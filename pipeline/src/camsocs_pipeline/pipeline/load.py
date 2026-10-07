@@ -487,7 +487,30 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
                 record, org_key, sources.get(record.source_url)
             )
     plan.sources = list(sources.values())
+    plan.broker_profiles = _merge_profiles(plan.broker_profiles)
     return plan
+
+
+def _merge_profiles(profiles: list[BrokerProfileInput]) -> list[BrokerProfileInput]:
+    """One profile per organisation. The server replaces an organisation's
+    inferred needs (offers) with each posted list, so the pages of one site —
+    each its own observation — must arrive as one list, not overwrite each
+    other. Items keep their own page's source URL; the first sighting of an
+    item wins."""
+    merged: dict[str, BrokerProfileInput] = {}
+    for profile in profiles:
+        current = merged.get(profile.org_key)
+        if current is None:
+            merged[profile.org_key] = profile.model_copy(deep=True)
+            continue
+        for kind in ("needs", "offers"):
+            incoming = getattr(profile, kind)
+            if incoming is None:
+                continue
+            existing = getattr(current, kind) or []
+            known = {item.item for item in existing}
+            setattr(current, kind, [*existing, *(i for i in incoming if i.item not in known)])
+    return list(merged.values())
 
 
 def _source_row(

@@ -222,3 +222,50 @@ def test_the_load_stage_posts_keyed_staged_observations(make_settings) -> None:
     assert load_report.ok
     assert load_report.skipped == 1, "the unkeyed harvest record waits for resolve"
     assert "2 records from su_directory, _resolved; 1 awaiting resolve" in load_report.notes
+
+
+def test_load_posts_resolved_organisations_before_their_enrichment(
+    make_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A website observation adds fields to an organisation the resolver's
+    output creates; the server refuses claims for an organisation that does
+    not exist yet, so `_resolved` goes first — and `--limit` counts only
+    records that can load."""
+    from datetime import UTC, datetime
+
+    from camsocs_pipeline.claims import parser_field
+    from camsocs_pipeline.models.observation import IdentityHints, Observation
+    from camsocs_pipeline.staging.store import RESOLVED, StagingStore
+
+    def org(source_type: str, key: str | None, field: str, value: str) -> Observation:
+        return Observation(
+            source_type=source_type,
+            source_key=f"{source_type}-1",
+            source_url=f"https://{source_type.replace('_', '-')}.example/",
+            retrieved_at=datetime(2026, 10, 7, tzinfo=UTC),
+            entity_type="organisation",
+            identity=IdentityHints(name="CU Chess Club", known_key=key),
+            entity_key=key,
+            fields=[parser_field(field, value, extractor="t", evidence="primary")],
+        )
+
+    settings = make_settings()
+    store = StagingStore(settings.staging_dir)
+    store.write("cucbc", "r1", [org("cucbc", None, "name", "Unkeyed")])
+    store.write(
+        "society_website", "r1", [org("society_website", "org-cu-chess", "howToJoin", "Turn up")]
+    )
+    store.write(RESOLVED, "r1", [org("su_directory", "org-cu-chess", "name", "CU Chess Club")])
+
+    posted: list[list[str]] = []
+    original = load.ConvexLoader.post_observations
+
+    def spy(self, records, *, run_key=None):
+        posted.append([record.source_type for record in records])
+        return original(self, records, run_key=run_key)
+
+    monkeypatch.setattr(load.ConvexLoader, "post_observations", spy)
+    report = run_sync(settings=settings, dry_run=True, stages=["load"], limit=1)
+    assert report.ok
+    assert posted == [["su_directory"]]
+    assert report.stages[0].skipped == 1

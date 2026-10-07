@@ -16,6 +16,7 @@ from __future__ import annotations
 from itertools import islice
 
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.staging.store import RESOLVED
 
 #: Rejection reasons shown in the stage notes; the rest are counted.
 MAX_REJECTION_NOTES = 10
@@ -26,11 +27,21 @@ def run(ctx: StageContext) -> None:
     if not directories:
         ctx.report.notes.append("nothing staged")
         return
-    records = [record for name in directories for record in ctx.staging.read_latest(name)]
+    # The resolver's output first: it creates the organisations (their
+    # `name` claims) that post-resolve stages' keyed observations — website
+    # enrichment, events — only add fields to. A claim for an organisation
+    # that does not exist yet is refused unless its name arrives first.
+    ordered = [name for name in directories if name == RESOLVED]
+    ordered += [name for name in directories if name != RESOLVED]
+    records = [record for name in ordered for record in ctx.staging.read_latest(name)]
+    total = len(records)
+    awaiting = sum(1 for record in records if not record.is_keyed)
+    records = [record for record in records if record.is_keyed]
     if ctx.limit is not None:
         records = list(islice(records, ctx.limit))
 
     report = ctx.loader.post_observations(records, run_key=ctx.run.run_key)
+    report.skipped += awaiting
     claims = report.claims
     ctx.report.inserted += claims.inserted
     ctx.report.updated += claims.updated
@@ -38,7 +49,7 @@ def run(ctx: StageContext) -> None:
     ctx.report.skipped += report.skipped
 
     ctx.report.notes.append(
-        f"{len(records)} records from {', '.join(directories)}; {report.skipped} awaiting resolve"
+        f"{total} records from {', '.join(directories)}; {report.skipped} awaiting resolve"
     )
     entities = claims.entities
     if entities:
