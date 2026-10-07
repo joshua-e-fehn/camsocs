@@ -9,12 +9,17 @@ for the resolve stage and are counted as skipped.
 
 Re-posting unchanged observations is cheap: the server recognises each claim
 by its fingerprint and writes nothing (reported as `unchanged`).
+
+Images staged as a bare ``{"sourceUrl"}`` get our own stored copy on the way
+(`camsocs_pipeline.media`): the bytes come from the fetch cache the harvest
+stage filled, and an image that cannot be had is not posted.
 """
 
 from __future__ import annotations
 
 from itertools import islice
 
+from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.staging.store import RESOLVED
 
@@ -40,7 +45,11 @@ def run(ctx: StageContext) -> None:
     if ctx.limit is not None:
         records = list(islice(records, ctx.limit))
 
-    report = ctx.loader.post_observations(records, run_key=ctx.run.run_key)
+    media = CachedImages(ctx.settings)
+    try:
+        report = ctx.loader.post_observations(records, run_key=ctx.run.run_key, media=media)
+    finally:
+        media.close()
     report.skipped += awaiting
     claims = report.claims
     ctx.report.inserted += claims.inserted
@@ -51,6 +60,11 @@ def run(ctx: StageContext) -> None:
     ctx.report.notes.append(
         f"{total} records from {', '.join(directories)}; {report.skipped} awaiting resolve"
     )
+    if report.files_stored or report.files_dropped:
+        ctx.report.notes.append(
+            f"images: {report.files_stored} stored, {report.files_dropped} not available"
+            + (f" ({media.unavailable})" if media.unavailable else "")
+        )
     entities = claims.entities
     if entities:
         ctx.report.notes.append(

@@ -1,0 +1,58 @@
+{
+  "events": [
+    {
+      "date_string": "19:45, Tue 13th – Sat 17th October 2026",
+      "id": 501,
+      "start_at": "2026-10-13T18:45:00+00:00",
+      "repeat_until": "2026-10-17",
+      "other_venue": "ADC Theatre",
+      "show": {"id": 9001, "name": "The Test Play", "slug": "2026-the-test-play", "_type": "show"},
+      "venue": {"id": 29, "name": "ADC Theatre", "slug": "adc-theatre", "_type": "venue"},
+      "_links": {"show": "/shows/2026-the-test-play", "venue": "/venues/adc-theatre"},
+      "_type": "performance"
+    },
+    {
+      "date_string": "14:30, Sat 17th October 2026",
+      "id": 502,
+      "start_at": "2026-10-17T13:30:00+00:00",
+      "other_venue": "ADC Theatre",
+      "show": {"id": 9001, "name": "The Test Play", "slug": "2026-the-test-play", "_type": "show"},
+      "venue": {"id": 29, "name": "ADC Theatre", "slug": "adc-theatre", "_type": "venue"},
+      "_type": "performance"
+    },
+    {
+      "date_string": "21:30, Wed 4th – Sat 7th November 2026",
+      "id": 503,
+      "start_at": "2026-11-04T21:30:00+00:00",
+      "repeat_until": "2026-11-07",
+      "other_venue": "Pembroke New Cellars",
+      "show": {"id": 9002, "name": "Late Show", "slug": "2026-late-show", "_type": "show"},
+      "_type": "performance"
+    },
+    {
+      "date_string": "12:00, Fri 29th May – Fri 18th December 2026",
+      "id": 504,
+      "start_at": "2026-05-29T11:00:00+00:00",
+      "repeat_until": "2026-12-18",
+      "other_venue": "Not applicable",
+      "show": {"id": 9003, "name": "A Short Film", "slug": "2026-a-short-film", "_type": "show"},
+      "_type": "performance"
+    },
+    {
+      "id": 77,
+      "dates": [{"start_at": "2026-10-16T12:00:00+00:00", "end_at": "2026-10-16T18:00:00+01:00", "id": 77}],
+      "end_at": "2026-10-16T18:00:00+01:00",
+      "societies": [{"id": 1, "name": "Test Dramatic Club", "slug": "test-dramatic-club"}],
+      "name": "Open Day",
+      "start_at": "2026-10-16T12:00:00+00:00",
+      "description": "Come and see the theatre.",
+      "societies_display_list": [1],
+      "_type": "event"
+    },
+    {"_type": "performance", "id": 999}
+  ],
+  "labels": [{"type": "week", "start_at": "2026-10-11", "text": "Week 1", "_type": "label"}],
+  "start_date": "2026-10-11",
+  "end_date": "2026-12-20",
+  "_type": "diary"
+}

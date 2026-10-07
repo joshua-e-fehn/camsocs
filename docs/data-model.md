@@ -210,6 +210,19 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 
 An event row is created by its first claims, which must include `title`, `startsAt`, `visibility`, `source`, `externalId` and `sourceUrl`; the pipeline's `claims_for_event` always sends the last four.
 
+**`externalId` per source** (the events stages, `pipeline/.../events/`; source-research §5–§12):
+
+| `source` | `externalId` | Notes |
+|---|---|---|
+| camdram | `show:<show id>/performance:<run id>/<YYYY-MM-DD>`; `show:<id>/performance:<run id>` for a run over 21 days (one all-day event); `event:<id>/<date>` for a non-show diary event | **Series:** every night of a show shares the `show:<id>/` prefix and the show page as `sourceUrl` |
+| talks_cam | talk id | |
+| ics, luma, google_calendar, uni_events_api, cucbc (calendar) | the iCalendar `UID`; `<UID>/<original start, UTC>` for an occurrence of a recurring event (all-day: `<UID>/<YYYYMMDD>`) | An override (`RECURRENCE-ID`) keeps its occurrence's id |
+| cucbc | `bumps:<lent\|may>:<year>`; `timetable:<academic year>:<term>:<slug(name)>` | Timetable dates are computed from Full Term weeks: `status: tbc`, times `inferred` |
+| playwaze | fixture id (`Fixtures/<n>-B`) | |
+| su_whatson | `events/<SU org id>/<event id>` or `ents/<id>` | |
+
+**Event images** are our own copy (as logos): a stage that finds an image checks it (raster, ≤ 2 MB) and stages `image: {sourceUrl}`; the load stage uploads the bytes (`/api/pipeline/files`) and posts `{storageId, sourceUrl}`. An image it cannot store is not posted (`pipeline/.../media.py`).
+
 **Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, plus a search index `search_title` on title (filter: visibility).
 
 `eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, visibility }` (the last two denormalised from the event and kept in step), with indexes `by_org_startsAt` and `by_event`. It exists for "events of organisation X". The pipeline replaces an event's whole organiser set at once.

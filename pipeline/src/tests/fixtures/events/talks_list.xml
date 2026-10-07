@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+  <id>123456</id>
+  <name>Test Society Talks</name>
+  <details>A synthetic list for tests.</details>
+  <url>https://talks.cam.ac.uk/show/index/123456</url>
+  <talk>
+    <id>900001</id>
+    <title>Galaxies for Beginners</title>
+    <abstract>An introduction.</abstract>
+    <speaker>Dr Ada Example (Institute of Testing)</speaker>
+    <speaker_url></speaker_url>
+    <venue>Lecture Theatre 1</venue>
+    <special_message></special_message>
+    <organiser>A Person</organiser>
+    <url>https://talks.cam.ac.uk/talk/index/900001</url>
+    <start_time>Wed, 14 Oct 2026 19:30:00 +0100</start_time>
+    <end_time>Wed, 14 Oct 2026 20:30:00 +0100</end_time>
+    <series>Test Society Talks</series>
+    <created_at>Mon, 01 Sep 2026 10:00:00 +0100</created_at>
+    <updated_at>Mon, 01 Sep 2026 10:00:00 +0100</updated_at>
+  </talk>
+  <talk>
+    <id>900002</id>
+    <title>CANCELLED: Stars</title>
+    <abstract></abstract>
+    <speaker>Prof B Sample; Dr C Demo (Elsewhere University)</speaker>
+    <venue>Lecture Theatre 1</venue>
+    <special_message></special_message>
+    <organiser>A Person</organiser>
+    <url>https://talks.cam.ac.uk/talk/index/900002</url>
+    <start_time>Wed, 04 Nov 2026 19:30:00 +0000</start_time>
+    <end_time>Wed, 04 Nov 2026 20:30:00 +0000</end_time>
+    <series>Test Society Talks</series>
+  </talk>
+  <talk>
+    <id>900003</id>
+    <title>A Department Seminar</title>
+    <speaker>TBC</speaker>
+    <url>https://talks.cam.ac.uk/talk/index/900003</url>
+    <start_time>Thu, 15 Oct 2026 16:00:00 +0100</start_time>
+    <series>Department Seminar Series</series>
+  </talk>
+  <talk>
+    <id>900004</id>
+    <title>No start time</title>
+    <series>Test Society Talks</series>
+  </talk>
+</list>

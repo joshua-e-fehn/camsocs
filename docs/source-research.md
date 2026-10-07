@@ -198,6 +198,14 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Harvester:** stage `camdram_societies`, `sources/camdram.py`. One request; the image is the logo's source, and our own copy is made by a later image step.
 
+**Events harvester (T6, re-verified 2026-10-07)** — `pipeline/src/camsocs_pipeline/events/camdram.py`, stage `camdram_events`.
+- robots.txt: `User-agent: *` with nothing disallowed.
+- The API page (`/api/`) asks for an API key; unauthenticated calls get "very low rate limits and long response delays". `CAMDRAM_API_KEY` (optional, an OAuth access token) is sent as a Bearer header; without it requests are 2 s apart and show JSON is reused from the cache for 20 h.
+- `diary.json?end=YYYY-MM-DD`: the diary starts at the current week's Sunday (default 8 weeks; `end` from `DiaryController`). On 2026-10-07 it held 79 performance runs of 63 shows plus 1 society event (`_type: event`, with `societies[]` and `dates[]`).
+- A diary performance is a run: `start_at` (an instant) daily until `repeat_until` (a date) at the same London wall time. One event per night, external id `show:<show id>/performance:<run id>/<date>`; runs over 21 days (a film listed May–December) are one all-day event.
+- Show JSON (`/shows/<slug>.json`): `societies[]` (+ `societies_display_list` order), `description` (markdown), `online_booking_url`, `image.filename` → `/media/cache/preview/<filename>` (the page's `og:image`). Some shows have no societies and `other_venue: "N/A"`.
+- `/venues.json` returns all 29 venues with address and coordinates in one request.
+
 ## §6 talks.cam
 
 **Endpoints**
@@ -213,6 +221,12 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **Traps**
 - List IDs change.
 - Of 18 society lists checked, only 5 had talks in the last 12 months.
+
+**Events harvester (T6, re-verified 2026-10-07)** — `events/talks_cam.py`, stage `talks_cam`.
+- robots.txt (read with our User-Agent): `Disallow: /` for GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, CCBot, Google-Extended and others; for `*`: `Crawl-delay: 10` and disallows only `/show/archive/`, edit/login paths, `/include/`, `/subscriptions/`, `/custom_views/`. `/show/xml/` is allowed for us.
+- The XML's shape was checked by element names only (no text was read): `list/{id,name,details,url}` and `talk/{id,title,abstract,speaker,speaker_url,venue,special_message,organiser,url,start_time,end_time,series,created_at,updated_at}`; times are RFC 2822 with an offset. `organiser` is a person's name and is never used.
+- Lists come from `orgInternal.talksListIds` plus a verified seed (`events/seeds.py`): CUAS → `201664`, linked from https://cuastronomy.co.uk/talks/ ("Cambridge Talks page"; an older `16901` is commented out in that page's source).
+- A talk whose `series` is another list is left out (society lists include department series).
 
 ## §7 CUCBC
 
@@ -238,6 +252,12 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - "Lady Margaret Boat Club" names no college. https://www.ladymargaretboatclub.org/ states "The Lady Margaret Boat Club is the rowing club of St John's College, Cambridge". The harvester re-checks that page on each run before claiming the college.
 
 **Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Details pages are reused from the cache for a week.
+
+**Events harvester (T6, re-verified 2026-10-07)** — `events/cucbc.py`, stage `cucbc_events`.
+- robots.txt: `Crawl-delay: 10`; disallows Drupal internals only (`/admin/`, `/user/…`, `/search/`, `/node/add/`, …).
+- `/calendar/ical/YYYY-MM` answers a valid but **empty** VCALENDAR for every month checked (2025-11, 2026-03, 2026-10, 2026-11), Bumps months included. Still read, month by month.
+- `/bumps` states the dates in one sentence: "The Lent Bumps 2026 will take place from Tuesday 3rd March to Saturday 7th March 2026. The May Bumps 2026 … from Wednesday 17th June to Saturday 20th June 2026." (both past on 2026-10-07; 2026-27 dates not yet posted).
+- `/college_events/timetable` is the fixed calendar (CUCBC, 2000) in Full Term weeks: e.g. Emmanuel Sprint Regatta "7th Sunday", Fairbairn Cup Novices/Seniors "(Jesus)" "9th Thursday"/"9th Friday", Lent Bumps "6th/7th Tuesday – 7th/8th Saturday". Weeks run Thursday–Wednesday (Week 1 = first Thursday of Full Term; "0th Monday" = the Monday before): checked against Lent Bumps 2026 (6th Tuesday = 3 Mar) and May Bumps 2026 (7th Wednesday = 17 Jun). Dates computed from it are stored as `tbc` with `inferred` times; specs with alternatives ("6th/7th") are skipped.
 
 ## §8 Colleges and JCR/MCR
 
@@ -286,11 +306,19 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Trap:** the IDs roll over each season. On 2026-10-07 the 2026-27 IDs were not yet live.
 
+**Events harvester (T6, re-verified 2026-10-07)** — `events/playwaze.py`, stage `playwaze`.
+- robots.txt: `cambridgeuniversityleagues.playwaze.com` → `user-agent: *` / `allow: /`; **`public-cambridgeuniversityleagues.playwaze.com` → `user-agent: *` / `disallow: /`** (never fetched; its league paths are read on the main host).
+- `/Home` (and `/…/Community-Network`) redirect to `/confirminvitation?Token=…`, a sign-in page: not fetched, not usable for discovery.
+- Discovery: Sport Cambridge's https://www.sport.cam.ac.uk/college-sport/college-leagues-z links each league; on 2026-10-07 all still pointed to **2025-26** communities (`…-netball-25-26`, `…-rugby-football-union-25-`), so the stage skips them (season roll-over) and stages nothing until 2026-27 links appear.
+- The league page (GET) gives the league name, divisions (`data-value2="LeagueDivisions/…"`) and `pageConfig.FixtureListRequest.BaseCommunityId`. The fixture list is loaded by a form POST to `/<community>/<id>/fixture-fixturelist` with `page`, `pageSize`, `request[BaseCommunityId]`, `request[CompetitionIds]`, `isDashboard` (without `BaseCommunityId` it answers "Invalid request"); the answer groups fixtures under a date header with team names, venue and kick-off time. The `league-fixtures` GET is a results grid without dates; the CSV export redirects to sign-in.
+
 ## §10 University Events API
 
 **Endpoint:** `https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json` (also `.rss` and `.ics`). It returned 745 events.
 
 **Use:** context for internal partners. It is not specific to societies.
+
+**robots.txt (re-verified 2026-10-07): `User-agent: *` / `Disallow: /` on `webservices.admin.cam.ac.uk`.** Every endpoint (`events.json`, `.rss`, `.ics`, `show.xml`, uploaded images) is on that host, including the feeds the public What's On page (https://www.admin.cam.ac.uk/whatson/) links for subscription. The stage `uni_events` (`events/uni_events.py`) therefore fetches nothing while the block stands and says so in its run notes. Its parser reads the iCalendar export (a standard format; the JSON schema was not checked, since that would breach robots.txt) and keeps only events naming exactly one known student group.
 
 ## §11 Calendar feeds that societies publish
 
@@ -303,6 +331,11 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Trap:** timezones are often wrong. One feed was set to Asia/Dhaka. Normalise to Europe/London.
 
+**Events harvester (T6, re-verified 2026-10-07)** — `events/calendar_feeds.py` + `events/ics.py`, stage `calendar_feeds`.
+- `api.lu.ma` robots.txt: `User-agent: *` / `Disallow: /insights/` — the ICS endpoint is allowed. Luma ICS: UTC times, `STATUS:TENTATIVE` on every event (ignored), `ORGANIZER;CN=` often a person (never used), a generated description ("Get up-to-date information at: <event page> / Address: … / Hosted by <names>") from which only the page is kept. Seed: Cambridge AI Safety Hub `cal-4TNl4yi3sVEcAO5` (from https://luma.com/es51jfvb).
+- **`calendar.google.com` robots.txt: `User-agent: *` / `Allow: /$` / `Disallow: /`** — Google Calendar ICS feeds (`/calendar/ical/<id>/public/basic.ics`) are disallowed for crawlers, so they are listed but not fetched (e.g. CUPS links one from camphysoc.co.uk).
+- Time zones (`events/ics.py` docstring): floating → London; a zone whose offset differs from London's at that moment (event `TZID`, or `X-WR-TIMEZONE` for UTC times) is re-read as London wall-clock time when the location is empty, online or in Cambridge; such times are `inferred`. Recurrences are expanded in wall-clock time inside the window; events are de-duplicated by UID.
+
 ## §12 SU What's On
 
 **Endpoints**
@@ -310,6 +343,11 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - RSS: `/ents/rss/0/subtree/`.
 
 **Coverage is low:** only about 6 of 61 events came from student groups.
+
+**Events harvester (T6, re-verified 2026-10-07)** — `events/su_whatson.py`, stage `su_whatson`.
+- robots.txt for `*` disallows `/photos/ /advertclick/ /login/ /pagestylesheet/ /stylesheet/ /skins/ /resourcehandler/ /edit/ /search/ /asset/ /account/ /Shibboleth.sso /sso/`. Event images are under `/asset/`, so they are not fetched.
+- `/whatson/` listed 60 entries: Sabbatical Officers 34, Cambridge SU 19, Clubs and Societies 1, University of Cambridge 1, student groups 5 (Sikh Society, Jugglers' Association, The Interfaith Society, Indonesia Association, Hong Kong Postgraduate Scholars Association). Each `div.event_item` has `data-msl-organisation-id`; the listing date ("8th October") has no year or time.
+- Event pages (`/events/<org id>/<event id>/`, `/ents/event/<id>/`) give the title (`h1`), "Friday 09 October 2026", "6pm - 8:45pm", location and organisation (`.event-details` with Font Awesome icons) and the description (`.e-details-txt`). SU-run events (SU, sabbatical officers, the clubs office, the University) are left out; so are entries linking elsewhere (elections page, external sites).
 
 ## §13 Linktree
 

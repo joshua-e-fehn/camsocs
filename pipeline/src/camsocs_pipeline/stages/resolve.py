@@ -35,14 +35,20 @@ from camsocs_pipeline.resolve.crosswalk import (
     quarantine_path,
 )
 from camsocs_pipeline.resolve.resolver import resolve_records
-from camsocs_pipeline.staging.store import RESOLVED
+from camsocs_pipeline.staging.store import RESOLVED, is_events_directory
 
 #: Quarantine lines shown in the stage notes; the file has all of them.
 MAX_NOTES = 8
 
 
 def run(ctx: StageContext) -> None:
-    directories = [name for name in ctx.staging.directories() if name != RESOLVED]
+    # Events stages write keyed observations to `<source_type>.events`; they
+    # run after resolve and `load` reads them from there.
+    directories = [
+        name
+        for name in ctx.staging.directories()
+        if name != RESOLVED and not is_events_directory(name)
+    ]
     if not directories:
         ctx.report.notes.append("nothing staged")
         return

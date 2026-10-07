@@ -21,7 +21,8 @@
    purpose, so two branches that each uncomment their own line merge without
    conflict. If your stage has no reserved line, add one in its phase with a
    comment line above it.
-4. Order matters only *between* phases; within the harvest phase, stages are
+4. A stage that reads public sources says ``fetches=True`` (offline runner
+   tests leave it out). Order matters only *between* phases; within the harvest phase, stages are
    independent. Use ``requires=(...)`` only when your stage cannot run on the
    previous run's output of another stage.
 5. Cite your `docs/source-research.md` § in the comment and in the module
@@ -67,29 +68,31 @@ STAGES: list[Stage] = [
     #
     # ── enrich (T5): websites, Linktree; writes keyed observations ────────────
     # Society websites + Linktree: links, JSON-LD, LLM extraction (§13, §14).
-    Stage("enrich", description="websites + Linktree → keyed enrichment observations"),
+    Stage(
+        "enrich", fetches=True, description="websites + Linktree → keyed enrichment observations"
+    ),
     #
-    # ── events (T6) ────────────────────────────────────────────────────────────
+    # ── events (T6): camsocs_pipeline/events/; each writes <source_type>.events ──
     # Camdram diary (§5).
-    # Stage("camdram_events"),
+    Stage("camdram_events", fetches=True, description="Camdram diary → performance events"),
     #
     # talks.cam — parser only, never the LLM, Crawl-delay 10 (§6).
-    # Stage("talks_cam"),
+    Stage("talks_cam", fetches=True, description="talks.cam lists → talks (parser only)"),
     #
-    # CUCBC calendar (§7).
-    # Stage("cucbc_events"),
+    # CUCBC calendar, Bumps dates and fixed timetable (§7).
+    Stage("cucbc_events", fetches=True, description="CUCBC calendar, Bumps, timetable → events"),
     #
     # Playwaze leagues (§9).
-    # Stage("playwaze"),
+    Stage("playwaze", fetches=True, description="Playwaze college leagues → matches"),
     #
     # University Events API (§10).
-    # Stage("uni_events"),
+    Stage("uni_events", fetches=True, description="University events → society events"),
     #
     # Society ICS / Luma / Google feeds (§11).
-    # Stage("calendar_feeds"),
+    Stage("calendar_feeds", fetches=True, description="society ICS / Luma / Google feeds → events"),
     #
     # SU What's On (§12).
-    # Stage("su_whatson"),
+    Stage("su_whatson", fetches=True, description="SU What's On → student-group events"),
     #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
     # Forwarded mailing-list mail (§16).
