@@ -36,9 +36,20 @@ work — a cron that sees success because most of it worked is how a broken sour
   models in `models/observation.py` and the helpers in `claims.py` (`parser_field`,
   `llm_field`, `missing_field`). They never mint organisation keys and never call Convex.
 - **resolve** (T4) maps identities to keys and writes `var/staging/_resolved/`.
+- **Events stages** (T6, `camsocs_pipeline/events/`, one module per source: Camdram, talks.cam,
+  CUCBC, Playwaze, University events, society ICS/Luma/Google feeds, SU What's On) run after
+  resolve. They resolve organiser hints against the keyed organisations in staging
+  (`events/organisers.py`; never minting an org key), keep unmatched ones in
+  `unresolved_organisers` instead of holding the event back, and write keyed
+  `EventObservation`s to `var/staging/<source_type>.events/` — a directory of their own,
+  because Camdram and CUCBC also feed harvest stages. Stages that read the network say
+  `fetches=True` in the registry. Times, the window, recurrence and the bogus-time-zone
+  heuristic are documented in `events/common.py` and `events/ics.py`.
 - **load** posts every keyed observation from the latest file of each directory through
-  `ConvexLoader.post_observations`: sources → claims → orgInternal → relationships →
+  `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
+  Images staged as `{sourceUrl}` are uploaded first (our own copy, never a hotlink;
+  `media.py`).
 
 Contracts shared with the webapp, each guarded by a test:
 
@@ -65,6 +76,7 @@ Read from `pipeline/.env` (gitignored) or the environment:
 | `CAMSOCS_STAGING_DIR` | Staged observations (default `<repo>/var/staging`) |
 | `CAMSOCS_STATE_PATH` | Run state file (default `<repo>/.camsocs-state.json`) |
 | `CAMSOCS_MIN_HOST_INTERVAL` | Minimum seconds between requests to one host (default 1.0) |
+| `CAMDRAM_API_KEY` | Optional Camdram API access token (Bearer); without it the Camdram events stage paces itself at 3 s |
 
 ## Politeness rules (enforced in `sources/base.py`)
 
@@ -73,7 +85,10 @@ Read from `pipeline/.env` (gitignored) or the environment:
 - One request in flight per host, at least `CAMSOCS_MIN_HOST_INTERVAL` apart; different hosts
   may run concurrently.
 - 429/503/transport errors back off 20 s → 300 s with jitter and honour `Retry-After`.
-- 401/403 are recorded as `access_restricted` and never retried with credentials.
+- 401/403 are recorded as `access_restricted` and never retried with credentials. The only
+  credential ever sent is an API key a source asks for (Camdram), via `fetch(headers=…)`.
+- `post_form` is for a public listing that loads by a form POST (Playwaze fixtures): same robots
+  check, pacing and cache; redirects are never followed.
 - Raw bodies are cached under `var/cache/<host>/` with their SHA-256; conditional requests and
   hash comparison report unchanged pages as `unchanged`.
 - 404/410 are negative evidence (`not_found`), never "verified".

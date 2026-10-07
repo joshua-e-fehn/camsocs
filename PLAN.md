@@ -108,7 +108,7 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T3 | B Harvest | Seed harvesters: SU directory + profiles, Proctors, Sport A–Z + pages + guide PDF, Camdram societies, CUCBC, colleges, JCR/MCR bodies | todo |
 | T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | todo |
 | T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | todo |
-| T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | todo |
+| T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | done (branch `feat/events-feeds`) |
 | T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail | todo |
 | T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | todo |
 | T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | todo |
