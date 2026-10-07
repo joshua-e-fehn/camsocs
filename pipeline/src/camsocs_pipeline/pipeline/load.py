@@ -619,8 +619,11 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
         else:
             plan.claims.extend(claims_for_observation(record))
             if record.entity_type == "organisation":
-                org_key = record.entity_key
                 _plan_organisation(plan, record)
+                # A counterpart named on a page (a sponsor on a society's
+                # site) does not own that page.
+                if not _claims_counterpart(record):
+                    org_key = record.entity_key
         if _is_http(record.source_url):
             sources[record.source_url] = _source_row(
                 record, org_key, sources.get(record.source_url)
@@ -633,6 +636,10 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)
     return plan
+
+
+def _claims_counterpart(record: Observation) -> bool:
+    return any(f.field == "isCounterpart" and f.value is True for f in record.fields)
 
 
 def _merge_profiles(profiles: list[BrokerProfileInput]) -> list[BrokerProfileInput]:
