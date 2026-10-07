@@ -1,12 +1,26 @@
 import { type FunctionArgs, type FunctionReference, httpRouter } from "convex/server"
 import { Base64 } from "convex/values"
+import {
+  bytesToBase64,
+  INBOUND_LIMITS,
+  type InboundMessage,
+  parseGenericPayload,
+  parseResendWebhook,
+  recipientAllowed,
+  resendMessage,
+  svixHeaders,
+  verifySvixSignature,
+} from "../lib/inbound-email"
+import { fetchReceivedAttachments, fetchReceivedEmail, ResendError } from "../lib/resend-inbound"
 import { internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { type ActionCtx, httpAction } from "./_generated/server"
 import { authComponent, createAuth } from "./betterAuth/auth"
 import { ALLOWED_CONTENT_TYPES, MAX_FILE_BYTES, sniffContentType } from "./ingest/files"
 
 /**
- * HTTP surface: Better Auth's own routes, plus the pipeline ingestion API.
+ * HTTP surface: Better Auth's own routes, the pipeline ingestion API, and the
+ * inbound-mail webhook (`POST /api/inbound/email`, at the end of this file).
  *
  * Copied from Bundestracker convex/http.ts. The ingestion API exists because
  * the harvesting pipeline is Python and there is no Convex client for Python,
@@ -51,8 +65,8 @@ async function secretEquals(a: string, b: string): Promise<boolean> {
   return diff === 0
 }
 
-async function authorized(request: Request): Promise<boolean> {
-  const expected = process.env.PIPELINE_API_KEY
+/** Whether the request carries `Authorization: Bearer <expected>`. */
+async function bearerMatches(request: Request, expected: string | undefined): Promise<boolean> {
   // An unset key denies rather than allows. Convex env vars are per deployment,
   // so forgetting it on production is a live possibility and the failure has to
   // be a locked door, not an open one.
@@ -60,6 +74,10 @@ async function authorized(request: Request): Promise<boolean> {
   const header = request.headers.get("Authorization") ?? ""
   if (!header.startsWith("Bearer ")) return false
   return await secretEquals(header.slice("Bearer ".length), expected)
+}
+
+async function authorized(request: Request): Promise<boolean> {
+  return await bearerMatches(request, process.env.PIPELINE_API_KEY)
 }
 
 // --- request / response plumbing -----------------------------------------
@@ -190,6 +208,8 @@ ingestionRoute("termDates", internal.ingest.termDates.upsert)
 // The mailing-list inbox (source-research §16).
 readRoute("inbound/pending", internal.ingest.inbound.pending)
 ingestionRoute("inbound/mark", internal.ingest.inbound.mark)
+// The mailing-list sign-up worklist (`camsocs worklist`).
+readRoute("worklist", internal.ingest.orgInternal.worklistPage)
 // Maintenance: re-derive everything now; reset the dev deployment.
 ingestionRoute("derive", internal.derive.daily)
 ingestionRoute("purge", internal.ingest.purge.purge)
@@ -249,5 +269,181 @@ http.route({
     )
   }),
 })
+
+/**
+ * `POST /api/pipeline/inbound/file` — `{ messageId, storageId }` → `{ data:
+ * <base64>, contentType, filename }`: one attachment (or the HTML body) of a
+ * forwarded list mail, for the pipeline's poster and termcard extraction. Only
+ * files belonging to that mail are served (`fileOf`).
+ */
+http.route({
+  path: "/api/pipeline/inbound/file",
+  method: "POST",
+  handler: pipelineRoute(async (ctx, request) => {
+    const body = await readJsonBody(request)
+    const { messageId, storageId } = body
+    if (typeof messageId !== "string" || typeof storageId !== "string") {
+      throw new Error("Body must be { messageId: string, storageId: string }")
+    }
+    const file = await ctx.runQuery(internal.ingest.inbound.fileOf, {
+      messageId,
+      storageId: storageId as Id<"_storage">,
+    })
+    if (!file) return json({ error: "File not found for this message" }, 404)
+    const blob = await ctx.storage.get(file.storageId)
+    if (!blob) return json({ error: "Stored file not found" }, 404)
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    return json(
+      { data: bytesToBase64(bytes), contentType: file.contentType, filename: file.filename },
+      200,
+    )
+  }),
+})
+
+// --- inbound mail (source-research §16) -----------------------------------------------------
+
+/**
+ * `POST /api/inbound/email` — forwarded society list mail lands here and is
+ * stored in the internal `inboundEmails` table as `pending`; the pipeline's
+ * `inbox` stage extracts events from it. Nothing here is ever public.
+ *
+ * Two senders, told apart by the Svix headers:
+ *
+ *  - **Resend** (`email.received`, signed with Svix): verified with
+ *    `RESEND_WEBHOOK_SECRET` (the endpoint's `whsec_…` signing secret); the
+ *    body, headers and attachments are then fetched from Resend's Receiving API
+ *    with `RESEND_INBOUND_API_KEY` (or `RESEND_API_KEY`), which needs full
+ *    access. Other event types are acknowledged and ignored.
+ *  - **Anything else** posts the provider-agnostic JSON (lib/inbound-email.ts)
+ *    with `Authorization: Bearer $INBOUND_EMAIL_SECRET`.
+ *
+ * Either secret unset → 401 for that sender: deny-all. Optional
+ * `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one
+ * of those addresses. Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`;
+ * 401 bad signature or secret; 400 malformed; 413 too large; 502/503 when
+ * Resend's API failed or is not configured yet — Resend retries those for about
+ * a day, and the `messageId` dedupe makes every retry safe.
+ */
+http.route({
+  path: "/api/inbound/email",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const declared = Number(request.headers.get("Content-Length") ?? "0")
+    if (declared > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
+    const raw = await request.text()
+    if (raw.length > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
+    const now = Date.now()
+
+    const svix = svixHeaders((name) => request.headers.get(name))
+    if (svix) {
+      const verified = await verifySvixSignature(
+        svix,
+        raw,
+        process.env.RESEND_WEBHOOK_SECRET,
+        Math.floor(now / 1000),
+      )
+      if (!verified) return json({ error: "Unauthorized" }, 401)
+      return await receiveResend(ctx, raw, now)
+    }
+
+    if (!(await bearerMatches(request, process.env.INBOUND_EMAIL_SECRET))) {
+      return json({ error: "Unauthorized" }, 401)
+    }
+    let body: unknown
+    try {
+      body = JSON.parse(raw)
+    } catch {
+      return json({ error: "Body must be JSON" }, 400)
+    }
+    const parsed = parseGenericPayload(body, now)
+    if (!parsed.ok) return json({ error: parsed.error }, 400)
+    if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, parsed.value.to)) {
+      return json({ ignored: "recipient" }, 200)
+    }
+    return await storeInbound(ctx, parsed.value)
+  }),
+})
+
+async function receiveResend(ctx: ActionCtx, raw: string, now: number): Promise<Response> {
+  let body: unknown
+  try {
+    body = JSON.parse(raw)
+  } catch {
+    return json({ error: "Body must be JSON" }, 400)
+  }
+  const parsed = parseResendWebhook(body)
+  if (!parsed.ok) return json({ error: parsed.error }, 400)
+  const received = parsed.value
+  if (received === null) return json({ ignored: "event type" }, 200)
+  if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, received.to)) {
+    return json({ ignored: "recipient" }, 200)
+  }
+  if (
+    received.messageId &&
+    (await ctx.runQuery(internal.ingest.inbound.hasMessage, { messageId: received.messageId }))
+  ) {
+    return json({ duplicate: true }, 200)
+  }
+  const apiKey = process.env.RESEND_INBOUND_API_KEY || process.env.RESEND_API_KEY
+  if (!apiKey) return json({ error: "Resend API key not configured" }, 503)
+  try {
+    const email = await fetchReceivedEmail(fetch, apiKey, received.emailId)
+    const message = resendMessage(received, email, now)
+    if (received.attachmentCount > 0) {
+      const files = await fetchReceivedAttachments(fetch, apiKey, received.emailId)
+      message.attachments = files.attachments
+      message.skipped = files.skipped
+    }
+    return await storeInbound(ctx, message)
+  } catch (error) {
+    if (error instanceof ResendError) return json({ error: error.message }, 502)
+    throw error
+  }
+}
+
+/** Stores the HTML and attachments, then the row; undoes the uploads when the
+ * row turns out to be a duplicate (a concurrent retry won the race). */
+async function storeInbound(ctx: ActionCtx, message: InboundMessage): Promise<Response> {
+  if (await ctx.runQuery(internal.ingest.inbound.hasMessage, { messageId: message.messageId })) {
+    return json({ duplicate: true }, 200)
+  }
+  const uploaded: Id<"_storage">[] = []
+  const notes = [...message.skipped]
+  let htmlStorageId: Id<"_storage"> | undefined
+  if (message.html) {
+    const bytes = new TextEncoder().encode(message.html)
+    if (bytes.byteLength <= INBOUND_LIMITS.maxHtmlBytes) {
+      htmlStorageId = await ctx.storage.store(new Blob([bytes], { type: "text/html" }))
+      uploaded.push(htmlStorageId)
+    } else {
+      notes.push(`html body not kept: ${bytes.byteLength} bytes`)
+    }
+  }
+  const attachments = []
+  for (const file of message.attachments) {
+    const storageId = await ctx.storage.store(
+      new Blob([new Uint8Array(file.bytes)], { type: file.contentType }),
+    )
+    uploaded.push(storageId)
+    attachments.push({ storageId, filename: file.filename, contentType: file.contentType })
+  }
+  const { stored } = await ctx.runMutation(internal.ingest.inbound.receive, {
+    messageId: message.messageId,
+    receivedAt: message.receivedAt,
+    from: message.from,
+    listId: message.listId,
+    listName: message.listName,
+    subject: message.subject,
+    text: message.text,
+    htmlStorageId,
+    attachments,
+    note: notes.length ? `skipped: ${notes.join("; ")}` : undefined,
+  })
+  if (!stored) {
+    for (const storageId of uploaded) await ctx.storage.delete(storageId)
+    return json({ duplicate: true }, 200)
+  }
+  return json({ stored: true }, 200)
+}
 
 export default http

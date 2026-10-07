@@ -1,7 +1,9 @@
+import { paginationOptsValidator } from "convex/server"
 import { v } from "convex/values"
+import { EVENT_SOURCES, ORG_LEVELS, ORG_STATUSES, ORG_TYPES } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
-import { internalMutation } from "../_generated/server"
-import { isOrgKey } from "../lib/fields"
+import { internalMutation, internalQuery } from "../_generated/server"
+import { isOrgKey, mailingListValidator } from "../lib/fields"
 import {
   assertBatchSize,
   type BatchResult,
@@ -9,6 +11,7 @@ import {
   recordBatch,
   upsertRow,
 } from "../lib/ingest"
+import { literalUnion } from "../lib/validators"
 import { orgInternalFields as f } from "../schema"
 
 /**
@@ -110,5 +113,99 @@ export const patch = internalMutation({
       recordBatch(result, outcome)
     }
     return result
+  },
+})
+
+// --- the mailing-list worklist (read by `camsocs worklist`) ------------------------------
+
+/** The event feeds an organisation's `orgInternal` row names, as event sources. */
+export function feedSources(row: Doc<"orgInternal"> | null): string[] {
+  if (!row) return []
+  const feeds: string[] = []
+  if (row.camdramSlug || row.camdramId !== undefined) feeds.push("camdram")
+  if (row.talksListIds.length) feeds.push("talks_cam")
+  if (row.icsUrls.length) feeds.push("ics")
+  if (row.lumaCalendarIds.length) feeds.push("luma")
+  if (row.googleCalendarIds.length) feeds.push("google_calendar")
+  if (row.playwaze?.leagueIds.length || row.playwaze?.teamIds.length) feeds.push("playwaze")
+  if (row.cucbcClub) feeds.push("cucbc")
+  if (row.instagramBusiness) feeds.push("instagram_api")
+  return feeds
+}
+
+const worklistOrgValidator = v.object({
+  key: v.string(),
+  slug: v.string(),
+  name: v.string(),
+  shortName: v.optional(v.string()),
+  aliases: v.array(v.string()),
+  status: literalUnion(ORG_STATUSES),
+  orgType: v.optional(literalUnion(ORG_TYPES)),
+  level: v.optional(literalUnion(ORG_LEVELS)),
+  mailingList: v.optional(mailingListValidator),
+  sympaList: v.optional(v.string()),
+  /** Event feeds on record (`feedSources`). */
+  feeds: v.array(v.string()),
+  /** Sources of its upcoming events (at most 10 looked at). */
+  upcomingEventSources: v.array(literalUnion(EVENT_SOURCES)),
+})
+
+/**
+ * `POST /api/pipeline/worklist` — one page of non-counterpart organisations
+ * with what the mailing-list worklist ranks on: derived status, the mailing
+ * list (address included: this route is internal), the Sympa list on record,
+ * the event feeds on record and the sources of upcoming events. Paged, because
+ * organisation rows are large; the pipeline follows `continueCursor`.
+ */
+export const worklistPage = internalQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: v.object({
+    page: v.array(worklistOrgValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, { paginationOpts }) => {
+    const result = await ctx.db
+      .query("organisations")
+      .withIndex("by_isCounterpart", (q) => q.eq("isCounterpart", false))
+      .paginate({
+        ...paginationOpts,
+        numItems: Math.max(1, Math.min(paginationOpts.numItems, 200)),
+      })
+    const now = Date.now()
+    const page = []
+    for (const org of result.page) {
+      const internal = await ctx.db
+        .query("orgInternal")
+        .withIndex("by_orgKey", (q) => q.eq("orgKey", org.key))
+        .unique()
+      const upcoming = await ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_org_startsAt", (q) => q.eq("orgKey", org.key).gte("startsAt", now))
+        .take(10)
+      const sources = new Set<(typeof EVENT_SOURCES)[number]>()
+      for (const link of upcoming) {
+        const event = await ctx.db
+          .query("events")
+          .withIndex("by_key", (q) => q.eq("key", link.eventKey))
+          .unique()
+        if (event) sources.add(event.source)
+      }
+      page.push({
+        key: org.key,
+        slug: org.slug,
+        name: org.name,
+        shortName: org.shortName,
+        aliases: org.aliases,
+        status: org.status,
+        orgType: org.orgType,
+        level: org.level,
+        mailingList: org.mailingList,
+        sympaList: internal?.sympaList,
+        feeds: feedSources(internal),
+        upcomingEventSources: [...sources].sort(),
+      })
+    }
+    return { page, isDone: result.isDone, continueCursor: result.continueCursor }
   },
 })
