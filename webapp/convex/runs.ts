@@ -137,6 +137,6 @@ export const latest = internalQuery({
       .withIndex("by_startedAt")
       .order("desc")
       .take(limit)
-    return rows.map(withoutSystemFields)
+    return rows.map((row) => withoutSystemFields<"harvestRuns">(row))
   },
 })

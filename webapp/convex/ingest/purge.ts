@@ -1,0 +1,212 @@
+import { v } from "convex/values"
+import { ENTITY_TYPES } from "../../lib/vocab"
+import type { TableNames } from "../_generated/dataModel"
+import { internalMutation, type MutationCtx } from "../_generated/server"
+import { ENTITY_TABLES, findEntity, loadTerms, refreshOrganisation } from "../lib/entityStore"
+import { FIELD_SPECS } from "../lib/fields"
+import { literalUnion } from "../lib/validators"
+
+/**
+ * Deleting pipeline data. Two tools, both internal:
+ *
+ *  - `purge` (`POST /api/pipeline/purge`) empties every pipeline-owned table
+ *    on the **dev** deployment, to reset it before a full harvest. It refuses
+ *    unless the body says `{"confirm": "PURGE-DEV"}` *and* the deployment's
+ *    own `CONVEX_CLOUD_URL` names the dev deployment — a production URL can
+ *    never match, whatever key or body reaches it. It deletes at most
+ *    `PURGE_BUDGET` rows per call and reports `done: false` until nothing is
+ *    left, so the caller loops.
+ *  - `removeEntity` deletes one entity, its claims and what hangs off it. Not
+ *    routed over HTTP: run it with `bunx convex run ingest/purge:removeEntity`.
+ *
+ * Kept: `harvestRuns` (the run log is evidence), `inboundEmails` and
+ * `listingRequests` (written by people, not the pipeline), and every
+ * broker-owned row (`interactions`, `introductions`, `manual` people,
+ * confirmed needs/offers and notes).
+ */
+
+/** The dev deployment (AGENTS.md). Production has a different name. */
+export const DEV_DEPLOYMENT = "hushed-rhinoceros-215"
+
+/** Rows deleted per call: under Convex's per-transaction write limit. */
+export const PURGE_BUDGET = 4_000
+
+const PIPELINE_TABLES = [
+  "fieldClaims",
+  "eventOrganisers",
+  "relationships",
+  "orgCards",
+  "organisations",
+  "events",
+  "teams",
+  "sessions",
+  "venues",
+  "sources",
+  "orgInternal",
+  "termDates",
+  "storedFiles",
+] as const satisfies readonly TableNames[]
+
+export function isDevDeployment(cloudUrl: string | undefined): boolean {
+  return cloudUrl !== undefined && new RegExp(`^https://${DEV_DEPLOYMENT}\\.`).test(cloudUrl)
+}
+
+export const purge = internalMutation({
+  args: { confirm: v.literal("PURGE-DEV") },
+  returns: v.object({ deleted: v.record(v.string(), v.number()), done: v.boolean() }),
+  handler: async (ctx) => {
+    if (!isDevDeployment(process.env.CONVEX_CLOUD_URL)) {
+      throw new Error(`Refusing to purge: this is not the dev deployment (${DEV_DEPLOYMENT})`)
+    }
+    let budget = PURGE_BUDGET
+    const deleted: Record<string, number> = {}
+
+    for (const table of PIPELINE_TABLES) {
+      if (budget <= 0) break
+      const rows = await ctx.db.query(table).take(budget)
+      for (const row of rows) {
+        if (table === "storedFiles") {
+          await ctx.storage.delete(
+            (row as { storageId: Parameters<typeof ctx.storage.delete>[0] }).storageId,
+          )
+        }
+        await ctx.db.delete(table, row._id as never)
+      }
+      if (rows.length > 0) deleted[table] = rows.length
+      budget -= rows.length
+    }
+
+    let more = budget <= 0
+    if (!more) more = await purgeBrokerInferences(ctx, budget, deleted)
+    return { deleted, done: !more }
+  },
+})
+
+/**
+ * Pipeline-owned broker rows: `parser`/`llm` people, and inferred needs/offers
+ * (a profile with nothing broker-owned left is deleted). Returns whether a
+ * full page was read, i.e. whether another call may find more.
+ */
+async function purgeBrokerInferences(
+  ctx: MutationCtx,
+  budget: number,
+  deleted: Record<string, number>,
+): Promise<boolean> {
+  const limit = Math.max(1, Math.floor(budget / 2))
+  let used = 0
+  const people = await ctx.db.query("people").take(limit)
+  for (const person of people) {
+    if (person.method === "manual") continue
+    await ctx.db.delete("people", person._id)
+    used++
+  }
+  const profiles = await ctx.db.query("orgBrokerProfiles").take(limit)
+  for (const profile of profiles) {
+    const needs = profile.needs.filter((entry) => entry.status === "confirmed")
+    const offers = profile.offers.filter((entry) => entry.status === "confirmed")
+    if (needs.length === profile.needs.length && offers.length === profile.offers.length) continue
+    const brokerOwned =
+      needs.length > 0 ||
+      offers.length > 0 ||
+      profile.notes !== undefined ||
+      profile.sponsorNotes !== undefined ||
+      profile.ethicsFlags.length > 0 ||
+      profile.suppressed ||
+      Object.keys(profile.optIns).length > 0
+    if (brokerOwned) await ctx.db.patch("orgBrokerProfiles", profile._id, { needs, offers })
+    else await ctx.db.delete("orgBrokerProfiles", profile._id)
+    used++
+  }
+  if (used > 0) deleted.brokerInferences = used
+  // Broker-owned rows survive, so a full page means "maybe more", not "more".
+  return used > 0 && (people.length === limit || profiles.length === limit)
+}
+
+export const removeEntity = internalMutation({
+  args: { entityType: literalUnion(ENTITY_TYPES), key: v.string() },
+  returns: v.object({ deleted: v.record(v.string(), v.number()) }),
+  handler: async (ctx, args) => {
+    const deleted: Record<string, number> = {}
+    const count = (table: string) => {
+      deleted[table] = (deleted[table] ?? 0) + 1
+    }
+
+    const entity = await findEntity(ctx, args.entityType, args.key)
+    if (entity) {
+      await ctx.db.delete(ENTITY_TABLES[args.entityType], entity._id as never)
+      count(ENTITY_TABLES[args.entityType])
+    }
+    for (const field of Object.keys(FIELD_SPECS[args.entityType])) {
+      const claims = await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_field", (q) =>
+          q.eq("entityType", args.entityType).eq("entityKey", args.key).eq("field", field),
+        )
+        .take(2_000)
+      for (const claim of claims) {
+        await ctx.db.delete("fieldClaims", claim._id)
+        count("fieldClaims")
+      }
+    }
+
+    const affectedOrgs = new Set<string>()
+    if (args.entityType === "organisation") {
+      const card = await ctx.db
+        .query("orgCards")
+        .withIndex("by_key", (q) => q.eq("key", args.key))
+        .unique()
+      if (card) {
+        await ctx.db.delete("orgCards", card._id)
+        count("orgCards")
+      }
+      for (const index of ["by_from", "by_to"] as const) {
+        const edges = await ctx.db
+          .query("relationships")
+          .withIndex(index, (q) => q.eq(index === "by_from" ? "fromKey" : "toKey", args.key))
+          .take(1_000)
+        for (const edge of edges) {
+          await ctx.db.delete("relationships", edge._id)
+          count("relationships")
+        }
+      }
+      const links = await ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_org_startsAt", (q) => q.eq("orgKey", args.key))
+        .take(2_000)
+      for (const link of links) {
+        await ctx.db.delete("eventOrganisers", link._id)
+        count("eventOrganisers")
+      }
+      const internal = await ctx.db
+        .query("orgInternal")
+        .withIndex("by_orgKey", (q) => q.eq("orgKey", args.key))
+        .unique()
+      if (internal) {
+        await ctx.db.delete("orgInternal", internal._id)
+        count("orgInternal")
+      }
+    }
+    if (args.entityType === "event") {
+      const links = await ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_event", (q) => q.eq("eventKey", args.key))
+        .take(200)
+      for (const link of links) {
+        affectedOrgs.add(link.orgKey)
+        await ctx.db.delete("eventOrganisers", link._id)
+        count("eventOrganisers")
+      }
+    }
+
+    const now = Date.now()
+    const terms = await loadTerms(ctx)
+    for (const orgKey of affectedOrgs) {
+      const org = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", orgKey))
+        .unique()
+      if (org) await refreshOrganisation(ctx, org, { now, terms })
+    }
+    return { deleted }
+  },
+})

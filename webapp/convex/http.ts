@@ -1,7 +1,9 @@
 import { type FunctionArgs, type FunctionReference, httpRouter } from "convex/server"
+import { Base64 } from "convex/values"
 import { internal } from "./_generated/api"
 import { type ActionCtx, httpAction } from "./_generated/server"
 import { authComponent, createAuth } from "./betterAuth/auth"
+import { ALLOWED_CONTENT_TYPES, MAX_FILE_BYTES, sniffContentType } from "./ingest/files"
 
 /**
  * HTTP surface: Better Auth's own routes, plus the pipeline ingestion API.
@@ -153,9 +155,99 @@ function ingestionRoute<Ref extends FunctionReference<"mutation", "internal">>(
   })
 }
 
+/**
+ * Registers `POST /api/pipeline/<path>` as the front door to one internal
+ * *query* — the read routes the pipeline needs (pending inbound mail).
+ */
+function readRoute<Ref extends FunctionReference<"query", "internal">>(
+  path: string,
+  queryRef: Ref,
+): void {
+  http.route({
+    path: `/api/pipeline/${path}`,
+    method: "POST",
+    handler: pipelineRoute(async (ctx, request) => {
+      const body = await readJsonBody(request)
+      return json(await ctx.runQuery(queryRef, asArgs<FunctionArgs<Ref>>(body)), 200)
+    }),
+  })
+}
+
 // The run log first: every pipeline run opens a row before it writes data and
 // closes it with per-stage results. See convex/runs.ts.
 ingestionRoute("runs/start", internal.runs.start)
 ingestionRoute("runs/finish", internal.runs.finish)
+
+// Field claims → resolved entities (convex/ingest/claims.ts).
+ingestionRoute("claims", internal.ingest.claims.ingest)
+// Keyed side tables.
+ingestionRoute("sources", internal.ingest.sources.upsert)
+ingestionRoute("orgInternal", internal.ingest.orgInternal.patch)
+ingestionRoute("relationships", internal.ingest.relationships.upsert)
+ingestionRoute("eventOrganisers", internal.ingest.relationships.setEventOrganisers)
+ingestionRoute("brokerInferences", internal.ingest.broker.ingest)
+ingestionRoute("termDates", internal.ingest.termDates.upsert)
+// The mailing-list inbox (source-research §16).
+readRoute("inbound/pending", internal.ingest.inbound.pending)
+ingestionRoute("inbound/mark", internal.ingest.inbound.mark)
+// Maintenance: re-derive everything now; reset the dev deployment.
+ingestionRoute("derive", internal.derive.daily)
+ingestionRoute("purge", internal.ingest.purge.purge)
+
+/**
+ * `POST /api/pipeline/files` — `{ data: <base64>, contentType }` → the
+ * `storageId` of our own copy (logos, event images, termcards: never
+ * hotlinked). At most 2 MB; raster images and PDF only, and the bytes must
+ * look like the type they claim. Identical bytes are stored once
+ * (convex/ingest/files.ts).
+ */
+http.route({
+  path: "/api/pipeline/files",
+  method: "POST",
+  handler: pipelineRoute(async (ctx, request) => {
+    const body = await readJsonBody(request)
+    const { data, contentType } = body
+    if (typeof data !== "string" || typeof contentType !== "string") {
+      throw new Error("Body must be { data: base64 string, contentType: string }")
+    }
+    if (!(ALLOWED_CONTENT_TYPES as readonly string[]).includes(contentType)) {
+      throw new Error(`Content type ${contentType} is not accepted`)
+    }
+    if (data.length > Math.ceil(MAX_FILE_BYTES / 3) * 4 + 4) {
+      throw new Error(`File too large: the limit is ${MAX_FILE_BYTES} bytes`)
+    }
+    // Copied into a fresh ArrayBuffer-backed view: Web Crypto and Blob reject
+    // views typed over a possibly-shared buffer.
+    const bytes = new Uint8Array(Base64.toByteArray(data))
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) {
+      throw new Error(`File must be 1..${MAX_FILE_BYTES} bytes`)
+    }
+    if (sniffContentType(bytes) !== contentType) {
+      throw new Error(`The bytes are not ${contentType}`)
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))
+    const sha256 = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("")
+
+    const known = await ctx.runQuery(internal.ingest.files.findBySha256, { sha256 })
+    if (known) return json({ storageId: known, sha256, inserted: 0, updated: 0, unchanged: 1 }, 200)
+    const storageId = await ctx.storage.store(new Blob([bytes], { type: contentType }))
+    const recorded = await ctx.runMutation(internal.ingest.files.record, {
+      sha256,
+      storageId,
+      contentType,
+      size: bytes.byteLength,
+    })
+    return json(
+      {
+        storageId: recorded.storageId,
+        sha256,
+        inserted: recorded.deduplicated ? 0 : 1,
+        updated: 0,
+        unchanged: recorded.deduplicated ? 1 : 0,
+      },
+      200,
+    )
+  }),
+})
 
 export default http

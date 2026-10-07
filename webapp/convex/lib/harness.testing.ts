@@ -17,9 +17,25 @@ import schema from "../schema"
 const appModules = {
   "./_generated/server.ts": () => import("../_generated/server"),
   "./auth.ts": () => import("../auth"),
+  "./crons.ts": () => import("../crons"),
+  "./derive.ts": () => import("../derive"),
+  "./events.ts": () => import("../events"),
   "./http.ts": () => import("../http"),
+  "./listingRequests.ts": () => import("../listingRequests"),
+  "./orgs.ts": () => import("../orgs"),
   "./runs.ts": () => import("../runs"),
+  "./termDates.ts": () => import("../termDates"),
+  "./venues.ts": () => import("../venues"),
   "./broker/session.ts": () => import("../broker/session"),
+  "./ingest/broker.ts": () => import("../ingest/broker"),
+  "./ingest/claims.ts": () => import("../ingest/claims"),
+  "./ingest/files.ts": () => import("../ingest/files"),
+  "./ingest/inbound.ts": () => import("../ingest/inbound"),
+  "./ingest/orgInternal.ts": () => import("../ingest/orgInternal"),
+  "./ingest/purge.ts": () => import("../ingest/purge"),
+  "./ingest/relationships.ts": () => import("../ingest/relationships"),
+  "./ingest/sources.ts": () => import("../ingest/sources"),
+  "./ingest/termDates.ts": () => import("../ingest/termDates"),
 }
 
 const authModules = {

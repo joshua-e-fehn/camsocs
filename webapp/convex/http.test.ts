@@ -122,3 +122,87 @@ describe("POST /api/pipeline/runs/*", () => {
     })
   })
 })
+
+describe("POST /api/pipeline/* data routes", () => {
+  const claim = {
+    entityType: "organisation",
+    entityKey: "org-zz-test-fixture",
+    field: "name",
+    value: "ZZ Test Fixture",
+    evidence: "primary",
+    method: "parser",
+    extractor: "test",
+    sourceKey: "src-x",
+    sourceUrl: "https://example.org/",
+    sourceType: "society_website",
+    retrievedAt: Date.now() - 1_000,
+  }
+
+  test("claims round-trips through the router and reports counts", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      const a = post("/api/pipeline/claims", { runKey: "r1", claims: [claim] })
+      const response = await t.fetch(a.path, a.init)
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        inserted: 1,
+        entities: { created: 1 },
+        rejected: [],
+      })
+      const denied = post("/api/pipeline/claims", { claims: [claim] }, "wrong")
+      expect((await t.fetch(denied.path, denied.init)).status).toBe(401)
+    })
+  })
+
+  test("a posted confidence is a 400 naming the field", async () => {
+    await withEnv(ENV, async () => {
+      const a = post("/api/pipeline/claims", { claims: [{ ...claim, confidence: 1 }] })
+      const response = await newTest().fetch(a.path, a.init)
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toMatch(/confidence/)
+    })
+  })
+
+  test("files stores a PNG once and refuses what it is not", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      // A 1×1 transparent PNG.
+      const png =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+      const a = post("/api/pipeline/files", { data: png, contentType: "image/png" })
+      const first = await (await t.fetch(a.path, a.init)).json()
+      expect(first).toMatchObject({ inserted: 1, unchanged: 0 })
+      expect(first.sha256).toMatch(/^[0-9a-f]{64}$/)
+      const second = await (await t.fetch(a.path, a.init)).json()
+      expect(second).toMatchObject({ storageId: first.storageId, inserted: 0, unchanged: 1 })
+
+      const lying = post("/api/pipeline/files", { data: png, contentType: "image/jpeg" })
+      expect((await t.fetch(lying.path, lying.init)).status).toBe(400)
+      const svg = post("/api/pipeline/files", {
+        data: btoa("<svg/>"),
+        contentType: "image/svg+xml",
+      })
+      expect((await t.fetch(svg.path, svg.init)).status).toBe(400)
+    })
+  })
+
+  test("inbound/pending answers with the query's result", async () => {
+    await withEnv(ENV, async () => {
+      const a = post("/api/pipeline/inbound/pending", { limit: 10 })
+      const response = await newTest().fetch(a.path, a.init)
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual([])
+    })
+  })
+
+  test("purge refuses on a deployment that is not dev, even with the right key and body", async () => {
+    await withEnv({ ...ENV, CONVEX_CLOUD_URL: "https://prod-otter-1.convex.cloud" }, async () => {
+      const a = post("/api/pipeline/purge", { confirm: "PURGE-DEV" })
+      const response = await newTest().fetch(a.path, a.init)
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toMatch(/not the dev deployment/)
+      const noConfirm = post("/api/pipeline/purge", {})
+      expect((await newTest().fetch(noConfirm.path, noConfirm.init)).status).toBe(400)
+    })
+  })
+})
