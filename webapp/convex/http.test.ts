@@ -195,6 +195,15 @@ describe("POST /api/pipeline/* data routes", () => {
     })
   })
 
+  test("crosswalk answers a page of organisations", async () => {
+    await withEnv(ENV, async () => {
+      const a = post("/api/pipeline/crosswalk", { cursor: null })
+      const response = await newTest().fetch(a.path, a.init)
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ rows: [], isDone: true })
+    })
+  })
+
   test("purge refuses on a deployment that is not dev, even with the right key and body", async () => {
     await withEnv({ ...ENV, CONVEX_CLOUD_URL: "https://prod-otter-1.convex.cloud" }, async () => {
       const a = post("/api/pipeline/purge", { confirm: "PURGE-DEV" })

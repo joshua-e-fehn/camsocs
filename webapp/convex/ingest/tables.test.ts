@@ -91,6 +91,32 @@ describe("orgInternal", () => {
       talksListIds: [],
     })
   })
+
+  test("crosswalk pages every organisation with its source identifiers", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-a", "org-b", "org-c")
+    await t.mutation(internal.ingest.orgInternal.patch, {
+      patches: [{ orgKey: "org-b", suOrgId: "8391", instagramHandle: "cuentrepreneurs" }],
+    })
+    const first = await t.query(internal.ingest.orgInternal.crosswalk, { limit: 2 })
+    expect(first.isDone).toBe(false)
+    expect(first.rows.map((row) => row.orgKey)).toEqual(["org-a", "org-b"])
+    expect(first.rows[1]).toMatchObject({
+      name: "B",
+      aliases: [],
+      collegeKeys: [],
+      isCounterpart: false,
+      suOrgId: "8391",
+      instagramHandle: "cuentrepreneurs",
+    })
+    expect(first.rows[0].suOrgId).toBeUndefined()
+    const rest = await t.query(internal.ingest.orgInternal.crosswalk, {
+      cursor: first.continueCursor,
+      limit: 2,
+    })
+    expect(rest.rows.map((row) => row.orgKey)).toEqual(["org-c"])
+    expect(rest.isDone).toBe(true)
+  })
 })
 
 describe("relationships", () => {
