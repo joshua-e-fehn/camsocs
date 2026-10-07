@@ -1,6 +1,5 @@
-import type { FunctionReturnType } from "convex/server"
-import type { api } from "@/convex/_generated/api"
 import { formatInstantDate } from "./calendar"
+import type { OrgPublic } from "./public-api"
 import type { ClaimMethod, FieldStatus, MissingReason } from "./vocab"
 
 /**
@@ -18,9 +17,7 @@ import type { ClaimMethod, FieldStatus, MissingReason } from "./vocab"
  * `not_applicable` renders nothing: a non-sports society has no Blue status.
  */
 
-export type PublicFieldMeta = NonNullable<
-  FunctionReturnType<typeof api.orgs.getBySlug>
->["org"]["meta"][string]
+export type PublicFieldMeta = OrgPublic["meta"][string]
 
 export type SourceTone = "positive" | "neutral" | "caution" | "muted"
 
@@ -41,7 +38,7 @@ export type SourceLineModel =
   | { kind: "missing"; label: string; detail: string }
   | {
       kind: "known"
-      status: Exclude<FieldStatus, "missing" | "not_applicable">
+      status: KnownStatus
       label: string
       description: string
       tone: SourceTone
@@ -55,8 +52,11 @@ export type SourceLineModel =
       conflicts: ConflictReading[]
     }
 
-const KNOWN: Record<
-  Exclude<FieldStatus, "missing" | "not_applicable">,
+export type KnownStatus = Exclude<FieldStatus, "missing" | "not_applicable">
+
+/** The chip for each status a value can have — also the legend on /about. */
+export const STATUS_DETAILS: Record<
+  KnownStatus,
   { label: string; description: string; tone: SourceTone }
 > = {
   found: {
@@ -86,7 +86,8 @@ const KNOWN: Record<
   },
 }
 
-const MISSING: Record<MissingReason, { label: string; detail: string }> = {
+/** What a missing value says, by reason — also the legend on /about. */
+export const MISSING_DETAILS: Record<MissingReason, { label: string; detail: string }> = {
   not_found: {
     label: "Not published yet",
     detail: "We looked, and no source we use publishes this.",
@@ -146,12 +147,12 @@ export function formatReading(value: unknown): string {
 
 export function sourceLine(meta: PublicFieldMeta | undefined): SourceLineModel {
   // Every claimable field has a meta entry; a missing one means nobody looked.
-  if (meta === undefined) return { kind: "missing", ...MISSING.not_attempted }
+  if (meta === undefined) return { kind: "missing", ...MISSING_DETAILS.not_attempted }
   if (meta.status === "not_applicable") return { kind: "hidden" }
   if (meta.status === "missing") {
-    return { kind: "missing", ...MISSING[meta.missingReason ?? "not_found"] }
+    return { kind: "missing", ...MISSING_DETAILS[meta.missingReason ?? "not_found"] }
   }
-  const known = KNOWN[meta.status]
+  const known = STATUS_DETAILS[meta.status]
   return {
     kind: "known",
     status: meta.status,
