@@ -175,7 +175,12 @@ export function classifyEmail(email: string): EmailType {
   const at = address.lastIndexOf("@")
   const local = address.slice(0, at)
   const domain = address.slice(at + 1)
-  if (domain === "cam.ac.uk" && CRSID_LOCAL.test(local)) return "personal_crsid"
+  // On cam.ac.uk or any subdomain (hermes, college domains): a CRSid-shaped
+  // local part names a person. Errs toward hiding a role address like `jcr1@`.
+  const camDomain = domain === "cam.ac.uk" || domain.endsWith(".cam.ac.uk")
+  if (camDomain && domain !== "lists.cam.ac.uk" && CRSID_LOCAL.test(local)) {
+    return "personal_crsid"
+  }
   if (/(^|\.)cusu\./.test(domain) || domain === "cusu.org") return "legacy_cusu"
   if (domain === "cambridgesu.co.uk" || domain.endsWith(".cambridgesu.co.uk")) return "cambridgesu"
   if (domain === "lists.cam.ac.uk") return "lists_cam"

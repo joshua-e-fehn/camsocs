@@ -137,6 +137,8 @@ describe("classifyEmail", () => {
   test.each([
     ["jf123@cam.ac.uk", "personal_crsid"],
     ["JF123@CAM.AC.UK", "personal_crsid"],
+    ["ab123@hermes.cam.ac.uk", "personal_crsid"],
+    ["ab123@jesus.cam.ac.uk", "personal_crsid"],
     ["president@cam.ac.uk", "role_own_domain"],
     ["soc-chess@lists.cam.ac.uk", "lists_cam"],
     ["chess@cambridgesu.co.uk", "cambridgesu"],
