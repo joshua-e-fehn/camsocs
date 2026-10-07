@@ -54,7 +54,7 @@ convex/
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
   auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)
   authEmail.ts               internal throttle for the @cam.ac.uk sign-in link
-  broker/                    PRIVATE CRM functions — every one calls requireBrokerUser
+  broker/                    PRIVATE CRM functions — every one calls requireBrokerUser (see "Broker API")
   lib/fields.ts              claimable-field registry: validators, merge/compare rules, applicability
   lib/resolve.ts             field resolution engine (data-model §1), pure
   lib/materialise.ts         resolutions → row + meta + derived fields; lib/derived.ts the §6 rules
@@ -251,6 +251,26 @@ events), lastSeenAt, confidence, meta`.
 
 Labels for vocabularies: `CATEGORY_LABELS` in `lib/vocab.ts`; the rest are added there when the UI
 needs them.
+
+## Broker API (private)
+
+Every function in `convex/broker/*` calls `requireBrokerUser` first; `convex/broker/gating.test.ts`
+reads the directory, calls every exported function with validator-generated arguments, and fails
+unless each refuses a signed-out caller, a non-listed account, an unverified broker address and
+everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read models are in
+`convex/lib/brokerRows.ts`; pure analysis (coverage, matching, outreach CSV, graph layout) is in
+`lib/broker/` so the browser and `bun test` share it.
+
+| Module | Functions |
+|---|---|
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, best non-personal address, held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` |
+| `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
+| `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove` |
+| `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
+| `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
+| `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status) |
+| `broker/listingRequests` | `list({status?})`, `setStatus` |
+| `broker/session` | `me` |
 
 ## Ingestion API (pipeline only)
 

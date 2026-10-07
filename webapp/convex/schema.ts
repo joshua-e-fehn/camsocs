@@ -185,6 +185,13 @@ export const organisationFields = {
   isCounterpart: v.boolean(),
   /** Marked defunct by a source (e.g. a college's inactive list) or manually. */
   defunct: v.optional(v.boolean()),
+  /**
+   * Hidden from the public site by the broker (a "remove" or "object" listing
+   * request). Not a claim: set only by `broker.orgs.setHidden`, never by the
+   * pipeline, and kept through every re-resolution. A hidden organisation has
+   * no `orgCards` row, so no public query lists, links or names it.
+   */
+  hidden: v.optional(v.boolean()),
   /** Derived (data-model §6). */
   status: literalUnion(ORG_STATUSES),
   /** Derived: max of the claimed value and the latest past event. */

@@ -125,7 +125,8 @@ const UPCOMING_EVENTS = 50
  * One organisation's page: its public projection (with per-field `meta` for
  * the SourceLine), teams, regular sessions, upcoming events the viewer may
  * see (public; `cam_only` too for a verified @cam.ac.uk viewer), and its
- * public relationships with the counterpart's name. Null when no such slug.
+ * public relationships with the counterpart's name. Null when no such slug,
+ * or when the broker has hidden the listing.
  */
 export const getBySlug = query({
   args: { slug: v.string() },
@@ -144,7 +145,8 @@ export const getBySlug = query({
       .query("organisations")
       .withIndex("by_slug", (i) => i.eq("slug", args.slug))
       .unique()
-    if (!org) return null
+    // Hidden by the broker after a remove / object request: as if absent.
+    if (!org || org.hidden === true) return null
 
     const [teams, sessions] = await Promise.all([
       ctx.db

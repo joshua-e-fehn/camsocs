@@ -105,6 +105,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | parentKey | string? | Hierarchy, e.g. a team club inside a University club, or a JCR within its college |
 | isCounterpart | boolean | true for external or institutional parties that exist only because they are linked to a society. Default false. Counterparts are never listed in the directory and have no `missingFields` |
 | defunct | boolean? | Marked defunct by a source (a college's inactive list) or manually; makes `status` `archived` |
+| hidden | boolean? | Hidden from the public site by the broker after a remove / object request (`broker.orgs.setHidden`). Not claimable; the pipeline never sets it and re-resolution keeps it. A hidden organisation has no `orgCards` row, so no public query lists, names or links it, and `orgs.getBySlug` is null |
 | status | `active \| dormant \| archived \| unknown` | Derived (§6) |
 | lastActiveAt | number? | Latest dated activity: the maximum of claimed values (a post, a page update) and the start of the latest past event it organised or co-hosted (derived) |
 | registrations | object | `{ su?, proctors?, sportsService?, camdram?, cucbc? }`, each `{ registered: boolean, year?: string, sourceUrl?: string }`, `year` an academic year like `2026-27`. Claimed per register as `registrations.su`, `registrations.proctors`, … These lapse independently. |
@@ -378,7 +379,7 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | Field | Type |
   |---|---|
   | orgKey | string |
-  | needs, offers | `{ item: vocab NEED_OFFER_ITEMS, status: "inferred"\|"confirmed", evidenceQuote?, sourceUrl?, method?, updatedAt }[]`. The pipeline's inferred list replaces its previous inferred entries; `confirmed` entries are never touched |
+  | needs, offers | `{ item: vocab NEED_OFFER_ITEMS, status: "inferred"\|"confirmed"\|"rejected", evidenceQuote?, sourceUrl?, method?, updatedAt }[]`. The pipeline's inferred list replaces its previous inferred entries; the broker's verdicts (`confirmed`, `rejected`) are never touched, and a rejected item is never re-inferred (a tombstone, hidden in the UI) |
   | optIns | `{ openToSponsors?, openToCollaborations?, careersEvents? }` (unknown until phase 2) |
   | pecrSubscriberType | `individual \| corporate \| unknown` |
   | suppressed | boolean |
@@ -455,6 +456,7 @@ These are computed in Convex by `convex/derive.ts`, which runs on ingest and fro
 
 Implemented in `webapp/convex/lib/projections.ts`; the projections are the `returns` validators of the public queries, so nothing else can leave.
 
+- **Hidden organisations** (`hidden: true`) are absent from every public query: no card, `getBySlug` null, dropped from event organisers and relationship counterparts.
 - **orgPublic** removes `orgInternal`, the broker data, `searchText`, and any `meta.sourceUrl` (and conflict reading) from an internal source (`mailing_list_email`, `manual`) or that is not `http(s)`, and keeps the rest. A `personal_crsid` email is removed (its meta reads `missing` / `not_published`), personal role emails are dropped, and the mailing list shows only `platform` and `signupUrl`. Stored logos become URLs.
 - **eventPublic** is `visibility === "public"`; `cam_only` needs a verified `@cam.ac.uk` session (or the broker); `members_only` is never shown. A mailing-list event has no `sourceUrl`. Organisers are resolved to `{key, slug, name, role}`.
 - **relationships**: only `visibility === "public"` edges, with the counterpart's name and the `http(s)` evidence URLs.

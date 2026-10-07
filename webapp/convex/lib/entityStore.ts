@@ -103,13 +103,22 @@ export function orgCardOf(
   }
 }
 
-/** Inserts or patches the card for `org`; writes nothing when it is current. */
+/**
+ * Inserts or patches the card for `org`; writes nothing when it is current.
+ * A hidden organisation (`broker.orgs.setHidden`) has no card: every public
+ * query lists, names and links organisations through the cards, so removing
+ * it is what takes the listing off the site.
+ */
 export async function writeOrgCard(ctx: MutationCtx, org: Doc<"organisations">): Promise<void> {
-  const card = orgCardOf(org)
   const existing = await ctx.db
     .query("orgCards")
     .withIndex("by_key", (q) => q.eq("key", org.key))
     .unique()
+  if (org.hidden === true) {
+    if (existing) await ctx.db.delete("orgCards", existing._id)
+    return
+  }
+  const card = orgCardOf(org)
   if (!existing) {
     await ctx.db.insert("orgCards", card)
     return
