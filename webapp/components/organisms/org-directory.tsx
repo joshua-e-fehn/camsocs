@@ -221,7 +221,7 @@ export function OrgDirectory({
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[16rem_1fr]">
       <aside aria-label="Filters" className="hidden lg:block">
-        <div className="sticky top-20 max-h-[calc(100svh-6rem)] overflow-y-auto pr-2 pb-8">
+        <div className="sticky top-20 max-h-[calc(100svh-6rem)] overflow-y-auto pr-2 pb-8 [scrollbar-width:thin]">
           {filters}
         </div>
       </aside>
@@ -298,7 +298,7 @@ export function OrgDirectory({
           {list.page.length > 0 ? (
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {list.page.map((card) => (
-                <li key={card.key}>
+                <li key={card.key} className="min-w-0">
                   <OrgCard card={card} collegeNames={collegeNames} />
                 </li>
               ))}

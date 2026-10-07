@@ -338,7 +338,7 @@ export function EventsCalendar({
                   </h3>
                   <ul className="grid gap-2 lg:grid-cols-2">
                     {dayEvents.map((event) => (
-                      <li key={event.key}>
+                      <li key={event.key} className="min-w-0">
                         <EventItem
                           event={event}
                           href={eventHref(event)}

@@ -22,7 +22,10 @@ const loadOrg = cache(async (slug: string) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const page = await loadOrg((await params).slug)
-  if (!page) return { title: "Not found" }
+  // An unknown slug renders the not-found page. The status stays 200 once
+  // loading.tsx has streamed, and Next marks the page noindex instead
+  // (Next docs, loading.md "Status Codes").
+  if (!page) notFound()
   const { org } = page
   const description =
     org.shortDescription ?? `${org.name}: what it does, how to join and how to get in touch.`

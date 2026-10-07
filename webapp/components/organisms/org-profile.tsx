@@ -455,7 +455,7 @@ export function OrgProfile({
             {events.length > 0 ? (
               <ul className="flex flex-col gap-2">
                 {events.map((event) => (
-                  <li key={event.key}>
+                  <li key={event.key} className="min-w-0">
                     <EventItem event={event} href={`/events?org=${org.slug}&event=${event.key}`} />
                   </li>
                 ))}
@@ -567,17 +567,18 @@ export function OrgProfile({
                 meta={meta.mailingList}
                 className="sm:grid-cols-1 sm:gap-1"
               >
-                {org.mailingList &&
-                  (org.mailingList.signupUrl ? (
-                    <ExternalLink href={org.mailingList.signupUrl}>
-                      Sign up
-                      {org.mailingList.platform &&
-                        ` (${MAILING_LIST_PLATFORM_LABELS[org.mailingList.platform]})`}
-                    </ExternalLink>
-                  ) : (
-                    org.mailingList.platform &&
-                    MAILING_LIST_PLATFORM_LABELS[org.mailingList.platform]
-                  ))}
+                {org.mailingList && (
+                  <span className="flex flex-wrap items-baseline gap-x-2">
+                    {org.mailingList.signupUrl && (
+                      <ExternalLink href={org.mailingList.signupUrl}>Sign up</ExternalLink>
+                    )}
+                    {org.mailingList.platform && (
+                      <span className="text-muted-foreground">
+                        {MAILING_LIST_PLATFORM_LABELS[org.mailingList.platform]}
+                      </span>
+                    )}
+                  </span>
+                )}
               </Fact>
               {(hasValue(meta.contactFormUrl) || org.contactFormUrl) && (
                 <Fact

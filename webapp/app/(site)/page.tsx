@@ -99,8 +99,15 @@ export default async function HomePage() {
               Find your people in Cambridge.
             </h1>
             <p className="max-w-2xl text-lg text-muted-foreground">
-              <span className="font-mono text-foreground tabular-nums">{facets.total}</span>{" "}
-              societies and clubs in one place, each fact linked to the page it came from.
+              {facets.total > 0 ? (
+                <>
+                  <span className="font-mono text-foreground tabular-nums">{facets.total}</span>{" "}
+                  {facets.total === 1 ? "society or club" : "societies and clubs"} in one place,
+                  each fact linked to the page it came from.
+                </>
+              ) : (
+                "Societies and clubs in one place, each fact linked to the page it came from. The directory is being filled from public sources now."
+              )}
             </p>
           </div>
           <search className="w-full max-w-xl">
@@ -194,7 +201,7 @@ export default async function HomePage() {
           {thisWeek.length > 0 ? (
             <ul className="grid gap-3 md:grid-cols-2">
               {thisWeek.map((event) => (
-                <li key={event.key}>
+                <li key={event.key} className="min-w-0">
                   <EventItem event={event} href={`/events?event=${event.key}`} className="h-full" />
                 </li>
               ))}

@@ -131,7 +131,7 @@ export function RequestForm({
       }
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" initial={false}>
       {done ? (
         <motion.div key="done" {...motionProps} className="flex flex-col gap-6">
           <Alert>
