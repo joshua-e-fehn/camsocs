@@ -23,7 +23,7 @@ import { harvestRunFields } from "../schema"
  */
 
 const EVENT_WINDOW_DAYS = 14
-const MAX_EVENTS = 2_000
+const MAX_EVENTS = 1_000
 const MAX_COUNT = 1_000
 
 const counts = v.record(v.string(), v.number())

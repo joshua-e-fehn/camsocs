@@ -156,8 +156,8 @@ function CamEmailForm({
   if (enabled === false) {
     return (
       <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-        Cambridge email sign-in is not switched on yet. Browsing the directory and public events
-        needs no account.
+        Cambridge email sign-in is not switched on yet, so Cambridge-only events stay hidden for
+        now.
       </p>
     )
   }

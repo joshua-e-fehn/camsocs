@@ -33,7 +33,10 @@ app/                         Next.js App Router pages
   layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster
   page.tsx                   Public landing page
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
-  dashboard/                 Private area (session required; data needs broker access)
+  dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
+                             it is closed): overview, organisations (?org=<key> opens the drawer),
+                             people, interactions, introductions, graph, reports (missing data +
+                             outreach CSV), requests
   not-found.tsx              404
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
 
@@ -71,8 +74,12 @@ convex/
   _generated/                COMMITTED codegen (see .gitignore note)
 
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
+hooks/convex/broker.ts       The broker area's hooks (mounted only inside BrokerGate) + runWithToast
 lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline
+  cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
+  broker/                    Broker analysis shared by browser and tests: coverage, matching,
+                             outreach (CSV + Art 14 notice), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)

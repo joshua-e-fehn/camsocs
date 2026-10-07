@@ -19,7 +19,9 @@ import { literalUnion } from "../lib/validators"
  * ⚠ Every function here calls `requireBrokerUser` first.
  */
 
-const MAX_EDGES = 5_000
+/** Edges are small (a few sightings each); this keeps one read well under
+ * Convex's per-function limit. `relationships` reports `truncated`. */
+const MAX_EDGES = 3_000
 const MAX_PROFILES = 3_000
 const MAX_CARDS = 5_000
 
