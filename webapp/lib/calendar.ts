@@ -132,7 +132,15 @@ export function shiftAnchor(view: CalendarView, anchor: string, step: -1 | 1): s
 
 // --- display ---------------------------------------------------------------------------------
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+/** Monday first, as the calendar grids are laid out. */
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+/** Indexed by `dayOfWeek` as sessions store it (data-model §2): 0 = Sunday. */
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+/** A session's `dayOfWeek` (0 = Sunday) as a name. */
+export function dayName(dayOfWeek: number): string {
+  return DAY_NAMES[dayOfWeek] ?? ""
+}
 const MONTHS = [
   "Jan",
   "Feb",

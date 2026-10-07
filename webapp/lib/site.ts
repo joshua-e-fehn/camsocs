@@ -38,6 +38,10 @@ export const PRIVACY_NOTICE_UPDATED = "2026-10-07"
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"
 
+/** Where a visitor goes to unlock Cambridge-only events: the @cam.ac.uk
+ * sign-in link (built in the auth task; `cam=1` selects that option). */
+export const CAM_SIGN_IN_HREF = "/sign-in?cam=1"
+
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =
   "camsocs is an independent, unofficial project. It is not affiliated with, endorsed by or run by the University of Cambridge, any of its colleges or Cambridge SU."

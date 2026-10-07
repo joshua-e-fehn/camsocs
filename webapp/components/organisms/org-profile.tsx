@@ -16,9 +16,10 @@ import { SourceLine } from "@/components/molecules/source-line"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { formatDate, formatInstantDate } from "@/lib/calendar"
+import { dayName, formatDate, formatInstantDate } from "@/lib/calendar"
 import { formatPence, languageName, paragraphs } from "@/lib/format"
 import type { OrgPage, OrgPublic, RelationshipPublic, SessionPublic } from "@/lib/public-api"
+import { CAM_SIGN_IN_HREF } from "@/lib/site"
 import { hasValue } from "@/lib/source-line"
 import {
   ACTIVITY_TYPE_LABELS,
@@ -46,8 +47,6 @@ import {
  * sight. A server component: it has nothing interactive, so it ships no
  * JavaScript of its own.
  */
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 function Section({
   id,
@@ -123,7 +122,7 @@ function Membership({ membership }: { membership: NonNullable<OrgPublic["members
 
 function Session({ session }: { session: SessionPublic }) {
   const when = [
-    session.dayOfWeek !== undefined ? DAY_NAMES[session.dayOfWeek] : undefined,
+    session.dayOfWeek !== undefined ? dayName(session.dayOfWeek) : undefined,
     session.startTime
       ? session.endTime
         ? `${session.startTime}–${session.endTime}`
@@ -471,7 +470,7 @@ export function OrgProfile({
                 <LockIcon aria-hidden className="size-4" />
                 <span>
                   {hiddenEvents} more Cambridge-only {hiddenEvents === 1 ? "event" : "events"} —{" "}
-                  <Link href="/sign-in?cam=1" className="underline underline-offset-4">
+                  <Link href={CAM_SIGN_IN_HREF} className="underline underline-offset-4">
                     sign in with your @cam.ac.uk email
                   </Link>
                 </span>

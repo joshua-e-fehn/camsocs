@@ -5,7 +5,7 @@ import { RequestForm } from "@/components/organisms/request-form"
 import { api } from "@/convex/_generated/api"
 import { isRequestKind } from "@/lib/listing-request"
 import { CONTACT_EMAIL } from "@/lib/site"
-import type { SearchParams } from "@/lib/url-state"
+import { firstParam, isOrgSlug, type SearchParams } from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
 
@@ -16,17 +16,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/request" },
 }
 
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-
-function one(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value
-}
-
 export default async function RequestPage({ searchParams }: Props) {
   const params = await searchParams
-  const kindParam = one(params.kind)
-  const slug = one(params.org)
-  const page = slug && SLUG.test(slug) ? await fetchQuery(api.orgs.getBySlug, { slug }) : null
+  const kindParam = firstParam(params, "kind")
+  const slug = firstParam(params, "org")
+  const page = slug && isOrgSlug(slug) ? await fetchQuery(api.orgs.getBySlug, { slug }) : null
   const org = page ? { key: page.org.key, slug: page.org.slug, name: page.org.name } : null
 
   return (

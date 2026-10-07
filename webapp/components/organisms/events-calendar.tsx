@@ -47,8 +47,10 @@ import {
   londonIsoDate,
   shiftAnchor,
   viewWindow,
+  WEEKDAYS,
 } from "@/lib/calendar"
 import type { EventPublic, OrgRef } from "@/lib/public-api"
+import { CAM_SIGN_IN_HREF } from "@/lib/site"
 import { type EventsState, serializeEventsState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 import { CATEGORIES, CATEGORY_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/vocab"
@@ -84,7 +86,7 @@ function CamOnlyNote({ preloaded }: { preloaded: Preloaded<typeof api.events.res
         <span>
           <span className="font-mono tabular-nums">{camOnly}</span> more Cambridge-only{" "}
           {camOnly === 1 ? "event" : "events"} in this view —{" "}
-          <Link href="/sign-in?cam=1">sign in with your @cam.ac.uk email</Link> to see{" "}
+          <Link href={CAM_SIGN_IN_HREF}>sign in with your @cam.ac.uk email</Link> to see{" "}
           {camOnly === 1 ? "it" : "them"}.
         </span>
       </AlertDescription>
@@ -126,7 +128,7 @@ function EventSheet({
             <SheetTitle>Event not available</SheetTitle>
             <SheetDescription>
               It may have been removed, or it is a Cambridge-only event:{" "}
-              <Link href="/sign-in?cam=1" className="underline underline-offset-4">
+              <Link href={CAM_SIGN_IN_HREF} className="underline underline-offset-4">
                 sign in with your @cam.ac.uk email
               </Link>{" "}
               to see those.
@@ -413,7 +415,7 @@ export function EventsCalendar({
               aria-hidden
               className="grid grid-cols-7 gap-1 font-mono text-[11px] text-muted-foreground uppercase"
             >
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
+              {WEEKDAYS.map((name) => (
                 <span key={name} className="px-1">
                   {name}
                 </span>

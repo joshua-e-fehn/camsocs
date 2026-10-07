@@ -1,6 +1,7 @@
 import type { FunctionArgs } from "convex/server"
 import type { api } from "@/convex/_generated/api"
 import { CALENDAR_VIEWS, type CalendarView, isIsoDate } from "./calendar"
+import { SLUG_MAX_LENGTH } from "./keys"
 import {
   ACTIVITY_TYPES,
   AUDIENCES,
@@ -33,7 +34,13 @@ const ORG_KEY = /^org-[a-z0-9]+(?:-[a-z0-9]+)*$/
 const ORG_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const EVENT_KEY = /^evt-[0-9a-f]{40}$/
 
-function first(params: SearchParams, name: string): string | undefined {
+/** A slug as lib/keys.ts mints it: `[a-z0-9]` runs joined by single hyphens. */
+export function isOrgSlug(value: string): boolean {
+  return ORG_SLUG.test(value) && value.length <= SLUG_MAX_LENGTH
+}
+
+/** The first value of a search parameter (a repeated one comes as an array). */
+export function firstParam(params: SearchParams, name: string): string | undefined {
   const value = params[name]
   return Array.isArray(value) ? value[0] : value
 }
@@ -58,7 +65,7 @@ function orgKeys(params: SearchParams, name: string): string[] {
 }
 
 function query(params: SearchParams): string | undefined {
-  const q = first(params, "q")?.trim().slice(0, MAX_QUERY)
+  const q = firstParam(params, "q")?.trim().slice(0, MAX_QUERY)
   return q ? q : undefined
 }
 
@@ -106,8 +113,8 @@ export const EMPTY_DIRECTORY: DirectoryState = {
 }
 
 export function parseDirectoryParams(params: SearchParams): DirectoryState {
-  const beginner = first(params, "beginner")
-  const page = Number.parseInt(first(params, "page") ?? "1", 10)
+  const beginner = firstParam(params, "beginner")
+  const page = Number.parseInt(firstParam(params, "page") ?? "1", 10)
   return {
     q: query(params),
     categories: oneOf(params, "cat", CATEGORIES),
@@ -207,10 +214,10 @@ export type EventsState = {
 }
 
 export function parseEventsParams(params: SearchParams): EventsState {
-  const view = first(params, "view")
-  const date = first(params, "date")
-  const org = first(params, "org")
-  const event = first(params, "event")
+  const view = firstParam(params, "view")
+  const date = firstParam(params, "date")
+  const org = firstParam(params, "org")
+  const event = firstParam(params, "event")
   return {
     view: (CALENDAR_VIEWS as readonly string[]).includes(view ?? "")
       ? (view as CalendarView)
@@ -220,7 +227,7 @@ export function parseEventsParams(params: SearchParams): EventsState {
     categories: oneOf(params, "cat", CATEGORIES),
     eventTypes: oneOf(params, "type", EVENT_TYPES),
     collegeKeys: orgKeys(params, "college"),
-    org: org && ORG_SLUG.test(org) && org.length <= 80 ? org : undefined,
+    org: org && isOrgSlug(org) ? org : undefined,
     event: event && EVENT_KEY.test(event) ? event : undefined,
   }
 }

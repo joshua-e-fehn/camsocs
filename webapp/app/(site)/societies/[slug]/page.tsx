@@ -7,16 +7,15 @@ import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
+import { isOrgSlug } from "@/lib/url-state"
 
 type Props = { params: Promise<{ slug: string }> }
-
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 /** One fetch per request, shared by the metadata and the page. With the
  * viewer's token: the upcoming events include Cambridge-only ones for a
  * verified @cam.ac.uk visitor. */
 const loadOrg = cache(async (slug: string) => {
-  if (!SLUG.test(slug) || slug.length > 80) return null
+  if (!isOrgSlug(slug)) return null
   return await fetchQuery(api.orgs.getBySlug, { slug }, { token: await getToken() })
 })
 
