@@ -38,7 +38,7 @@ STAGES: list[Stage] = [
     #
     # ── harvest (T3): who exists — each writes var/staging/<source_type>/ ──────
     # SU Find a Society directory + profiles (§1).
-    # Stage("su_directory"),
+    Stage("su_directory", description="SU directory + every profile → staging"),
     #
     # Proctors' register (§2).
     # Stage("proctors_register"),
