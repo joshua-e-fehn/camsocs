@@ -286,6 +286,9 @@ pipeline API and does not accept the pipeline key.
 - Deduplicated by `Message-ID`; HTML (≤ 2 MB) and kept attachments (images, PDF,
   calendars; ≤ 5 MB each, at most 10; never SVG) go to storage; `List-Id` is parsed into
   `listId` / `listName`; `receivedAt` is the `Date` header clamped to now.
+- `INBOUND_EMAIL_RECIPIENTS`, when set, must match `To`/`Cc` or a delivery header
+  (`Delivered-To`, `X-Original-To`, `Resent-To`, `Received … for <…>`); for Resend this is
+  checked after the headers are fetched.
 - Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`; 401 bad signature or secret;
   400 malformed; 413 too large; 502/503 when Resend's API failed or is not configured
   (Resend retries for about a day).

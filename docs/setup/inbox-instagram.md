@@ -76,6 +76,8 @@ The route is deployed with the T7 code. `bunx convex dev --once` pushes it to de
 
 If you ever forward by hand, forward *as attachment* or redirect, for the same reason.
 
+**Check the first redirected list mail** in Resend's webhook log. It should answer `{"stored":true}`. If it answers `{"ignored":"recipient"}`, the redirect did not name the inbound address in any delivery header. In that case, unset `INBOUND_EMAIL_RECIPIENTS` (`bunx convex env remove INBOUND_EMAIL_RECIPIENTS`): the Svix signature still proves each mail came through your Resend inbox, and the unguessable address keeps strangers out.
+
 **2. External forwarding.** Cambridge Exchange Online allows external forwarding (Engineering IT help: https://help.eng.cam.ac.uk/email/forwarding-your-email/). If redirected mail never reaches Resend, check whether Microsoft has blocked automatic forwarding for the tenant. In that case, ask UIS (or Engineering IT) about the outbound spam policy for your mailbox.
 
 **3. Work through the sign-up list.** Run:

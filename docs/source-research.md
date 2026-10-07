@@ -228,7 +228,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **The route** (`POST /api/inbound/email`)
 - Two senders: Resend (Svix-signed, `RESEND_WEBHOOK_SECRET`; content fetched with `RESEND_INBOUND_API_KEY` or `RESEND_API_KEY`, which needs full access) and a provider-agnostic JSON body behind `Authorization: Bearer $INBOUND_EMAIL_SECRET` (`webapp/lib/inbound-email.ts` documents the shape). Either secret unset → 401 for that sender.
-- Optional `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one of those addresses: use an unguessable local part, so strangers who learn the receiving domain cannot post events.
+- Optional `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one of those addresses: use an unguessable local part, so strangers who learn the receiving domain cannot post events. A redirected list mail keeps the list's address in `To:`, so the check also reads `Delivered-To`, `X-Original-To`, `Resent-To` and the `for <…>` of `Received` headers, after fetching them.
 - Limits: 15 MB per request, 100 000 characters of text, HTML ≤ 2 MB (to storage), at most 10 attachments of ≤ 5 MB each. Only images, PDF and calendar files are kept, never SVG; skipped files are named in `extractionNote`.
 - `receivedAt` is the mail's `Date` header when it lies between a week before and a day after receipt, clamped to now (the claims API refuses future retrieval times); else when Resend received it.
 - Nothing in `inboundEmails` is returned by a public function. Files reach the pipeline only through `POST /api/pipeline/inbound/file`, which serves a file only for the mail it belongs to.
