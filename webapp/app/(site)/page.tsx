@@ -149,7 +149,8 @@ export default async function HomePage() {
       </section>
 
       <section aria-labelledby="categories" className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6">
-        <Reveal className="flex flex-col gap-6">
+        {/* Not revealed: it sits at the fold, and must be visible before scripts run. */}
+        <div className="flex flex-col gap-6">
           <div className="flex items-end justify-between gap-4">
             <h2 id="categories" className="text-2xl font-semibold tracking-tight">
               Browse by category
@@ -182,7 +183,7 @@ export default async function HomePage() {
               )
             })}
           </ul>
-        </Reveal>
+        </div>
       </section>
 
       <section aria-labelledby="this-week" className="border-y bg-muted/30">

@@ -34,7 +34,9 @@ export function SearchField({
   const [text, setText] = useState(value)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latest = useRef(onSearch)
-  latest.current = onSearch
+  useEffect(() => {
+    latest.current = onSearch
+  })
 
   useEffect(() => setText(value), [value])
   useEffect(
