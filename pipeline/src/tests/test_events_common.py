@@ -387,3 +387,24 @@ def test_no_events_module_can_reach_an_llm() -> None:
                 imported.add(node.module or "")
                 imported |= {alias.name for alias in node.names}
         assert not {"camsocs_pipeline.extract.llm", "llm_field", "openai"} & imported, path.name
+
+
+def test_personal_crsid_addresses_never_reach_a_public_field() -> None:
+    from camsocs_pipeline.events.common import redact_personal_emails
+
+    text = (
+        "Tickets: ab123@cam.ac.uk or XYZ9@hermes.cam.ac.uk; committee: president@soc.example, "
+        "soc-chess@lists.cam.ac.uk, jcr@jesus.cam.ac.uk."
+    )
+    assert redact_personal_emails(text) == (
+        "Tickets: [personal email withheld] or [personal email withheld]; committee: "
+        "president@soc.example, soc-chess@lists.cam.ac.uk, jcr@jesus.cam.ac.uk."
+    )
+    observation = build_event_observation(
+        draft(title="Talk (RSVP ab123@cam.ac.uk)", description="Email ab123@cam.ac.uk"),
+        source_type="ics_feed",
+        source_url="https://x.org/c.ics",
+        retrieved_at=AT,
+        evidence="primary",
+    )
+    assert "ab123" not in observation.model_dump_json()

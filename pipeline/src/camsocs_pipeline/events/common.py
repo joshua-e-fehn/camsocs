@@ -25,6 +25,11 @@ re-read timezone) are claimed as ``inferred``.
 nobody can match yet goes to ``unresolved_organisers`` instead of holding the
 event back (`models.observation.EventObservation`).
 
+**Personal addresses.** A CRSid-shaped address on cam.ac.uk (the server's
+`personal_crsid` rule) names a person and never reaches a public field, so it
+is replaced by ``[personal email withheld]`` in titles, descriptions and venue
+text; role addresses (``president@soc.org``, ``soc-x@lists.cam.ac.uk``) stay.
+
 **Content hashes.** Event observations carry no ``content_sha256``: a feed or
 diary changes for unrelated reasons (a DTSTAMP of "now", a shifted window), and
 the claim fingerprint would then change every run. Without it, re-posting the
@@ -180,6 +185,30 @@ def clean_text(text: str | None, *, max_length: int | None = None) -> str | None
     if max_length is not None and len(value) > max_length:
         value = value[: max_length - 1].rstrip() + "…"
     return value
+
+
+_EMAIL = re.compile(r"(?<![\w.+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")
+#: A CRSid-shaped local part (webapp/convex/lib/derived.ts `CRSID_LOCAL`).
+_CRSID_LOCAL = re.compile(r"^[a-z]{2,5}[0-9]{1,5}$")
+WITHHELD = "[personal email withheld]"
+
+
+def is_personal_crsid(local: str, domain: str) -> bool:
+    """The server's `classifyEmail` rule for `personal_crsid`: a CRSid-shaped
+    address on cam.ac.uk or a subdomain (not lists.cam.ac.uk)."""
+    domain = domain.lower().rstrip(".")
+    on_cam = domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")
+    return on_cam and domain != "lists.cam.ac.uk" and bool(_CRSID_LOCAL.match(local.lower()))
+
+
+def redact_personal_emails(text: str | None) -> str | None:
+    """Replaces personal CRSid addresses in free text: they name a person and
+    never appear in a public field (AGENTS.md), even inside a description."""
+    if not text:
+        return text
+    return _EMAIL.sub(
+        lambda m: WITHHELD if is_personal_crsid(m.group(1), m.group(2)) else m.group(0), text
+    )
 
 
 def single_line(text: str | None, *, max_length: int) -> str | None:
@@ -390,11 +419,14 @@ def build_event_observation(
             )
         )
 
-    put("title", single_line(draft.title, max_length=TITLE_MAX))
+    put("title", single_line(redact_personal_emails(draft.title), max_length=TITLE_MAX))
     put("startsAt", epoch_ms(draft.starts_at))
     put("endsAt", epoch_ms(draft.ends_at) if draft.ends_at is not None else None)
     put("allDay", draft.all_day)
-    put("description", clean_text(draft.description, max_length=DESCRIPTION_MAX))
+    put(
+        "description",
+        clean_text(redact_personal_emails(draft.description), max_length=DESCRIPTION_MAX),
+    )
     if draft.page_url:
         put("sourceUrl", draft.page_url)
     put("speakers", draft.speakers or None)
@@ -415,7 +447,7 @@ def build_event_observation(
 
     venue = draft.venue
     if venue is not None:
-        name = single_line(venue.name, max_length=VENUE_TEXT_MAX)
+        name = single_line(redact_personal_emails(venue.name), max_length=VENUE_TEXT_MAX)
         if name is None:
             venue = None
         else:
@@ -530,6 +562,7 @@ __all__ = [
     "merge_drafts",
     "observations_from",
     "polite_client",
+    "redact_personal_emails",
     "single_line",
     "write_staging",
 ]
