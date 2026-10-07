@@ -5,7 +5,7 @@ never talks to Convex and never mints organisation keys: it records what one
 source said about one thing as an `Observation` (organisations, teams,
 sessions, venues) or an `EventObservation`, with `IdentityHints` saying how
 to recognise who it is about. `staging.store` writes them as JSONL under
-``var/staging/<source_type>/<run_key>.jsonl``.
+``var/staging/<source_type>/<run_key>--<stage>.jsonl``.
 
 Then:
 
@@ -16,7 +16,7 @@ Then:
 2. stages that run after resolve (enrichment, events, inbox) may write
    observations that already carry keys, to their own source directory;
 3. **load** posts every *keyed* observation (`Observation.is_keyed`) from the
-   latest file of each directory: claims, sources, orgInternal,
+   latest file of each directory (and stage part): claims, sources, orgInternal,
    relationships, broker inferences and event organisers
    (`pipeline.load.ConvexLoader.post_observations`).
 
@@ -194,7 +194,10 @@ class Observation(_ObservationBase):
     kind: Literal["observation"] = "observation"
     entity_type: EntityTypeStr
     identity: IdentityHints
-    #: The owning organisation, for a team or session.
+    #: The owning organisation, for a team or session (→ ``orgKey``); for an
+    #: organisation, the one it sits inside, e.g. a JCR's college (→ ``parentKey``).
+    #: An outgoing ``member_college`` relationship also yields ``collegeKeys``
+    #: (`claims.claims_for_observation`).
     parent: IdentityHints | None = None
     #: Set by the resolver (or a stage that already knows the entity).
     entity_key: str | None = None
