@@ -7,6 +7,7 @@ import { ConvexClientProvider } from "@/components/providers/convex-client-provi
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { getToken } from "@/lib/auth-server"
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
 import { cn } from "@/lib/utils"
 
 const fontSans = Geist({
@@ -20,11 +21,23 @@ const fontMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "camsocs",
-    template: "%s · camsocs",
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s · ${SITE_NAME}`,
   },
-  description: "A sourced directory of Cambridge societies and sports clubs.",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  // Open Graph without any University branding: our wordmark only
+  // (app/opengraph-image.tsx).
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "en_GB",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
 }
 
 export default async function RootLayout({
@@ -37,7 +50,7 @@ export default async function RootLayout({
 
   return (
     <html
-      lang="en"
+      lang="en-GB"
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", fontSans.variable)}
     >

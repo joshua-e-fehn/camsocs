@@ -1,7 +1,7 @@
 import { v } from "convex/values"
 import type { HarvestRunStatus } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server"
+import { internalMutation, internalQuery, type MutationCtx, query } from "./_generated/server"
 import { assertBatchSize, sameFields, withoutSystemFields } from "./lib/ingest"
 import { type HarvestStageResult, harvestRunFields, harvestStageResult } from "./schema"
 
@@ -138,5 +138,31 @@ export const latest = internalQuery({
       .order("desc")
       .take(limit)
     return rows.map((row) => withoutSystemFields<"harvestRuns">(row))
+  },
+})
+
+/** Runs inspected for `lastHarvest`; a run of failures longer than this is a
+ * broken pipeline, and "no recent harvest" is then the honest answer. */
+const LAST_HARVEST_SCAN = 50
+
+/**
+ * When the pipeline last finished a run that wrote data (`success` or
+ * `partial`) — for the About page's "last harvest" line. The one public read of
+ * the run log, and it returns only that instant: stages, counts, warnings and
+ * errors stay internal. Null before the first such run.
+ */
+export const lastHarvest = query({
+  args: {},
+  returns: v.union(v.null(), v.object({ finishedAt: v.number() })),
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("harvestRuns")
+      .withIndex("by_startedAt")
+      .order("desc")
+      .take(LAST_HARVEST_SCAN)
+    const run = rows.find(
+      (row) => row.finishedAt !== null && (row.status === "success" || row.status === "partial"),
+    )
+    return run?.finishedAt ? { finishedAt: run.finishedAt } : null
   },
 })

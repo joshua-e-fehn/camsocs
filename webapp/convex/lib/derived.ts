@@ -1,3 +1,4 @@
+import { DAY_MS, isoDateMs, londonIsoDate, londonOffsetMs } from "../../lib/calendar"
 import {
   CATEGORY_LABELS,
   type Category,
@@ -15,39 +16,12 @@ import type { FieldMeta } from "./resolve"
  * from the daily cron; nothing here reads the database.
  */
 
-export const DAY_MS = 24 * 60 * 60 * 1000
-
 /** An organisation is `active` with dated activity within this window. */
 export const ACTIVE_WINDOW_MS = 180 * DAY_MS
 
-// --- Europe/London calendar ------------------------------------------------------------
-
-/** Epoch ms of the last Sunday of `month` (0-based) in `year`, 01:00 UTC — when
- * UK clocks change (EU rule, in force since 1996). */
-function lastSundayAt1Utc(year: number, month: number): number {
-  const lastDay = new Date(Date.UTC(year, month + 1, 0))
-  const sunday = lastDay.getUTCDate() - lastDay.getUTCDay()
-  return Date.UTC(year, month, sunday, 1)
-}
-
-/** Offset of Europe/London from UTC at `ms`, in ms (0 or 1 h). Computed rather
- * than via `Intl`, whose time-zone data is not guaranteed in every runtime. */
-export function londonOffsetMs(ms: number): number {
-  const year = new Date(ms).getUTCFullYear()
-  const bst = ms >= lastSundayAt1Utc(year, 2) && ms < lastSundayAt1Utc(year, 9)
-  return bst ? 60 * 60 * 1000 : 0
-}
-
-/** The Europe/London calendar date of an instant, `YYYY-MM-DD`. */
-export function londonIsoDate(ms: number): string {
-  return new Date(ms + londonOffsetMs(ms)).toISOString().slice(0, 10)
-}
-
-/** Midnight UTC of an ISO date, as epoch ms — for day arithmetic on dates. */
-function isoDateMs(iso: string): number {
-  const [year, month, day] = iso.split("-").map(Number)
-  return Date.UTC(year, month - 1, day)
-}
+// The Europe/London calendar lives in lib/calendar.ts (shared with the
+// webapp's events calendar); re-exported here for the Convex modules.
+export { DAY_MS, londonIsoDate, londonOffsetMs }
 
 /**
  * The academic year an instant falls in, e.g. "2026-27". Years turn over on

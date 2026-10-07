@@ -94,7 +94,11 @@ style `radix-nova`): greys with a faint violet tint (oklch hue ≈ 320–326), n
 
 ### ✏️ Semantic Colors (extend as needed)
 
-When the project purpose is defined, add these custom tokens to `globals.css`:
+In use (`app/globals.css`, light and dark): `--success` / `--success-foreground` and `--warning` /
+`--warning-foreground`, for provenance chips only (found / owner-confirmed; inferred / conflicting —
+`components/molecules/source-line.tsx`). Always with an icon and a word, never colour alone.
+
+Further tokens, if a need appears:
 
 ```css
 /* Example — uncomment and adjust when ready:

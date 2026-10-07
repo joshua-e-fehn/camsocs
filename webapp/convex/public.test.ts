@@ -229,6 +229,25 @@ describe("events.list / events.get", () => {
   })
 })
 
+describe("events.restrictedCount", () => {
+  test("counts the cam_only events a visitor cannot see, under the same filters", async () => {
+    const t = newTest()
+    await seed(t)
+    const window = { from: NOW, to: NOW + 30 * DAY }
+    // One cam_only event; the members_only one is never counted or shown.
+    expect(await t.query(api.events.restrictedCount, window)).toEqual({ camOnly: 1 })
+    expect(await t.query(api.events.restrictedCount, { ...window, eventTypes: ["talk"] })).toEqual({
+      camOnly: 0,
+    })
+    expect(await t.query(api.events.restrictedCount, { ...window, orgKey: "org-chess" })).toEqual({
+      camOnly: 1,
+    })
+
+    const cam = await signedInAs(t, "xy789@cam.ac.uk")
+    expect(await cam.query(api.events.restrictedCount, window)).toEqual({ camOnly: 0 })
+  })
+})
+
 describe("listingRequests.submit", () => {
   const request = {
     kind: "correct" as const,
@@ -265,6 +284,42 @@ describe("listingRequests.submit", () => {
       })
     }
     await expect(t.mutation(api.listingRequests.submit, request)).rejects.toThrow(/Too many/)
+  })
+})
+
+describe("listingRequests.submit — the form's other paths", () => {
+  test("an add request needs no listing; every other kind does", async () => {
+    const t = newTest()
+    await seed(t)
+    const base = { submitterEmail: "sec@newsoc.example", message: "Please add the Go Society." }
+    const { key } = await t.mutation(api.listingRequests.submit, {
+      ...base,
+      kind: "add",
+      fields: { name: "CU Go Society", website: "https://go.example.org/" },
+    })
+    expect(key).toMatch(/^lr-/)
+    for (const kind of ["claim", "correct", "remove", "object"] as const) {
+      await expect(t.mutation(api.listingRequests.submit, { ...base, kind })).rejects.toThrow(
+        /Which listing/,
+      )
+    }
+  })
+
+  test("refuses field names that are not identifiers and oversized values", async () => {
+    const t = newTest()
+    await seed(t)
+    const base = {
+      kind: "correct" as const,
+      orgKey: "org-chess",
+      submitterEmail: "sec@cuchess.org",
+      message: "Two corrections to the listing.",
+    }
+    await expect(
+      t.mutation(api.listingRequests.submit, { ...base, fields: { "<script>": "x" } }),
+    ).rejects.toThrow(/Not a field name/)
+    await expect(
+      t.mutation(api.listingRequests.submit, { ...base, fields: { website: "x".repeat(2_001) } }),
+    ).rejects.toThrow(/too long/)
   })
 })
 

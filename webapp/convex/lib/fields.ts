@@ -1,4 +1,5 @@
 import { type GenericValidator, type Infer, v } from "convex/values"
+import { isEmail, isHttpUrl } from "../../lib/syntax"
 import {
   ACTIVITY_TYPES,
   AUDIENCES,
@@ -134,22 +135,14 @@ export const priceValidator = v.object({
 
 type Check = (value: unknown) => string | null
 
-const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i
 const ORG_KEY = /^org-[a-z0-9-]+$/
 
-/** A plausible email address (syntax only; never a reason to guess one). */
-export function isEmail(value: string): boolean {
-  return EMAIL.test(value) && value.length <= 254
-}
+// Shared with the public form's in-browser checks.
+export { isEmail, isHttpUrl }
 
 /** An organisation key as lib/keys.ts mints it. */
 export function isOrgKey(value: string): boolean {
   return ORG_KEY.test(value)
-}
-
-/** Every URL we store may end up as an `href`: http(s) only. */
-export function isHttpUrl(value: string): boolean {
-  return /^https?:\/\/[^\s/]+\.[^\s]*$/i.test(value) && value.length <= 2048
 }
 
 const checks = {

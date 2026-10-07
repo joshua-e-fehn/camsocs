@@ -1,6 +1,7 @@
 import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs"
 import { getToken as libraryGetToken } from "@convex-dev/better-auth/utils"
 import { headers as nextHeaders } from "next/headers"
+import { cache } from "react"
 import { stripConvexIngressUnsafeHeaders } from "@/lib/auth-forwarded-headers"
 import { requireConvexUrls } from "@/lib/convex-url"
 
@@ -53,8 +54,12 @@ export const {
  * headers. The library's own Next.js variant forwards Vercel's inbound
  * `x-forwarded-host`, which Convex's edge answers with a 404 that `betterFetch`
  * reports as "no data" — indistinguishable from a signed-out reader.
+ *
+ * Memoised per request (`React.cache`): the root layout and the page that
+ * preloads viewer-dependent queries both ask, and each ask is an HTTP round
+ * trip to the Convex site.
  */
-export async function getToken(): Promise<string | undefined> {
+export const getToken = cache(async (): Promise<string | undefined> => {
   const inbound = new Headers(await nextHeaders())
   // Mirrors the library's own hop-by-hop handling.
   inbound.delete("content-length")
@@ -63,4 +68,4 @@ export async function getToken(): Promise<string | undefined> {
 
   const { token } = await libraryGetToken(siteUrl, stripConvexIngressUnsafeHeaders(inbound))
   return token
-}
+})

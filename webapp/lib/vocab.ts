@@ -553,3 +553,252 @@ export type SessionField = (typeof SESSION_FIELDS)[number]
 
 export const VENUE_FIELDS = ["name", "aliases", "address", "collegeKey", "lat", "lng"] as const
 export type VenueField = (typeof VENUE_FIELDS)[number]
+
+// --- display labels (public site) ------------------------------------------------------
+//
+// Records, not tuples: the parity test reads only `export const NAME = [...] as
+// const`, and `Record<Union, string>` makes the compiler insist every value has
+// a label.
+
+export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
+  university: "University",
+  college: "College",
+  department: "Department",
+  intercollegiate: "Intercollegiate",
+  external: "External",
+}
+
+export const ORG_TYPE_LABELS: Record<OrgType, string> = {
+  society: "Society",
+  sports_club: "Sports club",
+  college_club: "College club",
+  jcr: "JCR",
+  mcr: "MCR",
+  college_boat_club: "College boat club",
+  college: "College",
+  department: "Department",
+  uni_office: "University office",
+  student_union: "Students' union",
+  company: "Company",
+  ngo: "Charity or NGO",
+  public_body: "Public body",
+  other_university_society: "Society at another university",
+  media: "Student media",
+  theatre_company: "Theatre company",
+  other: "Other",
+}
+
+export const ORG_STATUS_LABELS: Record<OrgStatus, string> = {
+  active: "Active",
+  dormant: "Dormant",
+  archived: "Archived",
+  unknown: "Activity unknown",
+}
+
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  talks: "Talks",
+  socials: "Socials",
+  competitions: "Competitions",
+  performances: "Performances",
+  workshops: "Workshops",
+  trips: "Trips",
+  training: "Training",
+  publications: "Publications",
+  volunteering: "Volunteering",
+  careers_events: "Careers events",
+  formals: "Formals",
+  worship: "Worship",
+  meetings: "Meetings",
+}
+
+export const AUDIENCE_LABELS: Record<Audience, string> = {
+  undergraduates: "Undergraduates",
+  postgraduates: "Postgraduates",
+  staff: "Staff",
+  alumni: "Alumni",
+  public: "Open to the public",
+  own_college_only: "Own college only",
+  women: "Women",
+  men: "Men",
+  mixed: "Mixed",
+  lgbtq: "LGBTQ+",
+  international: "International students",
+  beginners: "Beginners",
+}
+
+export const BLUE_STATUS_LABELS: Record<BlueStatus, string> = {
+  full: "Full Blue",
+  full_some: "Full Blue (some players)",
+  discretionary_full: "Discretionary Full Blue",
+  half: "Half Blue",
+  none: "No Blue",
+}
+
+export const GENDER_CATEGORY_LABELS: Record<GenderCategory, string> = {
+  men: "Men",
+  women: "Women",
+  open: "Open",
+  mixed: "Mixed",
+}
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  talk: "Talk",
+  social: "Social",
+  performance: "Performance",
+  competition: "Competition",
+  match: "Match",
+  workshop: "Workshop",
+  trip: "Trip",
+  formal: "Formal",
+  careers: "Careers",
+  meeting: "Meeting",
+  training: "Training",
+  worship: "Worship",
+  fair: "Fair",
+  other: "Other",
+}
+
+export const EVENT_SOURCE_LABELS: Record<EventSource, string> = {
+  camdram: "Camdram",
+  talks_cam: "talks.cam",
+  ics: "Calendar feed",
+  luma: "Luma",
+  google_calendar: "Google Calendar",
+  playwaze: "Playwaze",
+  uni_events_api: "University events listing",
+  cucbc: "CUCBC",
+  su_whatson: "SU What's On",
+  mailing_list: "Society mailing list",
+  instagram_api: "Instagram (official API)",
+  termcard: "Termcard",
+  website: "Society website",
+  manual: "Added by hand",
+}
+
+export const ROLE_LABELS: Record<Role, string> = {
+  president: "President",
+  secretary: "Secretary",
+  treasurer: "Treasurer",
+  sponsorship: "Sponsorship",
+  events: "Events",
+  publicity: "Publicity",
+  welfare: "Welfare",
+  captain: "Captain",
+  other: "Other",
+}
+
+export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatform, string> = {
+  instagram: "Instagram",
+  facebook_page: "Facebook",
+  facebook_group: "Facebook group",
+  x: "X",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  linktree: "Linktree",
+  website_blog: "Blog",
+  wechat: "WeChat",
+  threads: "Threads",
+  bluesky: "Bluesky",
+}
+
+export const CHAT_PLATFORM_LABELS: Record<ChatPlatform, string> = {
+  whatsapp: "WhatsApp",
+  discord: "Discord",
+  telegram: "Telegram",
+  slack: "Slack",
+  groupme: "GroupMe",
+}
+
+export const MAILING_LIST_PLATFORM_LABELS: Record<MailingListPlatform, string> = {
+  sympa: "University mailing list (Sympa)",
+  mailchimp: "Mailchimp",
+  google_group: "Google Group",
+  other: "Mailing list",
+}
+
+export const MEMBERSHIP_PERIOD_LABELS: Record<MembershipPeriod, string> = {
+  life: "for life",
+  year: "per year",
+  term: "per term",
+  one_off: "one-off",
+  free: "free",
+}
+
+export const TERM_SCOPE_LABELS: Record<TermScope, string> = {
+  full_term: "Full Term",
+  all_year: "All year",
+  michaelmas: "Michaelmas",
+  lent: "Lent",
+  easter: "Easter",
+}
+
+export const REGISTRATION_BODY_LABELS: Record<RegistrationBody, string> = {
+  su: "Cambridge SU directory",
+  proctors: "Proctors' register",
+  sportsService: "Sport Cambridge clubs",
+  camdram: "Camdram",
+  cucbc: "CUCBC",
+}
+
+export const LISTING_REQUEST_KIND_LABELS: Record<ListingRequestKind, string> = {
+  claim: "Claim this listing",
+  correct: "Correct something",
+  remove: "Remove this listing",
+  object: "Object to processing",
+  add: "Add a missing society",
+}
+
+/** What a visitor sees for each organisation field (missing-field lists and
+ * the correction form). */
+export const ORGANISATION_FIELD_LABELS: Record<OrganisationField, string> = {
+  name: "Name",
+  aliases: "Other names",
+  shortName: "Short name",
+  orgType: "Type",
+  level: "Level",
+  collegeKeys: "College",
+  collegeBody: "College body",
+  parentKey: "Parent organisation",
+  isCounterpart: "Partner organisation",
+  defunct: "Defunct",
+  lastActiveAt: "Last activity",
+  "registrations.su": "SU registration",
+  "registrations.proctors": "Proctors' registration",
+  "registrations.sportsService": "Sport Cambridge registration",
+  "registrations.camdram": "Camdram listing",
+  "registrations.cucbc": "CUCBC membership",
+  categories: "Categories",
+  activityTypes: "Activities",
+  audiences: "Who it is for",
+  languages: "Languages",
+  tags: "Tags",
+  suCategory: "SU category",
+  department: "Department",
+  logo: "Logo",
+  shortDescription: "Short description",
+  description: "Description",
+  howToJoin: "How to join",
+  joinUrl: "Join link",
+  membership: "Membership and prices",
+  beginnerFriendly: "Beginner-friendly",
+  trials: "Trials or auditions",
+  timeCommitment: "Time commitment",
+  termcardUrl: "Termcard",
+  accessibilityNote: "Accessibility",
+  "sport.sport": "Sport",
+  "sport.blueStatus": "Blue status",
+  "sport.varsity": "Varsity",
+  "sport.bucs": "BUCS",
+  "sport.collegeCompetition": "College competition",
+  "sport.genderCategories": "Gender categories",
+  "sport.kitCostNote": "Kit costs",
+  "sport.venues": "Training venues",
+  website: "Website",
+  email: "General email",
+  roleEmails: "Role email addresses",
+  contactFormUrl: "Contact form",
+  mailingList: "Mailing list",
+  socials: "Social media",
+  chatChannels: "Group chats",
+}
