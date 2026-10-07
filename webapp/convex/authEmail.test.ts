@@ -54,7 +54,7 @@ function requestLink(t: TestConvex, email: string) {
 
 /** The link in the last email, as the path + query `t.fetch` takes. */
 function lastLinkPath(): string {
-  const match = sent.at(-1)?.body.text.match(/https?:\/\/\S+/)
+  const match = sent[sent.length - 1]?.body.text.match(/https?:\/\/\S+/)
   if (!match) throw new Error("no link in the email")
   const url = new URL(match[0])
   expect(url.origin).toBe(SITE)
