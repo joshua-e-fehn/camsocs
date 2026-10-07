@@ -153,6 +153,40 @@ def chunked(items: Sequence[Any], size: int = MAX_BATCH) -> Iterator[Sequence[An
         yield items[start : start + size]
 
 
+def entity_batches(claims: Sequence[ClaimInput], size: int = MAX_BATCH) -> list[list[ClaimInput]]:
+    """Claims in batches that never split one entity's claims, in first-seen
+    entity order.
+
+    The claims route creates an entity only from claims in the same request
+    that carry its required fields (an organisation's `name`; an event's title,
+    start, visibility, source, …). Observations of one organisation are often
+    staged apart — a name-less register row, then the page that names it — so
+    a plain chunk boundary could send the name-less part first, alone, and
+    have it refused. Keeping each entity's claims together avoids that. An
+    entity with more than `size` claims is split, its earliest-staged claims
+    (which carry the creating fields) first."""
+    if size < 1:
+        raise ValueError("batch size must be positive")
+    groups: dict[tuple[str, str], list[ClaimInput]] = {}
+    for claim in claims:
+        groups.setdefault((claim.entity_type, claim.entity_key), []).append(claim)
+    batches: list[list[ClaimInput]] = []
+    current: list[ClaimInput] = []
+    for group in groups.values():
+        if current and len(current) + len(group) > size:
+            batches.append(current)
+            current = []
+        for start in range(0, len(group), size):
+            piece = group[start : start + size]
+            if len(current) + len(piece) > size:
+                batches.append(current)
+                current = []
+            current.extend(piece)
+    if current:
+        batches.append(current)
+    return batches
+
+
 class ConvexLoader:
     """Posts to the Convex ingestion API. One instance per run."""
 
@@ -303,7 +337,14 @@ class ConvexLoader:
     ) -> BatchResult:
         """`claims`: append to the claim log and re-resolve the touched entities."""
         extra = {"runKey": run_key} if run_key else None
-        return self.post_batches("claims", "claims", claims, extra=extra)
+        result = BatchResult("claims")
+        for batch in entity_batches(claims):
+            result.record(
+                self.post("claims", {**(extra or {}), "claims": [c.to_wire() for c in batch]})
+            )
+        if result.requests:
+            logger.info("claims → %s", result)
+        return result
 
     def upsert_sources(self, sources: Sequence[SourceInput]) -> BatchResult:
         return self.post_batches("sources", "sources", sources)
@@ -555,6 +596,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     """Turns keyed observations into wire rows. See `ConvexLoader.post_observations`."""
     plan = LoadPlan()
     sources: dict[str, SourceInput] = {}
+    #: The organisations each fetched page was observed for. A page observed
+    #: for several (a directory, a register, an A–Z) belongs to none of them.
+    owners: dict[str, set[str]] = {}
     for record in records:
         if not record.is_keyed:
             plan.skipped += 1
@@ -581,6 +625,11 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
             sources[record.source_url] = _source_row(
                 record, org_key, sources.get(record.source_url)
             )
+            if org_key:
+                owners.setdefault(record.source_url, set()).add(org_key)
+    for url, keys in owners.items():
+        if len(keys) > 1:
+            sources[url] = sources[url].model_copy(update={"org_key": None})
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)
     return plan
@@ -685,6 +734,7 @@ def _plan_organisation(plan: LoadPlan, record: Observation) -> None:
                 org_key=key,
                 name=person["name"],
                 role=person["role"],
+                academic_year=person.get("academic_year"),
                 start_date=person.get("start_date"),
                 source_url=record.source_url,
                 seen_at=seen_at,

@@ -10,12 +10,14 @@ import pytest
 import respx
 
 import camsocs_pipeline.pipeline.load as load
+from camsocs_pipeline.models.wire import ClaimInput
 from camsocs_pipeline.pipeline.load import (
     MAX_BATCH,
     ConvexAuthError,
     ConvexError,
     ConvexLoader,
     chunked,
+    entity_batches,
 )
 
 SITE = "https://happy-otter-123.convex.site"
@@ -34,6 +36,47 @@ def test_chunks_match_the_ceiling_convex_enforces() -> None:
     assert MAX_BATCH == 500, "must equal MAX_BATCH in webapp/convex/lib/ingest.ts"
     assert [len(batch) for batch in chunked(list(range(1_200)))] == [500, 500, 200]
     assert list(chunked([])) == []
+
+
+def claim(entity_key: str, field: str = "name") -> ClaimInput:
+    return ClaimInput(
+        entity_type="organisation",
+        entity_key=entity_key,
+        field=field,
+        value="x",
+        evidence="primary",
+        method="parser",
+        extractor="t",
+        source_key="src-1",
+        source_url="https://example.org/",
+        source_type="su_directory",
+        retrieved_at=0,
+    )
+
+
+def test_claim_batches_never_split_an_entity() -> None:
+    # A name-less part of an organisation staged first, its name later: they
+    # travel together, so the server can create the row from the name.
+    claims = [
+        *(claim(f"org-{i}") for i in range(3)),
+        claim("org-late", "registrations.su"),
+        *(claim(f"org-{i}", "website") for i in range(3)),
+        claim("org-late"),
+    ]
+    batches = entity_batches(claims, size=4)
+    assert [[(c.entity_key, c.field) for c in batch] for batch in batches] == [
+        [("org-0", "name"), ("org-0", "website"), ("org-1", "name"), ("org-1", "website")],
+        [
+            ("org-2", "name"),
+            ("org-2", "website"),
+            ("org-late", "registrations.su"),
+            ("org-late", "name"),
+        ],
+    ]
+    # An entity larger than a batch is split, earliest claims first.
+    big = entity_batches([claim("org-big", f"f{i}") for i in range(5)], size=2)
+    assert [len(batch) for batch in big] == [2, 2, 1]
+    assert entity_batches([]) == []
 
 
 def test_large_inputs_are_split_and_counted(net: respx.MockRouter) -> None:

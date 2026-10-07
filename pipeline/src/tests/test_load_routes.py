@@ -90,6 +90,29 @@ class TestPlan:
         assert source.yielded == ["email", "name"]
         assert source.http_status == 200
 
+    def test_a_page_seen_for_several_organisations_belongs_to_none(self) -> None:
+        directory = "https://example.org/directory"
+        plan = plan_observations(
+            [
+                org(source_url=directory),
+                org(source_url=directory, entity_key="org-cu-chess-club"),
+                org(),
+            ]
+        )
+        owners = {source.url: source.org_key for source in plan.sources}
+        assert owners == {directory: None, "https://cugs.org/": "org-cu-german-society"}
+
+    def test_people_keep_their_academic_year(self) -> None:
+        record = org(
+            broker={
+                "people": [
+                    {"name": "Anna Example", "role": "President", "academic_year": "2026-27"}
+                ]
+            }
+        )
+        [person] = plan_observations([record]).people
+        assert person.academic_year == "2026-27"
+
     def test_internal_identifiers_relationships_and_broker_rows(self) -> None:
         record = org(
             internal={"su_org_id": "6789", "ics_urls": ["https://cugs.org/cal.ics"]},
