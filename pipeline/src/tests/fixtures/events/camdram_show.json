@@ -1,0 +1,17 @@
+{
+  "id": 9001,
+  "societies": [
+    {"id": 22, "name": "Test Players", "slug": "test-players"},
+    {"id": 7, "name": "Touring Company", "slug": "touring-company"},
+    {"name": "A Free-Text Society"}
+  ],
+  "name": "The Test Play",
+  "description": "**A play.** About testing.",
+  "image": {"id": 4185, "filename": "abc123.jpg", "type": "image/jpeg", "_type": "image"},
+  "slug": "2026-the-test-play",
+  "author": "Anon",
+  "category": "drama",
+  "online_booking_url": "https://www.example-theatre.org/whats-on/test-play/",
+  "societies_display_list": [7, 22],
+  "_type": "show"
+}
