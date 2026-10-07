@@ -599,6 +599,13 @@ export const introductionFields = {
   ...stamps,
 }
 
+/** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
+ * log: the address is stored only as a sha256, and rows are pruned after a day. */
+export const signInLinkSendFields = {
+  emailHash: v.string(),
+  sentAt: v.number(),
+}
+
 export default defineSchema({
   // public, pipeline-owned
   organisations: defineTable(organisationFields)
@@ -669,6 +676,11 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_status_createdAt", ["status", "createdAt"])
     .index("by_submitter_createdAt", ["submitterEmail", "createdAt"]),
+
+  // internal, auth
+  signInLinkSends: defineTable(signInLinkSendFields)
+    .index("by_emailHash_sentAt", ["emailHash", "sentAt"])
+    .index("by_sentAt", ["sentAt"]),
 
   // private broker CRM
   people: defineTable(personFields)

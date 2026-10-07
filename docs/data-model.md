@@ -348,6 +348,7 @@ These are never returned by public queries.
   | resolvedAt | number? |
 
   Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour and 200 open per hour overall). Accepted corrections become `owner_submitted` claims, never direct edits.
+- **signInLinkSends**: `{ emailHash, sentAt }`, indexes `by_emailHash_sentAt`, `by_sentAt`. The throttle for the `@cam.ac.uk` sign-in link (`convex/authEmail.ts`): one row per link sent, the address only as a sha256 of its normalised form, rows pruned after a day. Not pipeline-owned and never read by a public query.
 - **storedFiles**: `{ sha256, storageId, contentType, size, createdAt }`, index `by_sha256`. Our own copies of logos, event images and termcards, uploaded through `/api/pipeline/files` (≤ 2 MB; PNG, JPEG, WebP, GIF, AVIF or PDF, checked against the bytes; never SVG) and de-duplicated by content.
 
 ## 4. Broker tables (private)

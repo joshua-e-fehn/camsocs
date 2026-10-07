@@ -17,6 +17,7 @@ import schema from "../schema"
 const appModules = {
   "./_generated/server.ts": () => import("../_generated/server"),
   "./auth.ts": () => import("../auth"),
+  "./authEmail.ts": () => import("../authEmail"),
   "./crons.ts": () => import("../crons"),
   "./derive.ts": () => import("../derive"),
   "./events.ts": () => import("../events"),

@@ -1,5 +1,6 @@
 import type { GenericCtx } from "@convex-dev/better-auth/utils"
 import { isBrokerEmail } from "../../lib/broker-access"
+import { isCamEmail } from "../../lib/cam-email"
 import type { DataModel } from "../_generated/dataModel"
 import { authComponent } from "../betterAuth/auth"
 
@@ -11,7 +12,8 @@ import { authComponent } from "../betterAuth/auth"
  *    `requireBrokerUser`, convex/lib/auth.ts).
  *  - `isCamVerified`: a *verified* email ending `@cam.ac.uk` — the tier that
  *    sees `cam_only` events (mailing-list events). Subdomains such as
- *    `@srcf.cam.ac.uk` do not count: the sign-in link is sent to `@cam.ac.uk`.
+ *    `@srcf.cam.ac.uk` do not count: the sign-in link is sent to `@cam.ac.uk`
+ *    only (lib/cam-email.ts is the one rule for both).
  *
  * Pass the result down; do not re-derive access in each query.
  */
@@ -23,10 +25,6 @@ export type Viewer = {
 }
 
 export const ANONYMOUS: Viewer = { isBroker: false, isCamVerified: false }
-
-export function isCamEmail(email: string): boolean {
-  return /^[^@\s]+@cam\.ac\.uk$/i.test(email.trim())
-}
 
 export async function getViewer(ctx: GenericCtx<DataModel>): Promise<Viewer> {
   const user = await authComponent.safeGetAuthUser(ctx)

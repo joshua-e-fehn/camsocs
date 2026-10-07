@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authEmail from "../authEmail.js";
 import type * as broker_session from "../broker/session.js";
 import type * as crons from "../crons.js";
 import type * as derive from "../derive.js";
@@ -34,6 +35,7 @@ import type * as lib_orgFilters from "../lib/orgFilters.js";
 import type * as lib_projections from "../lib/projections.js";
 import type * as lib_relationships from "../lib/relationships.js";
 import type * as lib_resolve from "../lib/resolve.js";
+import type * as lib_signInEmail from "../lib/signInEmail.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_viewer from "../lib/viewer.js";
 import type * as listingRequests from "../listingRequests.js";
@@ -50,6 +52,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authEmail: typeof authEmail;
   "broker/session": typeof broker_session;
   crons: typeof crons;
   derive: typeof derive;
@@ -75,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   "lib/projections": typeof lib_projections;
   "lib/relationships": typeof lib_relationships;
   "lib/resolve": typeof lib_resolve;
+  "lib/signInEmail": typeof lib_signInEmail;
   "lib/validators": typeof lib_validators;
   "lib/viewer": typeof lib_viewer;
   listingRequests: typeof listingRequests;

@@ -32,7 +32,7 @@ range `>=1.6.11 <1.7.0`, and a caret resolves to 1.7.x.
 app/                         Next.js App Router pages
   layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster
   page.tsx                   Public landing page
-  sign-in/page.tsx           Google sign-in (creates the account on first use; no sign-up page)
+  sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private area (session required; data needs broker access)
   not-found.tsx              404
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
@@ -52,7 +52,8 @@ convex/
                              relationships + eventOrganisers, broker, files, inbound, termDates, purge)
   derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
-  auth.ts                    getCurrentUser, getBrokerAccess (public, never throw)
+  auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)
+  authEmail.ts               internal throttle for the @cam.ac.uk sign-in link
   broker/                    PRIVATE CRM functions — every one calls requireBrokerUser
   lib/fields.ts              claimable-field registry: validators, merge/compare rules, applicability
   lib/resolve.ts             field resolution engine (data-model §1), pure
@@ -113,8 +114,23 @@ REST layer and no React Query; never wrap a Convex query in another fetching lib
 
 ## Authentication
 
-- **Google only**, registered only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are both set
-  on the Convex deployment (otherwise sign-in answers PROVIDER_NOT_FOUND; nothing crashes).
+Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-in` offers both
+(`?cam=1` preselects the Cambridge option, `?next=/path` is where a Cambridge sign-in lands).
+
+- **Google, for the admin**, registered only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+  are both set on the Convex deployment (otherwise sign-in answers PROVIDER_NOT_FOUND; nothing
+  crashes). Broker access is `BROKER_EMAILS` (below).
+- **`@cam.ac.uk` sign-in link** (Better Auth's magic-link plugin, supported by
+  @convex-dev/better-auth 0.12.5), registered only when `RESEND_API_KEY` and `RESEND_FROM` are
+  both set (otherwise the endpoint is a 404 and the form shows the option as off). The link is
+  sent from the `/api/auth/*` HTTP action through Resend's HTTP API (`convex/lib/signInEmail.ts`),
+  works once and expires in 10 minutes. The server refuses any address that is not exactly
+  `@cam.ac.uk` (`lib/cam-email.ts`, the same rule `getViewer` uses) before storing anything, and
+  throttles to 3 links per address per 15 minutes and 60 per hour overall (`convex/authEmail.ts`,
+  table `signInLinkSends`, sha256 of the address only, pruned after a day). A verified link means
+  `emailVerified: true`, so `getViewer(ctx).isCamVerified` holds for that session.
+- `auth.getSignInOptions` → `{ google, camEmail }` (booleans) and `auth.getViewerTier` →
+  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI.
 - Better Auth runs **inside Convex**. Flow: client → same-origin `/api/auth/*` → route handler
   (`lib/auth-forwarded-headers.ts`) → Convex site URL → Better Auth → session in the component's
   tables → `ConvexBetterAuthProvider` holds the token.
@@ -134,7 +150,8 @@ Dev and prod are separate Convex deployments of the `camsocs` project with indep
   `NEXT_PUBLIC_CONVEX_SITE_URL`, optionally `NEXT_PUBLIC_SITE_URL`. See `.env.example`.
 - Vercel production: the three `NEXT_PUBLIC_*` values + `CONVEX_DEPLOY_KEY` (production only).
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
-  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`.
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`,
+  `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link).
 
 ## Commands
 
