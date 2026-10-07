@@ -105,16 +105,16 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 |---|---|---|---|
 | T1 | A Foundation | Scaffold the webapp (template, upgraded) and the pipeline skeleton (polite client, LLM client, loader, runner). Gates and CI. | in progress |
 | T2 | A Foundation | Domain schema from `docs/data-model.md`. Ingestion mutations and the field resolution / derivation engine. Vocab parity test. | done |
-| T3 | B Harvest | Seed harvesters: SU directory + profiles, Proctors, Sport A–Z + pages + guide PDF, Camdram societies, CUCBC, colleges, JCR/MCR bodies | todo |
-| T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | todo |
-| T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | todo |
-| T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | done (branch `feat/events-feeds`) |
+| T3 | B Harvest | Seed harvesters: SU directory + profiles, Proctors, Sport A–Z + pages + guide PDF, Camdram societies, CUCBC, colleges, JCR/MCR bodies | done (SU, Proctors, Sport A–Z + pages + guide, Camdram, CUCBC, colleges + JCR/MCR) |
+| T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | done (crosswalk, quarantine report, `resolve-decisions.json`) |
+| T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | done (Linktree blocked by robots.txt) |
+| T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | done |
 | T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail; mailing-list sign-up worklist | done |
 | T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | done |
-| T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | done (branch `feat/public-webapp`) |
-| T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | todo |
-| T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | todo |
-| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | form done (`feat/public-webapp`); admin inbox and suppression list todo |
+| T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | done |
+| T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | done (sign-in link off until Resend is configured, J3) |
+| T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | done |
+| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | form and admin inbox (`/dashboard/requests`) done; accepted corrections → `owner_submitted` claims and the removal suppression list todo |
 | T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`); J6 and the DPIA todos open |
 | T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | todo |
 | T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | todo |
