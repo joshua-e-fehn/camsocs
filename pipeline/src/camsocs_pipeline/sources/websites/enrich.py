@@ -16,7 +16,7 @@ website and/or a Linktree:
 3. **Deterministically**: JSON-LD ``sameAs`` and links → socials; ``mailto:``
    and written addresses → role emails / the general email (never personal
    addresses, never decoded obfuscation); ICS / Google Calendar / Luma /
-   talks.cam / Camdram / ticketing links → ``orgInternal`` feeds; mailing-list
+   talks.cam / ticketing links → ``orgInternal`` feeds; mailing-list
    sign-up links; join and termcard links; the final URL → ``website``; HTTP
    status and platform → ``orgInternal.websiteHealth``.
 4. **LLM** (bulk model, prompt ``org_v1``) over the cleaned text of those
@@ -373,9 +373,11 @@ class Enricher:
         haystack = set(tokens(f"{page.title} {page.text[:20_000]} {page.url}"))
         if words & haystack:
             return True
-        stems = {word[:5] for word in words if len(word) >= 5}
-        if any(token[:5] in stems for token in haystack if len(token) >= 5):
-            return True  # "Builder" / "Build", "Robotics" / "Robots"
+        # "Builder" / "Build", "Robotics" / "Robots": a word less its last
+        # three letters, never shorter than five.
+        stems = {word[: max(5, len(word) - 3)] for word in words if len(word) >= 5}
+        if any(token.startswith(stem) for token in haystack for stem in stems):
+            return True
         url = page.url.lower()
         return any(word in url for word in words if len(word) >= 3)
 
@@ -509,10 +511,9 @@ class Enricher:
                     )
                     found.add("termcardUrl")
         for kind, values in feeds.items():
-            if kind == "camdram_slug":
-                if len(values) == 1:
-                    home_record.internal["camdram_slug"] = values[0]
-            else:
+            # A Camdram link on a site may be a co-production's company; the
+            # Camdram harvester owns the society's own slug.
+            if kind != "camdram_slug":
                 home_record.internal[kind] = values
 
         # A sponsors page means the group looks for sponsorship (broker, private).

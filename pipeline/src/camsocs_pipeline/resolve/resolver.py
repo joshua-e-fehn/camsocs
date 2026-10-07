@@ -276,7 +276,9 @@ class Resolver:
             if isinstance(record, Observation) and record.entity_key is not None:
                 self.counts["already_keyed"] += 1
                 continue
-            if isinstance(record, EventObservation) and record.is_keyed and record.venue is None:
+            if isinstance(record, EventObservation) and record.is_keyed:
+                # Loaded from its own directory as it is; a second, keyed copy
+                # here would post the event twice (its venue stays text).
                 self.counts["already_keyed"] += 1
                 continue
             pending.append(record)
