@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
   // for lockfiles and can adopt an unrelated one above the repo (it picked
   // ~/package-lock.json on the scaffold machine), which changes file tracing.
   turbopack: { root: path.join(__dirname) },
+  // Logos and event images are our own stored copies (data-model §2: never
+  // hotlinked), served from Convex file storage; nothing else is optimised.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.convex.cloud", pathname: "/api/storage/**" },
+    ],
+  },
 }
 
 export default nextConfig

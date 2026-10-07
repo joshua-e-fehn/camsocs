@@ -20,7 +20,16 @@
 
 /** Routes a signed-out visitor may see. "/api" keeps Better Auth's callbacks
  * reachable while signed out. */
-export const PUBLIC_PATHS = ["/", "/sign-in", "/api"] as const
+export const PUBLIC_PATHS = [
+  "/",
+  "/sign-in",
+  "/api",
+  "/societies",
+  "/events",
+  "/request",
+  "/about",
+  "/privacy",
+] as const
 
 /** Routes that need a session (and, in Convex, a broker account). */
 export const PRIVATE_PATHS = ["/dashboard"] as const

@@ -166,6 +166,11 @@ export function weekdayShort(iso: string): string {
   return WEEKDAYS[weekdayIndex(iso)]
 }
 
+/** "Oct" */
+export function monthShort(iso: string): string {
+  return MONTHS[Number(iso.slice(5, 7)) - 1]
+}
+
 /** "Thu 8 Oct" */
 export function formatDayShort(iso: string): string {
   const [, month, day] = iso.split("-").map(Number)
@@ -189,13 +194,23 @@ export function formatInstantDate(ms: number): string {
   return formatDate(londonIsoDate(ms))
 }
 
+type Timed = { startsAt: number; endsAt?: number; allDay: boolean }
+
+/** The time part of an event, London time: "19:30–21:30", "19:30",
+ * "18:00 – Sun 11 Oct, 12:00" across days, "All day". */
+export function formatEventTime(event: Timed): string {
+  if (event.allDay) return "All day"
+  const start = londonTime(event.startsAt)
+  if (event.endsAt === undefined || event.endsAt <= event.startsAt) return start
+  const endDay = londonIsoDate(event.endsAt)
+  return endDay === londonIsoDate(event.startsAt)
+    ? `${start}–${londonTime(event.endsAt)}`
+    : `${start} – ${formatDayShort(endDay)}, ${londonTime(event.endsAt)}`
+}
+
 /** "Thu 8 Oct, 19:30–21:00", "Thu 8 Oct (all day)", or across days
  * "Fri 9 Oct, 18:00 – Sun 11 Oct, 12:00" — London time. */
-export function formatEventWhen(event: {
-  startsAt: number
-  endsAt?: number
-  allDay: boolean
-}): string {
+export function formatEventWhen(event: Timed): string {
   const startDay = londonIsoDate(event.startsAt)
   if (event.allDay) {
     const endDay = event.endsAt === undefined ? startDay : londonIsoDate(event.endsAt - 1)
@@ -203,12 +218,7 @@ export function formatEventWhen(event: {
       ? `${formatDayShort(startDay)} – ${formatDayShort(endDay)} (all day)`
       : `${formatDayShort(startDay)} (all day)`
   }
-  const start = `${formatDayShort(startDay)}, ${londonTime(event.startsAt)}`
-  if (event.endsAt === undefined || event.endsAt <= event.startsAt) return start
-  const endDay = londonIsoDate(event.endsAt)
-  return endDay === startDay
-    ? `${start}–${londonTime(event.endsAt)}`
-    : `${start} – ${formatDayShort(endDay)}, ${londonTime(event.endsAt)}`
+  return `${formatDayShort(startDay)}, ${formatEventTime(event)}`
 }
 
 /** The label for a view's range: "12 – 18 Oct 2026", "October 2026", … */

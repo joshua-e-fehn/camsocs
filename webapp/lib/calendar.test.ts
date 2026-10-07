@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   addMonths,
+  formatEventTime,
   formatEventWhen,
   formatRange,
   isIsoDate,
@@ -104,6 +105,14 @@ describe("display", () => {
     expect(formatEventWhen({ startsAt: day, endsAt: day + 24 * HOUR, allDay: true })).toBe(
       "Sat 10 Oct (all day)",
     )
+  })
+
+  test("the time part alone", () => {
+    const startsAt = Date.UTC(2026, 9, 8, 18, 30)
+    expect(formatEventTime({ startsAt, endsAt: startsAt + HOUR, allDay: false })).toBe(
+      "19:30–20:30",
+    )
+    expect(formatEventTime({ startsAt, allDay: true })).toBe("All day")
   })
 
   test("range labels", () => {
