@@ -2,7 +2,7 @@
 (source-research §2; parsing in `sources/proctors.py`).
 
 Fetches the one register page politely (robots.txt, cache) and writes one
-observation per entry to ``var/staging/proctors_register/<run>.jsonl``. The
+observation per entry to ``var/staging/proctors_register/<run>--proctors_register.jsonl``. The
 entries' links are classified, never fetched. A dry run replays the cached
 page, if any, and stages nothing.
 """
@@ -37,7 +37,7 @@ def run(ctx: StageContext) -> None:
     if ctx.dry_run:
         ctx.report.notes.append("dry run: replayed from cache, nothing staged")
     else:
-        ctx.staging.write("proctors_register", ctx.run.run_key, records)
+        ctx.staging.write("proctors_register", ctx.run.run_key, records, part=ctx.report.name)
 
     kinds = Counter(entry.link_kind or "no link" for entry in entries)
     ctx.report.notes.append(f"{listed} listed; {len(records)} observations")

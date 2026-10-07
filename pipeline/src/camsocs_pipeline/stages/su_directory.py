@@ -1,10 +1,10 @@
 """Stage `su_directory`: Cambridge SU "Find a Society" — the directory page and
 every profile (source-research §1; parsing in `sources/su.py`).
 
-Writes two staging files per run: ``var/staging/su_directory/<run>.jsonl``
-(one observation per directory entry) and ``var/staging/su_profile/<run>.jsonl``
-(one per profile). It never calls Convex and never mints keys; `resolve`
-does, then `load` posts.
+Writes two staging files per run: ``var/staging/su_directory/<run>--su_directory.jsonl``
+(one observation per directory entry) and
+``var/staging/su_profile/<run>--su_directory.jsonl`` (one per profile). It never
+calls Convex and never mints keys; `resolve` does, then `load` posts.
 
 Fetching goes through `PoliteClient` (robots.txt, one request at a time,
 ≥ 1 s apart, cached under ``var/cache``). A profile fetched within
@@ -93,8 +93,8 @@ def harvest(ctx: StageContext, client: PoliteClient) -> None:
     if ctx.dry_run:
         ctx.report.notes.append("dry run: replayed from cache, nothing staged")
     else:
-        ctx.staging.write("su_directory", ctx.run.run_key, directory_records)
-        ctx.staging.write("su_profile", ctx.run.run_key, profile_records)
+        ctx.staging.write("su_directory", ctx.run.run_key, directory_records, part=ctx.report.name)
+        ctx.staging.write("su_profile", ctx.run.run_key, profile_records, part=ctx.report.name)
 
     ctx.report.skipped += len(unreadable)
     ctx.report.notes.append(

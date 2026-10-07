@@ -225,22 +225,45 @@ def _claims(
 
 def claims_for_observation(obs: Observation) -> list[ClaimInput]:
     """Claims for a resolved observation. Teams and sessions get an `orgKey`
-    claim from their resolved parent."""
+    claim from their resolved parent; an organisation gets `parentKey` from
+    its resolved parent (a JCR inside its college) and `collegeKeys` from its
+    resolved ``member_college`` relationships — harvesters never mint keys, so
+    these key-valued fields can only be claimed once the resolver has keyed
+    the identities they point at."""
     if obs.entity_key is None:
         raise ValueError("observation is not resolved: entity_key is None")
     fields = list(obs.fields)
-    if obs.parent is not None and obs.entity_type in ("team", "session"):
+    present = {f.field for f in fields}
+    evidence = _evidence_of(obs.fields)
+    if obs.parent is not None:
         if obs.parent.known_key is None:
             raise ValueError("parent organisation is not resolved")
-        if not any(f.field == "orgKey" for f in fields):
+        parent_field = "parentKey" if obs.entity_type == "organisation" else "orgKey"
+        if obs.entity_type in ("team", "session", "organisation") and parent_field not in present:
             fields.append(
                 parser_field(
-                    "orgKey",
+                    parent_field,
                     obs.parent.known_key,
                     extractor="resolve.parent",
-                    evidence=_evidence_of(obs.fields),
+                    evidence=evidence,
                 )
             )
+    colleges = [
+        rel.to_identity.known_key
+        for rel in obs.relationships
+        if rel.type == "member_college"
+        and rel.direction == "outgoing"
+        and rel.to_identity.known_key is not None
+    ]
+    if obs.entity_type == "organisation" and colleges and "collegeKeys" not in present:
+        fields.append(
+            parser_field(
+                "collegeKeys",
+                sorted(set(colleges)),
+                extractor="resolve.member_college",
+                evidence=evidence,
+            )
+        )
     return _claims(fields, obs, obs.entity_type, obs.entity_key)
 
 

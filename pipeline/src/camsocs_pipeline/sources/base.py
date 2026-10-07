@@ -279,6 +279,14 @@ class PoliteClient:
         cached = self._read_cache(url)
         return None if cached is None else _from_cache(url, *cached, detail="from cache")
 
+    def robots_verdict(self, url: str) -> Literal["allowed", "disallowed", "crawl_delay"]:
+        """What robots.txt says about `url` for us (the `sources.robotsVerdict`
+        vocabulary). Reads the host's robots.txt if this run has not yet."""
+        policy = self._robots_policy(url)
+        if not self._robots_allows(policy, url):
+            return "disallowed"
+        return "crawl_delay" if policy.delay > 0 else "allowed"
+
     # -- robots ----------------------------------------------------------------
 
     def _robots_policy(self, url: str) -> _RobotsPolicy:

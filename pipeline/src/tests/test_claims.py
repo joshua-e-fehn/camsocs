@@ -23,6 +23,7 @@ from camsocs_pipeline.models.observation import (
     IdentityHints,
     Observation,
     OrganiserObs,
+    RelObs,
 )
 
 AT = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -206,3 +207,36 @@ def test_event_claims_include_identity_and_venue_text() -> None:
         "sourceUrl": "https://www.camdram.net/shows/hamlet",
         "venueText": "ADC Theatre",
     }
+
+
+def test_an_organisation_gets_parent_and_college_keys_once_resolved() -> None:
+    college = IdentityHints(name="Jesus College", org_type="college", known_key="org-jesus-college")
+    jcsu = org_observation(
+        entity_key="org-jesus-college-student-union",
+        parent=college,
+        relationships=[
+            RelObs(
+                type="member_college",
+                to_identity=college,
+                evidence_url="https://jcsu.example/",
+                direction="outgoing",
+            ),
+            RelObs(
+                type="parent_of",
+                to_identity=college,
+                evidence_url="https://jcsu.example/",
+                direction="incoming",
+            ),
+        ],
+    )
+    claims = {claim.field: claim for claim in claims_for_observation(jcsu)}
+    assert claims["parentKey"].value == "org-jesus-college"
+    assert claims["collegeKeys"].value == ["org-jesus-college"]
+    assert claims["collegeKeys"].extractor == "resolve.member_college"
+
+
+def test_an_unresolved_parent_cannot_become_a_claim() -> None:
+    observation = org_observation(parent=IdentityHints(name="Jesus College"))
+    assert not observation.is_keyed
+    with pytest.raises(ValueError, match="parent organisation is not resolved"):
+        claims_for_observation(observation)

@@ -9,9 +9,13 @@
    when the stage runs. Put source-specific code (parsers, fetch helpers)
    under ``camsocs_pipeline/sources/<name>/`` or next to the stage.
 2. **Harvest and enrichment stages only write observations** to staging
-   (``with ctx.staging.writer(<source_type>, ctx.run.run_key) as out: …``,
-   `models/observation.py`). They never call the loader and never mint
-   organisation keys; `resolve` assigns keys and `load` posts.
+   (``with ctx.staging.writer(<source_type>, ctx.run.run_key, ctx.report.name)
+   as out: …``, `models/observation.py`) — pass your stage name as the part,
+   so a stage sharing a source type with another (Camdram societies and
+   Camdram events) never overwrites or hides its files; `sources/observe.py`
+   `run_harvest` does all of this for a harvest function. They never call
+   the loader and never mint organisation keys; `resolve` assigns keys and
+   `load` posts.
 3. Edit **exactly one line** below: uncomment your reserved line. There is
    no import to add. The reserved lines are separated by comment lines on
    purpose, so two branches that each uncomment their own line merge without
@@ -44,19 +48,19 @@ STAGES: list[Stage] = [
     Stage("proctors_register", description="Proctors' register → staging"),
     #
     # Sport Cambridge A–Z + club pages (§3).
-    # Stage("sport_clubs"),
+    Stage("sport_clubs"),
     #
     # Sports Club Guide 2026-27 PDF (§4).
-    # Stage("sport_guide_pdf"),
+    Stage("sport_guide_pdf"),
     #
     # Camdram societies (§5).
-    # Stage("camdram_societies"),
+    Stage("camdram_societies"),
     #
     # CUCBC clubs (§7).
-    # Stage("cucbc_clubs"),
+    Stage("cucbc_clubs"),
     #
     # Colleges and their JCR/MCR bodies (§8).
-    # Stage("colleges"),
+    Stage("colleges"),
     #
     # ── resolve (T4): identities → keys, writes var/staging/_resolved/ ────────
     # Stage("resolve"),

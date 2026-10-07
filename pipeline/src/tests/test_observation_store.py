@@ -133,3 +133,30 @@ class TestStagingStore:
         store = StagingStore(tmp_path / "missing")
         assert store.directories() == []
         assert store.read_latest("camdram") == []
+
+
+class TestParts:
+    def test_two_stages_of_one_source_type_keep_their_own_files(self, tmp_path) -> None:
+        store = StagingStore(tmp_path)
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Societies")], part="a")
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Events")], part="b")
+        names = sorted(record.identity.name for record in store.read_latest("camdram"))
+        assert names == ["Events", "Societies"]
+
+    def test_a_newer_run_of_one_part_replaces_only_that_part(self, tmp_path) -> None:
+        store = StagingStore(tmp_path)
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Old A")], part="a")
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Kept B")], part="b")
+        store.write("camdram", "20261008T120000Z-bbbbbb", [observation("New A")], part="a")
+        names = sorted(record.identity.name for record in store.read_latest("camdram"))
+        assert names == ["Kept B", "New A"]
+
+    def test_files_without_a_part_are_still_read(self, tmp_path) -> None:
+        store = StagingStore(tmp_path)
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Legacy")])
+        store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Staged")], part="a")
+        assert len(store.read_latest("camdram")) == 2
+
+    def test_parts_are_stage_names(self, tmp_path) -> None:
+        with pytest.raises(ValueError, match="stage name"):
+            StagingStore(tmp_path).path("camdram", "20261007T120000Z-aaaaaa", part="../x")

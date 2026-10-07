@@ -3,12 +3,19 @@
 Layout (gitignored — `var/` is never committed, and staged observations may
 hold names and contact details from public pages)::
 
-    var/staging/<source_type>/<run_key>.jsonl     one record per line
-    var/staging/_resolved/<run_key>.jsonl         written by the resolve stage
+    var/staging/<source_type>/<run_key>.jsonl          one record per line
+    var/staging/<source_type>/<run_key>--<part>.jsonl  the same, from one stage (`part`)
+    var/staging/_resolved/<run_key>.jsonl              written by the resolve stage
 
 Each line is one `Observation` or `EventObservation` (discriminated by
 ``kind``). Run keys sort chronologically (`report.mint_run_key`), so "latest"
 is the greatest file name.
+
+**Parts.** Several stages may observe the same source type (Camdram societies
+and Camdram events; a JCR's site seen by the colleges stage and by website
+enrichment). Each passes its stage name as ``part``, so in one run they write
+different files, and `read_latest` returns the latest file *of each part* —
+one stage's newer run never hides another stage's observations.
 
 A file is written to ``<name>.jsonl.tmp`` and renamed when complete, so a
 crashed stage leaves no half-file for the next stage to read. A stage that
@@ -33,6 +40,9 @@ logger = logging.getLogger(__name__)
 #: The resolve stage's output directory (not a source type).
 RESOLVED = "_resolved"
 
+#: Between the run key and the part in a staging file name.
+PART_SEPARATOR = "--"
+
 Record = Observation | EventObservation
 _RECORD = TypeAdapter(StagedRecord)
 
@@ -44,9 +54,21 @@ def _check_directory(name: str) -> str:
 
 
 def _check_run_key(run_key: str) -> str:
-    if not run_key or "/" in run_key or run_key.startswith("."):
+    if not run_key or "/" in run_key or run_key.startswith(".") or PART_SEPARATOR in run_key:
         raise ValueError(f"Not a usable run key: {run_key!r}")
     return run_key
+
+
+def _check_part(part: str | None) -> str | None:
+    if part is not None and not part.isidentifier():
+        raise ValueError(f"A staging part is a stage name: {part!r}")
+    return part
+
+
+def _part_of(path: Path) -> str:
+    """The part a staging file belongs to ("" for a file without one)."""
+    _run_key, _separator, part = path.stem.partition(PART_SEPARATOR)
+    return part
 
 
 class StagingWriter:
@@ -90,15 +112,20 @@ class StagingStore:
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    def path(self, directory: str, run_key: str) -> Path:
-        return self.root / _check_directory(directory) / f"{_check_run_key(run_key)}.jsonl"
+    def path(self, directory: str, run_key: str, part: str | None = None) -> Path:
+        name = _check_run_key(run_key)
+        if _check_part(part):
+            name += PART_SEPARATOR + part
+        return self.root / _check_directory(directory) / f"{name}.jsonl"
 
-    def writer(self, directory: str, run_key: str) -> StagingWriter:
-        """``with store.writer("su_directory", ctx.run.run_key) as out: out.write(obs)``"""
-        return StagingWriter(self.path(directory, run_key))
+    def writer(self, directory: str, run_key: str, part: str | None = None) -> StagingWriter:
+        """``with store.writer("su_directory", ctx.run.run_key, ctx.report.name) as out: …``"""
+        return StagingWriter(self.path(directory, run_key, part))
 
-    def write(self, directory: str, run_key: str, records: Iterable[Record]) -> int:
-        with self.writer(directory, run_key) as out:
+    def write(
+        self, directory: str, run_key: str, records: Iterable[Record], part: str | None = None
+    ) -> int:
+        with self.writer(directory, run_key, part) as out:
             out.write_all(records)
             return out.count
 
@@ -119,9 +146,19 @@ class StagingStore:
                 except ValueError as error:
                     raise ValueError(f"{path}:{number}: {error}") from error
 
+    def latest_paths(self, directory: str) -> list[Path]:
+        """The latest file of each part in `directory`, oldest part first."""
+        folder = self.root / _check_directory(directory)
+        if not folder.is_dir():
+            return []
+        latest: dict[str, Path] = {}
+        for path in sorted(folder.glob("*.jsonl")):
+            latest[_part_of(path)] = path
+        return sorted(latest.values())
+
     def read_latest(self, directory: str) -> list[Record]:
-        path = self.latest_path(directory)
-        return list(self.read(path)) if path else []
+        """Every record of the latest file of each part in `directory`."""
+        return [record for path in self.latest_paths(directory) for record in self.read(path)]
 
     def directories(self) -> list[str]:
         """Every staging directory that holds at least one file, sources first."""
@@ -142,4 +179,4 @@ class StagingStore:
         return {name: self.read_latest(name) for name in self.directories()}
 
 
-__all__ = ["RESOLVED", "Record", "StagingStore", "StagingWriter"]
+__all__ = ["PART_SEPARATOR", "RESOLVED", "Record", "StagingStore", "StagingWriter"]
