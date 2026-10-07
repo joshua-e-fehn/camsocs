@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { isCamEmail } from "../lib/cam-email"
 import { api, components } from "./_generated/api"
 import { NOT_CAM_EMAIL } from "./betterAuth/auth"
@@ -156,11 +156,21 @@ describe("POST /api/auth/sign-in/magic-link", () => {
     await withEnv(ENV, async () => {
       globalThis.fetch = (async () =>
         Response.json({ name: "validation_error" }, { status: 422 })) as unknown as typeof fetch
-      const response = await requestLink(newTest(), "ab123@cam.ac.uk")
-      expect(response.status).toBe(502)
-      const text = await response.text()
-      expect(text).not.toContain(ENV.RESEND_API_KEY)
-      expect(text).not.toContain("token=")
+      const logged = spyOn(console, "error").mockImplementation(() => {})
+      try {
+        const response = await requestLink(newTest(), "ab123@cam.ac.uk")
+        expect(response.status).toBe(502)
+        const text = await response.text()
+        expect(text).not.toContain(ENV.RESEND_API_KEY)
+        expect(text).not.toContain("token=")
+        // The deployment log names the failure, never the key or the link.
+        const log = JSON.stringify(logged.mock.calls)
+        expect(log).toContain("HTTP 422: validation_error")
+        expect(log).not.toContain(ENV.RESEND_API_KEY)
+        expect(log).not.toContain("token=")
+      } finally {
+        logged.mockRestore()
+      }
     })
   })
 })
