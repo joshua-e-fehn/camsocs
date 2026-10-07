@@ -167,10 +167,9 @@ export default function PrivacyPage() {
             Private committee notes: until the end of the academic year in which they were collected
             (30 June), then deleted within 30 days unless the person has agreed to more.
           </li>
-          <li>
-            Mailing-list messages: 90 days, then deleted. Events taken from them are deleted a year
-            after they took place.
-          </li>
+          <li>Mailing-list messages: 90 days, then deleted.</li>
+          <li>Events: deleted a year after they took place.</li>
+          <li>Notes of our own contacts with a society: three years after the last contact.</li>
           <li>
             Requests and complaints: two years after they are closed. If you ask us to remove a
             listing, we keep a minimal record so it is not added back.

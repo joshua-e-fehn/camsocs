@@ -1,0 +1,58 @@
+# DPIA-lite (screening and risk register)
+
+Controller: Joshua Fehn. Prepared 2026-10-07; review each July, and before: a new source, a new recipient, publishing anything about named people, or moving the pipeline to the VPS (PLAN.md J8).
+
+## 1. Screening: is a DPIA required?
+
+The ICO lists "invisible processing" (data aggregation, re-use of public data) and "data matching" as likely high risk, needing a DPIA when combined with another criterion (landscape brief §5.2).
+
+| Criterion | Public directory (A) | Broker CRM (B) |
+|---|---|---|
+| Invisible processing (aggregating public sources without telling people) | Yes, until the Art 14 notice goes out (J7, ~13 Nov 2026) | Yes |
+| Data matching across sources | Organisations only, not people | Names matched to organisations |
+| Large scale | ~1,500 organisations; few personal data items each | Hundreds of named officers at most |
+| Special category data | No (faith / political / LGBTQ+ societies listed, members not) | Risk: naming the officers of such societies can reveal affiliation |
+| Innovative technology | LLM extraction via a third-party provider | Same |
+| Vulnerable people | No (adult students) | No |
+
+**Outcome:** A — a full DPIA is not strictly required but this lite assessment is kept because of aggregation and the LLM. B — required; this document is its first version and must be extended before any outreach from the CRM.
+
+## 2. Data flows
+
+```
+public pages / feeds ──(polite fetcher, robots.txt)──▶ var/cache (pipeline host, 90 d)
+        │                                                  │
+        │                                     free text ───┴──▶ cliproxy relay ──▶ OpenAI (LLM)
+        ▼                                                                │
+  parser claims ──────────────▶ /api/pipeline/* ──▶ Convex ◀── quote-checked LLM claims
+                                                    │
+Joshua's @cam.ac.uk list mail ──▶ Resend inbound ──▶│ inboundEmails (internal, 90 d) ──▶ LLM (events only)
+                                                    │
+                       public projection only ──────┴──▶ Next.js on Vercel ──▶ visitors
+                       broker tables (requireBrokerUser) ──▶ /dashboard (Joshua only)
+request form ──▶ listingRequests (internal) ──▶ review by Joshua
+```
+
+## 3. Risks and measures
+
+Likelihood (L) and severity (S): low / medium / high. "Residual" is after the measures.
+
+| # | Risk | L | S | Measures (in place unless marked **todo**) | Residual |
+|---|---|---|---|---|---|
+| R-1 | A personal CRSid address or a named officer appears on the public site | M | M | Public projection removes `personal_crsid` emails and personal role emails (`convex/lib/projections.ts`, tested in `convex/public.test.ts`); `people` is broker-only; pipeline never writes names into public fields (AGENTS.md data honesty rules) | Low |
+| R-2 | Inaccurate data presented as fact (stale contacts, wrong officers) | H | L | Per-fact status / source / date; LLM values without a verified quote shown as `inferred`; conflicts shown with both readings; annual refresh; correction form | Low |
+| R-3 | Societies do not know they are listed (invisible processing) | H | M | Art 14 notice to every listed role address by ~13 Nov 2026 (J7) with claim / correct / remove links and the right to object; public privacy notice; About page | Low once J7 is done |
+| R-4 | LLM provider processes personal data in list mail and pages (US transfer; consumer-plan terms, possible use for training) | M | M | Only page text and list-mail text needed for extraction are sent; talks.cam never sent; **todo:** turn off model-training on the ChatGPT account used by cliproxy; strip signatures, quoted replies and addresses from list mail before extraction; record the transfer basis (record-of-processing, transfers) | Medium until the todos are done |
+| R-5 | Mailing-list content leaks to the public | L | M | Events from mail default to `cam_only`; `cam_only` needs a verified `@cam.ac.uk` session; a mailing-list event has no public `sourceUrl`; raw mail never in a public query; 90-day deletion (**todo:** automate, `retention.md` R4) | Low |
+| R-6 | Broker CRM used for unsolicited marketing (PECR reg 22) | M | M | PECR subscriber type per address, default individual; no marketing without consent; suppression list; identify sender and give an opt-out; introductions relay, no export (LIA §B) | Low |
+| R-7 | Officers of faith / political / identity societies revealed (Art 9) | L | H | No names in public fields; no inference about people; broker rows private and time-boxed | Low |
+| R-8 | A removed listing is re-created by the next harvest | M | M | **todo:** suppression list checked by the pipeline before creating organisations (`retention.md` open items); the site already promises this | Medium until built |
+| R-9 | Unauthorised access to broker data | L | H | `requireBrokerUser` on every broker function, `BROKER_EMAILS` allowlist, verified email only; secrets out of Git; Convex and Vercel access protected by Joshua's accounts (2FA **todo:** confirm on all four providers) | Low |
+| R-10 | Scraping beyond what sites allow (terms, robots, Computer Misuse Act for gated pages) | L | M | robots.txt and Crawl-delay honoured; no Raven / members-only / 403 pages; no Meta / LinkedIn scraping; honest User-Agent (source-research, global rules) | Low |
+| R-11 | Over-retention | M | L | `retention.md` schedule; **todo:** automate deletions | Low–medium |
+
+## 4. Sign-off
+
+- Measures marked **todo** are tracked in `retention.md` (open items) and the task list; R-4 and R-8 must be closed before the phase-2 outreach.
+- Re-assess B before any CRM data is used to contact people outside role addresses.
+- Owner: Joshua Fehn. Next review: July 2027, or earlier on any change listed at the top.
