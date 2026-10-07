@@ -48,6 +48,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - 50 entries still use legacy `@cusu` emails.
 - Some content is stale and dates from 2020.
 - 37% of entries have no short description and 17% have no long description.
+- Resources (where termcards live) are served under `/asset/` and `/resourcehandler/`, both disallowed for every crawler, and the resource page itself errors for anonymous requests (checked 2026-10-07). Record a resource termcard's URL, but never fetch the file (§21).
 
 ## §2 Proctors' register
 
@@ -212,21 +213,61 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 ## §16 Mailing-list inbox
 
-**Flow:** Joshua's @cam.ac.uk Outlook rule forwards mail that carries a `List-Id` header to an inbound webhook, which posts to the Convex HTTP route `/api/inbound/email` (shared secret). Mail lands in `inboundEmails`, and the pipeline extracts events from it.
+**Flow**
+- Joshua's @cam.ac.uk Outlook rule **redirects** mail that carries a `List-Id` header to an address on a Resend receiving subdomain (setup: `docs/setup/inbox-instagram.md`, J3/J4).
+- Resend posts an `email.received` webhook to the Convex HTTP route `POST /api/inbound/email` (`webapp/convex/http.ts`). The webhook carries metadata only; the route verifies its Svix signature, then fetches the body, headers and attachments from Resend's Receiving API and stores the mail in the internal `inboundEmails` table as `pending`.
+- The pipeline stage `inbox` extracts events and marks each mail `done` / `skipped` / `failed`.
 
-**Visibility:** events from mail default to `cam_only`.
+**Resend, checked 2026-10-07** (https://resend.com/docs/llms.txt and the pages it lists)
+- Event `email.received`: `{type, created_at, data: {email_id, created_at, from, to[], cc[], bcc[], received_for[], message_id, subject, attachments[{id, filename, content_type, content_disposition, content_id}]}}`. "Webhooks do not include the email body, headers, or attachments, only their metadata."
+- Body and headers: `GET https://api.resend.com/emails/receiving/{email_id}` → `{html, text, headers, …}`; `?html_format=cid` keeps inline images as `cid:` references instead of base64 data URIs.
+- Attachments: `GET https://api.resend.com/emails/receiving/{email_id}/attachments` → `data[{filename, size, content_type, download_url, expires_at}]`; each `download_url` is valid for an hour.
+- Signature: Svix headers `svix-id`, `svix-timestamp`, `svix-signature`; HMAC-SHA256 with the base64 part of the endpoint's `whsec_…` secret over `id.timestamp.body`; `svix-signature` may hold several space-separated `v1,<base64>` entries. Verified with Svix's published example (https://docs.svix.com/receiving/verifying-payloads/how-manual).
+- Retries: immediately, 5 s, 5 min, 30 min, 2 h, 5 h, 10 h, 10 h. Our route answers 502/503 when the Receiving API failed or is not configured, so a mail is fetched again later; `messageId` dedupe makes retries safe.
+- Receiving needs an MX record on a (sub)domain verified in Resend; a forward straight to Resend's SMTP host is dropped.
+
+**The route** (`POST /api/inbound/email`)
+- Two senders: Resend (Svix-signed, `RESEND_WEBHOOK_SECRET`; content fetched with `RESEND_INBOUND_API_KEY` or `RESEND_API_KEY`, which needs full access) and a provider-agnostic JSON body behind `Authorization: Bearer $INBOUND_EMAIL_SECRET` (`webapp/lib/inbound-email.ts` documents the shape). Either secret unset → 401 for that sender.
+- Optional `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one of those addresses: use an unguessable local part, so strangers who learn the receiving domain cannot post events.
+- Limits: 15 MB per request, 100 000 characters of text, HTML ≤ 2 MB (to storage), at most 10 attachments of ≤ 5 MB each. Only images, PDF and calendar files are kept, never SVG; skipped files are named in `extractionNote`.
+- `receivedAt` is the mail's `Date` header when it lies between a week before and a day after receipt, clamped to now (the claims API refuses future retrieval times); else when Resend received it.
+- Nothing in `inboundEmails` is returned by a public function. Files reach the pipeline only through `POST /api/pipeline/inbound/file`, which serves a file only for the mail it belongs to.
+
+**Extraction** (stage `inbox`)
+- Mail without a list signal (no `List-Id`, no lists.cam.ac.uk sender, no inline-forwarded list header) and not from a known organisation is `skipped` before any LLM call.
+- The sender is identified deterministically, strongest first: `List-Id` → Sympa list on record (and its society component, `soc-cugs-news` → `soc-cugs`); exact sender address; the sender's own domain (never webmail, cam.ac.uk or other shared domains); display or list name against known names. A society name the model reads from the sign-off counts only when its quote is verified.
+- E-mail addresses and phone numbers are redacted before the text goes to the LLM (bulk model, prompt `email_events_v1`). Quotes are checked against that redacted text.
+- Dates such as "Wednesday of Week 3" are resolved in code from the verified Full Term dates (§19) and the mail's date, never by the model.
+- Attached images and PDFs (posters, termcards) are read with the strong model's vision when the text found no events, says to see the attachment, or the file is named like a termcard. Values read only from an image cannot be checked and stay `inferred`.
+- External ids are scoped to the organisation (`<orgKey>:<date>:<title slug>`), so a weekly mail repeating an event updates it. Events another staged source already has (same organiser, start minute, similar title) are dropped.
+
+**Visibility:** `cam_only`, or `members_only` when the mail says so. Never public. The mail's `sourceUrl` is `inbound:<message-id>`, never shown publicly.
 
 **Fact:** external forwarding is possible from Cambridge Exchange Online (Engineering IT help: https://help.eng.cam.ac.uk/email/forwarding-your-email/).
 
 ## §17 Meta Instagram Business Discovery
 
 **Access**
-- It needs Joshua's own Instagram professional account, linked to a Facebook Page, a developer app and a long-lived token.
-- It covers professional (business or creator) target accounts only.
+- It needs Joshua's own Instagram professional account, linked to a Facebook Page, a developer app and a Facebook User access token with `instagram_basic`, `instagram_manage_insights` and `pages_read_engagement` (setup: `docs/setup/inbox-instagram.md`, J5).
+- It covers professional (business or creator) target accounts only; age-gated accounts return nothing.
+- The pipeline reads `META_IG_USER_ID` and `META_ACCESS_TOKEN` from `pipeline/.env`. Without both, the `instagram` stage notes "skipped: not configured" and succeeds.
 
-**Data:** media captions, timestamps and media URLs. Images are downloaded and stored, never hotlinked, because SocTrackr's hotlinked CDN URLs expired within days.
+**API, checked 2026-10-07** (https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-facebook-login/business-discovery.md and the IG Media reference)
+- `GET https://graph.facebook.com/v25.0/<META_IG_USER_ID>?fields=business_discovery.username(<handle>){id,username,media.limit(12){id,caption,timestamp,media_type,media_url,permalink,thumbnail_url,children{media_type,media_url}}}`. v25.0 was the latest version that day.
+- `media_url` is omitted for media containing copyrighted material (often Reels audio). `caption` excludes the `@` symbol unless the app user administers the page.
+- The token travels in `Authorization: Bearer`, never in the URL (so it cannot reach a log).
 
-**Also:** the Basic Display API has been dead since 4 Dec 2024.
+**Rate limits**
+- Business Discovery is under Platform rate limits, not the Instagram business-use-case limits. The `X-App-Usage` header reports `call_count` as a percentage; throttling answers error codes 4, 17, 32 or 613.
+- We send one request at a time, at least 2 s apart, at most 100 handles a run. A run stops at the first throttle or once `call_count` reaches 80 %.
+- Rotation: never-checked handles first, then the longest unchecked; a handle is due again after 20 h, or after 14 days if it is not a professional account (error 110 / subcode 2207013). An invalid token (codes 10, 102, 190, 200) fails the stage with a message to renew it.
+
+**Data:** captions, timestamps, permalinks and media URLs of posts from the last 60 days. Captions are read by the bulk model (`caption_events_v1`); when a caption points at the image ("see poster", "swipe for our termcard"), the strong model reads up to four images (`image_events_v1`). Image-only values stay `inferred`.
+- Events are `public` (the society published them), or `members_only` when the post says so. Their `sourceUrl` is the post's permalink, a link we never fetch.
+- Images are downloaded from the `media_url` the API returned (Meta CDN hosts only: `*.cdninstagram.com`, `*.fbcdn.net`) and stored as our own copy, never hotlinked, because SocTrackr's hotlinked CDN URLs expired within days.
+- `orgInternal` learns the handle, whether it is a professional account and its Instagram id; the newest post's time is a `lastActiveAt` claim.
+
+**Also:** the Basic Display API has been dead since 4 Dec 2024. instagram.com itself is never fetched.
 
 ## §18 SocTrackr (reference only)
 
@@ -251,3 +292,38 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **Week convention (for labels):** Full Term starts on a Tuesday; a student "week" runs Thursday to Wednesday, so Week 1 begins on the first Thursday of Full Term and Week 0 is the week before (as Camdram and CUCBC label weeks, LB §3). Labels run from Week 0 to the week holding the last day of Full Term (Michaelmas 2026: Week 9 = Thu 3 – Fri 4 Dec).
 
 **Rule:** add a year only after reading it on the official page; never extrapolate.
+
+## §20 Sympa public list search
+
+**Location:** `https://lists.cam.ac.uk/sympa/search_list/soc-`, one server-rendered page. Checked **2026-10-07**: 1,077 results, of which 1,030 list names start with `soc-`, from 627 societies (the brief counted 1,078 and about 629).
+
+**robots.txt:** `https://lists.cam.ac.uk/robots.txt` answered 404 on 2026-10-07 (no rules, so allowed). The page sets a session cookie; our client never stores one.
+
+**Naming:** University society lists are `soc-<society>[-<group>]` (UIS: https://help.uis.cam.ac.uk/node/1449).
+
+**Fields:** list name (from the `/sympa/info/<list>` link) and description (the item's text). Nothing else.
+
+**Traps**
+- Each list's **address is written by a `document.write` script**, i.e. obfuscated. It is never decoded or reconstructed; subscribing needs only the list *name*.
+- `/sympa/info/<list>` pages name the **owners and moderators**: personal data. They are never fetched.
+- Lists outlive their societies (`soc-ciccu-events2017`), so a list proves nothing about activity.
+- The search also matches non-society names (`caius-engsoc-2024`); only `soc-` names are kept.
+- Committee, cohort and year lists (`-committee`, `-exec`, `-alumni`, `-2017`) are not for joining; the worklist prefers announcement-style lists (`soc-x`, `-announce`, `-news`, `-events`, `-interested`, `-info`, then `-members`).
+
+**Subscribing** (UIS: https://help.uis.cam.ac.uk/node/1444): send `subscribe <list-name>` as the subject or first line to `sympa@lists.cam.ac.uk`; most lists ask the owners to approve.
+
+**Use:** `camsocs worklist` only (once a day at most; `sources/sympa.py`). It writes `var/reports/sympa-soc-lists.csv` and ranks organisations for Joshua's manual sign-up (`var/reports/mailing-list-worklist.csv`).
+
+## §21 Termcards
+
+**Inputs:** `termcardUrl` values claimed by other harvesters (SU profiles, society websites).
+
+**Cambridge SU resources** (`/resources/<id>/<name>/`, e.g. https://www.cambridgesu.co.uk/resources/8721/CUHCS-Michaelmas-Term-Card/): checked **2026-10-07**, the resource page answered "Sorry, there was a problem" to an anonymous request, and MSL serves resource files under `/asset/` and `/resourcehandler/`, which the SU's robots.txt disallows for every crawler (`User-agent: *`). **SU-hosted termcards are therefore never fetched**; the stage records them as skipped.
+
+**Fetch:** through the polite client (§ Global rules), at most weekly per card. A page is followed to the first file it links or embeds whose name, label or alt text says termcard / programme / poster, one level deep, robots-checked.
+
+**Read:** strong-model vision (`image_events_v1`). PDFs are rendered page by page (at most four pages, pypdfium2) and their **text layer** goes along: quotes are checked against it, so PDF values can be `found`. An image-only card has no text to check against, so its values stay `inferred`. Replies are cached by the file's content hash.
+
+**Dates:** "Week 3 Wednesday" needs the term. The card's own words ("Michaelmas 2026", "MT26") win, then the URL or file name. A card that says neither keeps only its calendar-dated events, because it may be last term's.
+
+**Visibility:** `public` (the society published the card), or `members_only` where the card says so. Events another staged source already has are dropped.
