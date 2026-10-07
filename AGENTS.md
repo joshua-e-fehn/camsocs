@@ -30,6 +30,9 @@ camsocs is a verified, current database of Cambridge student societies and sport
   - Each entity holds plain resolved values plus `meta[field]` = `{status, evidence, confidence, sourceUrl, retrievedAt, method}`.
   - Precedence and confidence rules are in `docs/data-model.md` §1. Confidence is computed by rule, **never self-reported by the LLM**.
 - **The pipeline never sends `null` for a field it didn't observe.** Upserts are patches, so it omits the field. (A null once blanked 633 records in Bundestracker.)
+- **Entity values arrive only as claims.** `POST /api/pipeline/claims` appends to `fieldClaims`; the server resolves (`convex/lib/resolve.ts`), materialises and derives the row (`convex/lib/materialise.ts`). Field names, validators and merge rules are one registry, `convex/lib/fields.ts`, over the tuples in `lib/vocab.ts`. The public read API and its types are documented in `docs/webapp.md` "Public API".
+- **Keys are minted identically on both sides** (`webapp/lib/keys.ts`, `pipeline/.../keys.py`); `webapp/lib/keys.fixtures.json` is asserted by both test suites.
+- **Pipeline stages are one ordered registry**, `pipeline/src/camsocs_pipeline/stages/__init__.py` (seed → harvest → resolve → enrich → events → inbox → load → report). Adding a stage is one line; its docstring has the convention. Harvest stages only write observations (`models/observation.py`) to `var/staging/`; `resolve` assigns keys; `load` posts.
 - **Vocabularies live in `webapp/lib/vocab.ts`** (as-const tuples, no server imports) and are mirrored in the pipeline. A test asserts the two match.
 - **Privacy boundary:**
   - Every `convex/broker/*` function calls `requireBrokerUser`. Only verified emails in the `BROKER_EMAILS` Convex env var get in; unset means nobody does.

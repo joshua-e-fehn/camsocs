@@ -232,3 +232,22 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 - `https://www.soctrackr.com/api/get-all-sources` lists 155 Instagram handles.
 - The repo has no licence, so we do **not** reuse its data without the author's permission. We may use it as a sanity check of coverage.
+
+## §19 University Full Term dates
+
+**Source:** `https://www.cam.ac.uk/about-the-university/term-dates-and-calendars` (the University's official term-dates page). Checked **2026-10-07**; the page states each date verbatim, e.g. "Full Term starts: Tuesday 6 October 2026". Cross-checked the same day against the University-domain search index (`cam.ac.uk` results quoting the same dates).
+
+| Academic year | Term | Full Term starts | Full Term ends |
+|---|---|---|---|
+| 2026-27 | Michaelmas | Tue 6 Oct 2026 | Fri 4 Dec 2026 |
+| 2026-27 | Lent | Tue 19 Jan 2027 | Fri 19 Mar 2027 |
+| 2026-27 | Easter | Tue 27 Apr 2027 | Fri 18 Jun 2027 |
+| 2027-28 | Michaelmas | Tue 5 Oct 2027 | Fri 3 Dec 2027 |
+| 2027-28 | Lent | Tue 18 Jan 2028 | Fri 17 Mar 2028 |
+| 2027-28 | Easter | Tue 25 Apr 2028 | Fri 16 Jun 2028 |
+
+**Use:** seeded by the pipeline stage `term_dates` (`pipeline/src/camsocs_pipeline/seeds/term_dates.py`) into `termDates`, and used for events' `termWeekLabel`.
+
+**Week convention (for labels):** Full Term starts on a Tuesday; a student "week" runs Thursday to Wednesday, so Week 1 begins on the first Thursday of Full Term and Week 0 is the week before (as Camdram and CUCBC label weeks, LB §3). Labels run from Week 0 to the week holding the last day of Full Term (Michaelmas 2026: Week 9 = Thu 3 – Fri 4 Dec).
+
+**Rule:** add a year only after reading it on the official page; never extrapolate.

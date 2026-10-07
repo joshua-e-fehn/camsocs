@@ -104,7 +104,7 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | Task | Phase | What | Status |
 |---|---|---|---|
 | T1 | A Foundation | Scaffold the webapp (template, upgraded) and the pipeline skeleton (polite client, LLM client, loader, runner). Gates and CI. | in progress |
-| T2 | A Foundation | Domain schema from `docs/data-model.md`. Ingestion mutations and the field resolution / derivation engine. Vocab parity test. | todo |
+| T2 | A Foundation | Domain schema from `docs/data-model.md`. Ingestion mutations and the field resolution / derivation engine. Vocab parity test. | done |
 | T3 | B Harvest | Seed harvesters: SU directory + profiles, Proctors, Sport A–Z + pages + guide PDF, Camdram societies, CUCBC, colleges, JCR/MCR bodies | todo |
 | T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | todo |
 | T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | todo |

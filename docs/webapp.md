@@ -44,14 +44,27 @@ components/                  Atomic Design
   providers/                 PROVIDERS — context wrappers (convex client, theme, auth guard)
 
 convex/
-  schema.ts                  App schema (harvestRuns so far; header states the schema rules)
+  schema.ts                  The domain schema (docs/data-model.md is the contract; header states the rules)
   http.ts                    Better Auth routes + /api/pipeline/* (Bearer PIPELINE_API_KEY)
+  orgs.ts events.ts venues.ts termDates.ts listingRequests.ts
+                             PUBLIC read API (see "Public API" below) + the listing-request form
+  ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
+                             relationships + eventOrganisers, broker, files, inbound, termDates, purge)
+  derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
   auth.ts                    getCurrentUser, getBrokerAccess (public, never throw)
   broker/                    PRIVATE CRM functions — every one calls requireBrokerUser
+  lib/fields.ts              claimable-field registry: validators, merge/compare rules, applicability
+  lib/resolve.ts             field resolution engine (data-model §1), pure
+  lib/materialise.ts         resolutions → row + meta + derived fields; lib/derived.ts the §6 rules
+  lib/entityStore.ts         keyed entity reads/writes, org cards, organisation refresh
+  lib/projections.ts         public projections (data-model §7) and their validators
+  lib/orgFilters.ts          directory filters and disjunctive facet counts, pure
+  lib/viewer.ts              getViewer(ctx): signed-in / broker / verified @cam.ac.uk
   lib/auth.ts                requireUserId / getUserId / requireBrokerUser / getBrokerUser
   lib/ingest.ts              upsertRow (write only when changed), MAX_BATCH 500, guarded prune
   lib/validators.ts          literalUnion() over lib/vocab.ts tuples
+  lib/checkValue.ts          checks a v.any() claim value against a field validator
   lib/harness.testing.ts     convex-test harness (two dots → never deployed)
   betterAuth/                Better Auth component (local install, from Bundestracker)
   _generated/                COMMITTED codegen (see .gitignore note)
@@ -59,6 +72,7 @@ convex/
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
 lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline
+  keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)
   auth-forwarded-headers.ts  The /api/auth hop without x-forwarded-host (Bundestracker outage fix)
@@ -140,3 +154,107 @@ project's functions onto another project's production (2026-07-29).
 
 All frontend design decisions are governed by `webapp/DESIGN.md`. Any time UI is created or
 modified, consult it. Sections marked ✏️ are meant to evolve.
+
+## Public API
+
+Everything a page needs comes from these Convex functions (via `hooks/convex/`). They are safe
+for a signed-out visitor, return only the public projection (data-model §7,
+`convex/lib/projections.ts`), and their `returns` validators are the exact types the client gets
+(`FunctionReturnType<typeof api.orgs.getBySlug>` etc.). Never read the internal or broker tables
+from a page.
+
+### Who is looking
+
+`convex/lib/viewer.ts` — `getViewer(ctx) → { userId?, email?, isBroker, isCamVerified }`.
+`isCamVerified` = a *verified* email ending exactly `@cam.ac.uk` (not a subdomain);
+`isBroker` = verified email on `BROKER_EMAILS`. `visibleEventTiers(viewer)` = `["public"]`, plus
+`"cam_only"` for a cam-verified viewer or the broker. `members_only` is never visible. For the UI's
+own "am I signed in / broker?" question use `api.auth.getCurrentUser` / `api.auth.getBrokerAccess`.
+
+### Organisations (`convex/orgs.ts`)
+
+Shared filter arguments (`OrgFilters`, `convex/lib/orgFilters.ts`) — OR within a facet, AND
+across facets; an absent or empty facet does not filter:
+
+```ts
+{
+  q?: string                         // full-text over name, aliases, short name/description, tags, category labels
+  categories?: Category[]            // CATEGORIES
+  levels?: OrgLevel[]
+  orgTypes?: OrgType[]
+  collegeKeys?: string[]             // org keys of colleges (orgs.colleges)
+  activityTypes?: ActivityType[]
+  audiences?: Audience[]
+  statuses?: OrgStatus[]             // default: everything except "archived"
+  sport?: { blueStatus?: BlueStatus[], beginnerFriendly?: boolean, gender?: GenderCategory[] }
+}
+```
+
+Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
+
+| Function | Args | Returns |
+|---|---|---|
+| `orgs.list` | `OrgFilters & { paginationOpts }` | `{ page: OrgCardPublic[], isDone, continueCursor }` — name order, or search relevance with `q`; works with `usePaginatedQuery` (cursor = offset) |
+| `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly }`, each `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns |
+| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventPublic[], relationships: RelationshipPublic[] }`; events are upcoming (from today, London), at most 50, gated by the viewer; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
+| `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
+
+`OrgCardPublic`: `key, slug, name, shortName?, shortDescription?, orgType?, level?, status,
+collegeKeys, categories, activityTypes, audiences, beginnerFriendly?, sport?: {sport?, blueStatus?,
+genderCategories}, logoUrl?`.
+
+`OrgPublic`: every public organisation field of data-model §2 (with `logo: {url, credit?}`, no
+personal email, `mailingList: {platform?, signupUrl?}`), plus `missingFields`, `updatedAt` and
+**`meta: Record<field, PublicFieldMeta>`** — one entry per claimable field, including dotted ones
+(`meta["sport.blueStatus"]`, `meta["registrations.su"]`). Render a `SourceLine` from it:
+`status` (chip), `sourceUrl` host (absent for internal sources: show "private source"),
+`retrievedAt` (date), `confidence`, `claimCount`; `conflicting` comes with `conflicts[]` (the other
+readings, each with its source) — show both; `missing` comes with `missingReason`
+(`not_attempted` = nobody has looked yet).
+
+### Events (`convex/events.ts`)
+
+| Function | Args | Returns |
+|---|---|---|
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventPublic[]` by start time (≤ 1000), gated by the viewer; `categories` / `collegeKeys` match the organisers' or co-hosts' |
+| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it) |
+
+`EventPublic`: `key, title, description?, startsAt, endsAt?, allDay, termWeekLabel?, venueKey?,
+venueText?, organisers: {key, slug, name, role}[], speakers, price?, bookingUrl?, signupRequired?,
+visibility, eventType, imageUrl?, cancelled, status, source, sourceUrl? (absent for mailing-list
+events), lastSeenAt, confidence, meta`.
+
+### Reference data and the form
+
+| Function | Args | Returns |
+|---|---|---|
+| `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
+| `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a user-readable message on invalid input, an unknown listing, or more than 5 requests per address per hour |
+
+Labels for vocabularies: `CATEGORY_LABELS` in `lib/vocab.ts`; the rest are added there when the UI
+needs them.
+
+## Ingestion API (pipeline only)
+
+`POST /api/pipeline/<path>` with `Authorization: Bearer $PIPELINE_API_KEY`; batches ≤ 500 rows
+(`MAX_BATCH`). Bodies and responses are modelled in `pipeline/src/camsocs_pipeline/models/wire.py`
+(the route table is in its docstring); the pipeline calls them through `ConvexLoader`
+(`pipeline/load.py`). Errors: 401 bad key, 400 validation (message names the field), 404 "not
+found". Item-level refusals (a bad claim, an unknown event) come back in the 200 response
+(`rejected`, `missingEvents`, `missing`) and the rest of the batch lands.
+
+| Path | Writes |
+|---|---|
+| `claims` | `fieldClaims` + the entity row (created on first claims), re-resolved and re-derived; `{inserted, updated, unchanged, entities: {created, updated, unchanged}, rejected[]}` |
+| `sources` | `sources` by key (`src-<sha1(url)>`) |
+| `orgInternal` | `orgInternal` by orgKey (patch; lists merge) |
+| `relationships` | `relationships` by server-minted key, evidence merged |
+| `eventOrganisers` | replaces each event's organiser set; mirrors it on the event; co-host / sponsor edges |
+| `brokerInferences` | inferred needs/offers and public-source people (never overwrites manual / confirmed) |
+| `files` | `{data: base64, contentType}` → `{storageId, sha256}` (≤ 2 MB, raster image or PDF, deduplicated) |
+| `inbound/pending`, `inbound/mark` | read pending list mail; record extraction outcome |
+| `termDates` | Full Term dates by (academicYear, term); re-labels events |
+| `derive` | schedules the daily re-derivation now |
+| `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
+| `runs/start`, `runs/finish` | the run log |

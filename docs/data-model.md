@@ -6,7 +6,20 @@ Decisions behind it: see PLAN.md §6 (Decisions log). Field research: `docs/rese
 
 ## 0. Rules
 
-1. **Keys.** Every entity has a minted string `key`, such as `org-cu-german-society`, `evt-<sha1(source:externalId)>` or `ven-west-road-concert-hall`. `v.id` is never used across tables or in the wire format.
+1. **Keys.** Every entity has a minted string `key`. `v.id` is never used across tables or in the wire format (only for `_storage` files). Minting lives in `webapp/lib/keys.ts` and `pipeline/.../keys.py`, asserted against shared fixtures (`webapp/lib/keys.fixtures.json`):
+
+   | Entity | Key |
+   |---|---|
+   | organisation | `org-<slug(name)>`; `slug` = key without `org-` |
+   | venue | `ven-<slug(name)>` |
+   | team | `team-<org slug>--<slug(team name)>` |
+   | session | `ses-<sha1(orgKey:slug(title):dayOfWeek:startTime)>` |
+   | event | `evt-<sha1(source:externalId)>` |
+   | relationship | `rel-<sha1(fromKey:type:toKey)>`, minted by the server |
+   | source | `src-<sha1(url)>` |
+   | person | `per-<sha1(orgKey:slug(name))>` |
+
+   `slug`: NFKD, a fixed transliteration (ß→ss, æ→ae, ø→o, …), combining marks dropped, `&`→`and`, apostrophes deleted, ASCII lowercase, runs of non-`[a-z0-9]` → `-`, at most 80 characters.
 2. **The pipeline is the source of truth.** Tables marked *pipeline-owned* are written only by internal mutations called through `/api/pipeline/*`. The two exceptions are manual or owner overrides, written as `fieldClaims` rows with `method: "manual" | "owner_submitted"`.
 3. **Provenance for every field.**
    - `fieldClaims` is an append-only log of every observed value.
@@ -32,11 +45,22 @@ FieldMeta = {
   missingReason?: "not_found" | "not_published" | "access_restricted" | "unreachable" | "not_attempted",
   confidence?: number,                          // 0..1, computed by rule (§1.1), never self-reported by the LLM
   sourceUrl?: string,
-  retrievedAt?: number,
+  sourceType?: SOURCE_TYPES,                   // decides whether sourceUrl may be shown (§7)
+  retrievedAt?: number,                         // the winning claim's latest sighting (lastSeenAt)
   method?: "parser" | "llm" | "manual" | "owner_submitted",
-  claimCount?: number,                          // how many independent sources agree
+  claimCount?: number,                          // independent sources (distinct hosts) that agree
+  conflicts?: { value, sourceUrl, sourceType, retrievedAt, method }[],  // when status = conflicting: the other readings
 }
 ```
+
+A field nobody has claimed has `{status: "missing", missingReason: "not_attempted"}`, or `{status: "not_applicable"}` when the field does not apply (sport fields of a non-sports group; college fields of a University-level group). Every claimable field has a `meta` entry.
+
+The engine is `webapp/convex/lib/resolve.ts` (pure, unit-tested). Its rules, in order:
+
+1. **Live claims.** `rejected` and `superseded` claims are ignored. Of the rest, only the newest claim per (`sourceKey`, `method`) counts: a newer reading of the same page by the same method replaces the older one (the server marks it `superseded`), so a page that stops listing an email retracts it. A parser and an LLM reading the same page are separate readings.
+2. **Status is normalised on the server**, whatever the caller asks for: `manual` → `manual`; `owner_submitted` → `owner_confirmed`; an LLM claim is `found` only with a non-empty `evidenceQuote` and `quoteCheck` `exact` or `normalised`, otherwise `inferred`; a parser claim is `found` unless it says `inferred` (a heuristic). A claim without a value is `missing` (with a `missingReason`, default `not_found`) or `not_applicable`. An empty array is not a value: it counts as `not_found`.
+3. **Merge rules per field** (`webapp/convex/lib/fields.ts`): `single` fields take the precedence winner (§1.2); array fields (`aliases`, `categories`, `socials`, `roleEmails`, …) take the **union** of every `found` claim's items (de-duplicated: URLs by normalised URL, role emails by role + address), or of the `inferred` ones when nothing was found, and a manual claim replaces the union; `lastActiveAt` takes the **maximum**.
+4. **Missing.** With no live value claim, the best negative claim (primary first, then newest) gives `status` and `missingReason`; a value from any source beats a negative claim from another.
 
 ### 1.1 Confidence (by rule, not by asking the LLM)
 
@@ -49,8 +73,9 @@ FieldMeta = {
 | llm without a verifiable quote, i.e. `inferred` | 0.50 |
 | owner_submitted / manual | 1.00 |
 
-- Add 0.05 for each additional agreeing independent source, capped at 0.99.
-- A value that disagrees with an equal-rank claim makes the status `conflicting`. Both readings stay in `fieldClaims`, and the UI shows both.
+- Negative claims use the same table (a parser reading "no email on this page" is as reliable as one reading an email); an LLM negative claim is 0.50.
+- Add 0.05 for each additional agreeing independent source, capped at 0.99. *Independent* means a different host of `sourceUrl` (the SU directory and an SU profile are one publisher).
+- A value that disagrees with an equal-rank claim makes the status `conflicting`. The precedence winner stays the displayed value, every other reading is kept in `fieldClaims` **and** in `meta.conflicts`, and the UI shows both. Comparison is case-insensitive for emails and ignores scheme, `www.` and trailing slashes for URLs. Free-text fields (`description`, `howToJoin`, `name`, …) never conflict: two sources' prose always differs. Manual claims never conflict (the latest override wins).
 
 ### 1.2 Precedence when resolving
 
@@ -59,7 +84,7 @@ FieldMeta = {
 3. `found` + secondary.
 4. `inferred`.
 
-Ties go to the most recent `retrievedAt`. Claims with `reviewStatus: "rejected"` are ignored.
+Ties go to the most recent sighting (`lastSeenAt`, else `retrievedAt`). Claims with `reviewStatus: "rejected"` or `"superseded"` are ignored.
 
 ## 2. Pipeline-owned public tables
 
@@ -70,18 +95,19 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | Field | Type | Notes |
 |---|---|---|
 | key, slug | string | `org-<slug>`. Slugs are unique. |
-| name | string | Canonical display name |
+| name | string | Canonical display name. Required to create the row; never blanked once set |
 | aliases | string[] | e.g. "CU German Society", "German Soc", "CUGS" |
 | shortName | string? | Acronym |
-| orgType | vocab `ORG_TYPES` | society, sports_club, college_club, jcr, mcr, college_boat_club, college, department, uni_office, student_union, company, ngo, public_body, other_university_society, media, theatre_company, other |
-| level | vocab `ORG_LEVELS` | university, college, department, intercollegiate, external |
+| orgType | vocab `ORG_TYPES`? | society, sports_club, college_club, jcr, mcr, college_boat_club, college, department, uni_office, student_union, company, ngo, public_body, other_university_society, media, theatre_company, other. Optional until a source says (meta says missing) |
+| level | vocab `ORG_LEVELS`? | university, college, department, intercollegiate, external. Optional until a source says |
 | collegeKeys | string[] | For college-level groups: the college(s), many-to-many (shared clubs) |
 | collegeBody | `jcr \| mcr \| college_run \| joint`? | For college-level groups |
 | parentKey | string? | Hierarchy, e.g. a team club inside a University club, or a JCR within its college |
-| isCounterpart | boolean | true for external or institutional parties that exist only because they are linked to a society |
+| isCounterpart | boolean | true for external or institutional parties that exist only because they are linked to a society. Default false. Counterparts are never listed in the directory and have no `missingFields` |
+| defunct | boolean? | Marked defunct by a source (a college's inactive list) or manually; makes `status` `archived` |
 | status | `active \| dormant \| archived \| unknown` | Derived (§6) |
-| lastActiveAt | number? | Latest dated activity: an event, a post or a page update |
-| registrations | object | `{ su?, proctors?, sportsService?, camdram?, cucbc? }`, each `{ registered: boolean, year?: string, sourceUrl?: string }`. These lapse independently. |
+| lastActiveAt | number? | Latest dated activity: the maximum of claimed values (a post, a page update) and the start of the latest past event it organised or co-hosted (derived) |
+| registrations | object | `{ su?, proctors?, sportsService?, camdram?, cucbc? }`, each `{ registered: boolean, year?: string, sourceUrl?: string }`, `year` an academic year like `2026-27`. Claimed per register as `registrations.su`, `registrations.proctors`, … These lapse independently. |
 | categories | vocab[] `CATEGORIES` | Our taxonomy (§5). An organisation can have several. |
 | activityTypes | vocab[] `ACTIVITY_TYPES` | talks, socials, competitions, performances, workshops, trips, training, publications, volunteering, careers_events, formals, worship, meetings |
 | audiences | vocab[] `AUDIENCES` | undergraduates, postgraduates, staff, alumni, public, own_college_only, women, men, mixed, lgbtq, international, beginners |
@@ -100,15 +126,15 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | timeCommitment | string? | Free text, e.g. "2 trainings/week + Wed matches" |
 | termcardUrl | string? | |
 | accessibilityNote | string? | |
-| sport | object? | `{ sport, blueStatus?: "full"\|"full_some"\|"discretionary_full"\|"half"\|"none", varsity?: boolean, bucs?: boolean, collegeCompetition?: boolean, genderCategories: ("men"\|"women"\|"open"\|"mixed")[], kitCostNote?, venues?: string[] }` |
+| sport | object? | `{ sport?, blueStatus?: "full"\|"full_some"\|"discretionary_full"\|"half"\|"none", varsity?: boolean, bucs?: boolean, collegeCompetition?: boolean, genderCategories: ("men"\|"women"\|"open"\|"mixed")[], kitCostNote?, venues?: string[] }`. Each part is claimed separately (`sport.blueStatus`, `sport.genderCategories`, …) because different sources state different parts; the object exists once any part has a value |
 | website | string? | Final URL after redirects |
 | email | string? | General contact address, published by the organisation or a register |
-| emailType | vocab? `EMAIL_TYPES` | role_own_domain, cambridgesu, srcf, lists_cam, college_domain, webmail, personal_crsid, legacy_cusu |
+| emailType | vocab? `EMAIL_TYPES` | role_own_domain, cambridgesu, srcf, lists_cam, college_domain, webmail, personal_crsid, legacy_cusu. **Derived on the server** from `email` (`classifyEmail`), never claimed: the public projection depends on it |
 | roleEmails | `{ role: vocab ROLES, email }[]` | president, secretary, treasurer, sponsorship, events, publicity, welfare, captain, other. Only addresses the organisation publishes. |
 | contactFormUrl | string? | |
 | mailingList | `{ platform?: "sympa"\|"mailchimp"\|"google_group"\|"other", address?, signupUrl? }`? | Public shows the sign-up only |
 | socials | `{ platform: vocab SOCIAL_PLATFORMS, url, handle? }[]` | instagram, facebook_page, facebook_group, x, linkedin, tiktok, youtube, linktree, website_blog, wechat, threads, bluesky |
-| chatChannels | `{ platform: "whatsapp"\|"discord"\|"telegram"\|"slack"\|"groupme", howToJoin?: string }[]` | Never store invite URLs |
+| chatChannels | `{ platform: "whatsapp"\|"discord"\|"telegram"\|"slack"\|"groupme", howToJoin?: string }[]` | Never store invite URLs (a `howToJoin` containing one is rejected) |
 | searchText | string | Derived: name, aliases, short description, tags and categories. Has a search index. |
 | meta | `Record<string, FieldMeta>` | One entry per resolvable field above |
 | missingFields | string[] | Derived: fields whose status is `missing`. Drives the phase-2 outreach. |
@@ -116,9 +142,15 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 
 **Indexes:** `by_key`, `by_slug`, `by_level_status`, `by_orgType`, `by_isCounterpart`, plus a search index `search_text` on `searchText` with filter fields level, status and orgType.
 
+**Claimable fields.** The fields a claim may target are the tuples `ORGANISATION_FIELDS`, `EVENT_FIELDS`, `TEAM_FIELDS`, `SESSION_FIELDS` and `VENUE_FIELDS` in `webapp/lib/vocab.ts` (mirrored in the pipeline). Each has a value validator (the schema column's), a merge rule and checks in `webapp/convex/lib/fields.ts`: URLs must be `http(s)`, keys must have their prefix, times are `HH:MM`, `shortDescription` ≤ 200 characters, tags lower-kebab, languages ISO 639-1. Derived fields are never claimable.
+
+### orgCards (derived, public)
+
+A small copy of each organisation for the directory list and its filters (`key, slug, name, nameSort, shortName, shortDescription, orgType, level, status, isCounterpart, collegeKeys, categories, activityTypes, audiences, beginnerFriendly, sport {sport, blueStatus, genderCategories}, logoStorageId, searchText, updatedAt`), maintained by the server whenever the organisation changes. `orgs.list` and `orgs.facets` scan it (a few hundred bytes per row) instead of the full rows (~10 KB each with descriptions and meta). It holds nothing that is not public. **Indexes:** `by_key`, `by_isCounterpart_nameSort`, `by_orgType`, search index `search_text` (filters isCounterpart, level, status, orgType).
+
 ### teams
 
-Child rows of a sports club.
+Child rows of a sports club. Created by claims for `orgKey` and `name`.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -133,14 +165,14 @@ Child rows of a sports club.
 
 ### sessions
 
-Regular activities: trainings, weekly meetings, services.
+Regular activities: trainings, weekly meetings, services. Created by claims for `orgKey` and `title`; `dayOfWeek` and the times are optional (a source may give only "weekly").
 
 | Field | Type | Notes |
 |---|---|---|
 | key | string | |
 | orgKey | string | |
 | title | string | |
-| dayOfWeek | 0..6 | |
+| dayOfWeek | 0..6? | 0 = Sunday |
 | startTime / endTime | "HH:MM" | |
 | venueKey / venueText | string? | |
 | termScope | `full_term \| all_year \| michaelmas \| lent \| easter`? | |
@@ -156,29 +188,31 @@ Regular activities: trainings, weekly meetings, services.
 | description | string? | |
 | startsAt | number | |
 | endsAt | number? | |
-| allDay | boolean | |
-| termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`) |
+| allDay | boolean | Default false |
+| termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`, §6) |
 | venueKey / venueText | string? | |
-| organiserKeys, coHostKeys, sponsorKeys | string[] | Organisation keys. Sponsors and co-hosts also create `relationships` edges. |
+| organiserKeys, coHostKeys, sponsorKeys | string[] | Organisation keys, set only by `eventOrganisers` (not claimable). Sponsors and co-hosts also create `relationships` edges. |
 | speakers | `{ name, affiliation? }[]` | Only as published |
 | price | `{ free: boolean, minPence?, maxPence?, text? }`? | |
 | bookingUrl | string? | |
 | signupRequired | boolean? | |
-| visibility | `public \| cam_only \| members_only` | Mailing-list-derived events default to `cam_only`. `members_only` is never shown publicly. |
-| eventType | vocab `EVENT_TYPES` | talk, social, performance, competition, match, workshop, trip, formal, careers, meeting, training, worship, fair, other |
+| visibility | `public \| cam_only \| members_only` | Required. Mailing-list-derived events default to `cam_only`. `members_only` is never shown publicly. |
+| eventType | vocab `EVENT_TYPES` | talk, social, performance, competition, match, workshop, trip, formal, careers, meeting, training, worship, fair, other. Default `other` |
 | image | `{ storageId?, sourceUrl? }`? | Our own stored copy |
-| cancelled | boolean | |
-| status | `confirmed \| tbc` | |
+| cancelled | boolean | Default false |
+| status | `confirmed \| tbc` | Default `confirmed` |
 | source | vocab `EVENT_SOURCES` | camdram, talks_cam, ics, luma, google_calendar, playwaze, uni_events_api, cucbc, su_whatson, mailing_list, instagram_api, termcard, website, manual |
 | externalId | string | |
-| sourceUrl | string | |
-| lastSeenAt | number | |
-| confidence | number | |
+| sourceUrl | string | The event's page, or an opaque internal URI (`inbound:<message-id>`) for mailing-list events, never shown |
+| lastSeenAt | number | Derived: latest sighting of any of its claims |
+| confidence | number | Derived: the lower of `title` and `startsAt` confidence |
 | meta | `Record<string, FieldMeta>` | |
 
-**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, plus a search index on title.
+An event row is created by its first claims, which must include `title`, `startsAt`, `visibility`, `source`, `externalId` and `sourceUrl`; the pipeline's `claims_for_event` always sends the last four.
 
-`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor }`, with indexes `by_org_startsAt` and `by_event`. It exists for "events of organisation X".
+**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, plus a search index `search_title` on title (filter: visibility).
+
+`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, visibility }` (the last two denormalised from the event and kept in step), with indexes `by_org_startsAt` and `by_event`. It exists for "events of organisation X". The pipeline replaces an event's whole organiser set at once.
 
 ### venues
 
@@ -201,10 +235,10 @@ Graph edges between organisations.
 | key | string | `rel-<sha1(from:type:to)>` |
 | fromKey / toKey | string | |
 | type | vocab `RELATIONSHIP_TYPES` | sponsors, co_hosted, sister_of, affiliated_with, parent_of, member_college, speaker_from, partner_of, venue_host |
-| evidence | `{ sourceUrl, eventKey?, note?, seenAt }[]` | |
+| evidence | `{ sourceUrl, eventKey?, note?, seenAt, confidence? }[]` | Newest first, at most 50, de-duplicated by (sourceUrl, eventKey). `confidence` is the rule-based confidence of that one sighting (§1.1), computed by the server |
 | firstSeenAt / lastSeenAt | number | |
-| confidence | number | |
-| visibility | `public \| internal` | Default `internal`. `sponsors` and `co_hosted` may be public when published by the organisation. |
+| confidence | number | The best sighting's confidence + 0.05 per additional independent host, capped at 0.99 |
+| visibility | `public \| internal` | Default `internal`. Only `sponsors` and `co_hosted`, only on primary evidence (published by the organisation), may become public; once public it stays public. |
 
 ### termDates
 
@@ -213,8 +247,9 @@ Graph edges between organisations.
 | academicYear | e.g. "2026-27" |
 | term | `michaelmas \| lent \| easter` |
 | fullTermStart / fullTermEnd | ISO dates |
+| sourceUrl | the official page |
 
-The table is seeded from the University's published Full Term dates and is used for `termWeekLabel`.
+The table is seeded from the University's published Full Term dates (source-research §19) and is used for `termWeekLabel`.
 
 ## 3. Pipeline-owned internal tables
 
@@ -228,8 +263,10 @@ These are never returned by public queries.
   | entityKey, field | string |
   | value | any |
   | valueRaw | string? |
-  | sourceKey, sourceUrl | string |
+  | sourceKey, sourceUrl | string (`sourceKey` = `src-<sha1(sourceUrl)>`) |
+  | sourceType | vocab `SOURCE_TYPES` |
   | retrievedAt | number |
+  | lastSeenAt | number (bumped, at most daily, when the same observation is posted again) |
   | contentSha256 | string? |
   | method | |
   | extractor | rule id or model id |
@@ -240,9 +277,12 @@ These are never returned by public queries.
   | confidence | number |
   | reviewStatus | `proposed \| accepted \| rejected \| superseded` |
   | runKey | |
+  | fingerprint | sha256 (`claimFingerprint` in lib/keys.ts) |
   | createdAt | number |
 
-  Indexes: `by_entity_field`, `by_run`.
+  Indexes: `by_entity_field` (entityType, entityKey, field, reviewStatus), `by_run`, `by_fingerprint`.
+
+  `status`, `confidence` and `fingerprint` are computed by the server; the API refuses a posted `confidence`. The fingerprint is sha256 over entity, field, canonical JSON of the value (or `!status:missingReason` for a negative claim), `sourceUrl`, `contentSha256` and `method`: re-posting the same observation of the same page content is a no-op.
 - **sources**: one row per fetched URL.
 
   | Field | Type |
@@ -258,9 +298,10 @@ These are never returned by public queries.
   | robotsVerdict | `allowed \| disallowed \| crawl_delay` |
   | robotsCheckedAt | number |
 
-  `SOURCE_TYPES` = su_directory, su_profile, proctors_register, sport_az, sport_club_page, sport_guide_pdf, camdram, talks_list, society_website, linktree, college_list, cucbc, playwaze, uni_events_api, ics_feed, luma, su_whatson, mailing_list_email, instagram_api, termcard, wayback.
+  `SOURCE_TYPES` = su_directory, su_profile, proctors_register, sport_az, sport_club_page, sport_guide_pdf, camdram, talks_list, society_website, linktree, college_list, cucbc, playwaze, uni_events_api, ics_feed, luma, su_whatson, mailing_list_email, instagram_api, termcard, wayback, manual. URLs of `mailing_list_email` and `manual` sources are internal.
 - **orgInternal**: one row per organisation.
-  - Feed and source identifiers: `suOrgId`, `suSlug`, `proctorsName`, `sportSlug`, `camdramSlug`/`camdramId`, `talksListIds[]`, `icsUrls[]`, `lumaCalendarIds[]`, `googleCalendarIds[]`, `playwaze` IDs, `cucbcClub`, `sympaList`, `ticketingUrls[]`, `instagramBusiness` (bool), `instagramUserId`.
+  - Feed and source identifiers: `suOrgId`, `suSlug`, `proctorsName`, `sportSlug`, `camdramSlug`/`camdramId`, `talksListIds[]`, `icsUrls[]`, `lumaCalendarIds[]`, `googleCalendarIds[]`, `playwaze {communityId?, leagueIds[], teamIds[]}`, `cucbcClub`, `sympaList`, `ticketingUrls[]`, `instagramHandle`, `instagramBusiness` (bool), `instagramUserId`, `websiteDomain`.
+  - Patched by `orgKey`; list fields **merge** (several harvesters contribute feeds).
   - Also `seniorTreasurer {name?, department?}`, `legalForm`, `emailHealth {mxOk, lastBounceAt}` and `websiteHealth {lastStatus, checkedAt, platform}`.
 - **harvestRuns**
 
@@ -288,6 +329,7 @@ These are never returned by public queries.
   | orgKey | string?, resolved |
   | extraction | `pending \| done \| failed \| skipped` |
   | extractedEventKeys | string[] |
+  | extractionNote | string? |
 
   The pipeline fetches `pending` rows, extracts, and posts events. Raw mail is internal only.
 - **listingRequests**: submissions from the public claim / correct / remove / object form.
@@ -305,6 +347,9 @@ These are never returned by public queries.
   | createdAt | number |
   | resolvedAt | number? |
 
+  Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour and 200 open per hour overall). Accepted corrections become `owner_submitted` claims, never direct edits.
+- **storedFiles**: `{ sha256, storageId, contentType, size, createdAt }`, index `by_sha256`. Our own copies of logos, event images and termcards, uploaded through `/api/pipeline/files` (≤ 2 MB; PNG, JPEG, WebP, GIF, AVIF or PDF, checked against the bytes; never SVG) and de-duplicated by content.
+
 ## 4. Broker tables (private)
 
 These live under `convex/broker/*` and every function calls `requireBrokerUser`.
@@ -316,11 +361,13 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | key, name, orgKey, role | string |
   | academicYear | e.g. "2026-27" |
   | startDate | string? |
-  | staleAfter | ISO date (next handover) |
+  | staleAfter | ISO date (next handover; default the next 30 June) |
+  | stale | boolean (derived daily: `staleAfter` has passed) |
   | sourceUrl | string |
   | seenAt | number |
   | publicLinks | `{ platform, url }[]` |
   | consentBasis | `public_source \| consent \| legitimate_interest` |
+  | method | `parser \| llm` rows are pipeline-owned; `manual` rows are never overwritten by the pipeline |
   | notes | string? |
   | archived | boolean |
 
@@ -330,7 +377,7 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | Field | Type |
   |---|---|
   | orgKey | string |
-  | needs, offers | `{ item: vocab NEED_OFFER_ITEMS, status: "inferred"\|"confirmed", evidenceQuote?, sourceUrl?, updatedAt }[]` |
+  | needs, offers | `{ item: vocab NEED_OFFER_ITEMS, status: "inferred"\|"confirmed", evidenceQuote?, sourceUrl?, method?, updatedAt }[]`. The pipeline's inferred list replaces its previous inferred entries; `confirmed` entries are never touched |
   | optIns | `{ openToSponsors?, openToCollaborations?, careersEvents? }` (unknown until phase 2) |
   | pecrSubscriberType | `individual \| corporate \| unknown` |
   | suppressed | boolean |
@@ -390,14 +437,23 @@ Assignment: the LLM assigns 1–3 categories, using the SU category as a hint pl
 These are computed in Convex by `convex/derive.ts`, which runs on ingest and from a daily cron.
 
 - **status**
-  - `active` if `lastActiveAt` falls within 180 days, or if the organisation was registered in the current academic year.
+  - `archived` if the organisation is marked `defunct`.
+  - `active` if `lastActiveAt` falls within 180 days, or if the organisation is on any register for the current academic year (`registrations.*.registered` with `year` equal to it, or with no `year` but reported by a claim retrieved in it).
   - `dormant` if the last activity was more than 180 days ago and there is no current registration.
-  - `archived` if the organisation is marked defunct.
   - Otherwise `unknown`.
-- **missingFields**, **searchText**, **termWeekLabel**.
-- **staleAfter** for people, which defaults to the next 30 June.
+  - Academic years turn over on **1 July** (London), e.g. `2026-27` runs 1 Jul 2026 – 30 Jun 2027.
+- **lastActiveAt**: see §2.
+- **missingFields**: the *tracked* fields (the ones worth asking a society about: description, contacts, socials, membership, categories, sport basics, …; `tracked` in fields.ts) whose status is `missing`. Empty for counterparts.
+- **searchText**: name, aliases, short name, short description, tags and category labels, lowercased.
+- **emailType**: from `email` (§2).
+- **termWeekLabel**: `MT26 Wk 3` / `LT27 Wk 1` / `ET27 Wk 1`; Week 1 starts on the first Thursday of Full Term, Week 0 is the week before; none outside Week 0 … the last week of Full Term (source-research §19).
+- **event confidence / lastSeenAt**: §2.
+- **staleAfter** for people, which defaults to the next 30 June; **stale** turns on once it has passed.
 
 ## 7. Public projections
 
-- **orgPublic** removes `orgInternal`, the broker data and any `meta.sourceUrl` pointing to an internal source (`mailing_list_email`), and keeps the rest. Contacts are shown only if `emailType !== "personal_crsid"`.
-- **eventPublic** is `visibility === "public"` only. `cam_only` needs a verified `@cam.ac.uk` session, and `members_only` is never shown.
+Implemented in `webapp/convex/lib/projections.ts`; the projections are the `returns` validators of the public queries, so nothing else can leave.
+
+- **orgPublic** removes `orgInternal`, the broker data, `searchText`, and any `meta.sourceUrl` (and conflict reading) from an internal source (`mailing_list_email`, `manual`) or that is not `http(s)`, and keeps the rest. A `personal_crsid` email is removed (its meta reads `missing` / `not_published`), personal role emails are dropped, and the mailing list shows only `platform` and `signupUrl`. Stored logos become URLs.
+- **eventPublic** is `visibility === "public"`; `cam_only` needs a verified `@cam.ac.uk` session (or the broker); `members_only` is never shown. A mailing-list event has no `sourceUrl`. Organisers are resolved to `{key, slug, name, role}`.
+- **relationships**: only `visibility === "public"` edges, with the counterpart's name and the `http(s)` evidence URLs.
