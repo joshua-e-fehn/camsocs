@@ -46,13 +46,7 @@ Fetch = Callable[..., FetchResult | None]
 
 
 def run(ctx: StageContext) -> None:
-    settings = ctx.settings
-    user_agent = settings.user_agent if ctx.dry_run else settings.require_user_agent()
-    with PoliteClient(
-        user_agent=user_agent or "camsocs-dry-run",
-        cache_dir=settings.cache_dir,
-        min_interval=settings.min_host_interval,
-    ) as client:
+    with ctx.crawler() as client:
         harvest(ctx, client)
 
 

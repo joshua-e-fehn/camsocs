@@ -12,18 +12,11 @@ from __future__ import annotations
 from collections import Counter
 
 from camsocs_pipeline.pipeline.context import StageContext
-from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.proctors import REGISTER_URL, parse_register, register_observation
 
 
 def run(ctx: StageContext) -> None:
-    settings = ctx.settings
-    user_agent = settings.user_agent if ctx.dry_run else settings.require_user_agent()
-    with PoliteClient(
-        user_agent=user_agent or "camsocs-dry-run",
-        cache_dir=settings.cache_dir,
-        min_interval=settings.min_host_interval,
-    ) as client:
+    with ctx.crawler() as client:
         page = client.cached(REGISTER_URL) if ctx.dry_run else client.fetch(REGISTER_URL)
 
     if page is None:
