@@ -282,13 +282,23 @@ def club_observation(entry: AzEntry, result: FetchResult, client: PoliteClient) 
                     evidence="secondary",
                 )
             )
-        for field_name, value in (
-            ("description", page.description),
-            ("shortDescription", page.short_description),
-        ):
+        fields.append(
+            parser_field(
+                "description",
+                page.description,
+                extractor=f"{extractor}.prose",
+                evidence="secondary",
+            )
+        )
+        if page.short_description:
+            # The lead sentence, when it is short enough; a longer one is not
+            # a missing short description, just none we can quote.
             fields.append(
                 parser_field(
-                    field_name, value, extractor=f"{extractor}.prose", evidence="secondary"
+                    "shortDescription",
+                    page.short_description,
+                    extractor=f"{extractor}.prose",
+                    evidence="secondary",
                 )
             )
         fields.append(
