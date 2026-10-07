@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { internal } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { newTest } from "./lib/harness.testing"
 import { deriveRunStatus } from "./runs"
 
@@ -114,5 +114,33 @@ describe("runs.start / runs.finish", () => {
     const runs = await t.query(internal.runs.latest, { limit: 2 })
     expect(runs).toHaveLength(2)
     expect(runs[0].startedAt).toBeGreaterThanOrEqual(runs[1].startedAt)
+  })
+})
+
+describe("runs.lastHarvest (public)", () => {
+  test("is the latest finished run that wrote data, and nothing else", async () => {
+    const t = newTest()
+    expect(await t.query(api.runs.lastHarvest, {})).toBeNull()
+
+    await t.mutation(internal.runs.start, startArgs)
+    expect(await t.query(api.runs.lastHarvest, {})).toBeNull()
+    await t.mutation(internal.runs.finish, {
+      runKey: startArgs.runKey,
+      stages: [STAGE],
+      warnings: ["a warning that must stay internal"],
+      error: null,
+    })
+    const harvested = await t.query(api.runs.lastHarvest, {})
+    expect(Object.keys(harvested ?? {})).toEqual(["finishedAt"])
+
+    // A later failed run does not count as a harvest.
+    await t.mutation(internal.runs.start, { ...startArgs, runKey: "20261008T010000Z-def456" })
+    await t.mutation(internal.runs.finish, {
+      runKey: "20261008T010000Z-def456",
+      stages: [{ ...STAGE, status: "failed" as const }],
+      warnings: [],
+      error: null,
+    })
+    expect(await t.query(api.runs.lastHarvest, {})).toEqual(harvested)
   })
 })
