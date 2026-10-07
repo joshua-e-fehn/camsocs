@@ -35,6 +35,9 @@ Properties enforced here rather than left to each caller's discipline:
    failed fetch.
 7. **Redirects are followed by hand** (at most 5 hops, http/https only), each
    hop checked against its own host's robots.txt and paced on its own host.
+   A redirect into a login service (Raven, Microsoft, Google sign-in; see
+   `LOGIN_HOSTS`) is not followed: the page is login-gated, recorded as
+   ``access_restricted`` (AGENTS.md: never fetch Raven-gated pages).
 """
 
 from __future__ import annotations
@@ -45,6 +48,7 @@ import http.cookiejar
 import json
 import logging
 import random
+import re
 import threading
 import time
 import urllib.robotparser
@@ -68,6 +72,24 @@ MAX_BACKOFF = 300.0
 MAX_REDIRECTS = 5
 #: A society page or PDF larger than this is not what we are looking for.
 MAX_BYTES = 25 * 1024 * 1024
+
+#: Hosts a site redirects to when a page needs a login. Never followed.
+LOGIN_HOSTS = frozenset(
+    {
+        "raven.cam.ac.uk",
+        "auth.srcf.net",
+        "login.microsoftonline.com",
+        "login.live.com",
+        "accounts.google.com",
+        "shib.raven.cam.ac.uk",
+        "nevar.srcf.net",
+    }
+)
+#: Paths a site redirects to when a page needs a login (Raven-style WLS, a
+#: CMS's own login). Never followed.
+_LOGIN_PATH = re.compile(
+    r"/(wls|auth)/authenticate|/wp-login\.php|/(login|signin|sign-in|saml2?|sso)(/|$|\?)", re.I
+)
 
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
@@ -310,6 +332,17 @@ class PoliteClient:
                         response.status_code,
                         detail=f"refusing non-http redirect to {current}",
                     )
+                login = urlsplit(current).netloc.lower().split(":")[0]
+                if login in LOGIN_HOSTS or _LOGIN_PATH.search(urlsplit(current).path):
+                    result = self._result(
+                        url,
+                        current,
+                        "access_restricted",
+                        response.status_code,
+                        detail=f"redirects to a login at {login}",
+                    )
+                    self._record_negative(url, result)
+                    return result
                 continue
 
             return self._classify(url, current, response, cached)
@@ -658,6 +691,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 __all__ = [
     "AI_AGENTS",
+    "LOGIN_HOSTS",
     "MAX_REDIRECTS",
     "SHARED_GATES",
     "FetchOutcome",

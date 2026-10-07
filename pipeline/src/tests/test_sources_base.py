@@ -306,6 +306,49 @@ def test_a_followed_redirect_reports_the_final_url(tmp_path: Path, net) -> None:
     assert result.text == "moved"
 
 
+def test_a_redirect_into_raven_is_not_followed(tmp_path: Path, net) -> None:
+    allow_all(net, "http://amnesty.soc.example")
+    net.get("http://amnesty.soc.example/").respond(
+        302, headers={"Location": "https://raven.cam.ac.uk/auth/authenticate.html?ver=3"}
+    )
+    raven = net.get(url__startswith="https://raven.cam.ac.uk/").respond(200)
+
+    result = make_client(tmp_path).fetch("http://amnesty.soc.example/")
+
+    assert result.outcome == "access_restricted"
+    assert "raven.cam.ac.uk" in (result.detail or "")
+    assert not raven.called
+
+
+def test_a_redirect_into_a_wls_login_is_not_followed(tmp_path: Path, net) -> None:
+    allow_all(net, "http://soc.example")
+    net.get("http://soc.example/").respond(
+        302, headers={"Location": "https://nevar.example/wls/authenticate?ver=3&url=x"}
+    )
+    login = net.get(url__startswith="https://nevar.example/").respond(200)
+
+    result = make_client(tmp_path).fetch("http://soc.example/")
+
+    assert result.outcome == "access_restricted"
+    assert not login.called
+
+
+def test_ai_input_follows_robots_ai_blocks_and_content_signals(tmp_path: Path, net) -> None:
+    net.get("https://open.example/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+    net.get("https://noai.example/robots.txt").respond(
+        200, text="User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n"
+    )
+    net.get("https://signal.example/robots.txt").respond(
+        200, text="User-agent: *\nContent-Signal: search=yes, ai-input=no\nAllow: /\n"
+    )
+    net.get("https://none.example/robots.txt").respond(404)
+    client = make_client(tmp_path)
+    assert client.ai_input_allowed("https://open.example/about")
+    assert not client.ai_input_allowed("https://noai.example/")
+    assert not client.ai_input_allowed("https://signal.example/")
+    assert client.ai_input_allowed("https://none.example/")
+
+
 def test_non_http_urls_are_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         make_client(tmp_path).fetch("file:///etc/passwd")
