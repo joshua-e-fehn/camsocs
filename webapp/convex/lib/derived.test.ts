@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import emailTypes from "../../lib/email-types.fixtures.json"
 import {
   ACTIVE_WINDOW_MS,
   academicYearOf,
@@ -134,21 +135,9 @@ describe("deriveOrgStatus (data-model §6)", () => {
 })
 
 describe("classifyEmail", () => {
-  test.each([
-    ["jf123@cam.ac.uk", "personal_crsid"],
-    ["JF123@CAM.AC.UK", "personal_crsid"],
-    ["ab123@hermes.cam.ac.uk", "personal_crsid"],
-    ["ab123@jesus.cam.ac.uk", "personal_crsid"],
-    ["president@cam.ac.uk", "role_own_domain"],
-    ["soc-chess@lists.cam.ac.uk", "lists_cam"],
-    ["chess@cambridgesu.co.uk", "cambridgesu"],
-    ["chess@cusu.cam.ac.uk", "legacy_cusu"],
-    ["chess@srcf.net", "srcf"],
-    ["chess@soc.srcf.net", "srcf"],
-    ["jcr-president@jesus.cam.ac.uk", "college_domain"],
-    ["cuchess@gmail.com", "webmail"],
-    ["hello@cuchess.org", "role_own_domain"],
-  ])("%s → %s", (email, type) => {
+  // Shared with the pipeline (pipeline/src/tests/test_links.py), which withholds
+  // personal CRSid addresses by the same rules before anything is posted.
+  test.each(emailTypes.cases.map((c) => [c.email, c.type]))("%s → %s", (email, type) => {
     expect(classifyEmail(email)).toBe(type as never)
   })
 })

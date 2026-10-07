@@ -231,19 +231,7 @@ class PoliteClient:
         _require_http(url)
         cached = self._read_cache(url)
         if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
-            meta, body = cached
-            return FetchResult(
-                url=url,
-                final_url=meta.get("final_url", url),
-                outcome="unchanged",
-                status=meta.get("status"),
-                fetched_at=meta["fetched_at"],
-                content=body,
-                content_type=meta.get("content_type"),
-                content_sha256=meta.get("content_sha256"),
-                from_cache=True,
-                detail="fresh in cache",
-            )
+            return _from_cache(url, *cached, detail="fresh in cache")
 
         current = url
         for _hop in range(MAX_REDIRECTS + 1):
@@ -276,6 +264,20 @@ class PoliteClient:
             return self._classify(url, current, response, cached)
 
         return self._result(url, current, "http_error", None, detail="too many redirects")
+
+    def allows(self, url: str) -> bool:
+        """Whether robots.txt lets us fetch `url`. Loads the host's robots.txt
+        on first use (paced like any request); never requests `url` itself —
+        for deciding what to record about a resource we must not fetch."""
+        _require_http(url)
+        return self._robots_allows(self._robots_policy(url), url)
+
+    def cached(self, url: str) -> FetchResult | None:
+        """The last successful copy of `url` in the cache, without touching the
+        network (a dry run replays from here), or None."""
+        _require_http(url)
+        cached = self._read_cache(url)
+        return None if cached is None else _from_cache(url, *cached, detail="from cache")
 
     # -- robots ----------------------------------------------------------------
 
@@ -541,6 +543,22 @@ class PoliteClient:
 
 
 # --- helpers ------------------------------------------------------------------
+
+
+def _from_cache(url: str, meta: dict, body: bytes | None, *, detail: str) -> FetchResult:
+    """A cached successful copy as an `unchanged` result."""
+    return FetchResult(
+        url=url,
+        final_url=meta.get("final_url", url),
+        outcome="unchanged",
+        status=meta.get("status"),
+        fetched_at=meta["fetched_at"],
+        content=body,
+        content_type=meta.get("content_type"),
+        content_sha256=meta.get("content_sha256"),
+        from_cache=True,
+        detail=detail,
+    )
 
 
 class _RejectAllCookies(http.cookiejar.DefaultCookiePolicy):
