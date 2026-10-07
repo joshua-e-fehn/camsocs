@@ -35,6 +35,11 @@ work — a cron that sees success because most of it worked is how a broken sour
   `var/staging/<source_type>/<run_key>.jsonl` via `ctx.staging.writer(...)` — using the
   models in `models/observation.py` and the helpers in `claims.py` (`parser_field`,
   `llm_field`, `missing_field`). They never mint organisation keys and never call Convex.
+- **In a dry run a harvest stage makes no request**: it replays what `var/cache` holds
+  (`PoliteClient.cached`) and stages nothing, so `sync --dry-run` stays offline.
+- Shared helpers for harvesters: `sources/links.py` (what a link or address is: socials,
+  chat platforms, mailing lists, email kinds, withholding CRSids and chat invites from free
+  text) and `sources/markdown.py` (HTML → the markdown stored in free-text fields).
 - **resolve** (T4) maps identities to keys and writes `var/staging/_resolved/`.
 - **load** posts every keyed observation from the latest file of each directory through
   `ConvexLoader.post_observations`: sources → claims → orgInternal → relationships →

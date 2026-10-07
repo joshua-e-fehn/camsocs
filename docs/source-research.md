@@ -19,48 +19,99 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Location and size**
 - Directory: `https://www.cambridgesu.co.uk/opportunities/societies/`. It is one server-rendered page listing 590 entries.
-- Profiles: `/organisation/{id or slug}/`.
+- Profiles: `/organisation/{id or slug}/` (144 of the 590 directory links use a slug).
 - Platform: MSL.
 
 **Fields**
-- From the directory:
+- From the directory (`li[data-msl-grouping-id]`, each preceded by its `li.msl-gl-logo`):
   - name;
   - logo;
-  - one of 7 categories;
-  - a stable `data-msl-grouping-id`.
+  - one of 7 categories (`dd.msl-gl-attribute`; one entry reads "Not categorised");
+  - a stable `data-msl-grouping-id`, the society's id. (`data-msl-organisation-id` is the SU's own id, 6021, on every entry.)
 - From the profile:
-  - email;
-  - Instagram, Facebook and X icons;
-  - short and long description;
-  - website;
-  - resources (sometimes a termcard).
+  - email (`a.socemail`, a `mailto:`);
+  - Instagram, Facebook and X icons (`a.msl-icon` with `socinstagram`, `socfacebook`, `soctwitter`);
+  - short description (`.grp-shrt-desc`, at most 200 characters) and long description (`.grp-lng-desc`, HTML);
+  - website (`a.msl_web`);
+  - resources (`.msl-resourcelist`, links to `/file/<org>/<name>/`), sometimes a termcard.
 
-**robots.txt**
-- Blocks `/search/ /asset/ /photos/ /login/ /account/`.
-- Allows `/organisation/` and `/opportunities/`.
+**robots.txt** (fetched 2026-10-07 with our User-Agent; no `Crawl-delay`)
+- The `User-agent: *` group disallows `/photos/ /advertclick/ /login/ /pagestylesheet/ /stylesheet/ /skins/ /resourcehandler/ /edit/ /search/ /asset/ /account/ /Shibboleth.sso /sso/`.
+- `/organisation/`, `/opportunities/` and `/file/` are allowed.
+- **Every logo lives under `/asset/Organisation/<id>/…`.** Logos are therefore never downloaded, and never hotlinked: `logo` is recorded as `missing` / `access_restricted`.
 
 **Terms and decision**
 - Societies consented to publication by the SU. No reuse licence was found.
 - **Decision 2026-10-07:** scrape the full profiles (Joshua's choice).
 
+**Harvester** (`sources/su.py`, stage `su_directory`; re-verified live on 2026-10-07)
+- One request per profile, at least 1 s apart. A profile fetched within the last 20 hours is served from the cache.
+- Measured on the full crawl of 590 profiles:
+
+  | Channel | Profiles |
+  |---|---|
+  | Email | 424 (71.9%) |
+  | Instagram | 514 (87.1%) |
+  | Facebook | 338 (57.3%) |
+  | X | 96 (16.3%) |
+  | Website | 350 (59.3%). Linktree, LinkedIn and Facebook URLs typed into the website slot count as socials. |
+  | Short description | 372 (63.1%) |
+  | Long description | 494 (83.7%) |
+
+- Email kinds: `@cambridgesu.co.uk` 137, webmail 118, own domain 82, legacy `@cusu` 50, SRCF 16, personal CRSid 11 (withheld), college domain 6, `lists.cam.ac.uk` 4.
+- Logo file names record the form the logo was uploaded with, and when. Example: "Society Handover Form 2026-27__Logo__<n>_2026-08-14-16-09__…".
+  - Counts: 390 for 2026-27, 63 for 2025-26, 1 for 2024-25.
+  - New registrations read "New Society_ Register Here (2025-2026)".
+  - `registrations.su.year` is claimed only when that year is the current academic year. An older form's logo was simply never replaced, and the listing itself shows current registration.
+  - The upload stamp is claimed as an `inferred` `lastActiveAt`.
+
 **Traps**
 - 390 of the 590 logos are named "Society Handover Form 2026-27".
 - 50 entries still use legacy `@cusu` emails.
-- Some content is stale and dates from 2020.
+- Some content is stale and dates from 2020, termcards especially ("Michaelmas 2020 Term Card"). A termcard titled for an earlier academic year is ignored; an undated one is claimed as `inferred`.
 - 37% of entries have no short description and 17% have no long description.
+- **The Join widget is login-gated on every profile** ("Please log in to join this organisation."). No join information is public, and the login page is never fetched: `joinUrl` is `missing` / `access_restricted`.
+- **An MSL mailing-list widget** (`mailinglist_chkLists`, 4 profiles) lists internal SU voter groups, with the name of the person who created each one. It is never read.
+- Descriptions contain:
+  - personal CRSid addresses (withheld, replaced by a marker);
+  - chat invite links (withheld);
+  - sometimes officers' first names, which no rule can detect.
+- A few profiles embed the SU's own event list (`.soc-event-list`, dates without a year). Those events belong to the SU What's On harvester (§12), not here.
+- Some description links are wrapped in Outlook SafeLinks. They are unwrapped from their own query string, never followed.
+- A test entry ("Test Soc") is listed like any society.
 
 ## §2 Proctors' register
 
 **Location and size**
 - `https://www.proctors.cam.ac.uk/clubsandsocs/registered-societies`
-- 303 entries, as static Drupal HTML.
+- 303 entries, as static Drupal HTML (`li[data-list-item-id]` inside the page's prose block).
 
 **Fields**
 - Name plus at most one link.
 - No email, category or description.
+- Names are written in sorted form: "African Caribbean Society (CU)", "Building Bridges … Society (The)", "AI in Law Society (CU, CUAILS)". The harvester (`sources/proctors.py`, stage `proctors_register`):
+  - moves the qualifiers to the front ("Cambridge University African Caribbean Society");
+  - keeps the name as published as `value_raw` and `proctors_name`;
+  - passes acronyms to the resolver as aliases.
+- Links on 2026-10-07:
+
+  | Kind | Entries |
+  |---|---|
+  | Own website | 106 |
+  | Social (Facebook, Instagram, LinkedIn, Linktree, WeChat) | 105 |
+  | SU profile | 44 |
+  | SRCF | 40 |
+  | cam.ac.uk page | 5 |
+  | None | 3 |
+
+- Two entries carry a second, stray anchor. Only the first is the entry's link.
+
+**robots.txt** (fetched 2026-10-07): standard Drupal rules only (`Disallow: /core/ /profiles/ /admin/ /search/ /user/…`). The register page is allowed. There is no `Crawl-delay`.
 
 **Registration window and terms**
 - Registration runs 1 Jul to 31 Dec, and the list size swings during that window.
+- The register states no year. `registrations.proctors` is therefore claimed without one, and its retrieval date places it in the academic year.
+- The register is primary evidence for the registration itself. For names and links it is a third party (`secondary`), so a society's own SU profile outranks it.
 - The cam.ac.uk site terms forbid commercial use without a licence. This project is non-commercial.
 
 ## §3 Sport Cambridge A–Z and club pages

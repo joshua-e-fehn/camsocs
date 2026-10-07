@@ -377,3 +377,38 @@ def test_fresh_for_skips_the_network(tmp_path: Path, net) -> None:
     assert route.call_count == 1
     assert again.outcome == "unchanged"
     assert again.content == b"cached"
+
+
+def test_cached_replays_without_the_network(tmp_path: Path, net) -> None:
+    allow_all(net, "https://soc.example")
+    route = net.get("https://soc.example/").respond(200, text="cached")
+
+    client = make_client(tmp_path)
+    assert client.cached("https://soc.example/") is None
+    client.fetch("https://soc.example/")
+    replay = make_client(tmp_path).cached("https://soc.example/")
+
+    assert route.call_count == 1
+    assert replay is not None
+    assert (replay.outcome, replay.content, replay.from_cache) == ("unchanged", b"cached", True)
+
+
+def test_a_failed_fetch_is_never_replayed_as_content(tmp_path: Path, net) -> None:
+    allow_all(net, "https://soc.example")
+    net.get("https://soc.example/gone").respond(404)
+
+    client = make_client(tmp_path)
+    client.fetch("https://soc.example/gone")
+
+    assert client.cached("https://soc.example/gone") is None
+
+
+def test_allows_checks_robots_without_requesting_the_url(tmp_path: Path, net) -> None:
+    net.get("https://su.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /asset/\n")
+    asset = net.get("https://su.example/asset/logo.png").respond(200, content=b"png")
+
+    client = make_client(tmp_path)
+
+    assert client.allows("https://su.example/asset/logo.png") is False
+    assert client.allows("https://su.example/organisation/1/") is True
+    assert not asset.called

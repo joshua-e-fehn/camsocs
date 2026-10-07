@@ -13,6 +13,7 @@ from camsocs_pipeline.config import Settings
 from camsocs_pipeline.pipeline.load import ConvexLoader
 from camsocs_pipeline.pipeline.report import RunReport, StageReport
 from camsocs_pipeline.pipeline.state import SyncState
+from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.staging.store import StagingStore
 
 
@@ -26,6 +27,7 @@ class StageContext:
     - stage observations through `staging` (harvest stages write only there,
       under ``run.run_key``);
     - post through `loader`, which is a no-op in a dry run;
+    - fetch through `crawler()` (robots.txt, per-host pacing, cache);
     - honour `limit` (process at most this many items) for trial runs.
     """
 
@@ -37,6 +39,22 @@ class StageContext:
     staging: StagingStore
     dry_run: bool
     limit: int | None
+
+    def crawler(self) -> PoliteClient:
+        """The polite HTTP client (sources/base.py) configured from settings;
+        use it as a context manager. A real run requires an honest User-Agent;
+        a dry run needs none, because a harvest stage then reads only the
+        cache (`PoliteClient.cached`) and makes no request."""
+        user_agent = (
+            self.settings.user_agent or "camsocs-dry-run"
+            if self.dry_run
+            else self.settings.require_user_agent()
+        )
+        return PoliteClient(
+            user_agent=user_agent,
+            cache_dir=self.settings.cache_dir,
+            min_interval=self.settings.min_host_interval,
+        )
 
 
 StageFn = Callable[[StageContext], None]

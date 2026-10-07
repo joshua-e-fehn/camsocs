@@ -1,0 +1,26 @@
+{
+  "_comment": "Email kinds (EMAIL_TYPES). Asserted against classifyEmail (webapp/convex/lib/derived.test.ts) and classify_email (pipeline/src/tests/test_links.py), so the server's emailType and the pipeline's CRSid withholding cannot drift apart.",
+  "cases": [
+    { "email": "jf123@cam.ac.uk", "type": "personal_crsid" },
+    { "email": "JF123@CAM.AC.UK", "type": "personal_crsid" },
+    { "email": "ab123@hermes.cam.ac.uk", "type": "personal_crsid" },
+    { "email": "ab123@jesus.cam.ac.uk", "type": "personal_crsid" },
+    { "email": "abcde12345@cam.ac.uk", "type": "personal_crsid" },
+    { "email": "president@cam.ac.uk", "type": "role_own_domain" },
+    { "email": "abcdef1@cam.ac.uk", "type": "role_own_domain" },
+    { "email": "soc-chess@lists.cam.ac.uk", "type": "lists_cam" },
+    { "email": "ab12@lists.cam.ac.uk", "type": "lists_cam" },
+    { "email": "chess@cambridgesu.co.uk", "type": "cambridgesu" },
+    { "email": "chess@societies.cambridgesu.co.uk", "type": "cambridgesu" },
+    { "email": "chess@cusu.cam.ac.uk", "type": "legacy_cusu" },
+    { "email": "chess@cusu.org", "type": "legacy_cusu" },
+    { "email": "chess@srcf.net", "type": "srcf" },
+    { "email": "chess@soc.srcf.net", "type": "srcf" },
+    { "email": "chess@srcf.ucam.org", "type": "srcf" },
+    { "email": "jcr-president@jesus.cam.ac.uk", "type": "college_domain" },
+    { "email": "cuchess@gmail.com", "type": "webmail" },
+    { "email": "cuchess@outlook.com", "type": "webmail" },
+    { "email": "hello@cuchess.org", "type": "role_own_domain" },
+    { "email": " Hello@CUChess.org ", "type": "role_own_domain" }
+  ]
+}
