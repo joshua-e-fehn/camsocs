@@ -154,6 +154,45 @@ class _RobotsPolicy:
     #: None = allow everything; a reason string = disallow everything.
     blanket_disallow: str | None
     delay: float
+    #: ``Content-Signal`` preferences (``ai-input`` → ``no`` …), any group.
+    content_signals: dict[str, str] | None = None
+
+
+#: Crawlers of AI companies that robots.txt files block by name. A host that
+#: blocks any of them from a page does not want that page read by a model, so
+#: its content is never passed to the LLM (source-research global rules, the
+#: talks.cam precedent in §6) — fetched and parsed deterministically only.
+AI_AGENTS = (
+    "GPTBot",
+    "ChatGPT-User",
+    "OAI-SearchBot",
+    "ClaudeBot",
+    "Claude-User",
+    "anthropic-ai",
+    "CCBot",
+    "Google-Extended",
+    "PerplexityBot",
+    "Applebot-Extended",
+    "Bytespider",
+    "meta-externalagent",
+    "cohere-ai",
+)
+
+
+def _content_signals(text: str) -> dict[str, str]:
+    """``Content-Signal: search=yes, ai-train=no`` lines (Cloudflare's
+    robots.txt extension), merged; a ``no`` anywhere wins."""
+    signals: dict[str, str] = {}
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() != "content-signal":
+            continue
+        for pair in value.split(","):
+            name, _, setting = pair.partition("=")
+            name, setting = name.strip().lower(), setting.strip().lower()
+            if name and setting and signals.get(name) != "no":
+                signals[name] = setting
+    return signals
 
 
 # --- the client ---------------------------------------------------------------
@@ -277,6 +316,21 @@ class PoliteClient:
 
         return self._result(url, current, "http_error", None, detail="too many redirects")
 
+    def ai_input_allowed(self, url: str) -> bool:
+        """Whether this host lets `url`'s content reach a language model: its
+        robots.txt names no AI crawler (`AI_AGENTS`) as disallowed from the
+        URL and sets no ``Content-Signal: ai-input=no``. Fetches robots.txt if
+        this run has not yet; an unreadable robots.txt answers False."""
+        _require_http(url)
+        policy = self._robots_policy(url)
+        if policy.blanket_disallow is not None:
+            return False
+        if (policy.content_signals or {}).get("ai-input") == "no":
+            return False
+        if policy.parser is None:
+            return True
+        return all(policy.parser.can_fetch(agent, url) for agent in AI_AGENTS)
+
     # -- robots ----------------------------------------------------------------
 
     def _robots_policy(self, url: str) -> _RobotsPolicy:
@@ -308,6 +362,7 @@ class PoliteClient:
             return _RobotsPolicy(None, None, 0.0)
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(response.text.splitlines())
+        signals = _content_signals(response.text)
         delay = 0.0
         crawl_delay = parser.crawl_delay(self.user_agent)
         if crawl_delay:
@@ -315,7 +370,7 @@ class PoliteClient:
         rate = parser.request_rate(self.user_agent)
         if rate and rate.requests:
             delay = max(delay, rate.seconds / rate.requests)
-        return _RobotsPolicy(parser, None, delay)
+        return _RobotsPolicy(parser, None, delay, signals)
 
     def _robots_allows(self, policy: _RobotsPolicy, url: str) -> bool:
         if policy.blanket_disallow is not None:
@@ -602,6 +657,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 __all__ = [
+    "AI_AGENTS",
     "MAX_REDIRECTS",
     "SHARED_GATES",
     "FetchOutcome",

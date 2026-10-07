@@ -123,6 +123,69 @@ def llm_field(
     )
 
 
+#: Joins the item quotes of a list value into its one evidence quote.
+QUOTE_JOINER = " … "
+
+
+def llm_items_field(
+    field: str,
+    items: list[tuple[Any, str | None]],
+    *,
+    source_texts: list[str],
+    source_type: str,
+    model: str,
+    prompt_version: str,
+    evidence: str,
+) -> FieldObs:
+    """A list value an LLM extracted item by item, each item with its own
+    quote (categories, activity types, audiences …). One claim per field per
+    page is all the server keeps, so the items become one value whose
+    evidence is their quotes joined by `QUOTE_JOINER`. Each quote is checked
+    against `source_texts` (the pages the model read); the claim is ``found``
+    only if **every** item's quote is there — otherwise the whole list is
+    ``inferred``."""
+    if source_type in NO_LLM_SOURCE_TYPES:
+        raise NoLLMSource(f"{source_type} content is never passed to the LLM (source-research §6)")
+    values: list[Any] = []
+    quotes: list[str] = []
+    verdict = EvidenceMatch.EXACT
+    for value, quote in items:
+        cleaned = strip_nones(value)
+        if _is_empty(cleaned) or cleaned in values:
+            continue
+        values.append(cleaned)
+        matches = [check_quote(quote, text) for text in source_texts] or [EvidenceMatch.ABSENT]
+        match = (
+            EvidenceMatch.EXACT
+            if EvidenceMatch.EXACT in matches
+            else EvidenceMatch.NORMALISED
+            if EvidenceMatch.NORMALISED in matches
+            else EvidenceMatch.ABSENT
+        )
+        if match is EvidenceMatch.ABSENT:
+            verdict = EvidenceMatch.ABSENT
+        elif match is EvidenceMatch.NORMALISED and verdict is EvidenceMatch.EXACT:
+            verdict = EvidenceMatch.NORMALISED
+        if quote and quote.strip() and quote.strip() not in quotes:
+            quotes.append(quote.strip())
+    if not values:
+        absent = missing_field(field, "not_found", extractor=model, evidence=evidence, method="llm")
+        absent.prompt_version = prompt_version
+        return absent
+    joined = QUOTE_JOINER.join(quotes)[:4_000] or None
+    return FieldObs(
+        field=field,
+        value=values,
+        method="llm",
+        evidence=evidence,
+        extractor=model,
+        prompt_version=prompt_version,
+        evidence_quote=joined,
+        quote_check=verdict.value if joined else EvidenceMatch.ABSENT.value,
+        status=None if joined and verdict is not EvidenceMatch.ABSENT else "inferred",
+    )
+
+
 def missing_field(
     field: str,
     reason: str,
@@ -282,12 +345,14 @@ def _evidence_of(fields: Iterable[FieldObs]) -> str:
 
 __all__ = [
     "NO_LLM_SOURCE_TYPES",
+    "QUOTE_JOINER",
     "NoLLMSource",
     "build_claim",
     "claims_for_event",
     "claims_for_observation",
     "epoch_ms",
     "llm_field",
+    "llm_items_field",
     "missing_field",
     "not_applicable_field",
     "parser_field",
