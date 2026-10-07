@@ -56,7 +56,13 @@ def test_wordpress_page_text_keeps_sentences_and_drops_navigation() -> None:
     # Inline markup stays inside its sentence, with no stray spaces.
     assert "research in quant finance, and industry experts" in page.text
     assert page.title.startswith("Cambridge University Algorithmic Trading Society")
-    assert page.emails == ["president@cuats.co.uk"]
+    # mailto: links as written on the site: "Name <address/>", a trailing slash.
+    assert page.emails == [
+        "president@cuats.co.uk",
+        "vice-president@cuats.co.uk",
+        "secretary@cuats.co.uk",
+        "treasurer@cuats.co.uk",
+    ]
     assert {link.region for link in page.links} >= {"main"}
 
 

@@ -177,7 +177,12 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     # Deterministic: final URL, sympa sign-up, role email, health and platform.
     assert fields["website"].value == "https://www.cuats.co.uk/"
     assert fields["mailingList"].value["platform"] == "sympa"
-    assert fields["roleEmails"].value == [{"role": "president", "email": "president@cuats.co.uk"}]
+    assert fields["roleEmails"].value == [
+        {"role": "president", "email": "president@cuats.co.uk"},
+        {"role": "other", "email": "vice-president@cuats.co.uk"},
+        {"role": "secretary", "email": "secretary@cuats.co.uk"},
+        {"role": "treasurer", "email": "treasurer@cuats.co.uk"},
+    ]
     home = result.website[0]
     assert home.internal["website_health"]["last_status"] == 200
     assert home.internal["website_health"]["platform"] == "wordpress"

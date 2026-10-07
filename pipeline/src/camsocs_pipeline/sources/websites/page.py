@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from html import unescape as html_unescape
 from typing import Any
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -110,8 +111,11 @@ def _robots_meta(tree: LexborHTMLParser) -> frozenset[str]:
 
 
 def _mailto(href: str) -> list[str]:
-    target = unquote(href[len("mailto:") :]).split("?", 1)[0]
-    return [part.strip() for part in target.split(",") if _EMAIL.fullmatch(part.strip())]
+    """The addresses of a ``mailto:`` link, as sites write them: plain,
+    several comma-separated, "Name <address>", or with a stray trailing slash."""
+    target = html_unescape(unquote(href[len("mailto:") :])).split("?", 1)[0]
+    found = (_EMAIL.search(part) for part in target.split(","))
+    return [match.group(1) for match in found if match]
 
 
 def parse_page(url: str, html: str) -> Page:
