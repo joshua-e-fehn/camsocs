@@ -1,0 +1,241 @@
+{
+  "_comment": "Generated from webapp/lib/keys.ts; asserted by webapp/lib/keys.test.ts and pipeline/src/tests/test_keys.py. Regenerate only together with both implementations.",
+  "hashes": [
+    {
+      "input": "",
+      "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "abc",
+      "sha1": "a9993e364706816aba3e25717850c26c9cd0d89d",
+      "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    {
+      "input": "camsocs",
+      "sha1": "8762763b5c2aa20c035b93149fc9b0ee75feb465",
+      "sha256": "d5c122904a49e7cec55fec936079a666ccd803beee9eceb3c0afe56242f7c573"
+    },
+    {
+      "input": "Grüße, 世界",
+      "sha1": "3e5721529bceb180397d308b1fcf4ddcd13552d9",
+      "sha256": "49837434716aa6f6917104cbba82bd5b8e82a970ddc5bfef7bcc45e3d6ea60b6"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sha1": "94218caae9904e93a3d7bf578bf4791926fc5e82",
+      "sha256": "aa20c23e3201834050679e1d88941b9a6fed0557c9a705cb2c315e2e63fd486d"
+    }
+  ],
+  "slugify": [
+    {
+      "input": "Cambridge University German Society",
+      "slug": "cambridge-university-german-society"
+    },
+    {
+      "input": "CU German Society",
+      "slug": "cu-german-society"
+    },
+    {
+      "input": "Queens' College JCR",
+      "slug": "queens-college-jcr"
+    },
+    {
+      "input": "St John’s College Boat Club",
+      "slug": "st-johns-college-boat-club"
+    },
+    {
+      "input": "Arts & Crafts Society",
+      "slug": "arts-and-crafts-society"
+    },
+    {
+      "input": "Société Française",
+      "slug": "societe-francaise"
+    },
+    {
+      "input": "Straße Club",
+      "slug": "strasse-club"
+    },
+    {
+      "input": "Ærø Øresund Society",
+      "slug": "aero-oresund-society"
+    },
+    {
+      "input": "  --Weird   spacing!!  ",
+      "slug": "weird-spacing"
+    },
+    {
+      "input": "ﬁne ligature Ｆｕｌｌ width",
+      "slug": "fine-ligature-full-width"
+    },
+    {
+      "input": "Café Crème 2026/27",
+      "slug": "cafe-creme-2026-27"
+    },
+    {
+      "input": "Łódź Polish Society",
+      "slug": "lodz-polish-society"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccc",
+      "slug": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-cccccccccccccccccc"
+    },
+    {
+      "input": "CUSU — Cambridge Students’ Union",
+      "slug": "cusu-cambridge-students-union"
+    }
+  ],
+  "slugifyErrors": ["", "   ", "中文学会", "!!!"],
+  "orgKey": [
+    {
+      "name": "Cambridge University German Society",
+      "key": "org-cambridge-university-german-society"
+    },
+    {
+      "name": "CU German Society",
+      "key": "org-cu-german-society"
+    },
+    {
+      "name": "Queens' College JCR",
+      "key": "org-queens-college-jcr"
+    },
+    {
+      "name": "St John’s College Boat Club",
+      "key": "org-st-johns-college-boat-club"
+    }
+  ],
+  "venueKey": [
+    {
+      "name": "West Road Concert Hall",
+      "key": "ven-west-road-concert-hall"
+    }
+  ],
+  "teamKey": [
+    {
+      "orgKey": "org-cuafc",
+      "name": "Blues",
+      "key": "team-cuafc--blues"
+    },
+    {
+      "orgKey": "org-cucc",
+      "name": "Women's 2nd XI",
+      "key": "team-cucc--womens-2nd-xi"
+    }
+  ],
+  "sessionKey": [
+    {
+      "orgKey": "org-cuafc",
+      "title": "Training",
+      "dayOfWeek": 3,
+      "startTime": "14:00",
+      "key": "ses-0335066ef980ed1774060fa09872883d1bba92de"
+    },
+    {
+      "orgKey": "org-cuafc",
+      "title": "Social run",
+      "key": "ses-b3bd3a106fc25c5652c31fb2b1aadfba2ca4c8e0"
+    }
+  ],
+  "eventKey": [
+    {
+      "source": "camdram",
+      "externalId": "show-1234",
+      "key": "evt-2c0fff9d1ee6f4d835a5a780af2dd7c4f5f1c66c"
+    },
+    {
+      "source": "talks_cam",
+      "externalId": "215632",
+      "key": "evt-c1fde767f7e07619a0d92f4cb963df1e2b9d08f2"
+    }
+  ],
+  "relationshipKey": [
+    {
+      "fromKey": "org-a",
+      "type": "sponsors",
+      "toKey": "org-b",
+      "key": "rel-c8982e6e3640c763b8034ee52bcdb54e037e9681"
+    }
+  ],
+  "sourceKey": [
+    {
+      "url": "https://www.cambridgesu.co.uk/organisation/6789/",
+      "key": "src-cc99fcda645793cebc3a74d90d005af5aa7a4910"
+    }
+  ],
+  "personKey": [
+    {
+      "orgKey": "org-cu-german-society",
+      "name": "Anna Müller",
+      "key": "per-67a68343bb132aee243e2994bfc1bf32ba1c00a2"
+    }
+  ],
+  "canonicalJson": [
+    {
+      "value": {
+        "b": 1,
+        "a": [true, null, "x"],
+        "c": {
+          "z": 1.5,
+          "y": "é"
+        }
+      },
+      "json": "{\"a\":[true,null,\"x\"],\"b\":1,\"c\":{\"y\":\"é\",\"z\":1.5}}"
+    },
+    {
+      "value": "line\nbreak \"quoted\"",
+      "json": "\"line\\nbreak \\\"quoted\\\"\""
+    },
+    {
+      "value": 1791409840124,
+      "json": "1791409840124"
+    },
+    {
+      "value": [
+        {
+          "role": "president",
+          "email": "p@x.org"
+        }
+      ],
+      "json": "[{\"email\":\"p@x.org\",\"role\":\"president\"}]"
+    }
+  ],
+  "claimFingerprint": [
+    {
+      "input": {
+        "entityType": "organisation",
+        "entityKey": "org-cu-german-society",
+        "field": "email",
+        "value": "president@cugs.org",
+        "status": "found",
+        "sourceUrl": "https://cugs.org/contact",
+        "contentSha256": "abababababababababababababababababababababababababababababababab",
+        "method": "parser"
+      },
+      "fingerprint": "8607111084466d9f482dd0e6f3a157b9ed356991d88fb41147b9f228cf4bf490"
+    },
+    {
+      "input": {
+        "entityType": "organisation",
+        "entityKey": "org-cu-german-society",
+        "field": "website",
+        "status": "missing",
+        "missingReason": "not_found",
+        "sourceUrl": "https://cugs.org/",
+        "method": "llm"
+      },
+      "fingerprint": "aeaa45986ece392b9f33e0a55bb218c090bd1bd7e338573e115ae5b3b3f6cf45"
+    },
+    {
+      "input": {
+        "entityType": "event",
+        "entityKey": "evt-0123",
+        "field": "startsAt",
+        "value": 1791409840124,
+        "status": "found",
+        "sourceUrl": "https://www.camdram.net/shows/x",
+        "method": "parser"
+      },
+      "fingerprint": "791e13b3eca1a23d0c52d932fea7de63b3dad56bf59c65b24bc654319b2657ed"
+    }
+  ]
+}
