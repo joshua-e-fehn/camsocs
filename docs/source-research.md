@@ -66,28 +66,32 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 ## §3 Sport Cambridge A–Z and club pages
 
 **Location and size**
-- `https://www.sport.cam.ac.uk/student-sport/university-sports-clubs`
-- It has 77 links, about 72–75 clubs.
-- Each link redirects to `/university-sports-clubs-0/<slug>`.
+- `https://www.sport.cam.ac.uk/student-sport/university-sports-clubs`, which redirects to `/university-sports-clubs-0`.
+- **Re-verified 2026-10-07:** 77 club links under "Sports Clubs A-Z" (77 distinct clubs); 74 of the 77 club pages link an Instagram account.
+- Most links go to `/university-sports-clubs-0/<slug>`; a few use legacy paths (`/student-sport/university-sports-clubs/<slug>`).
+
+**robots.txt** (www.sport.cam.ac.uk, checked 2026-10-07): `User-agent: *` with the Drupal defaults only (`Disallow: /core/`, `/profiles/`, `/admin/`, `/search/`, `/user/login` …). Club pages and `/sites/default/files/` are allowed. No `Crawl-delay`.
 
 **Fields**
-- Free-text description.
-- One Instagram link (on 71 of 74 pages).
-- The generic `support@sport.cam.ac.uk` address.
+- The A–Z is the Sports Service's register of recognised University sports clubs: `registrations.sportsService` (primary; the page states no year), `orgType` sports_club, `level` university, `categories` sport (data-model §5 rule).
+- Club page: the full name as the bold lead ("**Cambridge University Athletic Club (CUAC)** is …" → name + `shortName`) or, without bold, in the lead sentence; the description; one Instagram link.
+- The page's "Contact" is the Sports Service's generic `support@sport.cam.ac.uk`. It is **never** claimed as the club's address.
 
 **Traps**
-- Some pages carry the typo `support@sport.ac.uk`.
-- Some links go to a `pantheonsite.io` host.
+- Some pages carry the typo `support@sport.ac.uk` (in the `mailto:` only).
+- Four A–Z links (Kabaddi, Ski and Snowboard, Small Bore, and the page itself) point at `live-cambridge-sports-cwp.pantheonsite.io`, the hosting platform's own domain for the same site. Its robots.txt is `User-agent: * / Disallow: /` (checked 2026-10-07), so that host is never fetched; the same path on the canonical `www.sport.cam.ac.uk` (allowed) is fetched instead.
+
+**Harvester:** stage `sport_clubs`, `pipeline/src/camsocs_pipeline/sources/sport.py`.
 
 ## §4 Sports Club Guide 2026-27 (PDF)
 
-**Location:** `https://live-cambridge-sports-cwp.pantheonsite.io/sites/default/files/UoC%20Sports%20Club%20Guide%2026-27_web.pdf`. It has 36 pages and was created 16 Sep 2026.
+**Location:** linked from the §3 A–Z as `https://live-cambridge-sports-cwp.pantheonsite.io/sites/default/files/UoC%20Sports%20Club%20Guide%2026-27_web.pdf`. That host's robots.txt disallows everything (§3), so the harvester fetches the same file from the canonical host, `https://www.sport.cam.ac.uk/sites/default/files/UoC%20Sports%20Club%20Guide%2026-27_web.pdf` (allowed; re-verified 2026-10-07: 36 pages, 8,987,891 bytes, created 16 Sep 2026, InDesign).
 
 **Fields per club**
 - Description.
 - Website.
-- Instagram and Facebook links.
-- Contact email: there are 74 contact lines. 23 are `@sport.cam.ac.uk` aliases, 19 are Gmail, and one is misspelt `gmail.comm`.
+- Instagram and Facebook links (printed as `instagram.com/…`, `Instagram: @handle`).
+- Contact email: there are 74 contact lines. 23 are `@sport.cam.ac.uk` aliases, 19 are Gmail, and one is misspelt `gmail.comm` (not stored).
 - The "At a glance" table:
   - open to;
   - caters for (Beginner / Intermediate / Elite);
@@ -95,7 +99,23 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - college competition.
 - Venues.
 
-**Trap:** the ticks in the "At a glance" table cannot be read reliably from the PDF's text layer. Render the page to an image and use LLM vision on it, with an evidence check.
+**Layout (re-verified 2026-10-07)**
+- 78 club sections on PDF pages 8–31. Each starts with a heading in Helvetica Neue Heavy 10 pt; the description is in the Light face at 7.4–8 pt; links and "contact:" lines follow. Pages 11, 16 and 22 are images. A rotated side tab ("Aikido • American Football • Archery") marks the A–Z pages; page 27 has none.
+- "Sports Clubs at a Glance" on PDF pages 6–7: 79 rows.
+
+**Trap, and how it is solved:** the ticks in the "At a glance" table cannot be read from the PDF's *text*: it shows only "a a a". But every tick is drawn by its own `Tj` in the Webdings font, at an exact x. The seven columns sit 34.02 pt apart (from x = 176.13 on page 6 and x = 170.5 on page 7, the facing page). The same font also draws spaces, which are told apart by glyph code. The harvester reads tick positions from the content stream, checks the column headings first, and cross-checks every row's tick count against the text layer (79 of 79 rows agreed on 2026-10-07). If the columns are not seven evenly spaced ones, the table is skipped and the run says so. The readings are verifiable, so they are parser claims (`found`). The LLM-vision route this § first proposed is not needed: it could only ever have been `inferred`, and the environment has no PDF renderer.
+
+**Mapping**
+- Students → audiences undergraduates + postgraduates.
+- Staff → audiences staff.
+- Beginner → audiences beginners and `beginnerFriendly`; an empty cell is a published "no".
+- No Blue/Half Blue tick → `sport.blueStatus` none (primary). A tick says *some* Blue status without saying which, so the level is not claimed. The Hawks' Club list (LB §6.2) is undated, secondary and internally inconsistent: ice hockey and rugby league appear in two categories. It is not used.
+- College Competition → `sport.collegeCompetition`.
+- Intermediate and Elite have no field.
+
+**Not clubs on the A–Z:** "Rowing (College)" (college rowing, see §7) and "Disability Multisport" (CADMuS, a community club). The guide never claims `name` (its headings are sports, not club names), so these create no organisation.
+
+**Harvester:** stage `sport_guide_pdf`, `sources/sport_guide.py`.
 
 ## §5 Camdram
 
@@ -114,6 +134,18 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - An API key is recommended. Without one, the rate limits are "very low".
 
 **Trap:** society descriptions often contain committee role emails. Extract them as role emails, never as named people.
+
+**Re-verified 2026-10-07**
+- robots.txt is `User-agent: *` with no rules (everything allowed).
+- `societies.json` has 97 societies:
+  - 38 have a `college`: 37 Cambridge colleges plus one "Anglia Ruskin";
+  - 61 have an `image`, which the society page renders as `https://www.camdram.net/media/cache/thumbnail/{filename}`;
+  - 36 have a `facebook_id` (a page id or a page URL; one is a `bit.ly` link, which is dropped);
+  - `twitter_id` is sometimes a corrupted float (`7.62E+17`), so it is not used.
+- 24 descriptions contain addresses: role addresses, general ones, and **personal CRSids**. Several list committees by name, or give a CRSid in brackets ("Name (ab123)").
+- **Rule:** role addresses become `roleEmails`. The public `description` keeps only the leading prose, up to the first line that starts a committee or contact block, mentions a committee, founders or a CRSid, reads "Post: First Last", or carries an address or a Camdram person link.
+
+**Harvester:** stage `camdram_societies`, `sources/camdram.py`. One request; the image is the logo's source, and our own copy is made by a later image step.
 
 ## §6 talks.cam
 
@@ -140,6 +172,22 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **robots.txt:** `Crawl-delay: 10`.
 
+**Re-verified 2026-10-07**
+- robots.txt is `User-agent: *` with `Crawl-delay: 10` and the Drupal 7 defaults. `/clubs` and `/node/N` are allowed.
+- `/clubs` has 37 rows:
+  - the 31 college clubs;
+  - CUBC, CUCBC itself, Addenbrooke's, Anglia Ruskin, the Theological Colleges and the Vet School.
+- The "Club Website" column:
+  - is empty for 3 clubs (Addenbrooke's, Theological Colleges, Vet School);
+  - is a Facebook group for Homerton (stored as a social link, not a website).
+- Details page (`/node/N`):
+  - full name, short name and boat code;
+  - "CUCBC Email" written `name[at]cucbc.org`. This is obfuscated and **not decoded**: `email` is missing / `access_restricted`;
+  - an officers table of named people, which is **never read**.
+- "Lady Margaret Boat Club" names no college. https://www.ladymargaretboatclub.org/ states "The Lady Margaret Boat Club is the rowing club of St John's College, Cambridge". The harvester re-checks that page on each run before claiming the college.
+
+**Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Details pages are reused from the cache for a week.
+
 ## §8 Colleges and JCR/MCR
 
 **Seed**
@@ -156,6 +204,26 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - The Wolfson live site resets the connection. The archive copy is dated 2025-08-13.
 
 **Do not decode:** Queens' JCR emails (Cloudflare email protection) and Wolfson WCSA emails (hidden by a script).
+
+**Re-verified 2026-10-07/08**
+- **College A–Z:** 31 colleges, each with "Visit the … website". robots.txt (www.cam.ac.uk) has the Drupal defaults only. Colleges are staged as counterparts (`isCounterpart` true, `level` college).
+- **JCR/MCR bodies:** a table of **54 bodies** (`BODIES` in `sources/colleges.py`). It was built by following each college's own links: homepage, sitemap and student pages. Each entry records the body's own site (`home`) and/or a page that names it (`evidence`).
+  - The name is claimed only from a page that shows it:
+    - `found` for the full name;
+    - `inferred` for the short form ("JCR").
+  - The website is claimed only from a home page that answers and names the body.
+  - On a college's own site, only links and addresses that carry the body's mark ("instagram.com/girtonmcr", "gsb.president@…") are the body's, never the college's footer.
+- **Not found:** no page naming them was found for the Emmanuel MCR, the Caius MCR or the Queens' MCR.
+- **Traps seen**
+  - jcr.cai.cam.ac.uk: robots.txt disallows all → `website` missing / `access_restricted`.
+  - www.ecsu.org.uk: robots.txt answers HTTP 500, treated as disallow → `unreachable`.
+  - wcsa.wolfson.cam.ac.uk: resets the connection → `unreachable`. The college's own WCSA page (https://www.wolfson.cam.ac.uk/student-association-wcsa) is used instead of the archive copy.
+  - The Selwyn MCR site the college links (http://www-mcr.sel.cam.ac.uk/) answers **410** → `not_found`.
+  - kcgs.org.uk, linked by KCSU as "King's Graduate Society", now serves an unrelated site about King's College, so no website is claimed.
+  - Cloudflare email protection on Churchill's JCR/MCR page and on Queens' JCR → `email` and `roleEmails` missing / `access_restricted`, never decoded.
+- **Named officers:** none are read. The bodies' committee pages are left for a later broker-only extraction.
+
+**Harvester:** stage `colleges`, `sources/colleges.py`.
 
 ## §9 Playwaze (college leagues and BUCS)
 

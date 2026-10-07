@@ -32,9 +32,16 @@ work — a cron that sees success because most of it worked is how a broken sour
   there is no import line to add; the docstring of `stages/__init__.py` has the full
   convention.
 - **Harvest and enrichment stages only write observations** to staging —
-  `var/staging/<source_type>/<run_key>.jsonl` via `ctx.staging.writer(...)` — using the
-  models in `models/observation.py` and the helpers in `claims.py` (`parser_field`,
-  `llm_field`, `missing_field`). They never mint organisation keys and never call Convex.
+  `var/staging/<source_type>/<run_key>--<stage>.jsonl` via `ctx.staging.writer(...)` with
+  the stage name as the part (`sources/observe.run_harvest` does it), so two stages of one
+  source type never hide each other; `read_latest` returns the latest file of each part —
+  using the models in `models/observation.py` and the helpers in `claims.py`
+  (`parser_field`, `llm_field`, `missing_field`). They never mint organisation keys and
+  never call Convex.
+- **Seed harvesters** (T3b): `sport_clubs` (§3), `sport_guide_pdf` (§4), `camdram_societies`
+  (§5), `cucbc_clubs` (§7), `colleges` (§8), in `sources/`. Contact and link reading is
+  shared (`sources/contact_links.py`: personal CRSids never become values, role vs general
+  addresses, social links classified, obfuscated addresses detected and never decoded).
 - **resolve** (T4) maps identities to keys and writes `var/staging/_resolved/`.
 - **load** posts every keyed observation from the latest file of each directory through
   `ConvexLoader.post_observations`: sources → claims → orgInternal → relationships →
