@@ -43,3 +43,13 @@ export function useVenues(enabled: boolean) {
 export function useSubmitListingRequest() {
   return useMutation(api.listingRequests.submit)
 }
+
+/** `{ google, camEmail }`: which sign-in options the deployment has switched on. */
+export function useSignInOptions() {
+  return useQuery(api.auth.getSignInOptions)
+}
+
+/** `{ signedIn, isBroker, isCamVerified }` for the caller, undefined while loading. */
+export function useViewerTier() {
+  return useQuery(api.auth.getViewerTier)
+}

@@ -9,6 +9,14 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authEmail from "../authEmail.js";
+import type * as broker_graph from "../broker/graph.js";
+import type * as broker_interactions from "../broker/interactions.js";
+import type * as broker_introductions from "../broker/introductions.js";
+import type * as broker_listingRequests from "../broker/listingRequests.js";
+import type * as broker_orgs from "../broker/orgs.js";
+import type * as broker_overview from "../broker/overview.js";
+import type * as broker_people from "../broker/people.js";
 import type * as broker_session from "../broker/session.js";
 import type * as crons from "../crons.js";
 import type * as derive from "../derive.js";
@@ -24,6 +32,7 @@ import type * as ingest_relationships from "../ingest/relationships.js";
 import type * as ingest_sources from "../ingest/sources.js";
 import type * as ingest_termDates from "../ingest/termDates.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_brokerRows from "../lib/brokerRows.js";
 import type * as lib_checkValue from "../lib/checkValue.js";
 import type * as lib_derived from "../lib/derived.js";
 import type * as lib_entityStore from "../lib/entityStore.js";
@@ -34,6 +43,7 @@ import type * as lib_orgFilters from "../lib/orgFilters.js";
 import type * as lib_projections from "../lib/projections.js";
 import type * as lib_relationships from "../lib/relationships.js";
 import type * as lib_resolve from "../lib/resolve.js";
+import type * as lib_signInEmail from "../lib/signInEmail.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_viewer from "../lib/viewer.js";
 import type * as listingRequests from "../listingRequests.js";
@@ -50,6 +60,14 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authEmail: typeof authEmail;
+  "broker/graph": typeof broker_graph;
+  "broker/interactions": typeof broker_interactions;
+  "broker/introductions": typeof broker_introductions;
+  "broker/listingRequests": typeof broker_listingRequests;
+  "broker/orgs": typeof broker_orgs;
+  "broker/overview": typeof broker_overview;
+  "broker/people": typeof broker_people;
   "broker/session": typeof broker_session;
   crons: typeof crons;
   derive: typeof derive;
@@ -65,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "ingest/sources": typeof ingest_sources;
   "ingest/termDates": typeof ingest_termDates;
   "lib/auth": typeof lib_auth;
+  "lib/brokerRows": typeof lib_brokerRows;
   "lib/checkValue": typeof lib_checkValue;
   "lib/derived": typeof lib_derived;
   "lib/entityStore": typeof lib_entityStore;
@@ -75,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   "lib/projections": typeof lib_projections;
   "lib/relationships": typeof lib_relationships;
   "lib/resolve": typeof lib_resolve;
+  "lib/signInEmail": typeof lib_signInEmail;
   "lib/validators": typeof lib_validators;
   "lib/viewer": typeof lib_viewer;
   listingRequests: typeof listingRequests;

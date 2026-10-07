@@ -433,6 +433,7 @@ NEED_OFFER_ITEMS: tuple[str, ...] = (
 NEED_OFFER_STATUSES: tuple[str, ...] = (
     "inferred",
     "confirmed",
+    "rejected",
 )
 
 PECR_SUBSCRIBER_TYPES: tuple[str, ...] = (

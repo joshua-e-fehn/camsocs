@@ -412,7 +412,13 @@ export const NEED_OFFER_ITEMS = [
 ] as const
 export type NeedOfferItem = (typeof NEED_OFFER_ITEMS)[number]
 
-export const NEED_OFFER_STATUSES = ["inferred", "confirmed"] as const
+/**
+ * A need or offer's standing (data-model §4). The pipeline writes `inferred`;
+ * the broker confirms (`confirmed`) or rejects (`rejected`). Both broker
+ * verdicts are final: the pipeline never touches them, and a rejected item is
+ * not re-inferred — the rejection is a tombstone, hidden from the UI.
+ */
+export const NEED_OFFER_STATUSES = ["inferred", "confirmed", "rejected"] as const
 export type NeedOfferStatus = (typeof NEED_OFFER_STATUSES)[number]
 
 export const PECR_SUBSCRIBER_TYPES = ["individual", "corporate", "unknown"] as const

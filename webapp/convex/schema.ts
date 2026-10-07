@@ -185,6 +185,13 @@ export const organisationFields = {
   isCounterpart: v.boolean(),
   /** Marked defunct by a source (e.g. a college's inactive list) or manually. */
   defunct: v.optional(v.boolean()),
+  /**
+   * Hidden from the public site by the broker (a "remove" or "object" listing
+   * request). Not a claim: set only by `broker.orgs.setHidden`, never by the
+   * pipeline, and kept through every re-resolution. A hidden organisation has
+   * no `orgCards` row, so no public query lists, links or names it.
+   */
+  hidden: v.optional(v.boolean()),
   /** Derived (data-model §6). */
   status: literalUnion(ORG_STATUSES),
   /** Derived: max of the claimed value and the latest past event. */
@@ -599,6 +606,13 @@ export const introductionFields = {
   ...stamps,
 }
 
+/** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
+ * log: the address is stored only as a sha256, and rows are pruned after a day. */
+export const signInLinkSendFields = {
+  emailHash: v.string(),
+  sentAt: v.number(),
+}
+
 export default defineSchema({
   // public, pipeline-owned
   organisations: defineTable(organisationFields)
@@ -669,6 +683,11 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_status_createdAt", ["status", "createdAt"])
     .index("by_submitter_createdAt", ["submitterEmail", "createdAt"]),
+
+  // internal, auth
+  signInLinkSends: defineTable(signInLinkSendFields)
+    .index("by_emailHash_sentAt", ["emailHash", "sentAt"])
+    .index("by_sentAt", ["sentAt"]),
 
   // private broker CRM
   people: defineTable(personFields)

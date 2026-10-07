@@ -244,12 +244,15 @@ describe("eventOrganisers", () => {
 })
 
 describe("broker inferences", () => {
-  test("inferred needs replace inferred ones, never confirmed ones", async () => {
+  test("inferred needs replace inferred ones, never confirmed or rejected ones", async () => {
     const t = newTest()
     await t.run(async (ctx) => {
       await ctx.db.insert("orgBrokerProfiles", {
         orgKey: "org-a",
-        needs: [{ item: "sponsorship", status: "confirmed", updatedAt: 1 }],
+        needs: [
+          { item: "sponsorship", status: "confirmed", updatedAt: 1 },
+          { item: "members", status: "rejected", updatedAt: 1 },
+        ],
         offers: [],
         optIns: {},
         pecrSubscriberType: "unknown",
@@ -274,11 +277,21 @@ describe("broker inferences", () => {
       ],
     })
     await t.mutation(internal.ingest.broker.ingest, {
-      profiles: [{ orgKey: "org-a", needs: [{ item: "venue", sourceUrl, method: "llm" }] }],
+      profiles: [
+        {
+          orgKey: "org-a",
+          needs: [
+            { item: "venue", sourceUrl, method: "llm" },
+            // Rejected by the broker: never re-inferred.
+            { item: "members", sourceUrl, method: "llm" },
+          ],
+        },
+      ],
     })
     const profile = await t.run(async (ctx) => await ctx.db.query("orgBrokerProfiles").first())
     expect(profile?.needs.map((n) => [n.item, n.status])).toEqual([
       ["sponsorship", "confirmed"],
+      ["members", "rejected"],
       ["venue", "inferred"],
     ])
     expect(profile?.notes).toBe("Spoke to the president")

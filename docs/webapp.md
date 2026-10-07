@@ -39,8 +39,11 @@ app/                         Next.js App Router pages
     events/page.tsx          Calendar: list / week / month, filters, event sheet (?event=)
     request/page.tsx         Claim / correct / remove / object / add form (?kind=&org=<slug>)
     about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
-  sign-in/page.tsx           Google sign-in (creates the account on first use; no sign-up page)
-  dashboard/                 Private area (session required; data needs broker access)
+  sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
+  dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
+                             it is closed): overview, organisations (?org=<key> opens the drawer),
+                             people, interactions, introductions, graph, reports (missing data +
+                             outreach CSV), requests
   sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/
   opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
   not-found.tsx              404 outside the site frame
@@ -62,8 +65,9 @@ convex/
                              relationships + eventOrganisers, broker, files, inbound, termDates, purge)
   derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
-  auth.ts                    getCurrentUser, getBrokerAccess (public, never throw)
-  broker/                    PRIVATE CRM functions — every one calls requireBrokerUser
+  auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)
+  authEmail.ts               internal throttle for the @cam.ac.uk sign-in link
+  broker/                    PRIVATE CRM functions — every one calls requireBrokerUser (see "Broker API")
   lib/fields.ts              claimable-field registry: validators, merge/compare rules, applicability
   lib/resolve.ts             field resolution engine (data-model §1), pure
   lib/materialise.ts         resolutions → row + meta + derived fields; lib/derived.ts the §6 rules
@@ -80,6 +84,7 @@ convex/
   _generated/                COMMITTED codegen (see .gitignore note)
 
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
+hooks/convex/broker.ts       The broker area's hooks (mounted only inside BrokerGate) + runWithToast
 lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline,
                              plus their display labels (Records, ignored by the parity test)
@@ -92,6 +97,9 @@ lib/                         Pure logic + *.test.ts (no server imports)
   public-api.ts              Client names for the public API's return types (types only)
   format.ts                  Money, language names, paragraphs
   site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (placeholder), …
+  cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
+  broker/                    Broker analysis shared by browser and tests: coverage, matching,
+                             outreach (CSV + Art 14 notice), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
@@ -143,8 +151,23 @@ Opening an event only changes `?event=` with `window.history.pushState` (no serv
 
 ## Authentication
 
-- **Google only**, registered only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are both set
-  on the Convex deployment (otherwise sign-in answers PROVIDER_NOT_FOUND; nothing crashes).
+Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-in` offers both
+(`?cam=1` preselects the Cambridge option, `?next=/path` is where a Cambridge sign-in lands).
+
+- **Google, for the admin**, registered only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+  are both set on the Convex deployment (otherwise sign-in answers PROVIDER_NOT_FOUND; nothing
+  crashes). Broker access is `BROKER_EMAILS` (below).
+- **`@cam.ac.uk` sign-in link** (Better Auth's magic-link plugin, supported by
+  @convex-dev/better-auth 0.12.5), registered only when `RESEND_API_KEY` and `RESEND_FROM` are
+  both set (otherwise the endpoint is a 404 and the form shows the option as off). The link is
+  sent from the `/api/auth/*` HTTP action through Resend's HTTP API (`convex/lib/signInEmail.ts`),
+  works once and expires in 10 minutes. The server refuses any address that is not exactly
+  `@cam.ac.uk` (`lib/cam-email.ts`, the same rule `getViewer` uses) before storing anything, and
+  throttles to 3 links per address per 15 minutes and 60 per hour overall (`convex/authEmail.ts`,
+  table `signInLinkSends`, sha256 of the address only, pruned after a day). A verified link means
+  `emailVerified: true`, so `getViewer(ctx).isCamVerified` holds for that session.
+- `auth.getSignInOptions` → `{ google, camEmail }` (booleans) and `auth.getViewerTier` →
+  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI.
 - Better Auth runs **inside Convex**. Flow: client → same-origin `/api/auth/*` → route handler
   (`lib/auth-forwarded-headers.ts`) → Convex site URL → Better Auth → session in the component's
   tables → `ConvexBetterAuthProvider` holds the token.
@@ -164,7 +187,8 @@ Dev and prod are separate Convex deployments of the `camsocs` project with indep
   `NEXT_PUBLIC_CONVEX_SITE_URL`, optionally `NEXT_PUBLIC_SITE_URL`. See `.env.example`.
 - Vercel production: the three `NEXT_PUBLIC_*` values + `CONVEX_DEPLOY_KEY` (production only).
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
-  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`.
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`,
+  `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link).
 - Inbound list mail (all optional; each unset means that sender is denied):
   `RESEND_WEBHOOK_SECRET` (the Resend webhook's `whsec_…` signing secret),
   `RESEND_INBOUND_API_KEY` (full-access key for the Receiving API; falls back to `RESEND_API_KEY`),
@@ -272,6 +296,26 @@ events), lastSeenAt, confidence, meta`.
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
+
+## Broker API (private)
+
+Every function in `convex/broker/*` calls `requireBrokerUser` first; `convex/broker/gating.test.ts`
+reads the directory, calls every exported function with validator-generated arguments, and fails
+unless each refuses a signed-out caller, a non-listed account, an unverified broker address and
+everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read models are in
+`convex/lib/brokerRows.ts`; pure analysis (coverage, matching, outreach CSV, graph layout) is in
+`lib/broker/` so the browser and `bun test` share it.
+
+| Module | Functions |
+|---|---|
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, best non-personal address, held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` |
+| `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
+| `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove` |
+| `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
+| `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
+| `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status) |
+| `broker/listingRequests` | `list({status?})`, `setStatus` |
+| `broker/session` | `me` |
 
 ## Ingestion API (pipeline only)
 

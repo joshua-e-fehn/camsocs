@@ -50,7 +50,7 @@ import {
   WEEKDAYS,
 } from "@/lib/calendar"
 import type { EventPublic, OrgRef } from "@/lib/public-api"
-import { CAM_SIGN_IN_HREF } from "@/lib/site"
+import { camSignInHref } from "@/lib/site"
 import { type EventsState, serializeEventsState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 import { CATEGORIES, CATEGORY_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/vocab"
@@ -86,7 +86,7 @@ function CamOnlyNote({ preloaded }: { preloaded: Preloaded<typeof api.events.res
         <span>
           <span className="font-mono tabular-nums">{camOnly}</span> more Cambridge-only{" "}
           {camOnly === 1 ? "event" : "events"} in this view —{" "}
-          <Link href={CAM_SIGN_IN_HREF}>sign in with your @cam.ac.uk email</Link> to see{" "}
+          <Link href={camSignInHref("/events")}>sign in with your @cam.ac.uk email</Link> to see{" "}
           {camOnly === 1 ? "it" : "them"}.
         </span>
       </AlertDescription>
@@ -128,7 +128,7 @@ function EventSheet({
             <SheetTitle>Event not available</SheetTitle>
             <SheetDescription>
               It may have been removed, or it is a Cambridge-only event:{" "}
-              <Link href={CAM_SIGN_IN_HREF} className="underline underline-offset-4">
+              <Link href={camSignInHref("/events")} className="underline underline-offset-4">
                 sign in with your @cam.ac.uk email
               </Link>{" "}
               to see those.

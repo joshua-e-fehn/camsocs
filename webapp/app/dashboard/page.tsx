@@ -1,12 +1,8 @@
 import type { Metadata } from "next"
-import { BrokerAccessNotice } from "@/components/organisms/broker-access-notice"
+import { BrokerOverview } from "@/components/organisms/broker-overview"
 
-export const metadata: Metadata = { title: "Dashboard" }
+export const metadata: Metadata = { title: "Overview" }
 
 export default function DashboardPage() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      <BrokerAccessNotice />
-    </div>
-  )
+  return <BrokerOverview />
 }

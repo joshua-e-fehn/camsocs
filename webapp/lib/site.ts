@@ -39,8 +39,13 @@ export const PRIVACY_NOTICE_UPDATED = "2026-10-07"
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"
 
 /** Where a visitor goes to unlock Cambridge-only events: the @cam.ac.uk
- * sign-in link (built in the auth task; `cam=1` selects that option). */
+ * sign-in link (`cam=1` selects that option). */
 export const CAM_SIGN_IN_HREF = "/sign-in?cam=1"
+
+/** The @cam.ac.uk sign-in, landing back on `next` (a same-origin path). */
+export function camSignInHref(next: string): string {
+  return `${CAM_SIGN_IN_HREF}&next=${encodeURIComponent(next)}`
+}
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =

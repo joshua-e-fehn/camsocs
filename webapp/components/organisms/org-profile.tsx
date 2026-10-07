@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { dayName, formatDate, formatInstantDate } from "@/lib/calendar"
 import { formatPence, languageName, paragraphs } from "@/lib/format"
 import type { OrgPage, OrgPublic, RelationshipPublic, SessionPublic } from "@/lib/public-api"
-import { CAM_SIGN_IN_HREF } from "@/lib/site"
+import { camSignInHref } from "@/lib/site"
 import { hasValue } from "@/lib/source-line"
 import {
   ACTIVITY_TYPE_LABELS,
@@ -470,7 +470,10 @@ export function OrgProfile({
                 <LockIcon aria-hidden className="size-4" />
                 <span>
                   {hiddenEvents} more Cambridge-only {hiddenEvents === 1 ? "event" : "events"} —{" "}
-                  <Link href={CAM_SIGN_IN_HREF} className="underline underline-offset-4">
+                  <Link
+                    href={camSignInHref(`/societies/${org.slug}`)}
+                    className="underline underline-offset-4"
+                  >
                     sign in with your @cam.ac.uk email
                   </Link>
                 </span>

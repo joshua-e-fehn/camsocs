@@ -16,7 +16,9 @@ import {
 
 export function NavMain({
   items,
+  label = "Platform",
 }: {
+  label?: string
   items: {
     title: string
     url: string
@@ -30,7 +32,7 @@ export function NavMain({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) =>
           item.items && item.items.length > 0 ? (
@@ -65,7 +67,7 @@ export function NavMain({
             </Collapsible>
           ) : (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title} asChild>
+              <SidebarMenuButton tooltip={item.title} isActive={item.isActive} asChild>
                 <Link href={item.url} prefetch={false}>
                   {item.icon}
                   <span>{item.title}</span>

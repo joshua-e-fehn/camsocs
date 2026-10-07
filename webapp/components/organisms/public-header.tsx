@@ -1,13 +1,14 @@
 "use client"
 
-import { LayoutDashboardIcon, MenuIcon } from "lucide-react"
+import { BadgeCheckIcon, LayoutDashboardIcon, MenuIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import { Wordmark } from "@/components/molecules/wordmark"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { useBrokerAccess } from "@/hooks/convex"
+import { useViewerTier } from "@/hooks/convex"
 import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 
@@ -23,15 +24,16 @@ function isActive(pathname: string, href: string) {
 
 /**
  * Site header: wordmark, Societies / Events / About, and the account corner —
- * "Sign in" signed out, "Sign out" signed in, and "Dashboard" only when Convex
- * says the viewer is the broker (`auth.getBrokerAccess`, the same rule as
- * `getViewer`). Showing the link grants nothing; the broker functions check
- * again.
+ * "Sign in" signed out, "Sign out" signed in, a "Cambridge" badge for a
+ * verified @cam.ac.uk session (it sees Cambridge-only events), and "Dashboard"
+ * only when Convex says the viewer is the broker (`auth.getViewerTier`, the
+ * same rule as `getViewer`). Showing the link grants nothing; the broker
+ * functions check again.
  */
 export function PublicHeader() {
   const pathname = usePathname()
   const router = useRouter()
-  const access = useBrokerAccess()
+  const access = useViewerTier()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const signOut = async () => {
@@ -44,6 +46,12 @@ export function PublicHeader() {
       <span className="h-8 w-16" aria-hidden />
     ) : (
       <>
+        {access.isCamVerified && !access.isBroker && (
+          <Badge variant="secondary" title="Signed in with a verified @cam.ac.uk address">
+            <BadgeCheckIcon data-icon="inline-start" />
+            Cambridge
+          </Badge>
+        )}
         {access.isBroker && (
           <Button variant="outline" size="sm" asChild>
             <Link href="/dashboard">

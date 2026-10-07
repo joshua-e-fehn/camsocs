@@ -14,7 +14,8 @@ import { literalUnion } from "../lib/validators"
  *  - **needs / offers** per organisation, always `status: "inferred"`. The
  *    posted list *replaces* the organisation's previous inferred entries of
  *    that kind (the latest extraction is the pipeline's current reading), but
- *    a `confirmed` entry is never touched or duplicated.
+ *    a broker verdict — `confirmed` or `rejected` — is never touched, and its
+ *    item is never re-inferred (a rejection is a tombstone).
  *  - **people**: named committee members *as published*, keyed
  *    `per-<sha1(orgKey:nameSlug)>`. A row whose `method` is `manual` belongs
  *    to the broker and is never overwritten. `staleAfter` defaults to the next
@@ -56,7 +57,8 @@ export const personInputValidator = v.object({
 
 type NeedOffer = Doc<"orgBrokerProfiles">["needs"][number]
 
-/** Confirmed entries stay; inferred ones are replaced by the incoming set. */
+/** Broker verdicts (confirmed / rejected) stay and block re-inference of their
+ * item; inferred entries are replaced by the incoming set. */
 export function mergeNeedsOffers(
   existing: readonly NeedOffer[],
   incoming:
@@ -70,7 +72,7 @@ export function mergeNeedsOffers(
   now: number,
 ): NeedOffer[] {
   if (incoming === undefined) return [...existing]
-  const confirmed = existing.filter((entry) => entry.status === "confirmed")
+  const confirmed = existing.filter((entry) => entry.status !== "inferred")
   const confirmedItems = new Set(confirmed.map((entry) => entry.item))
   const previous = new Map(
     existing.filter((entry) => entry.status === "inferred").map((entry) => [entry.item, entry]),
@@ -98,7 +100,8 @@ export function mergeNeedsOffers(
   return [...confirmed, ...inferred]
 }
 
-function emptyProfile(orgKey: string) {
+/** A profile with nothing known yet — shared with convex/broker/orgs.ts. */
+export function emptyProfile(orgKey: string) {
   return {
     orgKey,
     needs: [],
