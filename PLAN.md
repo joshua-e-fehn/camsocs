@@ -111,11 +111,11 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | todo |
 | T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail | todo |
 | T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | todo |
-| T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | todo |
+| T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | done (branch `feat/public-webapp`) |
 | T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | todo |
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | todo |
-| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | todo |
-| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | todo |
+| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | form done (`feat/public-webapp`); admin inbox and suppression list todo |
+| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`); J6 and the DPIA todos open |
 | T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | todo |
 | T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | todo |
 

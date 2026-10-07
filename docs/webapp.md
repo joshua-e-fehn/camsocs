@@ -30,11 +30,20 @@ range `>=1.6.11 <1.7.0`, and a caret resolves to 1.7.x.
 
 ```
 app/                         Next.js App Router pages
-  layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster
-  page.tsx                   Public landing page
+  layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster;
+                             site-wide metadata (metadataBase, Open Graph)
+  (site)/                    The public site (route group: header + footer frame, error, not-found)
+    page.tsx                 Home: search, category tiles, this week's public events, explainer
+    societies/page.tsx       Directory: URL-synced filters + facet counts + search + pages
+    societies/[slug]/page.tsx  Organisation profile, a SourceLine under every fact
+    events/page.tsx          Calendar: list / week / month, filters, event sheet (?event=)
+    request/page.tsx         Claim / correct / remove / object / add form (?kind=&org=<slug>)
+    about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
   sign-in/page.tsx           Google sign-in (creates the account on first use; no sign-up page)
   dashboard/                 Private area (session required; data needs broker access)
-  not-found.tsx              404
+  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/
+  opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
+  not-found.tsx              404 outside the site frame
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
 
 components/                  Atomic Design
@@ -71,7 +80,17 @@ convex/
 
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
 lib/                         Pure logic + *.test.ts (no server imports)
-  vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline
+  vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline,
+                             plus their display labels (Records, ignored by the parity test)
+  calendar.ts                Europe/London calendar: offsets, days, view windows, formatting
+                             (shared with convex/lib/derived.ts)
+  url-state.ts               /societies and /events state <-> URL, and the Convex args it preloads
+  source-line.ts             What a SourceLine says for a field's public meta (status, source, …)
+  listing-request.ts         The request form's draft, validation (server limits) and submit args
+  syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
+  public-api.ts              Client names for the public API's return types (types only)
+  format.ts                  Money, language names, paragraphs
+  site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (placeholder), …
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)
@@ -96,6 +115,14 @@ test/setup.ts                happy-dom preload (keeps native fetch/Headers/Reque
 
 Convex hooks only (`hooks/convex/`), via `useQuery`/`useMutation` from `convex/react`. There is no
 REST layer and no React Query; never wrap a Convex query in another fetching library.
+
+Public pages render on the server. A page with interaction (directory, calendar) parses its URL
+state (`lib/url-state.ts`), calls `preloadQuery` from `convex/nextjs` and hands the result to a
+client organism that reads it with `usePreloadedQuery` (live afterwards); a filter change is a
+`router.push` of the new URL. A page without interaction (profile, home, About) uses `fetchQuery`
+and ships no client JavaScript of its own. Viewer-dependent queries (`events.*`,
+`orgs.getBySlug`) get `{ token: await getToken() }` (`lib/auth-server.ts`, memoised per request).
+Opening an event only changes `?event=` with `window.history.pushState` (no server round trip).
 
 ## Code quality
 
@@ -218,6 +245,7 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 |---|---|---|
 | `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventPublic[]` by start time (≤ 1000), gated by the viewer; `categories` / `collegeKeys` match the organisers' or co-hosts' |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it) |
+| `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events match but are hidden from this viewer (0 when they can see them) — a count only, for the "N more Cambridge-only events, sign in" note |
 
 `EventPublic`: `key, title, description?, startsAt, endsAt?, allDay, termWeekLabel?, venueKey?,
 venueText?, organisers: {key, slug, name, role}[], speakers, price?, bookingUrl?, signupRequired?,
@@ -230,10 +258,11 @@ events), lastSeenAt, confidence, meta`.
 |---|---|---|
 | `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a user-readable message on invalid input, an unknown listing, or more than 5 requests per address per hour |
+| `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, or more than 5 requests per address per hour (a plain `Error`'s message is hidden in production) |
 
-Labels for vocabularies: `CATEGORY_LABELS` in `lib/vocab.ts`; the rest are added there when the UI
-needs them.
+Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
+(`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
 
 ## Ingestion API (pipeline only)
 
