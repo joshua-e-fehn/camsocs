@@ -1,0 +1,4 @@
+# Husky lives in webapp/ while .git is one level up (`prepare` runs
+# `cd .. && husky webapp/.husky`), so hooks start at the repo root.
+cd webapp
+bunx lint-staged

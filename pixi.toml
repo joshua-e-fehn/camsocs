@@ -1,0 +1,109 @@
+## camsocs — monorepo root.
+##
+## Pixi owns the Python environment and is the single entry point for every
+## task in the repo, Python or JS (Bundestracker pattern). It does not manage JS
+## packages: webapp/ has its own package.json resolved by Bun, so the JS tasks
+## here are thin `bun run` delegations. `pixi run lint` covers both languages
+## while `cd webapp && bun run lint` still works on its own.
+##
+##   pixi run dev / build / pipeline / lint / format / typecheck / test / check-codegen
+##   pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
+
+[workspace]
+name = "camsocs"
+version = "0.1.0"
+description = "Cambridge societies & sports clubs directory, events, and a private brokering CRM."
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.12,<3.14"
+# Bun is not on conda-forge, so it is not listed here. The JS tasks call the
+# `bun` on PATH (bun 1.3.11; see webapp/package.json "packageManager").
+nodejs = ">=20"
+
+[pypi-dependencies]
+# Editable install: `pixi run pipeline` imports the working tree, so an edit to
+# pipeline/src is live without a reinstall.
+camsocs-pipeline = { path = "pipeline", editable = true, extras = ["dev"] }
+
+# --- tasks ------------------------------------------------------------------
+
+[tasks.dev]
+cmd = "bun run dev"
+cwd = "webapp"
+description = "Next.js dev server (Turbopack). Run `bunx convex dev` alongside it."
+
+[tasks.build]
+cmd = "bun run build"
+cwd = "webapp"
+description = "Production build of the webapp (deploys Convex only on Vercel with a key)."
+
+[tasks.pipeline]
+cmd = "python -m camsocs_pipeline.cli"
+cwd = "pipeline"
+description = "Run the Python pipeline, e.g. `pixi run pipeline -- sync --dry-run`."
+
+[tasks.lint-python]
+cmd = "ruff check . && ruff format --check ."
+cwd = "pipeline"
+description = "Ruff lint + format check over the pipeline."
+
+[tasks.lint-web]
+cmd = "bun run lint"
+cwd = "webapp"
+description = "Biome lint over the webapp."
+
+[tasks.lint]
+depends-on = ["lint-python", "lint-web"]
+description = "Lint everything: Ruff (Python) + Biome (TS)."
+
+[tasks.format-python]
+cmd = "ruff format . && ruff check --fix ."
+cwd = "pipeline"
+description = "Ruff format + autofix over the pipeline."
+
+[tasks.format-web]
+cmd = "bun run check"
+cwd = "webapp"
+# `biome check --write`: formats *and* applies safe fixes and organises imports,
+# which is what `format` means on the Python side too.
+description = "Biome format + safe fixes over the webapp."
+
+[tasks.format]
+depends-on = ["format-python", "format-web"]
+description = "Format everything: Ruff (Python) + Biome (TS)."
+
+[tasks.typecheck]
+cmd = "bun run typecheck"
+cwd = "webapp"
+description = "TypeScript type check (tsc --noEmit)."
+
+[tasks.check-codegen]
+cmd = "bun run check:codegen"
+cwd = "webapp"
+# convex/_generated/ is committed because it cannot be rebuilt without
+# deployment credentials (see webapp/.gitignore). This asserts the checked-in
+# copy still lists every module under convex/.
+description = "Assert the committed Convex codegen still matches convex/."
+
+[tasks.test-python]
+cmd = "pytest"
+cwd = "pipeline"
+description = "pytest over the pipeline (offline: respx blocks real network)."
+
+[tasks.test-web]
+cmd = "bun test"
+cwd = "webapp"
+# `bun test` exits non-zero when it matches no files, so the webapp must keep
+# at least one test.
+description = "JS tests (bun test, incl. convex-test suites)."
+
+[tasks.test]
+depends-on = ["test-python", "test-web"]
+description = "Run all tests (Python + JS)."
+
+[tasks.install-web]
+cmd = "bun install"
+cwd = "webapp"
+description = "Install JS dependencies (bun only — never npm/pnpm/yarn)."

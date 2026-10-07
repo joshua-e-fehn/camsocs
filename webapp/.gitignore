@@ -1,0 +1,46 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — every one except the documented template
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# convex
+# `convex/_generated/` and `convex/betterAuth/_generated/` are deliberately NOT
+# ignored (pattern from Bundestracker). They are derived, but they cannot be
+# re-derived without deployment credentials (`bunx convex codegen` needs a
+# CONVEX_DEPLOYMENT you can access), and without them a clean checkout cannot
+# typecheck or run the Convex tests — so CI could not run the gates at all.
+# Convex's own CLI says they "should be committed to the repo".
+# `bun run check:codegen` catches the one way they go stale offline (a module
+# added without regenerating). Regenerate with `bunx convex dev --once`.
+.convex/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

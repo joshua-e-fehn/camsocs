@@ -1,0 +1,84 @@
+# The repo's gates, run on every push to main and every pull request.
+#
+# Copied from Bundestracker. Nothing here is a new rule: every step is a pixi
+# task that exists locally (pixi.toml), so CI and a developer run the same
+# commands. Adding a gate here that is not a pixi task would put the two out of
+# step.
+#
+# Two package managers, and only two: pixi owns the Python environment and is
+# the entry point for every task; Bun resolves the JS. Bun is not on
+# conda-forge, so it is installed by its own action. Both installs are
+# lockfile-strict: setup-pixi passes `--locked` when pixi.lock exists, and
+# `bun install --frozen-lockfile` fails instead of updating bun.lock.
+#
+# One job, because the gates share an install that costs more than the gates
+# themselves; cheap, clear failures (codegen, lint, typecheck) run before the
+# expensive build.
+#
+# No secrets: convex/_generated is committed (check-codegen guards it), the
+# pipeline tests are offline (respx), and the build compiles against a
+# placeholder deployment via webapp/scripts/build-env-defaults.sh.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: codegen · lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned exactly, as setup-pixi's README asks: pixi is pre-1.0.
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          pixi-version: v0.73.0
+          cache: true
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      # Not `pixi run install-web`: CI wants the frozen variant so a stale
+      # bun.lock is an error rather than something the run quietly fixes.
+      # HUSKY=0: there is no git hook to install in CI.
+      - name: Install JS dependencies
+        working-directory: webapp
+        env:
+          HUSKY: "0"
+        run: bun install --frozen-lockfile
+
+      - name: Check committed Convex codegen is current
+        run: pixi run check-codegen
+
+      - name: Lint (Ruff + Biome)
+        run: pixi run lint
+
+      - name: Typecheck (tsc --noEmit)
+        run: pixi run typecheck
+
+      - name: Test (pytest + bun test)
+        run: pixi run test
+
+      # No env block and no CONVEX_DEPLOY_KEY, deliberately: this is the same
+      # `pixi run build` anyone can run in a clean checkout. Without the key
+      # scripts/convex-deploy-if-key.sh skips the deploy, and without the two
+      # public URLs scripts/build-env-defaults.sh substitutes a placeholder
+      # pair — which it refuses to do for a deploying build.
+      - name: Build (production-equivalent, no deploy)
+        run: pixi run build

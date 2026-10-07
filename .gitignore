@@ -1,0 +1,32 @@
+.worktrees/
+.vibe/sources/
+.vibe/TASK.md
+.vibe/tasks/
+
+# pixi — pixi.lock is committed; the environment is not
+.pixi/
+
+# dependencies and build output
+node_modules/
+.next/
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# secrets — never committed (webapp/.env.example is the documented template)
+.env*.local
+pipeline/.env
+.env
+
+# pipeline runtime artefacts (per host, not data about societies)
+var/
+.logs/
+.camsocs-state.json
+.daily-sync.lock
+
+# os
+.DS_Store

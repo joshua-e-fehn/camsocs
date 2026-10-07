@@ -1,0 +1,76 @@
+[project]
+name = "camsocs-pipeline"
+version = "0.1.0"
+description = "Harvests public Cambridge society and sports-club sources and ingests them into Convex."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.28",
+  "pydantic>=2.11",
+  "pydantic-settings>=2.7",
+  "click>=8.1",
+  # OpenAI-compatible client, pointed at LLM_BASE_URL (the local cliproxy).
+  # Model ids come from config; extract/llm.py refuses any `claude*` id.
+  "openai>=1.60",
+  "tenacity>=9.0",
+  # HTML parsing (fast, CSS selectors) and embedded structured data.
+  "selectolax>=0.3.27",
+  "extruct>=0.17",
+  # Calendars, dates and Europe/London handling.
+  "icalendar>=6.1",
+  "python-dateutil>=2.9",
+  "tzdata>=2024.1",
+  # Freshers' fair booklets and constitutions are often PDFs.
+  "pypdf>=5.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "respx>=0.22",
+  "ruff>=0.9",
+]
+
+[project.scripts]
+camsocs = "camsocs_pipeline.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/camsocs_pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+# --- Ruff -------------------------------------------------------------------
+# Ruff both lints and formats; there is no Black in this repo.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "I",    # isort
+  "B",    # flake8-bugbear
+  "C4",   # flake8-comprehensions
+  "UP",   # pyupgrade
+  "SIM",  # flake8-simplify
+  "RUF",  # ruff-specific
+]
+# Prose in docstrings legitimately uses these; a homoglyph in an identifier still fails.
+allowed-confusables = ["–", "×", "→", "≠", "’", "‘", "“", "”"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["camsocs_pipeline"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

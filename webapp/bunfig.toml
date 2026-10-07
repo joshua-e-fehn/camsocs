@@ -1,0 +1,7 @@
+# `test/setup.ts` registers a DOM (happy-dom) before any test file is imported.
+#
+# A preload rather than a per-file import (salo-ba pattern): `bun test` runs
+# every file in one process, and registering a second global document would
+# detach trees React already mounted.
+[test]
+preload = ["./test/setup.ts"]
