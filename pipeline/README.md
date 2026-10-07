@@ -13,11 +13,41 @@ pixi run pipeline -- status              # resolved config (secrets shown only a
 pixi run pipeline -- health              # GET /api/pipeline/health with the Bearer key
 pixi run pipeline -- sync --dry-run      # every stage, no credentials needed, nothing written
 pixi run pipeline -- sync                # health → runs/start → stages → runs/finish
-pixi run pipeline -- sync --stages discover,fetch --limit 20
+pixi run pipeline -- sync --stages term_dates,load --limit 20
+pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
+pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 ```
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
 work — a cron that sees success because most of it worked is how a broken source stays broken.
+
+## Stages, staging and loading
+
+`camsocs_pipeline/stages/__init__.py` holds the one ordered registry `sync` runs:
+
+    seed → harvest → resolve → enrich → events → inbox → load → report
+
+- **Adding a stage** is one line: write `stages/<name>.py` with `run(ctx)` and uncomment
+  (or add) `Stage("<name>")` in its phase. The module is imported when the stage runs, so
+  there is no import line to add; the docstring of `stages/__init__.py` has the full
+  convention.
+- **Harvest and enrichment stages only write observations** to staging —
+  `var/staging/<source_type>/<run_key>.jsonl` via `ctx.staging.writer(...)` — using the
+  models in `models/observation.py` and the helpers in `claims.py` (`parser_field`,
+  `llm_field`, `missing_field`). They never mint organisation keys and never call Convex.
+- **resolve** (T4) maps identities to keys and writes `var/staging/_resolved/`.
+- **load** posts every keyed observation from the latest file of each directory through
+  `ConvexLoader.post_observations`: sources → claims → orgInternal → relationships →
+  event organisers → broker inferences. Convex resolves values and computes confidence.
+
+Contracts shared with the webapp, each guarded by a test:
+
+| Python | TypeScript | Test |
+|---|---|---|
+| `models/vocab.py` | `webapp/lib/vocab.ts` | `test_vocab_parity.py` |
+| `keys.py` | `webapp/lib/keys.ts` | `test_keys.py` + `keys.test.ts` on `webapp/lib/keys.fixtures.json` |
+| `models/wire.py` | `webapp/convex/ingest/*.ts` validators | `test_wire.py`, `test_load_routes.py` |
+| `MAX_BATCH` in `pipeline/load.py` | `webapp/convex/lib/ingest.ts` | `test_load.py` |
 
 ## Configuration
 
@@ -32,6 +62,7 @@ Read from `pipeline/.env` (gitignored) or the environment:
 | `LLM_CONCURRENCY` | Parallel LLM calls (default 8) |
 | `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL; browser-like strings are refused |
 | `CAMSOCS_CACHE_DIR` | Raw response cache (default `<repo>/var/cache`) |
+| `CAMSOCS_STAGING_DIR` | Staged observations (default `<repo>/var/staging`) |
 | `CAMSOCS_STATE_PATH` | Run state file (default `<repo>/.camsocs-state.json`) |
 | `CAMSOCS_MIN_HOST_INTERVAL` | Minimum seconds between requests to one host (default 1.0) |
 

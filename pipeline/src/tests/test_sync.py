@@ -9,6 +9,7 @@ import pytest
 import respx
 
 import camsocs_pipeline.pipeline.load as load
+from camsocs_pipeline.pipeline.context import Stage
 from camsocs_pipeline.pipeline.load import ConvexAuthError
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import (
@@ -34,10 +35,16 @@ def failing_stage(ctx: StageContext) -> None:
     raise RuntimeError("source down")
 
 
+#: A registry shaped like the real one: independent stages, then a resolve
+#: stage that load requires.
+NAMES = ("discover", "fetch", "parse", "extract", "resolve", "load")
+
+
 def registry(**overrides):
-    stages = dict.fromkeys(STAGE_ORDER, ok_stage)
-    stages.update(overrides)
-    return stages
+    return [
+        Stage(name, overrides.get(name, ok_stage), requires=("resolve",) if name == "load" else ())
+        for name in NAMES
+    ]
 
 
 def mock_convex(net: respx.MockRouter) -> dict[str, respx.Route]:
@@ -52,11 +59,22 @@ def mock_convex(net: respx.MockRouter) -> dict[str, respx.Route]:
     }
 
 
-def test_resolve_stages_keeps_canonical_order_and_rejects_unknown() -> None:
-    assert resolve_stages(None) == list(STAGE_ORDER)
-    assert resolve_stages(["load", "fetch", "fetch"]) == ["fetch", "load"]
+def test_resolve_stages_keeps_registry_order_and_rejects_unknown() -> None:
+    assert [stage.name for stage in resolve_stages(None)] == list(STAGE_ORDER)
+    names = [s.name for s in resolve_stages(["load", "fetch", "fetch"], registry())]
+    assert names == ["fetch", "load"]
     with pytest.raises(ValueError, match="fecth"):
-        resolve_stages(["fecth"])
+        resolve_stages(["fecth"], registry())
+    with pytest.raises(ValueError, match="Duplicate"):
+        resolve_stages(None, [*registry(), Stage("load", ok_stage)])
+
+
+def test_the_real_registry_starts_with_seeds_and_ends_with_load() -> None:
+    assert STAGE_ORDER[0] == "term_dates"
+    assert "load" in STAGE_ORDER
+    # Every registered stage resolves to its module's run().
+    for stage in resolve_stages(None):
+        assert callable(stage.resolve())
 
 
 def test_dry_run_needs_no_credentials_and_writes_nothing(make_settings) -> None:
@@ -65,15 +83,15 @@ def test_dry_run_needs_no_credentials_and_writes_nothing(make_settings) -> None:
 
     report = run_sync(settings=settings, dry_run=True)
 
-    assert report.ok
+    assert report.ok, report.summary()
     assert report.dry_run
     assert [stage.name for stage in report.stages] == list(STAGE_ORDER)
     assert not settings.state_path.exists(), "a dry run leaves no state behind"
 
 
-def test_scaffold_stages_say_they_are_not_implemented(make_settings) -> None:
-    report = run_sync(settings=make_settings(), dry_run=True)
-    assert all("not implemented yet" in stage.notes[0] for stage in report.stages)
+def test_the_load_stage_says_when_nothing_is_staged(make_settings) -> None:
+    report = run_sync(settings=make_settings(), dry_run=True, stages=["load"])
+    assert report.stages[0].notes == ["nothing staged"]
 
 
 def test_a_real_run_brackets_the_stages_with_the_run_log(make_settings, net) -> None:
@@ -104,20 +122,33 @@ def test_a_failing_stage_is_recorded_and_the_rest_still_run(make_settings, net) 
     assert not report.ok
     statuses = {stage.name: stage.status for stage in report.stages}
     assert statuses["parse"] == "failed"
-    assert statuses["extract"] == "ok", "stages after a non-gating failure still run"
+    assert statuses["extract"] == "ok", "stages that do not require it still run"
     finish = json.loads(routes["finish"].calls[0].request.content)
     parse = next(stage for stage in finish["stages"] if stage["name"] == "parse")
     assert parse["error"] == "RuntimeError: source down"
     assert load_state(settings.state_path).last_run_ok is False
 
 
-def test_a_failed_discover_gates_every_later_stage(make_settings) -> None:
+def test_a_failed_requirement_skips_the_stage_that_needs_it(make_settings) -> None:
     report = run_sync(
-        settings=make_settings(), dry_run=True, registry=registry(discover=failing_stage)
+        settings=make_settings(), dry_run=True, registry=registry(resolve=failing_stage)
     )
 
-    statuses = [stage.status for stage in report.stages]
-    assert statuses == ["failed"] + ["not_run"] * (len(STAGE_ORDER) - 1)
+    statuses = {stage.name: stage.status for stage in report.stages}
+    assert statuses["resolve"] == "failed"
+    assert statuses["load"] == "not_run"
+    assert report.stages[-1].notes == ["skipped: resolve failed"]
+
+
+def test_a_requirement_that_was_not_requested_does_not_block(make_settings) -> None:
+    report = run_sync(settings=make_settings(), dry_run=True, stages=["load"], registry=registry())
+    assert report.ok
+
+
+def test_a_stage_module_that_fails_to_import_fails_alone(make_settings) -> None:
+    stages = [Stage("no_such_stage_module"), Stage("fine", ok_stage)]
+    report = run_sync(settings=make_settings(), dry_run=True, registry=stages)
+    assert [stage.status for stage in report.stages] == ["failed", "ok"]
 
 
 def test_a_rejected_key_stops_the_run_before_any_stage(make_settings, net) -> None:
@@ -162,3 +193,32 @@ def test_the_limit_reaches_the_stages(make_settings) -> None:
         registry=registry(fetch=lambda ctx: seen.append(ctx.limit)),
     )
     assert seen == [5]
+
+
+def test_the_load_stage_posts_keyed_staged_observations(make_settings) -> None:
+    from datetime import UTC, datetime
+
+    from camsocs_pipeline.claims import parser_field
+    from camsocs_pipeline.models.observation import IdentityHints, Observation
+    from camsocs_pipeline.staging.store import RESOLVED, StagingStore
+
+    settings = make_settings()
+    observation = Observation(
+        source_type="su_directory",
+        source_key="6789",
+        source_url="https://www.cambridgesu.co.uk/opportunities/societies/",
+        retrieved_at=datetime(2026, 10, 7, tzinfo=UTC),
+        entity_type="organisation",
+        identity=IdentityHints(name="CU Chess Club"),
+        fields=[parser_field("name", "CU Chess Club", extractor="su.name", evidence="secondary")],
+    )
+    store = StagingStore(settings.staging_dir)
+    store.write("su_directory", "r1", [observation])
+    store.write(RESOLVED, "r1", [observation.model_copy(update={"entity_key": "org-cu-chess"})])
+
+    report = run_sync(settings=settings, dry_run=True, stages=["load"])
+
+    [load_report] = report.stages
+    assert load_report.ok
+    assert load_report.skipped == 1, "the unkeyed harvest record waits for resolve"
+    assert "2 records from su_directory, _resolved; 1 awaiting resolve" in load_report.notes

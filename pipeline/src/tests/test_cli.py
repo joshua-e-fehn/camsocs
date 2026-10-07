@@ -8,6 +8,7 @@ from click.testing import CliRunner
 
 import camsocs_pipeline.pipeline.sync as sync_module
 from camsocs_pipeline.cli import cli
+from camsocs_pipeline.pipeline.context import Stage
 
 SITE = "https://happy-otter-123.convex.site"
 SECRET = "super-secret-pipeline-key-do-not-print"
@@ -45,17 +46,17 @@ def test_status_works_with_nothing_configured(make_settings) -> None:
 
 
 def test_sync_dry_run_exits_zero_without_credentials(make_settings) -> None:
-    result = invoke(make_settings(), "sync", "--dry-run", "--stages", "discover,fetch")
+    result = invoke(make_settings(), "sync", "--dry-run", "--stages", "term_dates")
     assert result.exit_code == 0, result.output
     assert "dry run" in result.output
-    assert "discover" in result.output and "parse" not in result.output
+    assert "term_dates" in result.output and "load" not in result.output
 
 
 def test_sync_exits_non_zero_when_a_stage_fails(make_settings, monkeypatch) -> None:
     def boom(_ctx):
         raise RuntimeError("source down")
 
-    monkeypatch.setitem(sync_module.STAGES, "fetch", boom)
+    monkeypatch.setattr(sync_module, "STAGES", [Stage("boom", boom)])
     result = invoke(make_settings(), "sync", "--dry-run")
     assert result.exit_code == 1
     assert "FAILED" in result.output

@@ -1,99 +1,60 @@
 """Orchestration: the stage runner (Bundestracker pipeline/sync.py pattern).
 
-    discover → fetch → parse → extract → resolve → load
+Runs the ordered registry in `camsocs_pipeline.stages` (`STAGES`)::
+
+    seed → harvest → resolve → enrich → events → inbox → load → report
 
 Each stage runs inside `_guard`, which records a failure on the stage's report
-instead of ending the run: one source being down must not cost the others. The
-exception is a **gating** stage (`discover`): without a source list there is
-nothing for later stages to work on, so a failed `discover` marks the rest
-`not_run` rather than producing a cascade of errors that buries the cause.
+instead of ending the run: one source being down must not cost the others. A
+stage whose `requires` include a stage that *failed in this run* is reported
+`not_run` instead (e.g. `load` after a failed `resolve`), rather than
+producing a cascade of errors that buries the cause.
 
 A real run is bracketed by the run log in Convex: `health()` first (a rotated
 key is one clean 401 before any work), then `runs.start`, the stages, and
 `runs.finish` with per-stage results — the server derives the run status. A
 `--dry-run` makes no network writes and needs no credentials: the loader
 serialises payloads and discards them, and no run row or state file is written.
-
-The stages are scaffolds for now: each reports "not implemented yet" and does
-nothing, so the plumbing (CLI → stages → report → run log → exit code) is real
-and tested before any harvester lands. Implement a stage by replacing its
-entry in `STAGES`; the contract is `StageFn` below.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.config import Settings
+from camsocs_pipeline.pipeline.context import Stage, StageContext, StageFn
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
 from camsocs_pipeline.pipeline.report import RunReport, StageReport, mint_run_key
 from camsocs_pipeline.pipeline.state import SyncState, load_state, save_state
+from camsocs_pipeline.stages import STAGES
+from camsocs_pipeline.staging.store import StagingStore
 
 logger = logging.getLogger(__name__)
 
-#: Canonical order. A subset requested with `--stages` still runs in this order.
-STAGE_ORDER: tuple[str, ...] = ("discover", "fetch", "parse", "extract", "resolve", "load")
-
-#: Stages whose failure makes every later stage pointless.
-GATING_STAGES = frozenset({"discover"})
-
-
-@dataclass
-class StageContext:
-    """Everything a stage may use. A stage writes its counts and notes to
-    `report`, reads/writes `state`, and posts through `loader` (which is a
-    no-op in a dry run)."""
-
-    settings: Settings
-    report: StageReport
-    run: RunReport
-    loader: ConvexLoader
-    state: SyncState
-    dry_run: bool
-    #: Process at most this many items (sources, pages, claims) — for trial runs.
-    limit: int | None
-
-
-StageFn = Callable[[StageContext], None]
-
-
-def _scaffold(purpose: str) -> StageFn:
-    def stage(ctx: StageContext) -> None:
-        ctx.report.notes.append(f"not implemented yet ({purpose})")
-
-    return stage
-
-
-STAGES: dict[str, StageFn] = {
-    "discover": _scaffold("seed lists → sources registry"),
-    "fetch": _scaffold("polite fetch of registered sources into var/cache"),
-    "parse": _scaffold("deterministic rules: mailto, socials, JSON-LD, iCal"),
-    "extract": _scaffold("LLM over cached text, verbatim-evidence checked"),
-    "resolve": _scaffold("stable keys, crosswalk, quarantine for ambiguous names"),
-    "load": _scaffold("upsert entities and claims into Convex"),
-}
+#: Canonical order of the registered stages. A subset requested with
+#: `--stages` still runs in this order.
+STAGE_ORDER: tuple[str, ...] = tuple(stage.name for stage in STAGES)
 
 
 def resolve_stages(
-    requested: Sequence[str] | None, registry: Mapping[str, StageFn] | None = None
-) -> list[str]:
-    """The stages to run, in canonical order. Unknown names are an error, not
+    requested: Sequence[str] | None, registry: Sequence[Stage] | None = None
+) -> list[Stage]:
+    """The stages to run, in registry order. Unknown names are an error, not
     a silent no-op — a typo in a cron line should fail loudly."""
     registry = STAGES if registry is None else registry
-    order = [name for name in STAGE_ORDER if name in registry] + [
-        name for name in registry if name not in STAGE_ORDER
-    ]
+    names = [stage.name for stage in registry]
+    if len(set(names)) != len(names):
+        raise ValueError(f"Duplicate stage names in the registry: {names}")
     if not requested:
-        return order
-    unknown = sorted({name for name in requested if name not in registry})
+        return list(registry)
+    unknown = sorted({name for name in requested if name not in names})
     if unknown:
-        raise ValueError(f"Unknown stage(s): {', '.join(unknown)}. Known: {', '.join(order)}.")
+        raise ValueError(f"Unknown stage(s): {', '.join(unknown)}. Known: {', '.join(names)}.")
     wanted = set(requested)
-    return [name for name in order if name in wanted]
+    return [stage for stage in registry if stage.name in wanted]
 
 
 def run_sync(
@@ -103,14 +64,13 @@ def run_sync(
     dry_run: bool = False,
     limit: int | None = None,
     loader: ConvexLoader | None = None,
-    registry: Mapping[str, StageFn] | None = None,
+    registry: Sequence[Stage] | None = None,
     now: datetime | None = None,
 ) -> RunReport:
     """Run the requested stages and return the report. Raises `ConfigError` /
     `ConvexError` only for failures before any stage ran (config, health,
     `runs.start`); stage failures are recorded on the report instead."""
-    registry = STAGES if registry is None else registry
-    names = resolve_stages(stages, registry)
+    selected = resolve_stages(stages, registry)
     report = RunReport(run_key=mint_run_key(now), command="sync", dry_run=dry_run)
     state = load_state(settings.state_path)
 
@@ -129,10 +89,13 @@ def run_sync(
             if not loader.health():
                 raise ConvexError("GET /api/pipeline/health did not answer ok")
             loader.start_run(
-                report.run_key, command="sync", stages=names, pipeline_version=__version__
+                report.run_key,
+                command="sync",
+                stages=[stage.name for stage in selected],
+                pipeline_version=__version__,
             )
 
-        _run_stages(names, registry, report, settings, loader, state, limit)
+        _run_stages(selected, report, settings, loader, state, limit)
 
         if not loader.dry_run:
             try:
@@ -153,20 +116,21 @@ def run_sync(
 
 
 def _run_stages(
-    names: Sequence[str],
-    registry: Mapping[str, StageFn],
+    stages: Sequence[Stage],
     report: RunReport,
     settings: Settings,
     loader: ConvexLoader,
     state: SyncState,
     limit: int | None,
 ) -> None:
-    gate_failed: str | None = None
-    for name in names:
-        stage_report = report.stage(name)
-        if gate_failed is not None:
+    staging = StagingStore(settings.staging_dir)
+    failed: set[str] = set()
+    for stage in stages:
+        stage_report = report.stage(stage.name)
+        blockers = [name for name in stage.requires if name in failed]
+        if blockers:
             stage_report.status = "not_run"
-            stage_report.notes.append(f"skipped: {gate_failed} failed")
+            stage_report.notes.append(f"skipped: {', '.join(blockers)} failed")
             continue
         context = StageContext(
             settings=settings,
@@ -174,17 +138,18 @@ def _run_stages(
             run=report,
             loader=loader,
             state=state,
+            staging=staging,
             dry_run=loader.dry_run,
             limit=limit,
         )
-        _guard(stage_report, lambda fn=registry[name], ctx=context: fn(ctx))
-        if not stage_report.ok and name in GATING_STAGES:
-            gate_failed = name
+        _guard(stage_report, lambda stage=stage, ctx=context: stage.resolve()(ctx))
+        if not stage_report.ok:
+            failed.add(stage.name)
 
 
 def _guard(stage_report: StageReport, body: Callable[[], None]) -> None:
     """Run a stage, recording a failure instead of ending the run. Broad on
-    purpose: the stages after the gate are independent of each other."""
+    purpose: stages are independent unless they declare `requires`."""
     try:
         body()
     except Exception as error:
@@ -192,4 +157,12 @@ def _guard(stage_report: StageReport, body: Callable[[], None]) -> None:
         stage_report.fail(f"{type(error).__name__}: {error}")
 
 
-__all__ = ["GATING_STAGES", "STAGES", "STAGE_ORDER", "StageContext", "resolve_stages", "run_sync"]
+__all__ = [
+    "STAGES",
+    "STAGE_ORDER",
+    "Stage",
+    "StageContext",
+    "StageFn",
+    "resolve_stages",
+    "run_sync",
+]

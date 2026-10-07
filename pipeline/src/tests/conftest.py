@@ -33,6 +33,7 @@ ENV_VARS = (
     "LLM_CONCURRENCY",
     "CAMSOCS_USER_AGENT",
     "CAMSOCS_CACHE_DIR",
+    "CAMSOCS_STAGING_DIR",
     "CAMSOCS_STATE_PATH",
     "CAMSOCS_MIN_HOST_INTERVAL",
 )
@@ -79,6 +80,7 @@ def make_settings(tmp_path: Path):
     def build(**overrides: Any) -> Settings:
         values: dict[str, Any] = {
             "cache_dir": tmp_path / "cache",
+            "staging_dir": tmp_path / "staging",
             "state_path": tmp_path / "state.json",
             "user_agent": TEST_UA,
         }

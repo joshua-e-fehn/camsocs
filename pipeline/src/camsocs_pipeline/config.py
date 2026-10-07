@@ -31,6 +31,9 @@ ENV_FILE = PIPELINE_DIR / ".env"
 #: Raw response cache. Under the repo, gitignored (`var/`), never committed.
 DEFAULT_CACHE_DIR = REPO_ROOT / "var" / "cache"
 
+#: Staged observations between harvest and load (staging/store.py). Gitignored.
+DEFAULT_STAGING_DIR = REPO_ROOT / "var" / "staging"
+
 #: What a run remembers for the next one. Gitignored.
 DEFAULT_STATE_PATH = REPO_ROOT / ".camsocs-state.json"
 
@@ -74,6 +77,7 @@ class Settings(BaseSettings):
 
     user_agent: str = Field(default="", validation_alias="CAMSOCS_USER_AGENT")
     cache_dir: Path = Field(default=DEFAULT_CACHE_DIR, validation_alias="CAMSOCS_CACHE_DIR")
+    staging_dir: Path = Field(default=DEFAULT_STAGING_DIR, validation_alias="CAMSOCS_STAGING_DIR")
     state_path: Path = Field(default=DEFAULT_STATE_PATH, validation_alias="CAMSOCS_STATE_PATH")
     min_host_interval: float = Field(
         default=DEFAULT_MIN_HOST_INTERVAL, ge=0.0, validation_alias="CAMSOCS_MIN_HOST_INTERVAL"

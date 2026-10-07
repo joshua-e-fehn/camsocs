@@ -3,6 +3,8 @@
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
     camsocs sync [--stages a,b] [--dry-run] [--limit N]
+    camsocs derive                       re-derive statuses, term weeks, stale flags now
+    camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
 
 Commands are thin: parsing and reporting only. Exit codes matter to the cron
 that runs `sync`: any failed stage exits non-zero even though the others
@@ -165,6 +167,45 @@ def sync(ctx: click.Context, stages: list[str] | None, dry_run: bool, limit: int
             "One or more stages failed — see the report above. Every write is an upsert, "
             "so the next run repairs what this one missed."
         )
+
+
+def _loader(settings: Settings) -> ConvexLoader:
+    try:
+        return ConvexLoader(settings.require_convex_http_url(), settings.require_pipeline_api_key())
+    except ConfigError as error:
+        raise click.ClickException(str(error)) from error
+
+
+@cli.command()
+@click.pass_context
+def derive(ctx: click.Context) -> None:
+    """Re-derive organisation statuses, events' term weeks and stale people now
+    (the daily cron does the same)."""
+    try:
+        with _loader(_settings(ctx)) as loader:
+            loader.derive()
+    except ConvexError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo("ok — derivation scheduled")
+
+
+@cli.command("purge-dev")
+@click.option("--yes", is_flag=True, help="Confirm: delete every pipeline-owned row on dev.")
+@click.pass_context
+def purge_dev(ctx: click.Context, yes: bool) -> None:
+    """Empty every pipeline-owned table on the dev deployment, before a full
+    harvest. The deployment itself refuses unless it is the dev deployment;
+    the run log, inbox, listing requests and broker-owned rows are kept."""
+    if not yes:
+        raise click.ClickException("Refusing without --yes.")
+    try:
+        with _loader(_settings(ctx)) as loader:
+            deleted = loader.purge_dev()
+    except ConvexError as error:
+        raise click.ClickException(str(error)) from error
+    total = sum(deleted.values())
+    detail = ", ".join(f"{table} {count}" for table, count in sorted(deleted.items()))
+    click.echo(f"ok — deleted {total} rows" + (f" ({detail})" if detail else ""))
 
 
 def main() -> None:
