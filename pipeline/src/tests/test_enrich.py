@@ -266,6 +266,21 @@ def test_a_dead_or_parked_site_yields_only_its_health(
     assert all(obs.field != "website" for r in parked.website for obs in r.fields)
 
 
+def test_a_site_the_llm_disowns_keeps_only_its_health(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    mock_cuats(net)
+    net.post(f"{LLM_BASE}/chat/completions").mock(
+        return_value=completion({"is_about_organisation": False})
+    )
+    result = Enricher(polite(tmp_path), llm_client()).enrich(cuats_target())
+    assert result.stats.not_about == 1
+    assert all(record.fields == [] and not record.broker for record in result.website)
+    assert result.website[0].internal == {
+        "website_health": result.website[0].internal["website_health"]
+    }
+
+
 def test_robots_disallow_is_recorded_not_crawled(tmp_path: Path, net: respx.MockRouter) -> None:
     net.get("https://private.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
     page = net.get("https://private.example/").respond(200, text="secret")

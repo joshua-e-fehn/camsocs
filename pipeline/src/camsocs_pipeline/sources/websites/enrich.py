@@ -45,8 +45,9 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from html import unescape as html_unescape
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from camsocs_pipeline.claims import (
     missing_field,
@@ -117,7 +118,18 @@ SKIP_HOSTS = (
     "eventbrite.co.uk",
     "fixr.co",
     "lu.ma",
+    "hellorubric.com",
+    "discord.com",
+    "discord.gg",
+    "chat.whatsapp.com",
+    "wa.me",
+    "t.me",
+    "groupme.com",
+    "join.slack.com",
+    "forms.office.com",
 )
+#: Query parameters that only track a click; dropped from a stated website.
+_TRACKING = re.compile(r"^(utm_\w+|fbclid|gclid|igshid|mc_cid|mc_eid|si|ref)$", re.I)
 _PARKED = re.compile(
     r"(domain (is )?for sale|buy this domain|parked free|this domain may be for sale)", re.I
 )
@@ -189,7 +201,7 @@ def targets_from(records: Iterable[Any]) -> tuple[list[Target], list[str]]:
             if isinstance(item, dict) and item.get("platform") == "linktree"
         ]
         for url in sites:
-            url = url if "://" in url else f"https://{url}"
+            url = _clean_url(url if "://" in url else f"https://{url}")
             if host_of(url) == "linktr.ee":
                 target.linktree = target.linktree or url
             elif target.website is None and not _skipped_host(url):
@@ -291,6 +303,14 @@ class Enricher:
         home_record = buckets.page(home)
         result.website = buckets.records
         outcome = home.result.outcome
+        if _skipped_host(home.url) and home.url != target.website:
+            # A short link that leads to a chat invite or a social profile.
+            result.notes.append(
+                f"{target.key}: {target.website} leads to {host_of(home.url)}, not a website"
+            )
+            home_record.fetch = None
+            result.website = []
+            return
         if outcome == "disallowed_by_robots" and "unreachable" not in (home.result.detail or ""):
             result.stats.disallowed += 1
             result.notes.append(f"{target.key}: robots.txt disallows {target.website}")
@@ -300,9 +320,9 @@ class Enricher:
         )
         if home.page is None:
             result.stats.unreachable += 1
-            result.notes.append(
-                f"{target.key}: {target.website} → {outcome} {home.result.status or ''}"
-            )
+            what = "unreachable" if outcome == "disallowed_by_robots" else outcome
+            status = home.result.status or ""
+            result.notes.append(f"{target.key}: {target.website} → {what} {status}".rstrip())
             return
         home_record.internal["website_domain"] = host_of(home.url)
         page = home.page
@@ -344,12 +364,20 @@ class Enricher:
 
     @staticmethod
     def _mentions(target: Target, page: Page) -> bool:
+        """Whether the page is about this organisation at all: one of its
+        distinctive words (or its acronym) in the title, text or URL. A
+        parked or for-sale domain never is."""
         if _PARKED.search(page.text[:5_000]):
             return False
         words = target.words
-        haystack = set(tokens(f"{page.title} {page.text[:20_000]} {host_of(page.url)}"))
-        host_text = host_of(page.url).replace(".", " ").replace("-", " ")
-        return bool(words & haystack) or any(word in host_text for word in words if len(word) >= 4)
+        haystack = set(tokens(f"{page.title} {page.text[:20_000]} {page.url}"))
+        if words & haystack:
+            return True
+        stems = {word[:5] for word in words if len(word) >= 5}
+        if any(token[:5] in stems for token in haystack if len(token) >= 5):
+            return True  # "Builder" / "Build", "Robotics" / "Robots"
+        url = page.url.lower()
+        return any(word in url for word in words if len(word) >= 3)
 
     # -- deterministic ------------------------------------------------------------------------
 
@@ -364,6 +392,10 @@ class Enricher:
         the fields found."""
         found: set[str] = set()
         pages = [f for f in fetched if f.page is not None]
+        # A "website" that is a page of a bigger site (a club's page on its
+        # parent club's or the RAF's site): the header, navigation and footer
+        # belong to that site, so only the page's own content counts.
+        sub_page = urlsplit(fetched[0].url).path.strip("/") != ""
 
         # Socials: links and JSON-LD sameAs, one choice per platform.
         candidates: dict[str, Counter] = defaultdict(Counter)
@@ -371,7 +403,7 @@ class Enricher:
         socials: dict[str, Social] = {}
         for item in pages:
             assert item.page is not None
-            urls = [link.url for link in item.page.links]
+            urls = [link.url for link in item.page.links if not sub_page or link.region == "main"]
             urls += _same_as(item.page.structured)
             for url in urls:
                 social = social_of(url)
@@ -407,7 +439,7 @@ class Enricher:
         seen_roles: set[tuple[str, str]] = set()
         for item in pages:
             assert item.page is not None
-            emails = list(item.page.emails)
+            emails = list(item.page.main_emails if sub_page else item.page.emails)
             emails += [e for e in _structured_emails(item.page.structured) if e not in emails]
             for email in emails:
                 reading = classify_email(email, org_words=target.words, site_host=site_host)
@@ -540,6 +572,15 @@ class Enricher:
             result.stats.llm_seconds += call.seconds
         extraction = call.extraction
         if not extraction.is_about_organisation:
+            # Then nothing read off these pages is about the organisation
+            # either: keep only the site's health.
+            for record in buckets.records:
+                record.fields = []
+                record.broker = {}
+                record.relationships = []
+                record.internal = {
+                    k: v for k, v in record.internal.items() if k == "website_health"
+                }
             result.stats.not_about += 1
             result.notes.append(
                 f"{target.key}: the LLM says {fetched[0].url} is not this organisation's site"
@@ -612,6 +653,18 @@ class Enricher:
 
 
 # --- helpers -----------------------------------------------------------------------------------
+
+
+def _clean_url(url: str) -> str:
+    """A stated website without click-tracking parameters (and with ``&amp;``
+    decoded, as some directories leave it)."""
+    parts = urlsplit(html_unescape(url.strip()))
+    query = "&".join(
+        pair
+        for pair in parts.query.split("&")
+        if pair and not _TRACKING.match(pair.split("=", 1)[0])
+    )
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
 
 
 def _canonical(url: str) -> str:

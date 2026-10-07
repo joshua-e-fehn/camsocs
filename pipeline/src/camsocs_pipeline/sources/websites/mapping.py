@@ -53,6 +53,12 @@ _PARTNER_TYPES = {
     "other_university_society": "other_university_society",
 }
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+#: A trial date as written: a day and month ("Sat 10 Oct", "10/10"), or ISO.
+_DATE_LIKE = re.compile(
+    r"\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}|\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|"
+    r"jul|aug|sep|oct|nov|dec)|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}\b",
+    re.I,
+)
 _KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
@@ -167,8 +173,9 @@ class ExtractionMapper:
             self.put("membership", _membership_value(x.membership), x.membership.evidence_quote)
         if x.trials is not None:
             trials: dict[str, Any] = {"required": x.trials.required}
-            if x.trials.dates:
-                trials["dates"] = [d.strip()[:40] for d in x.trials.dates if d.strip()][:10]
+            dates = [d.strip()[:40] for d in x.trials.dates if _DATE_LIKE.search(d)][:10]
+            if dates:
+                trials["dates"] = dates
             if note := self.public_text(x.trials.note, 300):
                 trials["note"] = note
             self.put("trials", trials, x.trials.evidence_quote)

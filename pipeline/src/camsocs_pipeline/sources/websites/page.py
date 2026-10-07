@@ -67,6 +67,9 @@ class Page:
     text: str = ""
     links: list[Link] = field(default_factory=list)
     emails: list[str] = field(default_factory=list)
+    #: The addresses in the page's own content (not its navigation, header or
+    #: footer) — for a site that is a sub-page of somebody else's.
+    main_emails: list[str] = field(default_factory=list)
     #: Robots meta directives, lower case (``noindex``, ``nofollow``, ``noai``, …).
     robots: frozenset[str] = frozenset()
     platform: str | None = None
@@ -132,6 +135,7 @@ def parse_page(url: str, html: str) -> Page:
         page.structured = {}
 
     emails: list[str] = []
+    main_emails: list[str] = []
     seen_links: set[tuple[str, str]] = set()
     for anchor in tree.css("a[href]"):
         href = (anchor.attributes.get("href") or "").strip()
@@ -141,7 +145,10 @@ def parse_page(url: str, html: str) -> Page:
             page.obfuscated_emails += 1
             continue
         if href.lower().startswith("mailto:"):
-            emails += _mailto(href)
+            found = _mailto(href)
+            emails += found
+            if _region(anchor) == "main":
+                main_emails += found
             continue
         absolute = urljoin(url, href)
         if urlsplit(absolute).scheme not in ("http", "https"):
@@ -174,7 +181,9 @@ def parse_page(url: str, html: str) -> Page:
     if not text and tree.body is not None:
         text = _clean_text(tree.body.text(separator="", strip=False))
     page.text = text[:MAX_PAGE_TEXT]
+    main_emails += [match.group(1) for match in _EMAIL.finditer(page.text)]
     page.emails = list(dict.fromkeys(email.lower().rstrip(".") for email in emails))
+    page.main_emails = list(dict.fromkeys(email.lower().rstrip(".") for email in main_emails))
     return page
 
 
