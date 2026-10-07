@@ -14,6 +14,7 @@ from camsocs_pipeline.pipeline.load import ConvexAuthError
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import (
     STAGE_ORDER,
+    STAGES,
     StageContext,
     resolve_stages,
     run_sync,
@@ -79,13 +80,16 @@ def test_the_real_registry_starts_with_seeds_and_ends_with_load() -> None:
 
 def test_dry_run_needs_no_credentials_and_writes_nothing(make_settings) -> None:
     # No CONVEX_HTTP_URL, no key, and no respx routes: any request would raise.
+    # Stages that read public sources (`fetches`) read even in a dry run, so
+    # this offline test runs every other registered stage.
     settings = make_settings()
+    offline = [stage.name for stage in STAGES if not stage.fetches]
 
-    report = run_sync(settings=settings, dry_run=True)
+    report = run_sync(settings=settings, dry_run=True, stages=offline)
 
     assert report.ok, report.summary()
     assert report.dry_run
-    assert [stage.name for stage in report.stages] == list(STAGE_ORDER)
+    assert [stage.name for stage in report.stages] == offline
     assert not settings.state_path.exists(), "a dry run leaves no state behind"
 
 

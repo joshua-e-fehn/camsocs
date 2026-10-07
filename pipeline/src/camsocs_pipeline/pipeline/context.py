@@ -55,12 +55,17 @@ class Stage:
     it is then reported `not_run` instead of running on stale or half input
     (e.g. `load` requires `resolve`). A required stage that was not requested
     does not block: the input from its last successful run is on disk.
+
+    `fetches`: the stage reads public sources over the network (through the
+    polite client), even in a dry run — a dry run writes nothing, but it still
+    reads. Offline tests of the runner leave these stages out.
     """
 
     name: str
     fn: StageFn | None = None
     requires: tuple[str, ...] = ()
     description: str = ""
+    fetches: bool = False
 
     def __post_init__(self) -> None:
         if not self.name.isidentifier():

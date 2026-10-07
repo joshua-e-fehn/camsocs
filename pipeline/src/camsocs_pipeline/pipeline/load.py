@@ -28,7 +28,9 @@ landed, and the stage reports them as notes.
 
 There is one method per route (`post_claims`, `upsert_sources`, …; the route
 table is in `models/wire.py`), and `post_observations` posts keyed staged
-observations as all of them, in dependency order.
+observations as all of them, in dependency order. Image fields staged as a
+bare ``{"sourceUrl"}`` (`camsocs_pipeline.media`) are uploaded first and
+posted with their ``storageId`` (`attach_stored_files`).
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ import json
 import logging
 import random
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, Self
@@ -83,6 +85,12 @@ MAX_BACKOFF = 60.0
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 USER_AGENT = f"camsocs-pipeline/{__version__} (convex ingestion)"
+
+#: Claim fields whose value references a stored file (`{storageId?, sourceUrl?}`).
+STORED_FILE_FIELDS = frozenset({("event", "image"), ("organisation", "logo")})
+
+#: Bytes and content type of an image URL, or None (`media.CachedImages`).
+MediaSource = Callable[[str], tuple[bytes, str] | None]
 
 
 class ConvexError(RuntimeError):
@@ -352,15 +360,24 @@ class ConvexLoader:
     # -- staged observations ---------------------------------------------------------
 
     def post_observations(
-        self, records: Iterable[Observation | EventObservation], *, run_key: str | None = None
+        self,
+        records: Iterable[Observation | EventObservation],
+        *,
+        run_key: str | None = None,
+        media: MediaSource | None = None,
     ) -> LoadReport:
         """Posts keyed observations as every row they imply, in dependency
-        order: sources → claims → orgInternal → relationships → event
-        organisers → broker inferences. Unkeyed records are skipped (they wait
-        for the resolve stage) and counted."""
+        order: sources → (files) → claims → orgInternal → relationships →
+        event organisers → broker inferences. Unkeyed records are skipped
+        (they wait for the resolve stage) and counted. With `media`, image
+        values that name only a ``sourceUrl`` are uploaded first."""
         plan = plan_observations(records)
         report = LoadReport(skipped=plan.skipped)
         report.sources = self.upsert_sources(plan.sources)
+        if media is not None and not self.dry_run:
+            plan.claims, report.files_stored, report.files_dropped = attach_stored_files(
+                plan.claims, self, media
+            )
         report.claims = self.post_claims(plan.claims, run_key=run_key)
         report.org_internal = self.patch_org_internal(plan.org_internal)
         report.relationships = self.upsert_relationships(plan.relationships)
@@ -395,6 +412,9 @@ class LoadReport:
     """What `post_observations` wrote, per route."""
 
     skipped: int = 0
+    #: Image claims given a stored copy, and those dropped for want of one.
+    files_stored: int = 0
+    files_dropped: int = 0
     sources: BatchResult = field(default_factory=lambda: BatchResult("sources"))
     claims: BatchResult = field(default_factory=lambda: BatchResult("claims"))
     org_internal: BatchResult = field(default_factory=lambda: BatchResult("orgInternal"))
@@ -425,6 +445,43 @@ class LoadPlan:
     event_organisers: list[EventOrganiserSet] = field(default_factory=list)
     broker_profiles: list[BrokerProfileInput] = field(default_factory=list)
     people: list[PersonInput] = field(default_factory=list)
+
+
+def attach_stored_files(
+    claims: Sequence[ClaimInput], loader: ConvexLoader, media: MediaSource
+) -> tuple[list[ClaimInput], int, int]:
+    """Gives every image claim that names only a ``sourceUrl`` our own copy:
+    reads the bytes through `media`, uploads them (`POST files`, de-duplicated
+    by content) and adds the ``storageId``. A claim whose bytes cannot be had
+    is dropped rather than posted as a bare URL — it would otherwise replace
+    an earlier stored copy from the same source. Returns (claims, stored,
+    dropped); one URL is uploaded once per call."""
+    stored: dict[str, str | None] = {}
+    kept: list[ClaimInput] = []
+    uploaded = dropped = 0
+    for claim in claims:
+        value = claim.value
+        if (
+            (claim.entity_type, claim.field) not in STORED_FILE_FIELDS
+            or not isinstance(value, dict)
+            or value.get("storageId")
+            or not isinstance(value.get("sourceUrl"), str)
+        ):
+            kept.append(claim)
+            continue
+        url = value["sourceUrl"]
+        if url not in stored:
+            found = media(url)
+            stored[url] = (
+                loader.upload_file(found[0], found[1]).storage_id if found is not None else None
+            )
+        storage_id = stored[url]
+        if storage_id is None:
+            dropped += 1
+            continue
+        kept.append(claim.model_copy(update={"value": {**value, "storageId": storage_id}}))
+        uploaded += 1
+    return kept, uploaded, dropped
 
 
 def _is_http(url: str) -> bool:

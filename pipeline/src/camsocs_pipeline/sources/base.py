@@ -24,7 +24,9 @@ Properties enforced here rather than left to each caller's discipline:
    and connection errors, backing off 20 s → 300 s with jitter and honouring
    `Retry-After` (delta-seconds or HTTP-date, capped at 300 s).
 4. **No auth bypass.** No cookies, no credentials. 401/403 are recorded as
-   `access_restricted` and not retried.
+   `access_restricted` and not retried. The one exception is an API key a
+   source itself asks its API consumers to send (Camdram), passed per call as
+   `headers=` — identification, never a way past an access wall.
 5. **Raw cache under `var/cache/<host>/`**, one body + one JSON meta per URL
    (named by the URL's SHA-256), with the content's SHA-256. Conditional
    requests (`If-None-Match` / `If-Modified-Since`) and hash comparison report
@@ -35,6 +37,10 @@ Properties enforced here rather than left to each caller's discipline:
    failed fetch.
 7. **Redirects are followed by hand** (at most 5 hops, http/https only), each
    hop checked against its own host's robots.txt and paced on its own host.
+8. **`post_form`** is for the rare public page whose own listing loads by a
+   form POST (Playwaze fixtures): the same robots check, host slot, retries
+   and cache as `fetch` (cached per URL + body), but no redirects are
+   followed — a redirect from a data endpoint is a sign-in wall, not content.
 """
 
 from __future__ import annotations
@@ -48,9 +54,9 @@ import random
 import threading
 import time
 import urllib.robotparser
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
@@ -221,29 +227,19 @@ class PoliteClient:
         *,
         fresh_for: timedelta | None = None,
         accept: str = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+        headers: Mapping[str, str] | None = None,
     ) -> FetchResult:
         """Fetch `url` under every rule in the module docstring.
 
         `fresh_for`: if the cache holds a successful copy younger than this,
         return it without touching the network (a per-entity TTL for expensive
-        pages).
+        pages). `headers`: extra request headers (an API key a source asks
+        for); they never replace the User-Agent.
         """
         _require_http(url)
         cached = self._read_cache(url)
         if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
-            meta, body = cached
-            return FetchResult(
-                url=url,
-                final_url=meta.get("final_url", url),
-                outcome="unchanged",
-                status=meta.get("status"),
-                fetched_at=meta["fetched_at"],
-                content=body,
-                content_type=meta.get("content_type"),
-                content_sha256=meta.get("content_sha256"),
-                from_cache=True,
-                detail="fresh in cache",
-            )
+            return _fresh_result(url, *cached)
 
         current = url
         for _hop in range(MAX_REDIRECTS + 1):
@@ -253,7 +249,9 @@ class PoliteClient:
                 return self._result(url, current, "disallowed_by_robots", None, detail=reason)
 
             conditional = cached if current == url else None
-            response, error = self._request(current, policy.delay, accept, conditional)
+            response, error = self._request(
+                current, policy.delay, accept, conditional, extra_headers=headers
+            )
             if response is None:
                 result = self._result(url, current, "unreachable", None, detail=error)
                 self._record_negative(url, result)
@@ -276,6 +274,42 @@ class PoliteClient:
             return self._classify(url, current, response, cached)
 
         return self._result(url, current, "http_error", None, detail="too many redirects")
+
+    def post_form(
+        self,
+        url: str,
+        form: Mapping[str, str],
+        *,
+        fresh_for: timedelta | None = None,
+        accept: str = "text/html,application/xhtml+xml,*/*;q=0.8",
+    ) -> FetchResult:
+        """POST `form` to `url` (url-encoded) under the same rules as `fetch`,
+        for a public page whose listing loads by a form POST. Cached per URL +
+        form body. A redirect is not followed: it is reported as `http_error`
+        (from a data endpoint it means a sign-in wall)."""
+        _require_http(url)
+        cache_key = _form_cache_key(url, form)
+        cached = self._read_cache(cache_key)
+        if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
+            return replace(_fresh_result(cache_key, *cached), url=url, final_url=url)
+        policy = self._robots_policy(url)
+        if not self._robots_allows(policy, url):
+            reason = policy.blanket_disallow or "disallowed by robots.txt"
+            return self._result(url, url, "disallowed_by_robots", None, detail=reason)
+        response, error = self._request(url, policy.delay, accept, None, form=form)
+        if response is None:
+            result = self._result(url, url, "unreachable", None, detail=error)
+            self._record_negative(cache_key, result)
+            return result
+        if response.status_code in REDIRECT_STATUSES:
+            return self._result(
+                url,
+                url,
+                "http_error",
+                response.status_code,
+                detail="refusing to follow a redirect from a form POST",
+            )
+        return replace(self._classify(cache_key, url, response, cached), url=url)
 
     # -- robots ----------------------------------------------------------------
 
@@ -347,13 +381,16 @@ class PoliteClient:
         cached: tuple[dict, bytes | None] | None,
         *,
         follow: bool = False,
+        extra_headers: Mapping[str, str] | None = None,
+        form: Mapping[str, str] | None = None,
     ) -> tuple[httpx.Response | None, str | None]:
-        """One logical request with retries, inside the host's slot.
+        """One logical request with retries, inside the host's slot: a GET,
+        or a form POST when `form` is given.
 
         Returns `(response, None)` for any HTTP answer worth classifying, or
         `(None, reason)` when transient failures outlasted the retries.
         """
-        headers = {**self._headers, "Accept": accept}
+        headers = {**(extra_headers or {}), **self._headers, "Accept": accept}
         if cached is not None:
             meta = cached[0]
             if meta.get("etag"):
@@ -369,7 +406,12 @@ class PoliteClient:
         with self._slot(host, robots_delay):
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = self._client.get(url, headers=headers, follow_redirects=follow)
+                    if form is None:
+                        response = self._client.get(url, headers=headers, follow_redirects=follow)
+                    else:
+                        response = self._client.post(
+                            url, headers=headers, data=dict(form), follow_redirects=False
+                        )
                 except (httpx.TimeoutException, httpx.TransportError) as error:
                     last_error = f"{type(error).__name__}: {error}"
                     wait = _jittered(backoff)
@@ -551,6 +593,27 @@ class _RejectAllCookies(http.cookiejar.DefaultCookiePolicy):
 
     def return_ok(self, cookie: http.cookiejar.Cookie, request: object) -> bool:
         return False
+
+
+def _fresh_result(url: str, meta: dict, body: bytes | None) -> FetchResult:
+    return FetchResult(
+        url=url,
+        final_url=meta.get("final_url", url),
+        outcome="unchanged",
+        status=meta.get("status"),
+        fetched_at=meta["fetched_at"],
+        content=body,
+        content_type=meta.get("content_type"),
+        content_sha256=meta.get("content_sha256"),
+        from_cache=True,
+        detail="fresh in cache",
+    )
+
+
+def _form_cache_key(url: str, form: Mapping[str, str]) -> str:
+    """A cache identity for a POST: the URL plus a hash of its sorted form."""
+    body = "&".join(f"{key}={form[key]}" for key in sorted(form))
+    return f"{url}#post-{hashlib.sha256(body.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _require_http(url: str) -> None:

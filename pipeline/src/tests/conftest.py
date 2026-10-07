@@ -36,6 +36,7 @@ ENV_VARS = (
     "CAMSOCS_STAGING_DIR",
     "CAMSOCS_STATE_PATH",
     "CAMSOCS_MIN_HOST_INTERVAL",
+    "CAMDRAM_API_KEY",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"

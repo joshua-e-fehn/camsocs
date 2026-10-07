@@ -3,8 +3,16 @@
 Layout (gitignored — `var/` is never committed, and staged observations may
 hold names and contact details from public pages)::
 
-    var/staging/<source_type>/<run_key>.jsonl     one record per line
-    var/staging/_resolved/<run_key>.jsonl         written by the resolve stage
+    var/staging/<source_type>/<run_key>.jsonl          one record per line
+    var/staging/<source_type>.events/<run_key>.jsonl   an events stage's output
+    var/staging/_resolved/<run_key>.jsonl              written by the resolve stage
+
+The ``.events`` directories exist because one source can feed both a harvest
+stage and an events stage (Camdram societies and the Camdram diary, CUCBC
+clubs and the CUCBC calendar): two stages writing ``<source_type>/<run>.jsonl``
+in one run would overwrite each other. Events stages run after resolve and
+write keyed `EventObservation`s, so the resolver does not read them; the load
+stage does.
 
 Each line is one `Observation` or `EventObservation` (discriminated by
 ``kind``). Run keys sort chronologically (`report.mint_run_key`), so "latest"
@@ -33,13 +41,31 @@ logger = logging.getLogger(__name__)
 #: The resolve stage's output directory (not a source type).
 RESOLVED = "_resolved"
 
+#: Suffix of an events stage's directory: ``camdram.events``.
+EVENTS_SUFFIX = ".events"
+
+
+def events_directory(source_type: str) -> str:
+    """The staging directory an events stage writes for `source_type`."""
+    return _check_directory(f"{source_type}{EVENTS_SUFFIX}")
+
+
+def _is_directory_name(name: str) -> bool:
+    if name == RESOLVED or name in SOURCE_TYPES:
+        return True
+    return name.endswith(EVENTS_SUFFIX) and name[: -len(EVENTS_SUFFIX)] in SOURCE_TYPES
+
+
 Record = Observation | EventObservation
 _RECORD = TypeAdapter(StagedRecord)
 
 
 def _check_directory(name: str) -> str:
-    if name != RESOLVED and name not in SOURCE_TYPES:
-        raise ValueError(f"{name!r} is not a source type (models.vocab.SOURCE_TYPES) or {RESOLVED}")
+    if not _is_directory_name(name):
+        raise ValueError(
+            f"{name!r} is not a source type (models.vocab.SOURCE_TYPES), "
+            f"<source type>{EVENTS_SUFFIX} or {RESOLVED}"
+        )
     return name
 
 
@@ -130,9 +156,7 @@ class StagingStore:
         names = sorted(
             child.name
             for child in self.root.iterdir()
-            if child.is_dir()
-            and (child.name == RESOLVED or child.name in SOURCE_TYPES)
-            and any(child.glob("*.jsonl"))
+            if child.is_dir() and _is_directory_name(child.name) and any(child.glob("*.jsonl"))
         )
         return [name for name in names if name != RESOLVED] + (
             [RESOLVED] if RESOLVED in names else []
@@ -142,4 +166,11 @@ class StagingStore:
         return {name: self.read_latest(name) for name in self.directories()}
 
 
-__all__ = ["RESOLVED", "Record", "StagingStore", "StagingWriter"]
+__all__ = [
+    "EVENTS_SUFFIX",
+    "RESOLVED",
+    "Record",
+    "StagingStore",
+    "StagingWriter",
+    "events_directory",
+]

@@ -83,6 +83,11 @@ class Settings(BaseSettings):
         default=DEFAULT_MIN_HOST_INTERVAL, ge=0.0, validation_alias="CAMSOCS_MIN_HOST_INTERVAL"
     )
 
+    #: Optional. A Camdram API access token (source-research §5): sent as a
+    #: Bearer header when set; without one the events stage paces itself
+    #: more gently, since unauthenticated calls get "very low" rate limits.
+    camdram_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="CAMDRAM_API_KEY")
+
     @field_validator("convex_url", "convex_http_url", "llm_base_url")
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
