@@ -330,12 +330,14 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const declared = Number(request.headers.get("Content-Length") ?? "0")
     if (declared > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
-    const raw = await request.text()
-    if (raw.length > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
     const now = Date.now()
 
     const svix = svixHeaders((name) => request.headers.get(name))
     if (svix) {
+      // The signature covers the raw body, so it is read first.
+      if (!process.env.RESEND_WEBHOOK_SECRET) return json({ error: "Unauthorized" }, 401)
+      const raw = await request.text()
+      if (raw.length > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
       const verified = await verifySvixSignature(
         svix,
         raw,
@@ -346,9 +348,12 @@ http.route({
       return await receiveResend(ctx, raw, now)
     }
 
+    // Authenticate before reading a body of up to 15 MB.
     if (!(await bearerMatches(request, process.env.INBOUND_EMAIL_SECRET))) {
       return json({ error: "Unauthorized" }, 401)
     }
+    const raw = await request.text()
+    if (raw.length > INBOUND_LIMITS.maxRequestBytes) return json({ error: "Too large" }, 413)
     let body: unknown
     try {
       body = JSON.parse(raw)
@@ -375,9 +380,6 @@ async function receiveResend(ctx: ActionCtx, raw: string, now: number): Promise<
   if (!parsed.ok) return json({ error: parsed.error }, 400)
   const received = parsed.value
   if (received === null) return json({ ignored: "event type" }, 200)
-  if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, received.to)) {
-    return json({ ignored: "recipient" }, 200)
-  }
   if (
     received.messageId &&
     (await ctx.runQuery(internal.ingest.inbound.hasMessage, { messageId: received.messageId }))
@@ -389,6 +391,11 @@ async function receiveResend(ctx: ActionCtx, raw: string, now: number): Promise<
   try {
     const email = await fetchReceivedEmail(fetch, apiKey, received.emailId)
     const message = resendMessage(received, email, now)
+    // Checked after fetching: a redirected list mail keeps the list in `To:`,
+    // and only its delivery headers name our inbound address.
+    if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, message.to)) {
+      return json({ ignored: "recipient" }, 200)
+    }
     if (received.attachmentCount > 0) {
       const files = await fetchReceivedAttachments(fetch, apiKey, received.emailId)
       message.attachments = files.attachments

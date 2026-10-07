@@ -68,7 +68,11 @@ def run(ctx: StageContext) -> None:
     llm = LLMClient(settings.require_llm())
     memo = LLMMemo(settings.cache_dir / "llm")
     calendar = TermCalendar.default()
-    index = EventIndex.from_staging(ctx.staging, exclude=[SOURCE_TYPE])
+    index = EventIndex.from_staging(
+        ctx.staging,
+        # Never defer a public event to a cam_only copy from list mail.
+        exclude=[SOURCE_TYPE, "mailing_list_email"],
+    )
     now = datetime.now(UTC)
 
     events: list[EventObservation] = []

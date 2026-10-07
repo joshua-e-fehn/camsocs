@@ -9,8 +9,9 @@ latest staging file of every directory, which is where the event-feed stages
 (T6) and the earlier LLM stages write them.
 
 Precedence follows stage order: deterministic feeds run first and always win;
-then `inbox` (cam_only), `instagram`, `termcards`. A public event is never
-hidden behind a cam_only copy because `inbox` defers to every staged source.
+then `instagram`, then `termcards`. `inbox` (cam_only) defers to every staged
+source, and `instagram` / `termcards` ignore staged list-mail events, so a
+public event is never hidden behind a cam_only copy.
 """
 
 from __future__ import annotations

@@ -146,6 +146,39 @@ export function recipientAllowed(allowedRaw: string | undefined, recipients: str
   return recipients.some((address) => allowed.includes(address.toLowerCase()))
 }
 
+/** Headers that can name the address a redirected or forwarded mail was
+ * delivered to, when `To:` still shows the list's own address. */
+const DELIVERY_HEADERS = [
+  "to",
+  "cc",
+  "delivered-to",
+  "x-original-to",
+  "x-forwarded-to",
+  "envelope-to",
+  "x-envelope-to",
+  "resent-to",
+]
+
+/** Every recipient-ish address in a header map, including the `for <…>`
+ * clauses of `Received` headers. */
+export function deliveryAddresses(headers: unknown): string[] {
+  if (headers === null || typeof headers !== "object") return []
+  const found: string[] = []
+  for (const [key, value] of Object.entries(headers as HeaderMap)) {
+    const name = key.toLowerCase()
+    if (DELIVERY_HEADERS.includes(name)) found.push(...addressesIn(value))
+    if (name === "received") {
+      for (const line of Array.isArray(value) ? value : [value]) {
+        if (typeof line !== "string") continue
+        for (const match of line.matchAll(/\bfor\s+<?([^\s<>;]+@[^\s<>;]+?)>?(?=[\s;]|$)/gi)) {
+          found.push(match[1].toLowerCase())
+        }
+      }
+    }
+  }
+  return [...new Set(found)]
+}
+
 /**
  * A `Date` header as epoch ms: accepted from a week before `now` to a day
  * after (a misconfigured sender clock must not move "this Wednesday" by a
@@ -347,7 +380,7 @@ export function parseGenericPayload(body: unknown, now: number): Parsed<InboundM
       messageId,
       receivedAt: plausibleDate(str(input.date) ?? headerValue(headers, "date"), now) ?? now,
       from: from.slice(0, INBOUND_LIMITS.maxFromChars),
-      to: addressesIn(toValue),
+      to: [...new Set([...addressesIn(toValue), ...deliveryAddresses(headers)])],
       subject: subject.slice(0, INBOUND_LIMITS.maxSubjectChars),
       text: chooseText(text, html),
       html: html || undefined,
@@ -435,7 +468,7 @@ export function resendMessage(
     messageId,
     receivedAt: plausibleDate(headerValue(headers, "date"), now) ?? received.createdAt ?? now,
     from: (from || "unknown").slice(0, INBOUND_LIMITS.maxFromChars),
-    to: received.to,
+    to: [...new Set([...received.to, ...deliveryAddresses(headers)])],
     subject: (email.subject ?? received.subject ?? "").slice(0, INBOUND_LIMITS.maxSubjectChars),
     text: chooseText(email.text ?? undefined, html),
     html,

@@ -252,9 +252,34 @@ def test_the_stage_stages_new_events_and_drops_known_ones(make_settings, net) ->
     titles = [next(f.value for f in e.fields if f.field == "title") for e in staged]
     assert titles == ["Orrery building"]
 
+    # A cam_only copy from list mail never hides the public termcard event.
+    store.write(
+        "mailing_list_email",
+        "20261002T000000Z-aaaaaa",
+        [
+            EventObservation(
+                source_type="mailing_list_email",
+                source_key="m-1",
+                source_url="inbound:<m-1@x>",
+                retrieved_at=datetime(2026, 10, 2, tzinfo=UTC),
+                event_source="mailing_list",
+                external_id="m-1",
+                visibility="cam_only",
+                organisers=[
+                    OrganiserObs(identity=IdentityHints(name="CUOC", known_key=ORRERY_KEY))
+                ],
+                fields=[
+                    parser_field("title", "Orrery building", extractor="t", evidence="primary"),
+                    parser_field("startsAt", ORRERY_BUILDING, extractor="t", evidence="primary"),
+                ],
+            )
+        ],
+    )
     # A second run reads the cached card and asks the model nothing new.
-    assert run_sync(settings=settings, stages=["termcards"]).ok
-    assert llm.call_count == 1
+    second = run_sync(settings=settings, stages=["termcards"])
+    assert second.ok and llm.call_count == 1
+    # This run itself kept the event: it was not deduplicated away.
+    assert second.stages[0].notes[0] == "1 termcards known, 1 read, 1 events"
 
 
 def test_no_termcards_and_dry_runs_are_quiet(make_settings) -> None:

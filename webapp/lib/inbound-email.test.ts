@@ -5,6 +5,7 @@ import {
   base64ToBytes,
   bytesToBase64,
   chooseText,
+  deliveryAddresses,
   headerValue,
   htmlToText,
   INBOUND_LIMITS,
@@ -56,6 +57,23 @@ describe("headers", () => {
       "lists-x7@in.example.org",
       "b@example.org",
     ])
+  })
+
+  test("deliveryAddresses finds the inbound address of a redirected list mail", () => {
+    const headers = {
+      To: "soc-x@lists.cam.ac.uk",
+      "Delivered-To": "lists-7f@in.example.org",
+      Received: [
+        "from mx.example.org by inbound-smtp.example.com for <lists-8g@in.example.org>; Wed, 7 Oct",
+        "from a by b (envelope-from <sender@example.org>)",
+      ],
+    }
+    expect(deliveryAddresses(headers).sort()).toEqual([
+      "lists-7f@in.example.org",
+      "lists-8g@in.example.org",
+      "soc-x@lists.cam.ac.uk",
+    ])
+    expect(deliveryAddresses(null)).toEqual([])
   })
 
   test("recipientAllowed: unset accepts all, set requires a match", () => {

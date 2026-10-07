@@ -233,6 +233,30 @@ describe("POST /api/inbound/email — Resend", () => {
     })
   })
 
+  test("with recipients configured, a redirected mail counts its delivery headers", async () => {
+    const redirected = {
+      ...event,
+      data: { ...event.data, message_id: "<redirected@x>", to: ["soc-zz@lists.cam.ac.uk"] },
+    }
+    const withHeaders = (deliveredTo: string) => ({
+      ...routes,
+      [`https://api.resend.com/emails/receiving/${EMAIL_ID}?html_format=cid`]: () =>
+        Response.json({
+          text: "Talk on Thursday",
+          headers: { to: "soc-zz@lists.cam.ac.uk", "delivered-to": deliveredTo },
+        }),
+    })
+    await withEnv({ ...ENV, INBOUND_EMAIL_RECIPIENTS: "lists-7f@in.example.org" }, async () => {
+      stubResend(withHeaders("lists-7f@in.example.org"))
+      const t = newTest()
+      expect(await (await postResend(t, redirected)).json()).toEqual({ stored: true })
+      stubResend(withHeaders("someone-else@in.example.org"))
+      const other = { ...redirected, data: { ...redirected.data, message_id: "<other@x>" } }
+      expect(await (await postResend(t, other)).json()).toEqual({ ignored: "recipient" })
+      expect(await inbox(t)).toHaveLength(1)
+    })
+  })
+
   test("a bad signature or unset secret is 401 and never reaches Resend", async () => {
     await withEnv(ENV, async () => {
       stubResend({})
