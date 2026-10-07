@@ -22,6 +22,10 @@ dependencies = [
   "tzdata>=2024.1",
   # Freshers' fair booklets and constitutions are often PDFs.
   "pypdf>=5.1",
+  # Termcards and posters (source-research §21): render PDF pages to images
+  # for the vision model, and shrink images before upload / vision.
+  "pypdfium2>=4.30",
+  "pillow>=11.0",
 ]
 
 [project.optional-dependencies]

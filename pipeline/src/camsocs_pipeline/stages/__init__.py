@@ -92,7 +92,7 @@ STAGES: list[Stage] = [
     #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
     # Forwarded mailing-list mail (§16).
-    # Stage("inbox"),
+    Stage("inbox"),
     #
     # Instagram Business Discovery (§17).
     # Stage("instagram"),

@@ -20,7 +20,9 @@ eventOrganisers        `EventOrganisersBatch`          ingest/relationships:setE
 brokerInferences       `BrokerInferences`              ingest/broker:ingest
 files                  `FileUpload`                    (http action) → ingest/files
 inbound/pending        `InboundPendingRequest`         ingest/inbound:pending
+inbound/file           `InboundFileRequest`            (http action) → ingest/inbound:fileOf
 inbound/mark           `InboundMarkBatch`              ingest/inbound:mark
+worklist               ``{paginationOpts}``            ingest/orgInternal:worklistPage
 termDates              `TermDatesBatch`                ingest/termDates:upsert
 derive                 ``{}``                          derive:daily
 purge                  `PurgeRequest`                  ingest/purge:purge (dev only)
@@ -370,6 +372,53 @@ class InboundMarkBatch(WireModel):
     items: list[InboundMark]
 
 
+class InboundFileRequest(WireModel):
+    message_id: str
+    storage_id: str
+
+
+class InboundFile(WireModel):
+    """One attachment of a forwarded mail (base64). Personal data: never logged."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    data: str
+    content_type: str
+    filename: str
+
+
+class MailingListInfo(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    platform: str | None = None
+    address: str | None = None
+    signup_url: str | None = None
+
+
+class WorklistOrg(WireModel):
+    """One organisation as `worklist` pages it (ingest/orgInternal.ts
+    `worklistPage`): what the mailing-list sign-up worklist ranks on."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    key: str
+    slug: str
+    name: str
+    short_name: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    status: str
+    org_type: str | None = None
+    level: str | None = None
+    mailing_list: MailingListInfo | None = None
+    sympa_list: str | None = None
+    feeds: list[str] = Field(default_factory=list)
+    upcoming_event_sources: list[str] = Field(default_factory=list)
+
+
+class WorklistPage(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    page: list[WorklistOrg]
+    is_done: bool
+    continue_cursor: str
+
+
 class TermDate(WireModel):
     academic_year: str
     term: TermStr
@@ -397,10 +446,13 @@ __all__ = [
     "EventOrganisersBatch",
     "FileResult",
     "FileUpload",
+    "InboundFile",
+    "InboundFileRequest",
     "InboundMark",
     "InboundMarkBatch",
     "InboundPendingRequest",
     "InferredItem",
+    "MailingListInfo",
     "OrgInternalBatch",
     "OrgInternalPatch",
     "PendingMail",
@@ -415,4 +467,6 @@ __all__ = [
     "TermDate",
     "TermDatesBatch",
     "WireModel",
+    "WorklistOrg",
+    "WorklistPage",
 ]
