@@ -71,6 +71,9 @@ describe("headers", () => {
       Date.UTC(2026, 9, 7, 8, 30, 0),
     )
     expect(plausibleDate("Thu, 01 Jan 1970 00:00:00 +0000", NOW)).toBeUndefined()
+    // A sender clock an hour fast is clamped to now; days fast is ignored.
+    expect(plausibleDate("Wed, 07 Oct 2026 13:00:00 +0000", NOW)).toBe(NOW)
+    expect(plausibleDate("Sat, 10 Oct 2026 12:00:00 +0000", NOW)).toBeUndefined()
     expect(plausibleDate("garbage", NOW)).toBeUndefined()
   })
 })

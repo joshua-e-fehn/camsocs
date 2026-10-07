@@ -78,6 +78,7 @@ def tools(llm: FakeLLM | None = None, loader=None, index: EventIndex | None = No
         index=index or EventIndex(),
         calendar=TermCalendar.default(),
         loader=loader,
+        now=lambda: datetime(2026, 11, 1, 12, 0, tzinfo=UTC),
     )
 
 
@@ -124,6 +125,17 @@ def test_identify_sender_by_list_forward_address_and_name() -> None:
 
 
 # --- one mail at a time ----------------------------------------------------------------------
+
+
+def test_a_mail_dated_in_the_future_is_clamped_to_now() -> None:
+    fast_clock = tools()
+    fast_clock.now = lambda: datetime(2026, 10, 19, 6, 0, tzinfo=UTC)  # before the Date header
+    outcome = inbox.process_mail(WEEKLY, fast_clock)
+    (activity,) = outcome.extra
+    assert activity.fields[0].value == int(
+        datetime(2026, 10, 19, 6, 0, tzinfo=UTC).timestamp() * 1000
+    )
+    assert all(e.retrieved_at <= datetime(2026, 10, 19, 6, 0, tzinfo=UTC) for e in outcome.events)
 
 
 def test_a_weekly_newsletter_becomes_dated_cam_only_events() -> None:

@@ -43,7 +43,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.claims import epoch_ms, parser_field
 from camsocs_pipeline.extract.dedupe import EventIndex
 from camsocs_pipeline.extract.events import (
     EventContext,
@@ -97,6 +97,8 @@ class InboxTools:
     index: EventIndex
     calendar: TermCalendar
     loader: ConvexLoader
+    #: The clock (tests pin it).
+    now: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
 
 
 def run(ctx: StageContext) -> None:
@@ -187,7 +189,8 @@ def _process(mail: PendingMail, tools: InboxTools) -> MailOutcome:
     if not is_list_mail(mail) and identified.org_key is None:
         return MailOutcome(mail, "skipped", notes=["not list mail"])
 
-    received = datetime.fromtimestamp(mail.received_at / 1000, UTC)
+    # Never later than now: the claims API refuses a future retrieval time.
+    received = min(datetime.fromtimestamp(mail.received_at / 1000, UTC), tools.now())
     anchor = london_date(received)
     body = redact_contacts(mail.text).strip()
     source_text = f"Subject: {redact_contacts(mail.subject)}\n\n{body}"
@@ -257,7 +260,7 @@ def _process(mail: PendingMail, tools: InboxTools) -> MailOutcome:
 
     extra: list[Observation] = []
     if org_key:
-        extra.append(_activity(mail, org_key, org.display_name if org else org_key, received))
+        extra.append(_activity(org_key, org.display_name if org else org_key, mail, received))
     if not kept:
         return MailOutcome(mail, "skipped", org_key, [], extra, [*notes, "no events"])
     return MailOutcome(mail, "done", org_key, kept, extra, notes)
@@ -324,7 +327,7 @@ def _attachment_events(
     return found
 
 
-def _activity(mail: PendingMail, org_key: str, name: str, received: datetime) -> Observation:
+def _activity(org_key: str, name: str, mail: PendingMail, received: datetime) -> Observation:
     """The mail itself is dated activity of its organisation (`lastActiveAt`,
     which takes the maximum of all claims)."""
     return Observation(
@@ -338,7 +341,7 @@ def _activity(mail: PendingMail, org_key: str, name: str, received: datetime) ->
         fields=[
             parser_field(
                 "lastActiveAt",
-                mail.received_at,
+                epoch_ms(received),
                 extractor="inbox.received",
                 evidence="primary",
             )

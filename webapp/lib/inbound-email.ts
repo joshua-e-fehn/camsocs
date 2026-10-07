@@ -146,13 +146,19 @@ export function recipientAllowed(allowedRaw: string | undefined, recipients: str
   return recipients.some((address) => allowed.includes(address.toLowerCase()))
 }
 
-/** A `Date` header as epoch ms, accepted only within a week of `now` (a
- * misconfigured sender clock must not move "this Wednesday" by a year). */
+/**
+ * A `Date` header as epoch ms: accepted from a week before `now` to a day
+ * after (a misconfigured sender clock must not move "this Wednesday" by a
+ * year), and never later than `now` — the claims API refuses a retrieval time
+ * in the future, so a fast sender clock would otherwise lose the mail's events.
+ */
 export function plausibleDate(raw: string | undefined, now: number): number | undefined {
   if (!raw) return undefined
   const parsed = Date.parse(raw)
   if (!Number.isFinite(parsed)) return undefined
-  return Math.abs(parsed - now) <= 7 * 24 * 3600 * 1000 ? parsed : undefined
+  const day = 24 * 3600 * 1000
+  if (parsed < now - 7 * day || parsed > now + day) return undefined
+  return Math.min(parsed, now)
 }
 
 // --- bodies -------------------------------------------------------------------------------
