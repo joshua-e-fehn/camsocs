@@ -35,6 +35,9 @@ Properties enforced here rather than left to each caller's discipline:
    failed fetch.
 7. **Redirects are followed by hand** (at most 5 hops, http/https only), each
    hop checked against its own host's robots.txt and paced on its own host.
+   A redirect into a login service (Raven, Microsoft, Google sign-in; see
+   `LOGIN_HOSTS`) is not followed: the page is login-gated, recorded as
+   ``access_restricted`` (AGENTS.md: never fetch Raven-gated pages).
 """
 
 from __future__ import annotations
@@ -45,6 +48,7 @@ import http.cookiejar
 import json
 import logging
 import random
+import re
 import threading
 import time
 import urllib.robotparser
@@ -68,6 +72,24 @@ MAX_BACKOFF = 300.0
 MAX_REDIRECTS = 5
 #: A society page or PDF larger than this is not what we are looking for.
 MAX_BYTES = 25 * 1024 * 1024
+
+#: Hosts a site redirects to when a page needs a login. Never followed.
+LOGIN_HOSTS = frozenset(
+    {
+        "raven.cam.ac.uk",
+        "auth.srcf.net",
+        "login.microsoftonline.com",
+        "login.live.com",
+        "accounts.google.com",
+        "shib.raven.cam.ac.uk",
+        "nevar.srcf.net",
+    }
+)
+#: Paths a site redirects to when a page needs a login (Raven-style WLS, a
+#: CMS's own login). Never followed.
+_LOGIN_PATH = re.compile(
+    r"/(wls|auth)/authenticate|/wp-login\.php|/(login|signin|sign-in|saml2?|sso)(/|$|\?)", re.I
+)
 
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
@@ -154,6 +176,45 @@ class _RobotsPolicy:
     #: None = allow everything; a reason string = disallow everything.
     blanket_disallow: str | None
     delay: float
+    #: ``Content-Signal`` preferences (``ai-input`` → ``no`` …), any group.
+    content_signals: dict[str, str] | None = None
+
+
+#: Crawlers of AI companies that robots.txt files block by name. A host that
+#: blocks any of them from a page does not want that page read by a model, so
+#: its content is never passed to the LLM (source-research global rules, the
+#: talks.cam precedent in §6) — fetched and parsed deterministically only.
+AI_AGENTS = (
+    "GPTBot",
+    "ChatGPT-User",
+    "OAI-SearchBot",
+    "ClaudeBot",
+    "Claude-User",
+    "anthropic-ai",
+    "CCBot",
+    "Google-Extended",
+    "PerplexityBot",
+    "Applebot-Extended",
+    "Bytespider",
+    "meta-externalagent",
+    "cohere-ai",
+)
+
+
+def _content_signals(text: str) -> dict[str, str]:
+    """``Content-Signal: search=yes, ai-train=no`` lines (Cloudflare's
+    robots.txt extension), merged; a ``no`` anywhere wins."""
+    signals: dict[str, str] = {}
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() != "content-signal":
+            continue
+        for pair in value.split(","):
+            name, _, setting = pair.partition("=")
+            name, setting = name.strip().lower(), setting.strip().lower()
+            if name and setting and signals.get(name) != "no":
+                signals[name] = setting
+    return signals
 
 
 # --- the client ---------------------------------------------------------------
@@ -259,6 +320,17 @@ class PoliteClient:
                         response.status_code,
                         detail=f"refusing non-http redirect to {current}",
                     )
+                login = urlsplit(current).netloc.lower().split(":")[0]
+                if login in LOGIN_HOSTS or _LOGIN_PATH.search(urlsplit(current).path):
+                    result = self._result(
+                        url,
+                        current,
+                        "access_restricted",
+                        response.status_code,
+                        detail=f"redirects to a login at {login}",
+                    )
+                    self._record_negative(url, result)
+                    return result
                 continue
 
             return self._classify(url, current, response, cached)
@@ -286,6 +358,21 @@ class PoliteClient:
         if not self._robots_allows(policy, url):
             return "disallowed"
         return "crawl_delay" if policy.delay > 0 else "allowed"
+
+    def ai_input_allowed(self, url: str) -> bool:
+        """Whether this host lets `url`'s content reach a language model: its
+        robots.txt names no AI crawler (`AI_AGENTS`) as disallowed from the
+        URL and sets no ``Content-Signal: ai-input=no``. Fetches robots.txt if
+        this run has not yet; an unreadable robots.txt answers False."""
+        _require_http(url)
+        policy = self._robots_policy(url)
+        if policy.blanket_disallow is not None:
+            return False
+        if (policy.content_signals or {}).get("ai-input") == "no":
+            return False
+        if policy.parser is None:
+            return True
+        return all(policy.parser.can_fetch(agent, url) for agent in AI_AGENTS)
 
     # -- robots ----------------------------------------------------------------
 
@@ -318,6 +405,7 @@ class PoliteClient:
             return _RobotsPolicy(None, None, 0.0)
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(response.text.splitlines())
+        signals = _content_signals(response.text)
         delay = 0.0
         crawl_delay = parser.crawl_delay(self.user_agent)
         if crawl_delay:
@@ -325,7 +413,7 @@ class PoliteClient:
         rate = parser.request_rate(self.user_agent)
         if rate and rate.requests:
             delay = max(delay, rate.seconds / rate.requests)
-        return _RobotsPolicy(parser, None, delay)
+        return _RobotsPolicy(parser, None, delay, signals)
 
     def _robots_allows(self, policy: _RobotsPolicy, url: str) -> bool:
         if policy.blanket_disallow is not None:
@@ -628,6 +716,8 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 __all__ = [
+    "AI_AGENTS",
+    "LOGIN_HOSTS",
     "MAX_REDIRECTS",
     "SHARED_GATES",
     "FetchOutcome",

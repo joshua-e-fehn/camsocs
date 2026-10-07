@@ -1,0 +1,500 @@
+"""Identity resolution (T4): the tricky cases the Cambridge lists actually
+contain (LB §1.4–1.5), key stability across runs, the quarantine, references
+and the derived claims."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+import pytest
+
+from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.models.observation import (
+    EventObservation,
+    FieldObs,
+    IdentityHints,
+    Observation,
+    OrganiserObs,
+    RelObs,
+)
+from camsocs_pipeline.models.wire import CrosswalkRow
+from camsocs_pipeline.resolve import Crosswalk, Decisions, resolve_records
+from camsocs_pipeline.resolve.names import name_parts, site_identity, split_parenthetical
+from camsocs_pipeline.resolve.resolver import Resolution, ref_of
+
+AT = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
+
+
+def org(
+    source_type: str,
+    source_key: str,
+    name: str,
+    *,
+    fields: list[FieldObs] | None = None,
+    relationships: list[RelObs] | None = None,
+    **hints: Any,
+) -> Observation:
+    return Observation(
+        source_type=source_type,
+        source_key=source_key,
+        source_url=f"https://{source_type.replace('_', '-')}.example/{source_key}",
+        retrieved_at=AT,
+        entity_type="organisation",
+        identity=IdentityHints(name=name, **hints),
+        fields=[
+            parser_field("name", name, extractor="test", evidence="secondary"),
+            *(fields or []),
+        ],
+        relationships=relationships or [],
+    )
+
+
+def keys(resolution: Resolution) -> dict[str, str]:
+    """ref → key for every resolved observation."""
+    return {
+        ref_of(record): record.entity_key
+        for record in resolution.records
+        if isinstance(record, Observation) and record.entity_key
+    }
+
+
+def field_values(resolution: Resolution, ref: str, field: str) -> list[Any]:
+    record = next(r for r in resolution.records if ref_of(r) == ref)
+    return [obs.value for obs in record.fields if obs.field == field]
+
+
+# --- names -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("Cambridge University Hockey Club", "Hockey Club (CU)"),
+        ("CU Hockey", "Hockey Society"),
+        ("Lacrosse (Women's)", "Cambridge University Women's Lacrosse Club"),
+        ("Cambridge Inter-Collegiate Christian Union", "Intercollegiate Christian Union"),
+        ("Society for Women in Physics", "Women in Physics"),
+        ("Jesus College Boat Club", "Jesus Boat Club"),
+    ],
+)
+def test_names_that_are_one_group_share_a_signature(a: str, b: str) -> None:
+    sig_a = name_parts(split_parenthetical(a)[0]).signature()
+    sig_b = name_parts(split_parenthetical(b)[0]).signature()
+    assert sig_a == sig_b
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("Lacrosse (Men's)", "Lacrosse (Women's)"),
+        ("Cambridge University Boat Club", "Jesus College Boat Club"),
+        ("Trinity Hall Boat Club", "Trinity College Boat Club"),
+        ("Clare Hall Football", "Clare College Football"),
+        ("Jesus College JCR", "Jesus College MCR"),
+    ],
+)
+def test_names_of_different_groups_differ(a: str, b: str) -> None:
+    assert name_parts(a).signature() != name_parts(b).signature()
+
+
+def test_bracketed_acronyms_are_aliases_but_qualifiers_stay() -> None:
+    assert split_parenthetical("Cambridge University Entrepreneurs (CUE)") == (
+        "Cambridge University Entrepreneurs",
+        ["CUE"],
+    )
+    assert split_parenthetical("Lacrosse (Men's)") == ("Lacrosse Men's", [])
+
+
+def test_site_identity_keeps_paths_only_on_shared_hosts() -> None:
+    assert site_identity("https://www.cue.org.uk/about/") == "cue.org.uk"
+    assert site_identity("http://linktr.ee/cuwes") == "linktr.ee/cuwes"
+    assert (
+        site_identity("https://sites.google.com/view/cusoc/home") == "sites.google.com/view/cusoc"
+    )
+    assert site_identity("https://www.jesus.cam.ac.uk/boat-club") == "jesus.cam.ac.uk/boat-club"
+    assert site_identity("https://www.instagram.com/cue") is None
+    assert site_identity("https://www.cambridgesu.co.uk/organisation/8391/") is None
+
+
+# --- the tricky fixtures ------------------------------------------------------------------
+
+
+def test_cue_and_the_su_entrepreneurs_society_are_one_organisation() -> None:
+    """LB §1.4: CUE is listed by the SU as "Entrepreneurs Society"."""
+    su = org("su_directory", "8391", "Entrepreneurs Society", su_id="8391")
+    proctors = org(
+        "proctors_register",
+        "cue",
+        "Cambridge University Entrepreneurs (CUE)",
+        proctors_name="Cambridge University Entrepreneurs (CUE)",
+        level="university",
+    )
+    acronym_only = org("manual", "cue-short", "CUE", level="university")
+    kings = org(
+        "college_list",
+        "kings/entrepreneurship-lab",
+        "The King's Entrepreneurship Lab Society",
+        college_hint="King's",
+        level="college",
+    )
+    resolution = resolve_records([su, proctors, acronym_only, kings])
+    by_ref = keys(resolution)
+    assert by_ref["su_directory:8391"] == by_ref["proctors_register:cue"]
+    assert by_ref["manual:cue-short"] == by_ref["su_directory:8391"]
+    assert by_ref["college_list:kings/entrepreneurship-lab"] != by_ref["su_directory:8391"]
+    assert not resolution.report.held
+
+
+def test_a_college_boat_club_never_merges_with_cubc() -> None:
+    cubc = org(
+        "sport_az",
+        "boat-club",
+        "Cambridge University Boat Club",
+        sport_slug="boat-club",
+        level="university",
+        website_domain="https://www.cubc.org.uk/",
+    )
+    jesus_cucbc = org(
+        "cucbc",
+        "jesus",
+        "Jesus College Boat Club",
+        cucbc_club="Jesus",
+        level="college",
+        org_type="college_boat_club",
+        college_hint="Jesus",
+    )
+    jesus_list = org(
+        "college_list",
+        "jesus/boat-club",
+        "Boat Club",
+        level="college",
+        college_hint="Jesus College",
+    )
+    caius_list = org(
+        "college_list", "caius/boat-club", "Boat Club", level="college", college_hint="Caius"
+    )
+    resolution = resolve_records([cubc, jesus_cucbc, jesus_list, caius_list])
+    by_ref = keys(resolution)
+    assert by_ref["sport_az:boat-club"] == "org-cambridge-university-boat-club"
+    assert by_ref["cucbc:jesus"] == by_ref["college_list:jesus/boat-club"]
+    assert by_ref["cucbc:jesus"] == "org-jesus-college-boat-club"
+    assert by_ref["college_list:caius/boat-club"] == "org-gonville-and-caius-college-boat-club"
+    assert len(set(by_ref.values())) == 3
+
+
+def test_cubc_listed_at_another_level_is_held_not_duplicated() -> None:
+    sport = org(
+        "sport_az",
+        "boat-club",
+        "Cambridge University Boat Club",
+        level="university",
+        website_domain="cubc.org.uk",
+    )
+    cucbc = org(
+        "cucbc",
+        "cubc",
+        "Cambridge University Boat Club",
+        level="intercollegiate",
+        website_domain="https://cubc.org.uk/",
+    )
+    resolution = resolve_records([sport, cucbc])
+    assert set(keys(resolution)) == {"sport_az:boat-club"}
+    (held,) = resolution.report.held
+    assert held.refs == ["cucbc:cubc"]
+    assert "levels differ" in held.reason
+    assert held.keys == []  # the kept side had no crosswalk key yet; see detail
+    assert "sport_az:boat-club" in (held.detail or "")
+
+
+def test_a_club_on_two_college_lists_stays_two_until_decided() -> None:
+    """LB §1.5: Pirton RFC is on Pembroke's and Girton's lists."""
+    pembroke = org(
+        "college_list", "pem/pirton", "Pirton RFC", level="college", college_hint="Pembroke"
+    )
+    girton = org("college_list", "gir/pirton", "Pirton RFC", level="college", college_hint="Girton")
+    resolution = resolve_records([pembroke, girton])
+    by_ref = keys(resolution)
+    assert by_ref["college_list:pem/pirton"] == "org-pembroke-college-pirton-rfc"
+    assert by_ref["college_list:gir/pirton"] == "org-girton-college-pirton-rfc"
+    (shared,) = [item for item in resolution.report.review if "several colleges" in item.reason]
+    assert shared.refs == ["college_list:gir/pirton", "college_list:pem/pirton"]
+
+    decided = resolve_records(
+        [pembroke, girton],
+        decisions=Decisions(same=[["college_list:pem/pirton", "college_list:gir/pirton"]]),
+    )
+    merged = keys(decided)
+    assert merged["college_list:pem/pirton"] == merged["college_list:gir/pirton"]
+    assert merged["college_list:pem/pirton"] == "org-pirton-rfc"
+
+
+def test_one_instagram_on_two_college_lists_holds_one_side() -> None:
+    pembroke = org(
+        "college_list",
+        "pem/pirton",
+        "Pirton RFC",
+        level="college",
+        college_hint="Pembroke",
+        instagram_handle="pirtonrfc",
+    )
+    girton = org(
+        "college_list",
+        "gir/pirton",
+        "Pirton Rugby",
+        level="college",
+        college_hint="Girton",
+        instagram_handle="@PirtonRFC",
+    )
+    resolution = resolve_records([pembroke, girton])
+    assert len(keys(resolution)) == 1
+    (held,) = resolution.report.held
+    assert "different colleges" in held.reason
+
+
+def test_the_three_lacrosse_clubs_stay_three() -> None:
+    """Sport A–Z lists Lacrosse three times (LB §1.1), sharing one Instagram."""
+    entries = [
+        org(
+            "sport_az",
+            f"lacrosse-{suffix}",
+            f"Lacrosse ({label})",
+            sport_slug=f"lacrosse-{suffix}",
+            level="university",
+            instagram_handle="cambridgelacrosse",
+        )
+        for suffix, label in (("mens", "Men's"), ("womens", "Women's"), ("mixed", "Mixed"))
+    ]
+    su_women = org(
+        "su_directory",
+        "4410",
+        "Cambridge University Women's Lacrosse Club",
+        su_id="4410",
+    )
+    resolution = resolve_records([*entries, su_women])
+    by_ref = keys(resolution)
+    assert len({by_ref[f"sport_az:lacrosse-{s}"] for s in ("mens", "womens", "mixed")}) == 3
+    assert by_ref["su_directory:4410"] == by_ref["sport_az:lacrosse-womens"]
+    assert not resolution.report.held
+    assert any("separate entries" in item.reason for item in resolution.report.review)
+
+
+def test_su_directory_and_profile_are_one_by_su_id() -> None:
+    directory = org("su_directory", "6789", "German Society", su_id="6789")
+    profile = org("su_profile", "6789", "CU German Society", su_id="6789")
+    resolution = resolve_records([directory, profile])
+    assert set(keys(resolution).values()) == {"org-cu-german-society"}
+
+
+def test_two_su_entries_with_one_name_stay_two() -> None:
+    a = org("su_directory", "1", "Chess Society", su_id="1")
+    b = org("su_directory", "2", "Chess Club", su_id="2")
+    resolution = resolve_records([a, b])
+    assert len(set(keys(resolution).values())) == 2
+
+
+def test_operator_distinct_decision_keeps_a_name_match_apart() -> None:
+    a = org("proctors_register", "a", "Hindu Society", level="university")
+    b = org("su_directory", "77", "CU Hindu Society", su_id="77")
+    decided = resolve_records(
+        [a, b], decisions=Decisions(distinct=[["proctors_register:a", "su_directory:77"]])
+    )
+    assert len(set(keys(decided).values())) == 2
+
+
+# --- keys across runs ---------------------------------------------------------------------
+
+
+def test_keys_survive_renames_and_new_sources(tmp_path) -> None:
+    crosswalk = Crosswalk()
+    first = resolve_records(
+        [org("su_directory", "6789", "German Society", su_id="6789")], crosswalk=crosswalk
+    )
+    (key,) = set(keys(first).values())
+    path = tmp_path / "crosswalk.json"
+    crosswalk.save(path)
+
+    reloaded = Crosswalk.load(path)
+    second = resolve_records(
+        [
+            org(
+                "su_directory",
+                "6789",
+                "Cambridge University German Society",
+                su_id="6789",
+                instagram_handle="cugermansoc",
+            ),
+            org("camdram", "german-soc", "Deutsche Gesellschaft", instagram_handle="cugermansoc"),
+        ],
+        crosswalk=reloaded,
+    )
+    assert set(keys(second).values()) == {key}
+
+
+def test_a_new_group_does_not_take_a_known_groups_key() -> None:
+    crosswalk = Crosswalk()
+    resolve_records([org("su_directory", "1", "Chess Society", su_id="1")], crosswalk=crosswalk)
+    later = resolve_records(
+        [org("su_directory", "2", "Chess Society", su_id="2")], crosswalk=crosswalk
+    )
+    (key,) = set(keys(later).values())
+    assert key != "org-chess-society"
+    assert key.startswith("org-chess-society-")
+
+
+def test_the_convex_crosswalk_keeps_keys_on_a_fresh_machine() -> None:
+    crosswalk = Crosswalk()
+    added = crosswalk.merge_remote(
+        [
+            CrosswalkRow(
+                org_key="org-entrepreneurs-society",
+                name="Entrepreneurs Society",
+                level="university",
+                su_org_id="8391",
+                instagram_handle="cue_cambridge",
+            )
+        ]
+    )
+    assert added == 1
+    resolution = resolve_records(
+        [
+            org("su_directory", "8391", "Entrepreneurs Society", su_id="8391"),
+            org(
+                "manual",
+                "cue",
+                "Cambridge University Entrepreneurs",
+                instagram_handle="cue_cambridge",
+            ),
+        ],
+        crosswalk=crosswalk,
+    )
+    assert set(keys(resolution).values()) == {"org-entrepreneurs-society"}
+
+
+# --- references and derived claims ------------------------------------------------------
+
+
+def test_references_are_keyed_counterparts_created_unknowns_dropped() -> None:
+    college = org("college_list", "jesus", "Jesus College", org_type="college", level="college")
+    jcr = org(
+        "college_list",
+        "jesus/jcr",
+        "Jesus College Students' Union",
+        org_type="jcr",
+        level="college",
+        college_hint="Jesus",
+        relationships=[
+            RelObs(
+                type="member_college",
+                to_identity=IdentityHints(name="Jesus College", org_type="college"),
+                evidence_url="https://college-list.example/jesus/jcr",
+            ),
+            RelObs(
+                type="sponsors",
+                direction="incoming",
+                to_identity=IdentityHints(name="Jane Street", org_type="company"),
+                evidence_url="https://college-list.example/jesus/jcr",
+            ),
+            RelObs(
+                type="sister_of",
+                to_identity=IdentityHints(name="Nobody We Know Society"),
+                evidence_url="https://college-list.example/jesus/jcr",
+            ),
+        ],
+    )
+    team = Observation(
+        source_type="college_list",
+        source_key="jesus/jcr/football",
+        source_url="https://college-list.example/jesus",
+        retrieved_at=AT,
+        entity_type="team",
+        identity=IdentityHints(name="Firsts"),
+        parent=IdentityHints(name="Jesus College Students' Union", college_hint="Jesus"),
+        fields=[parser_field("name", "Firsts", extractor="test", evidence="secondary")],
+    )
+    event = EventObservation(
+        source_type="ics_feed",
+        source_key="uid-1",
+        source_url="https://feeds.example/jcsu.ics",
+        retrieved_at=AT,
+        event_source="ics",
+        external_id="uid-1",
+        visibility="public",
+        organisers=[
+            OrganiserObs(identity=IdentityHints(name="Jesus College Students Union")),
+            OrganiserObs(identity=IdentityHints(name="Someone Else Entirely")),
+        ],
+        fields=[parser_field("title", "Bop", extractor="test", evidence="primary")],
+    )
+    resolution = resolve_records([college, jcr, team, event])
+    by_ref = keys(resolution)
+    assert by_ref["college_list:jesus"] == "org-jesus-college"
+    jcr_key = by_ref["college_list:jesus/jcr"]
+
+    jcr_out = next(r for r in resolution.records if ref_of(r) == "college_list:jesus/jcr")
+    targets = {rel.type: rel.to_identity.known_key for rel in jcr_out.relationships}
+    assert targets == {"member_college": "org-jesus-college", "sponsors": "org-jane-street"}
+
+    jane = next(r for r in resolution.records if r.entity_key == "org-jane-street")
+    assert {obs.field: obs.value for obs in jane.fields} == {
+        "name": "Jane Street",
+        "isCounterpart": True,
+        "orgType": "company",
+        "level": "external",
+    }
+    assert jane.fields[0].evidence == "secondary"
+    # Counterparts come first, so the page's own organisation owns its sources row.
+    assert resolution.records[0] is jane
+
+    team_out = next(r for r in resolution.records if ref_of(r) == "college_list:jesus/jcr/football")
+    assert team_out.parent.known_key == jcr_key
+    assert team_out.entity_key == f"team-{jcr_key[4:]}--firsts"
+
+    event_out = next(r for r in resolution.records if isinstance(r, EventObservation))
+    assert [o.identity.known_key for o in event_out.organisers] == [jcr_key]
+    dropped = {item.names[0] for item in resolution.report.dropped_references}
+    assert dropped == {"Nobody We Know Society", "Someone Else Entirely"}
+
+
+def test_college_keys_and_the_sport_category_are_derived() -> None:
+    college = org("college_list", "jesus", "Jesus College", org_type="college")
+    boat = org(
+        "cucbc", "jesus", "Jesus College Boat Club", college_hint="Jesus", cucbc_club="Jesus"
+    )
+    hockey = org(
+        "sport_az",
+        "hockey",
+        "Cambridge University Hockey Club",
+        sport_slug="hockey",
+        fields=[
+            parser_field(
+                "registrations.sportsService",
+                {"registered": True, "year": "2026-27"},
+                extractor="test",
+                evidence="primary",
+            )
+        ],
+    )
+    resolution = resolve_records([college, boat, hockey])
+    assert field_values(resolution, "cucbc:jesus", "collegeKeys") == [["org-jesus-college"]]
+    assert field_values(resolution, "sport_az:hockey", "categories") == [["sport"]]
+
+    without_college = resolve_records([boat])
+    assert field_values(without_college, "cucbc:jesus", "collegeKeys") == []
+    assert without_college.report.counts["college_keys_waiting"] == 1
+
+
+def test_already_keyed_records_are_left_to_load() -> None:
+    keyed = org("society_website", "https://a.example/", "A Society")
+    keyed.entity_key = "org-a-society"
+    resolution = resolve_records([keyed, org("su_directory", "1", "B Society", su_id="1")])
+    assert [ref_of(r) for r in resolution.records] == ["su_directory:1"]
+    assert resolution.report.counts["already_keyed"] == 1
+
+
+def test_unrelated_groups_with_one_shared_word_are_only_flagged() -> None:
+    a = org("su_directory", "1", "Cambridge University Hindu Society", su_id="1")
+    b = org("proctors_register", "b", "Hindu Cultural Society", level="university")
+    resolution = resolve_records([a, b])
+    assert len(set(keys(resolution).values())) == 2
+    assert any(item.reason == "similar names, not merged" for item in resolution.report.review)

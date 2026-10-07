@@ -302,7 +302,8 @@ These are never returned by public queries.
 - **orgInternal**: one row per organisation.
   - Feed and source identifiers: `suOrgId`, `suSlug`, `proctorsName`, `sportSlug`, `camdramSlug`/`camdramId`, `talksListIds[]`, `icsUrls[]`, `lumaCalendarIds[]`, `googleCalendarIds[]`, `playwaze {communityId?, leagueIds[], teamIds[]}`, `cucbcClub`, `sympaList`, `ticketingUrls[]`, `instagramHandle`, `instagramBusiness` (bool), `instagramUserId`, `websiteDomain`.
   - Patched by `orgKey`; list fields **merge** (several harvesters contribute feeds).
-  - Also `seniorTreasurer {name?, department?}`, `legalForm`, `emailHealth {mxOk, lastBounceAt}` and `websiteHealth {lastStatus, checkedAt, platform}`.
+  - Also `seniorTreasurer {name?, department?}`, `legalForm`, `emailHealth {mxOk, lastBounceAt}` and `websiteHealth {lastStatus, checkedAt, platform}`. `websiteHealth.lastStatus` is the home page's HTTP status at `checkedAt`, `0` when the site could not be reached at all (DNS, connection, robots.txt unreachable); `platform` is what the enrichment stage detected (`wordpress`, `wordpress_com`, `wix`, `squarespace`, `webflow`, `google_sites`, `github_pages`, `nextjs`, `sveltekit`, `astro`, `drupal`, `spa`, …).
+  - The pipeline's identity resolver reads every organisation with these identifiers back through `POST /api/pipeline/crosswalk` (`ingest/orgInternal.ts` `crosswalk`), so keys stay stable on a machine without its local crosswalk cache.
 - **harvestRuns**
 
   | Field | Type |

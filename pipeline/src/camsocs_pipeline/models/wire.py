@@ -21,6 +21,7 @@ brokerInferences       `BrokerInferences`              ingest/broker:ingest
 files                  `FileUpload`                    (http action) → ingest/files
 inbound/pending        `InboundPendingRequest`         ingest/inbound:pending
 inbound/mark           `InboundMarkBatch`              ingest/inbound:mark
+crosswalk              `CrosswalkRequest`              ingest/orgInternal:crosswalk
 termDates              `TermDatesBatch`                ingest/termDates:upsert
 derive                 ``{}``                          derive:daily
 purge                  `PurgeRequest`                  ingest/purge:purge (dev only)
@@ -358,6 +359,34 @@ class PendingMail(WireModel):
     org_key: str | None = None
 
 
+class CrosswalkRequest(WireModel):
+    cursor: str | None = None
+    limit: int | None = None
+
+
+class CrosswalkRow(WireModel):
+    """One organisation and the identifiers it is known by (read-only)."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    org_key: str
+    name: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    short_name: str | None = None
+    org_type: str | None = None
+    level: str | None = None
+    college_keys: list[str] = Field(default_factory=list)
+    is_counterpart: bool = False
+    su_org_id: str | None = None
+    su_slug: str | None = None
+    proctors_name: str | None = None
+    sport_slug: str | None = None
+    camdram_slug: str | None = None
+    camdram_id: int | None = None
+    cucbc_club: str | None = None
+    instagram_handle: str | None = None
+    website_domain: str | None = None
+
+
 class InboundMark(WireModel):
     message_id: str
     extraction: ExtractionStr
@@ -392,6 +421,8 @@ __all__ = [
     "ClaimInput",
     "ClaimsBatch",
     "ClaimsResult",
+    "CrosswalkRequest",
+    "CrosswalkRow",
     "EventOrganiser",
     "EventOrganiserSet",
     "EventOrganisersBatch",

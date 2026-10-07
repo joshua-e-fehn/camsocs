@@ -189,6 +189,8 @@ ingestionRoute("brokerInferences", internal.ingest.broker.ingest)
 ingestionRoute("termDates", internal.ingest.termDates.upsert)
 // The mailing-list inbox (source-research §16).
 readRoute("inbound/pending", internal.ingest.inbound.pending)
+// Every organisation key with its identifiers, for the pipeline's resolver.
+readRoute("crosswalk", internal.ingest.orgInternal.crosswalk)
 ingestionRoute("inbound/mark", internal.ingest.inbound.mark)
 // Maintenance: re-derive everything now; reset the dev deployment.
 ingestionRoute("derive", internal.derive.daily)

@@ -48,10 +48,30 @@ work — a cron that sees success because most of it worked is how a broken sour
   text), `sources/contact_links.py` (role vs general addresses, obfuscated addresses detected
   and never decoded) and `sources/markdown.py` (HTML → the markdown stored in free-text
   fields).
-- **resolve** (T4) maps identities to keys and writes `var/staging/_resolved/`.
-- **load** posts every keyed observation from the latest file of each directory through
+- A stage after resolve that meets a new organisation (enrichment's sponsors, an event's
+  organiser) keys it through `resolve.Resolver.reference_key` against the crosswalk —
+  never with `keys.org_key` directly.
+- **resolve** (T4, `stages/resolve.py`, `camsocs_pipeline/resolve/`) decides which observations
+  are one organisation and keys everything: the persisted crosswalk first (`var/state/crosswalk.json`
+  merged with Convex's `POST /api/pipeline/crosswalk`), then SU id, the other source ids, Instagram
+  handle, website, and normalised name within level and college. It never merges across type
+  families, levels or colleges, nor two entries one source lists separately; a strong match it
+  refuses holds the weaker side back. It writes `var/staging/_resolved/` and the quarantine
+  `var/reports/quarantine.json` (held records, dropped references, matches to review).
+  Decide a quarantined case in `pipeline/resolve-decisions.json` (`same` groups / `distinct`
+  pairs of the refs the report prints) and the next run applies it.
+- **enrich** (T5, `stages/enrich.py`, `sources/websites/`, prompt `extract/prompts/org_v1.md`)
+  reads each resolved organisation's website (and Linktree, which robots.txt currently disallows):
+  home page plus one page per kind, deterministic socials / role emails / feeds / mailing lists /
+  join links / health, then the bulk LLM with every value's quote checked against the page it is
+  attributed to. Committee names go to the private broker tables only; named sponsors become
+  counterpart organisations. It writes keyed observations to `var/staging/society_website/` and
+  `var/staging/linktree/`. LLM answers are cached under `var/cache/llm/`.
+- **load** posts every keyed observation from the latest file of each directory —
+  `_resolved` first, since it creates the organisations later stages add fields to — through
   `ConvexLoader.post_observations`: sources → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
+  `--limit N` loads the first N keyed records.
 
 Contracts shared with the webapp, each guarded by a test:
 

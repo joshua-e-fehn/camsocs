@@ -53,6 +53,8 @@ from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
     ClaimInput,
+    CrosswalkRequest,
+    CrosswalkRow,
     EventOrganiser,
     EventOrganiserSet,
     FileResult,
@@ -91,6 +93,10 @@ class ConvexError(RuntimeError):
 
 class ConvexAuthError(ConvexError):
     """The shared key was missing, wrong, or unset on the deployment."""
+
+
+class ConvexNotFound(ConvexError):
+    """404: the route is not deployed, or the function said "not found"."""
 
 
 @dataclass
@@ -239,6 +245,8 @@ class ConvexLoader:
                     time.sleep(_jittered(backoff))
                     backoff = min(backoff * 2, MAX_BACKOFF)
                 continue
+            if response.status_code == 404:
+                raise ConvexNotFound(f"404 from {url}: {_detail(response)}")
             if response.status_code >= 400:
                 # Not retried: deterministic, and the message names the problem.
                 raise ConvexError(f"{response.status_code} from {url}: {_detail(response)}")
@@ -326,6 +334,23 @@ class ConvexLoader:
             return []
         response = self.post("inbound/pending", {"limit": limit})
         return [PendingMail.model_validate(mail) for mail in response.get("result", [])]
+
+    def crosswalk(self, *, page_size: int = 200, max_pages: int = 100) -> list[CrosswalkRow]:
+        """Every organisation key with its names and source identifiers, for
+        the resolver (`resolve/crosswalk.py`). Raises `ConvexNotFound` while
+        the route is not deployed; empty in a dry run."""
+        if self.dry_run:
+            return []
+        rows: list[CrosswalkRow] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body = CrosswalkRequest(cursor=cursor, limit=page_size).to_wire()
+            response = self.post("crosswalk", body)
+            rows += [CrosswalkRow.model_validate(row) for row in response.get("rows", [])]
+            if response.get("isDone", True):
+                return rows
+            cursor = response.get("continueCursor")
+        raise ConvexError(f"crosswalk did not finish in {max_pages} pages")
 
     def mark_inbound(self, items: Sequence[InboundMark]) -> BatchResult:
         return self.post_batches("inbound/mark", "items", items, unit="inbound marks")
@@ -462,7 +487,30 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
                 record, org_key, sources.get(record.source_url)
             )
     plan.sources = list(sources.values())
+    plan.broker_profiles = _merge_profiles(plan.broker_profiles)
     return plan
+
+
+def _merge_profiles(profiles: list[BrokerProfileInput]) -> list[BrokerProfileInput]:
+    """One profile per organisation. The server replaces an organisation's
+    inferred needs (offers) with each posted list, so the pages of one site —
+    each its own observation — must arrive as one list, not overwrite each
+    other. Items keep their own page's source URL; the first sighting of an
+    item wins."""
+    merged: dict[str, BrokerProfileInput] = {}
+    for profile in profiles:
+        current = merged.get(profile.org_key)
+        if current is None:
+            merged[profile.org_key] = profile.model_copy(deep=True)
+            continue
+        for kind in ("needs", "offers"):
+            incoming = getattr(profile, kind)
+            if incoming is None:
+                continue
+            existing = getattr(current, kind) or []
+            known = {item.item for item in existing}
+            setattr(current, kind, [*existing, *(i for i in incoming if i.item not in known)])
+    return list(merged.values())
 
 
 def _source_row(

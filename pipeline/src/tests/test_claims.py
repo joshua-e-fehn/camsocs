@@ -82,6 +82,39 @@ def test_llm_field_is_found_only_with_a_verbatim_quote() -> None:
     assert stored_status(no_quote) == "inferred"
 
 
+def test_list_values_are_found_only_when_every_item_is_quoted() -> None:
+    from camsocs_pipeline.claims import QUOTE_JOINER, llm_items_field
+
+    texts = ["We run weekly talks.", "Socials every Friday!"]
+    common = {
+        "source_texts": texts,
+        "source_type": "society_website",
+        "model": "bulk-model-1",
+        "prompt_version": "org_v1",
+        "evidence": "primary",
+    }
+    found = llm_items_field(
+        "activityTypes",
+        [("talks", "We run weekly talks"), ("socials", "socials every friday"), ("talks", "x")],
+        **common,
+    )
+    assert found.value == ["talks", "socials"]
+    assert found.status is None
+    assert found.quote_check == "normalised"
+    assert found.evidence_quote == f"We run weekly talks{QUOTE_JOINER}socials every friday"
+
+    partly = llm_items_field(
+        "activityTypes", [("talks", "We run weekly talks"), ("trips", "We go abroad")], **common
+    )
+    assert partly.status == "inferred"
+    assert partly.quote_check == "absent"
+
+    with pytest.raises(NoLLMSource):
+        llm_items_field(
+            "categories", [("academic", "x")], **{**common, "source_type": "talks_list"}
+        )
+
+
 def test_talks_cam_never_reaches_the_llm() -> None:
     with pytest.raises(NoLLMSource):
         llm_field(

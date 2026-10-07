@@ -315,11 +315,26 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 `linktr.ee/<handle>` is server-rendered, and its links sit in `__NEXT_DATA__` JSON. Respect its robots.txt.
 
+**robots.txt (re-verified 2026-10-08, T5):** `User-agent: *` → `Disallow: /`. Only named search crawlers (Applebot, baiduspider, …, each with `Content-Signal: ai-train=no, search=yes`) may fetch profiles. Our User-Agent falls under `*`, so **Linktree profile pages are never fetched**. Besides, the edge answers the pipeline's HTTP client (httpx) with 403 even for robots.txt, which the polite client also treats as "disallow everything"; we do not work around either.
+
+**Use:** a Linktree URL another source states is kept as a `socials` entry (`platform: linktree`). The enrichment stage (`sources/websites/linktree.py`, deterministic, never the LLM) would read its links if the robots.txt ever allowed us; until then each run records the page as `robots_verdict: disallowed`.
+
 ## §14 Society websites
 
 - Fetch politely.
 - Extract JSON-LD and microdata first, then hand the cleaned text to the LLM.
 - About 15 of the 53 sites probed run WordPress. None exposes the Tribe events API, and at least 9 are on Wix.
+
+**How the enrichment stage reads them (T5, `stages/enrich.py`, `sources/websites/`; checked live 2026-10-08):**
+
+- **Which site:** the website a register states (SU profile first, then Proctors, Sport, …), never a social network, the SU or Sport directory, Camdram, talks.cam, a form, a ticket shop or a chat invite; a short link that lands on one of those is dropped. A site claimed by two organisations is read as neither's. A "website" that is a page of a bigger site (a club's page on its parent club's or the RAF's site) is read for its own content only: its header, navigation and footer belong to the host site.
+- **Pages:** the home page plus at most one page per kind (about, join, committee, contact, events, sponsors), inside the site and under the starting path. Never: files, login / account / members-only paths, a redirect into a login service (Raven `raven.cam.ac.uk`, SRCF's WLS `nevar.srcf.net`, Microsoft or Google sign-in) — recorded `access_restricted`. Cached pages younger than 3 days are not fetched again; one retry for a site that is down.
+- **robots:** robots.txt per host as for every source. A page with `<meta name="robots" content="noindex">` is not read; `nofollow` stops the discovery of further pages.
+- **No LLM when a site keeps AI out:** if the host's robots.txt disallows any AI crawler by name (GPTBot, ChatGPT-User, ClaudeBot, CCBot, Google-Extended, PerplexityBot, …) or says `Content-Signal: ai-input=no`, or the page says `noai`, its text never reaches the LLM — the talks.cam rule (§6) applied to every site. Such sites are read deterministically (links, emails, feeds) only.
+- **Never stored:** personal addresses (CRSids, `jane.smith@…`, anything that names someone), obfuscated addresses (Cloudflare email protection, "name [at] domain"), LinkedIn `/in/` profiles, chat invite links. Committee members' names go to the private broker `people` table only, and a public text that names one is dropped.
+- **Parked domains:** a site whose page does not mention the organisation, or says the domain is for sale, yields only its health.
+
+**Trial 2026-10-08** (the first 15 resolved organisations with a stated website, from the SU + Proctors harvest): 9 sites answered (WordPress 3, Wix 2, Squarespace 1, GitHub Pages 1, unknown 2) and 27 pages were read; 3 domains no longer resolve, 1 page is a 404, 1 site redirects to SRCF's Raven-style login (`nevar.srcf.net`), 1 stated website is a short link to a Discord invite, 1 Linktree is disallowed. 1 site's robots.txt blocks AI crawlers (read without the LLM); on 1 the LLM found the pages are not the society's. 8 LLM calls (average 16 s, 8 in parallel): 76 values, 62 quotes exact and 5 normalised; of the 9 unverified, 7 are tags (never quoted, always `inferred`).
 
 ## §15 Ticketing
 
