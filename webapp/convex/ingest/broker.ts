@@ -3,7 +3,7 @@ import { NEED_OFFER_ITEMS } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
 import { academicYearOf, nextHandoverDate } from "../lib/derived"
-import { isHttpUrl } from "../lib/fields"
+import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, sameFields } from "../lib/ingest"
 import { literalUnion } from "../lib/validators"
 
@@ -219,5 +219,5 @@ export const ingest = internalMutation({
 })
 
 function assertOrgKey(key: string): void {
-  if (!/^org-[a-z0-9-]+$/.test(key)) throw new Error(`Not an organisation key: ${key}`)
+  if (!isOrgKey(key)) throw new Error(`Not an organisation key: ${key}`)
 }

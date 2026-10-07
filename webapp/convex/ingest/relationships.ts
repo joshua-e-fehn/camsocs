@@ -10,7 +10,7 @@ import {
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
 import { loadTerms } from "../lib/entityStore"
-import { isHttpUrl } from "../lib/fields"
+import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, emptyBatchResult, recordBatch } from "../lib/ingest"
 import { upsertRelationship } from "../lib/relationships"
 import { literalUnion } from "../lib/validators"
@@ -26,8 +26,6 @@ import { refreshOrganisations } from "./claims"
  * `coHostKeys` / `sponsorKeys`, and the edges they imply (each co-host
  * `co_hosted` with each organiser; each sponsor `sponsors` each organiser).
  */
-
-const ORG_KEY = /^org-[a-z0-9-]+$/
 
 export const relationshipInputValidator = v.object({
   fromKey: v.string(),
@@ -50,7 +48,7 @@ export const upsert = internalMutation({
     const now = Date.now()
     const result = emptyBatchResult()
     for (const relationship of args.relationships) {
-      if (!ORG_KEY.test(relationship.fromKey) || !ORG_KEY.test(relationship.toKey)) {
+      if (!isOrgKey(relationship.fromKey) || !isOrgKey(relationship.toKey)) {
         throw new Error(`Relationship ends must be organisation keys`)
       }
       if (!isHttpUrl(relationship.evidence.sourceUrl)) {
@@ -84,7 +82,7 @@ export const setEventOrganisers = internalMutation({
     for (const set of args.events) {
       if (set.organisers.length > 50) throw new Error(`${set.eventKey}: at most 50 organisers`)
       for (const { orgKey } of set.organisers) {
-        if (!ORG_KEY.test(orgKey)) throw new Error(`Not an organisation key: ${orgKey}`)
+        if (!isOrgKey(orgKey)) throw new Error(`Not an organisation key: ${orgKey}`)
       }
       const event = await ctx.db
         .query("events")

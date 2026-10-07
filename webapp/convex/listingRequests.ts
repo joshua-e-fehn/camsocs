@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { sha1Hex } from "../lib/hash"
 import { LISTING_REQUEST_KINDS } from "../lib/vocab"
 import { mutation } from "./_generated/server"
+import { isEmail } from "./lib/fields"
 import { literalUnion } from "./lib/validators"
 
 /**
@@ -29,7 +30,6 @@ const LIMITS = {
   fieldValue: 2_000,
   fields: 30,
 }
-const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i
 
 export const submit = mutation({
   args: {
@@ -46,7 +46,7 @@ export const submit = mutation({
   returns: v.object({ key: v.string() }),
   handler: async (ctx, args) => {
     const email = args.submitterEmail.trim().toLowerCase()
-    if (!EMAIL.test(email) || email.length > LIMITS.email) {
+    if (!isEmail(email) || email.length > LIMITS.email) {
       throw new Error("Please give a valid email address")
     }
     const message = args.message.trim()

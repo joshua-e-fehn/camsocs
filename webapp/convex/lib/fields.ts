@@ -135,6 +135,17 @@ export const priceValidator = v.object({
 type Check = (value: unknown) => string | null
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i
+const ORG_KEY = /^org-[a-z0-9-]+$/
+
+/** A plausible email address (syntax only; never a reason to guess one). */
+export function isEmail(value: string): boolean {
+  return EMAIL.test(value) && value.length <= 254
+}
+
+/** An organisation key as lib/keys.ts mints it. */
+export function isOrgKey(value: string): boolean {
+  return ORG_KEY.test(value)
+}
 
 /** Every URL we store may end up as an `href`: http(s) only. */
 export function isHttpUrl(value: string): boolean {
@@ -143,13 +154,11 @@ export function isHttpUrl(value: string): boolean {
 
 const checks = {
   email: (value: unknown) =>
-    typeof value === "string" && EMAIL.test(value) && value.length <= 254
-      ? null
-      : "not an email address",
+    typeof value === "string" && isEmail(value) ? null : "not an email address",
   url: (value: unknown) =>
     typeof value === "string" && isHttpUrl(value) ? null : "not an http(s) URL",
   orgKey: (value: unknown) =>
-    typeof value === "string" && /^org-[a-z0-9-]+$/.test(value) ? null : "not an organisation key",
+    typeof value === "string" && isOrgKey(value) ? null : "not an organisation key",
   venueKey: (value: unknown) =>
     typeof value === "string" && /^ven-[a-z0-9-]+$/.test(value) ? null : "not a venue key",
   hhmm: (value: unknown) =>

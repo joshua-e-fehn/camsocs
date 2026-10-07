@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
+import { isOrgKey } from "../lib/fields"
 import {
   assertBatchSize,
   type BatchResult,
@@ -78,7 +79,7 @@ export const patch = internalMutation({
     const now = Date.now()
     const result = emptyBatchResult()
     for (const incoming of args.patches) {
-      if (!/^org-[a-z0-9-]+$/.test(incoming.orgKey)) {
+      if (!isOrgKey(incoming.orgKey)) {
         throw new Error(`Not an organisation key: ${incoming.orgKey}`)
       }
       const existing = await ctx.db
