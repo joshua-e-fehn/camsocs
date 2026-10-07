@@ -57,6 +57,7 @@ _TOKEN = re.compile(r"[a-z0-9]+")
 #: Token sequences meaning "of the University of Cambridge", removed anywhere.
 _UNIVERSITY_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("university", "of", "cambridge"),
+    ("uoc",),
     ("cambridge", "university"),
     ("cambridge", "uni"),
     ("cambridge",),
@@ -172,20 +173,56 @@ def name_parts(name: str, *, find_colleges: bool = True) -> NameParts:
 _PARENTHETICAL = re.compile(r"\s*[(\[]([^()\[\]]{1,60})[)\]]\s*")
 
 
+#: Words that qualify a name in brackets rather than rename the group:
+#: "Lacrosse (Men's)" is another club than "Lacrosse (Women's)".
+_QUALIFIERS = frozenset(
+    {
+        "men",
+        "mens",
+        "women",
+        "womens",
+        "ladies",
+        "mixed",
+        "open",
+        "lightweight",
+        "heavyweight",
+        "novice",
+        "novices",
+        "senior",
+        "seniors",
+        "junior",
+        "juniors",
+        "a",
+        "b",
+        "c",
+        "firsts",
+        "seconds",
+        "1st",
+        "2nd",
+        "jcr",
+        "mcr",
+        "undergraduate",
+        "postgraduate",
+        "graduate",
+    }
+)
+
+
 def split_parenthetical(name: str) -> tuple[str, list[str]]:
     """``"Cambridge University Entrepreneurs (CUE)"`` → ``("Cambridge
-    University Entrepreneurs", ["CUE"])``: an acronym or a "(CU)" /
-    "(Cambridge)" in brackets is another name for the group. Anything else in
-    brackets qualifies the name and stays in it ("Lacrosse (Men's)")."""
+    University Entrepreneurs", ["CUE"])``: what a name says in brackets is
+    another name for the group (an acronym, "(Addies Boat Club)", "(CU)",
+    "(UoC)") — unless it only qualifies the name ("Lacrosse (Men's)"), which
+    stays in it."""
     aliases: list[str] = []
 
     def keep_or_take(match: re.Match[str]) -> str:
         inner = match.group(1).strip()
-        single = len(inner.split()) == 1
-        if single and ((inner.isupper() and inner.isalpha()) or fold(inner) in ("cu", "cambridge")):
-            aliases.append(inner)
-            return " "
-        return f" {inner} "
+        words = fold(inner).split()
+        if words and all(word in _QUALIFIERS for word in words):
+            return f" {inner} "
+        aliases.append(inner)
+        return " "
 
     main = " ".join(_PARENTHETICAL.sub(keep_or_take, name).split())
     return (main or name), aliases
