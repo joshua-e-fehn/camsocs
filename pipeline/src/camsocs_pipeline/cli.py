@@ -5,6 +5,7 @@
     camsocs sync [--stages a,b] [--dry-run] [--limit N]
     camsocs derive                       re-derive statuses, term weeks, stale flags now
     camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
+    camsocs worklist [--no-sympa]        rank societies for mailing-list sign-up (CSV)
 
 Commands are thin: parsing and reporting only. Exit codes matter to the cron
 that runs `sync`: any failed stage exits non-zero even though the others
@@ -27,6 +28,14 @@ from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, run_sync
+from camsocs_pipeline.sources.base import PoliteClient
+from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
+from camsocs_pipeline.worklist import (
+    SympaMatcher,
+    rank_organisations,
+    write_sympa_lists,
+    write_worklist,
+)
 
 logger = logging.getLogger("camsocs_pipeline")
 
@@ -75,6 +84,8 @@ def status(ctx: click.Context) -> None:
         ("LLM bulk model", _model(settings.llm_model_bulk)),
         ("LLM strong model", _model(settings.llm_model_strong)),
         ("LLM concurrency", str(settings.llm_concurrency)),
+        ("Meta IG user", settings.meta_ig_user_id or "(unset)"),
+        ("Meta token", secret(settings.meta_access_token)),
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
@@ -206,6 +217,47 @@ def purge_dev(ctx: click.Context, yes: bool) -> None:
     total = sum(deleted.values())
     detail = ", ".join(f"{table} {count}" for table, count in sorted(deleted.items()))
     click.echo(f"ok — deleted {total} rows" + (f" ({detail})" if detail else ""))
+
+
+@cli.command()
+@click.option("--no-sympa", is_flag=True, help="Skip the public Sympa list search.")
+@click.pass_context
+def worklist(ctx: click.Context, no_sympa: bool) -> None:
+    """Rank organisations for mailing-list sign-up (PLAN.md J4) and write
+    var/reports/mailing-list-worklist.csv (+ sympa-soc-lists.csv)."""
+    settings = _settings(ctx)
+    try:
+        with _loader(settings) as loader:
+            organisations = loader.worklist()
+    except ConvexError as error:
+        raise click.ClickException(str(error)) from error
+
+    lists = []
+    if not no_sympa:
+        try:
+            with PoliteClient(
+                user_agent=settings.require_user_agent(),
+                cache_dir=settings.cache_dir,
+                min_interval=settings.min_host_interval,
+            ) as client:
+                lists = fetch_soc_lists(client)
+        except (SympaUnavailable, ConfigError) as error:
+            click.echo(f"warning: public Sympa lists not read ({error})", err=True)
+    matcher = SympaMatcher(lists)
+    public = matcher.assign(organisations)
+
+    inbox = load_state(settings.state_path).stage_data.get("inbox", {})
+    rows = rank_organisations(
+        organisations,
+        public_lists=public,
+        receiving_orgs=inbox.get("org_last_mail", {}).keys(),
+        receiving_lists=inbox.get("lists_seen", {}).keys(),
+    )
+    path = write_worklist(rows, settings.reports_dir)
+    click.echo(f"{len(rows)} organisations ranked of {len(organisations)} → {path}")
+    if lists:
+        sympa_path = write_sympa_lists(matcher, settings.reports_dir)
+        click.echo(f"{len(lists)} public soc- lists, {len(matcher.matched)} matched → {sympa_path}")
 
 
 def main() -> None:
