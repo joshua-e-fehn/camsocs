@@ -254,6 +254,7 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `brokerInferences` | inferred needs/offers and public-source people (never overwrites manual / confirmed) |
 | `files` | `{data: base64, contentType}` → `{storageId, sha256}` (≤ 2 MB, raster image or PDF, deduplicated) |
 | `inbound/pending`, `inbound/mark` | read pending list mail; record extraction outcome |
+| `crosswalk` | read: `{cursor?, limit?}` → a page of `{orgKey, name, aliases, shortName, orgType, level, collegeKeys, isCounterpart, suOrgId, suSlug, proctorsName, sportSlug, camdramSlug, camdramId, cucbcClub, instagramHandle, websiteDomain}`, for the pipeline's identity resolver |
 | `termDates` | Full Term dates by (academicYear, term); re-labels events |
 | `derive` | schedules the daily re-derivation now |
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
