@@ -345,7 +345,7 @@ These are never returned by public queries.
   | extractedEventKeys | string[] |
   | extractionNote | string? |
 
-  The pipeline fetches `pending` rows, extracts, and posts events. Raw mail is internal only.
+  The inbound webhook (`POST /api/inbound/email`, source-research §16) stores each mail once per `messageId`: `from` is the `From` header as sent, `receivedAt` the `Date` header clamped to now (else the time of receipt), `listId` / `listName` from `List-Id`, the HTML body and kept attachments in storage (`extractionNote` names skipped attachments). The pipeline's `inbox` stage fetches `pending` rows, extracts, posts the events, then marks each row `done` (with `extractedEventKeys` and the resolved `orgKey`), `skipped` (not list mail, or no events) or `failed` (the LLM reply never validated). Raw mail is internal only.
 - **listingRequests**: submissions from the public claim / correct / remove / object form.
 
   | Field | Type |

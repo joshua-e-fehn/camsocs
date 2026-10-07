@@ -109,8 +109,8 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | todo |
 | T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | todo |
 | T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | done (branch `feat/events-feeds`) |
-| T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail | todo |
-| T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | todo |
+| T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail; mailing-list sign-up worklist | done |
+| T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | done |
 | T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | todo |
 | T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | todo |
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | todo |
@@ -125,9 +125,9 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 |---|---|---|
 | J1 | `vercel login`, or import `joshua-e-fehn/camsocs` in the Vercel dashboard (root dir `webapp`) | T14 |
 | J2 | Create a Google OAuth client. Callbacks: `http://localhost:3000/api/auth/callback/google` and `https://camsocs.vercel.app/api/auth/callback/google`. Then `bunx convex env set GOOGLE_CLIENT_ID/SECRET`. Set `BROKER_EMAILS` to your Google login. | T10, T11 |
-| J3 | Resend account. DNS records at IONOS for sending (sign-in links) and an inbound subdomain (for forwarded list mail). Put the API key in the Convex env. | T7, T10 |
-| J4 | Outlook rule on your @cam.ac.uk mailbox that forwards list mail (has a `List-Id` header) to the inbound address. Then work through the mailing-list sign-up list (ranked; I generate it). | T7 |
-| J5 | Meta: switch an Instagram account to professional, link a Facebook Page, create a developer app, get a long-lived token | T8 |
+| J3 | Resend account. DNS records at IONOS for sending (sign-in links) and an inbound subdomain (for forwarded list mail). Webhook to `/api/inbound/email`; its signing secret and a full-access API key in the Convex env. Steps: `docs/setup/inbox-instagram.md` | T7, T10 |
+| J4 | Outlook rule on your @cam.ac.uk mailbox that **redirects** list mail (has a `List-Id` header) to the inbound address. Then work through the mailing-list sign-up list (`pixi run pipeline -- worklist` → `var/reports/mailing-list-worklist.csv`). Steps: `docs/setup/inbox-instagram.md` | T7 |
+| J5 | Meta: switch an Instagram account to professional, link a Facebook Page, create a developer app, get a long-lived token (renew about every 60 days); set `META_IG_USER_ID` and `META_ACCESS_TOKEN` in `pipeline/.env`. Steps: `docs/setup/inbox-instagram.md` | T8 |
 | J6 | Pay the ICO data protection fee (£52) | T13 |
 | J7 | Send the phase-2 outreach / Art 14 notice by about 13 Nov 2026 (from the export in T11) | compliance |
 | J8 | Later, and only on request: approve the VPS move (pipeline into Mya's workspace as Hermes script-only cron jobs, plus its own cliproxy key) | runs off the laptop |
@@ -164,3 +164,6 @@ See `AGENTS.md` and `docs/research/2026-10-07-repo-conventions.md` §2. The layo
 | 2026-10-07 | Seeding: **scrape SU profiles fully**, descriptions included (Joshua's choice over the seed-only option; database-right risk noted). |
 | 2026-10-07 | Compliance: the minimum compliant setup (privacy notice, disclaimer, claim/remove form, LIA, DPIA-lite, record of processing, ICO fee, Art 14 notice via the phase-2 email). |
 | 2026-10-07 | Field set confirmed as in `docs/data-model.md`. |
+| 2026-10-07 | Inbound list mail: Resend receiving subdomain → Svix-verified webhook `/api/inbound/email` (content fetched from Resend's Receiving API); a provider-agnostic JSON route behind a shared secret as the fallback. Outlook rule *redirects* (keeps `List-Id`). |
+| 2026-10-07 | Dates like "Wednesday of Week 3" are resolved in code from the verified term dates; the LLM only reports what the text says. LLM-extracted events from images without a text layer stay `inferred`. |
+| 2026-10-07 | SU resource termcards are not fetched: their files sit under robots-disallowed `/asset/` and `/resourcehandler/` (source-research §1, §21). |

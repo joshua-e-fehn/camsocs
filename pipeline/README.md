@@ -16,6 +16,7 @@ pixi run pipeline -- sync                # health → runs/start → stages → 
 pixi run pipeline -- sync --stages term_dates,load --limit 20
 pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
+pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
 ```
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
@@ -109,6 +110,9 @@ Read from `pipeline/.env` (gitignored) or the environment:
 | `CAMSOCS_STATE_PATH` | Run state file (default `<repo>/.camsocs-state.json`) |
 | `CAMSOCS_MIN_HOST_INTERVAL` | Minimum seconds between requests to one host (default 1.0) |
 | `CAMDRAM_API_KEY` | Optional Camdram API access token (Bearer); without it the Camdram events stage paces itself at 3 s |
+| `CAMSOCS_REPORTS_DIR` | Reports such as the mailing-list worklist (default `<repo>/var/reports`) |
+| `META_IG_USER_ID`, `META_ACCESS_TOKEN` | Instagram Business Discovery (both unset: the `instagram` stage skips itself); setup in `docs/setup/inbox-instagram.md` |
+| `META_GRAPH_VERSION` | Graph API version (default `v25.0`) |
 
 ## Politeness rules (enforced in `sources/base.py`)
 
@@ -124,3 +128,26 @@ Read from `pipeline/.env` (gitignored) or the environment:
 - Raw bodies are cached under `var/cache/<host>/` with their SHA-256; conditional requests and
   hash comparison report unchanged pages as `unchanged`.
 - 404/410 are negative evidence (`not_found`), never "verified".
+
+## LLM stages: inbox, instagram, termcards
+
+These run after `resolve` and know organisations from the keyed observations in staging
+(`known_orgs.KnownOrgs`). They share `extract/events.py`:
+
+- The model reports what a text says, with verbatim quotes, using the prompts in
+  `extract/prompts/`: `email_events_v1`, `caption_events_v1` and `image_events_v1`.
+- `extract/when.py` resolves "Wednesday of Week 3" and similar from the verified term dates.
+- Every value becomes an `llm_field`, its quote checked against the exact text sent.
+  Contact details are redacted before any LLM call.
+- `extract/dedupe.py` drops events another staged source already has.
+- `extract/memo.py` caches validated replies under `var/cache/llm/`.
+
+The three stages:
+
+| Stage | Source | Visibility | Notes |
+|---|---|---|---|
+| `inbox` | pending forwarded list mail (§16) | `cam_only` / `members_only` | posts its events itself, then marks each mail; also stages them under `mailing_list_email/` |
+| `instagram` | Graph API Business Discovery (§17) | `public` / `members_only` | gated on `META_*`; at most 100 handles a run, rate-limit aware; stores post images as our own copy |
+| `termcards` | `termcardUrl` values (§21) | `public` / `members_only` | strong-model vision; PDF text layer checks quotes; SU `/asset/` files are robots-blocked |
+
+In a dry run, `instagram` and `termcards` only report what they would read.

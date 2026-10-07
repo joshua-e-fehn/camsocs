@@ -16,6 +16,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,15 @@ class SyncState(BaseModel):
     last_run_ok: bool | None = None
     #: Stage name → when it last finished without error (ISO 8601).
     stage_last_success: dict[str, str] = Field(default_factory=dict)
+    #: Per-stage watermarks and quarantines, keyed by stage name, so a stage
+    #: adds its own memory without a new field here (e.g. ``instagram``: when
+    #: each handle was last checked; ``inbox``: when mail last arrived per
+    #: organisation). JSON values only.
+    stage_data: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    def data(self, stage: str) -> dict[str, Any]:
+        """The stage's own mutable dict (created on first use)."""
+        return self.stage_data.setdefault(stage, {})
 
     def record_run(self, run_key: str, ok: bool, succeeded: list[str]) -> None:
         now = datetime.now(UTC).isoformat()

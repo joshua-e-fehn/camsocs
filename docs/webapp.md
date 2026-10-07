@@ -46,6 +46,7 @@ components/                  Atomic Design
 convex/
   schema.ts                  The domain schema (docs/data-model.md is the contract; header states the rules)
   http.ts                    Better Auth routes + /api/pipeline/* (Bearer PIPELINE_API_KEY)
+                             + /api/inbound/email (forwarded list mail; Svix / Bearer, see below)
   orgs.ts events.ts venues.ts termDates.ts listingRequests.ts
                              PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
@@ -74,6 +75,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
+  inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
+  resend-inbound.ts          Resend Receiving API client (body, headers, attachments; fetch injected)
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)
   auth-forwarded-headers.ts  The /api/auth hop without x-forwarded-host (Bundestracker outage fix)
   convex-url.ts              Build-time check that both Convex URLs name one deployment
@@ -135,6 +138,12 @@ Dev and prod are separate Convex deployments of the `camsocs` project with indep
 - Vercel production: the three `NEXT_PUBLIC_*` values + `CONVEX_DEPLOY_KEY` (production only).
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`.
+- Inbound list mail (all optional; each unset means that sender is denied):
+  `RESEND_WEBHOOK_SECRET` (the Resend webhook's `whsec_…` signing secret),
+  `RESEND_INBOUND_API_KEY` (full-access key for the Receiving API; falls back to `RESEND_API_KEY`),
+  `INBOUND_EMAIL_RECIPIENTS` (comma-separated addresses to accept; unset accepts all),
+  `INBOUND_EMAIL_SECRET` (Bearer secret for the provider-agnostic JSON sender).
+  Setup: `docs/setup/inbox-instagram.md`.
 
 ## Commands
 
@@ -255,7 +264,32 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `files` | `{data: base64, contentType}` → `{storageId, sha256}` (≤ 2 MB, raster image or PDF, deduplicated) |
 | `inbound/pending`, `inbound/mark` | read pending list mail; record extraction outcome |
 | `crosswalk` | read: `{cursor?, limit?}` → a page of `{orgKey, name, aliases, shortName, orgType, level, collegeKeys, isCounterpart, suOrgId, suSlug, proctorsName, sportSlug, camdramSlug, camdramId, cucbcClub, instagramHandle, websiteDomain}`, for the pipeline's identity resolver |
+| `inbound/file` | `{messageId, storageId}` → `{data: base64, contentType, filename}`: one attachment (or the HTML body) of that mail only |
+| `worklist` | `{paginationOpts}` → a page of non-counterpart organisations with status, mailing list, Sympa list, feeds on record and upcoming event sources (read by `camsocs worklist`) |
 | `termDates` | Full Term dates by (academicYear, term); re-labels events |
 | `derive` | schedules the daily re-derivation now |
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
 | `runs/start`, `runs/finish` | the run log |
+
+## Inbound mail webhook
+
+`POST /api/inbound/email` stores forwarded society list mail in the internal
+`inboundEmails` table as `pending` (source-research §16). It is not part of the
+pipeline API and does not accept the pipeline key.
+
+- **Resend** (`svix-id` / `svix-timestamp` / `svix-signature` headers present): the
+  signature is verified with `RESEND_WEBHOOK_SECRET` (HMAC-SHA256, 5-minute tolerance,
+  constant-time). `email.received` metadata is followed by `GET /emails/receiving/{id}`
+  (`?html_format=cid`) and its attachments list; other event types are acknowledged
+  and ignored.
+- **Anything else**: the provider-agnostic JSON body (`webapp/lib/inbound-email.ts`
+  `parseGenericPayload`) with `Authorization: Bearer $INBOUND_EMAIL_SECRET`.
+- Deduplicated by `Message-ID`; HTML (≤ 2 MB) and kept attachments (images, PDF,
+  calendars; ≤ 5 MB each, at most 10; never SVG) go to storage; `List-Id` is parsed into
+  `listId` / `listName`; `receivedAt` is the `Date` header clamped to now.
+- `INBOUND_EMAIL_RECIPIENTS`, when set, must match `To`/`Cc` or a delivery header
+  (`Delivered-To`, `X-Original-To`, `Resent-To`, `Received … for <…>`); for Resend this is
+  checked after the headers are fetched.
+- Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`; 401 bad signature or secret;
+  400 malformed; 413 too large; 502/503 when Resend's API failed or is not configured
+  (Resend retries for about a day).

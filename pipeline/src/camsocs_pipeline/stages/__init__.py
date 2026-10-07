@@ -96,13 +96,13 @@ STAGES: list[Stage] = [
     #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
     # Forwarded mailing-list mail (§16).
-    # Stage("inbox"),
+    Stage("inbox"),
     #
     # Instagram Business Discovery (§17).
-    # Stage("instagram"),
+    Stage("instagram"),
     #
-    # Termcard OCR (§1 resources, §17).
-    # Stage("termcards"),
+    # Termcard OCR (§21).
+    Stage("termcards"),
     #
     # ── load: every keyed observation → Convex ──────────────────────────────────
     Stage("load", requires=("resolve",), description="staged observations → Convex"),

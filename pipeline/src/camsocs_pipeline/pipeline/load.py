@@ -61,6 +61,8 @@ from camsocs_pipeline.models.wire import (
     EventOrganiserSet,
     FileResult,
     FileUpload,
+    InboundFile,
+    InboundFileRequest,
     InboundMark,
     InferredItem,
     OrgInternalPatch,
@@ -73,6 +75,8 @@ from camsocs_pipeline.models.wire import (
     SourceInput,
     TermDate,
     WireModel,
+    WorklistOrg,
+    WorklistPage,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,7 +108,7 @@ class ConvexAuthError(ConvexError):
 
 
 class ConvexNotFound(ConvexError):
-    """404: the route is not deployed, or the function said "not found"."""
+    """404: the route is not deployed, or the thing it was asked about does not exist."""
 
 
 @dataclass
@@ -253,11 +257,10 @@ class ConvexLoader:
                     time.sleep(_jittered(backoff))
                     backoff = min(backoff * 2, MAX_BACKOFF)
                 continue
-            if response.status_code == 404:
-                raise ConvexNotFound(f"404 from {url}: {_detail(response)}")
             if response.status_code >= 400:
                 # Not retried: deterministic, and the message names the problem.
-                raise ConvexError(f"{response.status_code} from {url}: {_detail(response)}")
+                kind = ConvexNotFound if response.status_code == 404 else ConvexError
+                raise kind(f"{response.status_code} from {url}: {_detail(response)}")
 
             try:
                 body = response.json()
@@ -360,8 +363,43 @@ class ConvexLoader:
             cursor = response.get("continueCursor")
         raise ConvexError(f"crosswalk did not finish in {max_pages} pages")
 
+    def inbound_file(self, message_id: str, storage_id: str) -> bytes | None:
+        """One stored attachment of a forwarded mail, or None if the server
+        has no such file for that mail (404)."""
+        if self.dry_run:
+            return None
+        body = InboundFileRequest(message_id=message_id, storage_id=storage_id).to_wire()
+        try:
+            response = self.post("inbound/file", body)
+        except ConvexNotFound:
+            return None
+        return base64.b64decode(InboundFile.model_validate(response).data)
+
     def mark_inbound(self, items: Sequence[InboundMark]) -> BatchResult:
         return self.post_batches("inbound/mark", "items", items, unit="inbound marks")
+
+    def worklist(self, *, page_size: int = 100, max_pages: int = 100) -> list[WorklistOrg]:
+        """Every non-counterpart organisation with what the mailing-list
+        worklist ranks on, following the server's pagination cursor.
+
+        The first request sends ``"cursor": null`` on purpose: that is how
+        Convex's `paginationOpts` says "from the start" — a pagination token,
+        not an unobserved field, so the never-send-null rule does not apply.
+        """
+        if self.dry_run:
+            return []
+        organisations: list[WorklistOrg] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            response = self.post(
+                "worklist", {"paginationOpts": {"numItems": page_size, "cursor": cursor}}
+            )
+            page = WorklistPage.model_validate(response)
+            organisations.extend(page.page)
+            if page.is_done:
+                return organisations
+            cursor = page.continue_cursor
+        raise ConvexError(f"worklist did not finish in {max_pages} pages")
 
     def upsert_term_dates(self, terms: Sequence[TermDate]) -> BatchResult:
         return self.post_batches("termDates", "terms", terms, unit="terms")

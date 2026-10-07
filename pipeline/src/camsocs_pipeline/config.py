@@ -37,6 +37,14 @@ DEFAULT_STAGING_DIR = REPO_ROOT / "var" / "staging"
 #: What a run remembers for the next one. Gitignored.
 DEFAULT_STATE_PATH = REPO_ROOT / ".camsocs-state.json"
 
+#: Reports for Joshua (the mailing-list worklist). Gitignored (`var/`): they
+#: name organisations and list addresses, not people, but stay local anyway.
+DEFAULT_REPORTS_DIR = REPO_ROOT / "var" / "reports"
+
+#: Graph API version for Instagram Business Discovery (source-research §17;
+#: v25.0 was the latest on 2026-10-07). Override with META_GRAPH_VERSION.
+DEFAULT_META_GRAPH_VERSION = "v25.0"
+
 #: A Convex deployment answers on two hosts. The generated client API is on
 #: `convex.cloud`; anything on the `httpRouter` — which `/api/pipeline/*` is — is
 #: on `convex.site`. Posting to the cloud host returns a 404 that looks exactly
@@ -79,6 +87,7 @@ class Settings(BaseSettings):
     cache_dir: Path = Field(default=DEFAULT_CACHE_DIR, validation_alias="CAMSOCS_CACHE_DIR")
     staging_dir: Path = Field(default=DEFAULT_STAGING_DIR, validation_alias="CAMSOCS_STAGING_DIR")
     state_path: Path = Field(default=DEFAULT_STATE_PATH, validation_alias="CAMSOCS_STATE_PATH")
+    reports_dir: Path = Field(default=DEFAULT_REPORTS_DIR, validation_alias="CAMSOCS_REPORTS_DIR")
     min_host_interval: float = Field(
         default=DEFAULT_MIN_HOST_INTERVAL, ge=0.0, validation_alias="CAMSOCS_MIN_HOST_INTERVAL"
     )
@@ -88,13 +97,25 @@ class Settings(BaseSettings):
     #: more gently, since unauthenticated calls get "very low" rate limits.
     camdram_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="CAMDRAM_API_KEY")
 
+    #: Instagram Business Discovery (source-research §17). Both unset → the
+    #: `instagram` stage skips itself ("not configured") and exits cleanly.
+    meta_ig_user_id: str = Field(default="", validation_alias="META_IG_USER_ID")
+    meta_access_token: SecretStr = Field(
+        default=SecretStr(""), validation_alias="META_ACCESS_TOKEN"
+    )
+    meta_graph_version: str = Field(
+        default=DEFAULT_META_GRAPH_VERSION, validation_alias="META_GRAPH_VERSION"
+    )
+
     @field_validator("convex_url", "convex_http_url", "llm_base_url")
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         # Every caller builds URLs as f"{base}/path".
         return value.strip().rstrip("/")
 
-    @field_validator("llm_model_bulk", "llm_model_strong", "user_agent")
+    @field_validator(
+        "llm_model_bulk", "llm_model_strong", "user_agent", "meta_ig_user_id", "meta_graph_version"
+    )
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
@@ -159,6 +180,13 @@ class Settings(BaseSettings):
             model_strong=assert_model_allowed(self.llm_model_strong),
             concurrency=self.llm_concurrency,
         )
+
+    # -- Meta ------------------------------------------------------------------
+
+    @property
+    def meta_configured(self) -> bool:
+        """Whether Instagram Business Discovery can run (both values set)."""
+        return bool(self.meta_ig_user_id and self.meta_access_token.get_secret_value())
 
     # -- crawling ------------------------------------------------------------
 

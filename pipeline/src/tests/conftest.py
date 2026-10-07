@@ -37,6 +37,10 @@ ENV_VARS = (
     "CAMSOCS_STATE_PATH",
     "CAMSOCS_MIN_HOST_INTERVAL",
     "CAMDRAM_API_KEY",
+    "CAMSOCS_REPORTS_DIR",
+    "META_IG_USER_ID",
+    "META_ACCESS_TOKEN",
+    "META_GRAPH_VERSION",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
@@ -83,6 +87,7 @@ def make_settings(tmp_path: Path):
             "cache_dir": tmp_path / "cache",
             "staging_dir": tmp_path / "staging",
             "state_path": tmp_path / "state.json",
+            "reports_dir": tmp_path / "reports",
             "user_agent": TEST_UA,
         }
         values.update(overrides)
