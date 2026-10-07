@@ -213,6 +213,19 @@ def _local_tokens(local: str) -> list[str]:
     return [token for token in re.split(r"[._+\-]+", local) if token]
 
 
+def _role_of_words(words: list[str]) -> str | None:
+    """The role a run of words names: a deputy is ``other``; a named role
+    wins over a qualifier ("womens president"); an unnamed post is ``other``."""
+    if any(word.startswith("vice") or word in ("vp", "deputy") for word in words):
+        return "other"
+    for word in words:
+        if word in _ROLE_WORDS:
+            return _ROLE_WORDS[word]
+    if any(word in _OTHER_ROLE_WORDS or word.rstrip("s") in _OTHER_ROLE_WORDS for word in words):
+        return "other"
+    return None
+
+
 def role_of(address: str) -> str | None:
     """The `ROLES` value an address's local part names, or None.
 
@@ -221,18 +234,14 @@ def role_of(address: str) -> str | None:
     does not change the role (``womens.president@`` is ``president``)."""
     local, _domain = _split(address)
     tokens = _local_tokens(local)
-    if any(token.startswith("vice") or token in ("vp", "deputy") for token in tokens):
-        return "other"
-    for token in tokens:
-        if token in _ROLE_WORDS:
-            return _ROLE_WORDS[token]
-    if any(token in _OTHER_ROLE_WORDS for token in tokens):
-        return "other"
+    role = _role_of_words(tokens)
+    if role is not None:
+        return role
     # Joined words: "cuhwcpresident", "mcrpresident", "secretarycugs".
     for token in tokens:
-        for word, role in _ROLE_WORDS.items():
+        for word, joined_role in _ROLE_WORDS.items():
             if len(word) >= 6 and (token.endswith(word) or token.startswith(word)):
-                return role
+                return joined_role
     return None
 
 
@@ -322,15 +331,7 @@ class EmailReading:
 
 def label_role(label: str) -> str | None:
     """The role a link's text names ("Club Publicist", "Actors' Rep")."""
-    words = re.findall(r"[a-z]+", label.lower())
-    if any(word.startswith("vice") or word == "deputy" for word in words):
-        return "other"
-    for word in words:
-        if word in _ROLE_WORDS:
-            return _ROLE_WORDS[word]
-    if any(word in _OTHER_ROLE_WORDS or word.rstrip("s") in _OTHER_ROLE_WORDS for word in words):
-        return "other"
-    return None
+    return _role_of_words(re.findall(r"[a-z]+", label.lower()))
 
 
 def classify_email(
