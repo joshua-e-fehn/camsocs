@@ -1,8 +1,6 @@
-# camsocs webapp — notes for the root AGENTS.md
+# camsocs webapp internals
 
-Folded from the template's `webapp/agents.md` (MunichMinds), keeping only what is still true for
-camsocs. Deployment names, URLs, Vercel IDs, Hono/React Query, email/password, GitHub and Apple
-auth were removed. To be merged into the root `AGENTS.md`, then this file deleted.
+Folded from the template's `webapp/agents.md`. Root rules live in `/AGENTS.md`.
 
 ## Tech stack (resolved versions, 2026-10-07)
 

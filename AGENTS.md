@@ -1,0 +1,75 @@
+# AGENTS.md
+
+> This file is the repo-specific contract for any coding agent working here. `CLAUDE.md` is a symlink to it. The shared vibe protocol lives in `.vibe/PROTOCOL.md` and is imported at the end.
+
+## Project Overview
+
+camsocs is a verified, current database of Cambridge student societies and sports clubs, built from automated harvesting plus LLM extraction. Every field records its source and status. On top of the database sit a public discovery site (browse, filter, events calendar) and a **private brokering CRM** (people, needs and offers, interactions, introductions).
+
+- Personal / portfolio project by Joshua Fehn.
+- **Unofficial.** It is not affiliated with the University of Cambridge or Cambridge SU. Never use the crest or logo, or "University of Cambridge" / "Cambridge University", as branding.
+- Read first:
+  - `PLAN.md`: spec, tasks, decisions log;
+  - `docs/data-model.md`: the schema contract;
+  - `docs/source-research.md`: per-source rules (cite as §N);
+  - `docs/webapp.md`: webapp internals.
+
+## Techstack
+
+- **Python pipeline** (`pipeline/`, package `camsocs_pipeline`, run through pixi): harvests public sources and extracts structured claims with an LLM, then pushes them into Convex over authenticated HTTP. Stages are discover → fetch → parse → extract → resolve → transform → load.
+  - Fetching uses a polite client (`sources/base.py`). It checks robots.txt for each host, keeps one request in flight per host and honours Crawl-delay. Raw pages are cached in `var/cache/` with a SHA-256.
+  - LLM calls go through cliproxy, an OpenAI-compatible endpoint backed by Joshua's ChatGPT Codex Pro login. The model is `gpt-6-luna` for bulk work and `gpt-6.1-sol` for vision and hard cases.
+- **Convex** (`webapp/convex/`) is the database and backend. Tables written by the pipeline are changed only through internal mutations behind `/api/pipeline/*` (Bearer `PIPELINE_API_KEY`). Resolved field values and the derived fields are computed on the server.
+- **Next.js 16 + Tailwind v4 + shadcn (radix-nova, mauve)** (`webapp/`) renders the public site and the private `/dashboard` broker area. Data comes only from Convex hooks; there is no REST layer.
+- **Better Auth inside Convex** provides Google sign-in for the admin. A `@cam.ac.uk` email sign-in link (via Resend) unlocks the Cambridge-only tier.
+
+## Non-obvious structure
+
+- **Provenance is per field, not per row.**
+  - `fieldClaims` is an append-only log of observed values.
+  - Each entity holds plain resolved values plus `meta[field]` = `{status, evidence, confidence, sourceUrl, retrievedAt, method}`.
+  - Precedence and confidence rules are in `docs/data-model.md` §1. Confidence is computed by rule, **never self-reported by the LLM**.
+- **The pipeline never sends `null` for a field it didn't observe.** Upserts are patches, so it omits the field. (A null once blanked 633 records in Bundestracker.)
+- **Vocabularies live in `webapp/lib/vocab.ts`** (as-const tuples, no server imports) and are mirrored in the pipeline. A test asserts the two match.
+- **Privacy boundary:**
+  - Every `convex/broker/*` function calls `requireBrokerUser`. Only verified emails in the `BROKER_EMAILS` Convex env var get in; unset means nobody does.
+  - Public queries return the public projection only.
+  - `cam_only` events need a verified `@cam.ac.uk` session.
+  - `members_only` events are never shown.
+- **LLM guard:** `extract/llm.py` refuses any model id starting with `claude`. Never route Claude subscription credentials through cliproxy; Anthropic's terms prohibit it.
+- **talks.cam content is parsed deterministically and is never passed to the LLM.** Its robots.txt blocks AI agents; see source-research §6.
+- `webapp/convex/_generated/` is committed, and `check:codegen` guards it.
+- Convex test files need two dots in their names (`*.test.ts`, `*.testing.ts`) so they are never deployed. Register any new module in `convex/lib/harness.testing.ts`.
+- `MAX_BATCH = 500` must stay equal in `webapp/convex/lib/ingest.ts` and `pipeline/.../load.py`.
+
+## Data honesty rules
+
+- Every public fact carries a source URL, a retrieval date, a status and a confidence.
+- Never invent or guess emails, handles or URLs. An unknown value stays missing, with a `missingReason`.
+- A failed fetch is never recorded as found. A 404 is recorded as `not_found`.
+- An LLM claim without a verifiable verbatim quote is recorded as `inferred`, never `found`.
+- No scraping of Instagram, Facebook or LinkedIn. Store links only. The only access to Meta data is the official Business Discovery API.
+- Do not decode obfuscated emails. Do not fetch Raven-gated, members-only or 403 pages. Respect every robots.txt block.
+- Personal CRSids and named people never appear in public fields. Named people live only in `broker` tables, with a `staleAfter` date.
+- No scraped caches, raw personal data or tokens in Git.
+
+## Operational commands
+
+```bash
+pixi install
+pixi run dev | build | lint | format | typecheck | test | check-codegen
+pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
+cd webapp && unset CONVEX_DEPLOY_KEY && bunx convex dev --once   # push to dev and regenerate convex/_generated (commit it)
+cd webapp && bunx convex env list                                # add --prod for production
+```
+
+- Dev Convex deployment: `hushed-rhinoceros-215` (team `joshua-fehn`, project `camsocs`).
+- **Never export `CONVEX_DEPLOY_KEY` in a shell.** It overrides `.env.local`, and once deployed one project's functions onto another project's production. `scripts/convex-deploy-if-key.sh` deploys only on Vercel.
+- Secrets live in `webapp/.env.local` (Convex) and `pipeline/.env` (pipeline). Both are gitignored, and their values must never be printed.
+- Bun is the only JS/TS package manager. Never use npm, pnpm or yarn.
+- Gates before review: `pixi run lint`, `typecheck`, `test`, `check-codegen`, plus `cd webapp && bun run build`.
+- Any time you create or change UI, consult `webapp/DESIGN.md`. Follow the Atomic Design import rules in `docs/webapp.md`.
+- Third-party source is vendored under `.vibe/sources/`. To read a dependency's real implementation instead of guessing, run `vibe vendor <pkg>`. Prefer this over recalling the API from memory.
+- Commits follow conventional style (`feat:`, `fix:`, `refactor:`, `docs:`).
+
+@.vibe/PROTOCOL.md

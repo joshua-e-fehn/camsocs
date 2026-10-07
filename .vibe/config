@@ -1,0 +1,15 @@
+# vibe configuration
+base_branch   = "main"
+default_agent = "claude"
+worktree_dir  = ".worktrees"
+
+# handover PRs: "draft" (default) | "none" (push only) | "ready" (normal PR)
+handover_pr   = "draft"
+
+# PR size budget, enforced by `vibe ship`, warned about by `vibe handover`
+max_lines     = 4000
+max_files     = 20
+
+# seconds a single cmd: acceptance criterion may run before it is killed and
+# recorded as "timeout" (0 disables the bound)
+criteria_timeout = 300
