@@ -59,7 +59,7 @@ STAGES: list[Stage] = [
     # Stage("colleges"),
     #
     # ── resolve (T4): identities → keys, writes var/staging/_resolved/ ────────
-    # Stage("resolve"),
+    Stage("resolve", description="staged identities → organisation keys + quarantine"),
     #
     # ── enrich (T5): websites, Linktree; writes keyed observations ────────────
     # Society websites + JSON-LD + LLM extraction (§14).
