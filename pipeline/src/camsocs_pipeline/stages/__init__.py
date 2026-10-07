@@ -62,11 +62,8 @@ STAGES: list[Stage] = [
     Stage("resolve", description="staged identities → organisation keys + quarantine"),
     #
     # ── enrich (T5): websites, Linktree; writes keyed observations ────────────
-    # Society websites + JSON-LD + LLM extraction (§14).
-    # Stage("websites"),
-    #
-    # Linktree (§13).
-    # Stage("linktree"),
+    # Society websites + Linktree: links, JSON-LD, LLM extraction (§13, §14).
+    Stage("enrich", description="websites + Linktree → keyed enrichment observations"),
     #
     # ── events (T6) ────────────────────────────────────────────────────────────
     # Camdram diary (§5).
