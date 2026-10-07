@@ -1,0 +1,47 @@
+[
+ {
+  "id": 1,
+  "name": "Example Amateur Dramatic Club",
+  "short_name": "EADC",
+  "slug": "example-amateur-dramatic-club",
+  "theme_color": "#000000",
+  "college": null,
+  "facebook_id": "https://www.facebook.com/eadc/",
+  "twitter_id": "7.6201706841384E+17",
+  "image": {
+   "id": 9,
+   "filename": "abc123.png",
+   "type": "image/png",
+   "_type": "image"
+  },
+  "description": "The EADC puts on shows every week of term.\r\n\r\nWe welcome everyone, whatever their experience.\r\n\r\n**2026-27 Committee**\r\n[President](mailto:president@eadc.example) [Alex Example](https://www.camdram.net/people/alex-example)\r\n[Vice President](mailto:vicepresident@eadc.example)\r\n[Club Publicist](mailto:publicist@eadc.example)\r\n[Actors' Rep](mailto:actor@eadc.example)\r\n",
+  "_type": "society"
+ },
+ {
+  "id": 2,
+  "name": "Example College Players",
+  "short_name": "Example College Players",
+  "slug": "example-college-players",
+  "college": "Trinity Hall",
+  "facebook_id": "123456789012",
+  "image": null,
+  "description": "Drama at Trinity Hall since 1900.\n\nPlease contact Sam Sample (ss123) or email ab123@cam.ac.uk with any questions.\nexampleplayers@gmail.com",
+  "_type": "society"
+ },
+ {
+  "id": 3,
+  "name": "Other Uni Theatre",
+  "short_name": "OUT",
+  "slug": "other-uni-theatre",
+  "college": "Anglia Ruskin",
+  "facebook_id": "http://bit.ly/xyz",
+  "description": "https://www.example.org/",
+  "_type": "society"
+ },
+ {
+  "id": 4,
+  "name": "",
+  "slug": "nameless",
+  "_type": "society"
+ }
+]
