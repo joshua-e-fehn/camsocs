@@ -47,6 +47,8 @@ CANONICAL_ORIGIN = "https://www.sport.cam.ac.uk"
 PLATFORM_HOST_SUFFIX = ".pantheonsite.io"
 
 _GENDERS = {"men": "men", "mens": "men", "women": "women", "womens": "women", "mixed": "mixed"}
+#: "Lacrosse Club (Men)", "Basketball - Women": a gender at the end of a name.
+_GENDER_SUFFIX = re.compile(r"(?:\s+[-–]\s*|\s*\()(men|mens|women|womens|mixed)\)?\s*$", re.I)
 _SHORT_DESCRIPTION_MAX = 200
 
 
@@ -198,9 +200,20 @@ def sport_from_name(name: str) -> str | None:
     return base or None
 
 
+def gender_of(name: str) -> str | None:
+    """ "Basketball - Men" / "Lacrosse Club (Women)" → the gender; a leading
+    "Mixed" (Mixed Martial Arts) is not one."""
+    match = _GENDER_SUFFIX.search(name.strip())
+    return _GENDERS[match.group(1).lower()] if match else None
+
+
+def without_gender(name: str) -> str:
+    return _GENDER_SUFFIX.sub("", name.strip())
+
+
 def gender_from_name(name: str) -> list[str]:
-    match = re.search(r"\((?P<g>men|women|mixed|mens|womens)\)", name, re.IGNORECASE)
-    return [_GENDERS[match.group("g").lower()]] if match else []
+    gender = gender_of(name)
+    return [gender] if gender else []
 
 
 def az_observation(entry: AzEntry, result: FetchResult, client: PoliteClient) -> Observation:
@@ -363,6 +376,7 @@ __all__ = [
     "canonical_url",
     "club_observation",
     "gender_from_name",
+    "gender_of",
     "guide_url",
     "harvest",
     "name_in_text",
@@ -370,4 +384,5 @@ __all__ = [
     "parse_club_page",
     "split_name",
     "sport_from_name",
+    "without_gender",
 ]

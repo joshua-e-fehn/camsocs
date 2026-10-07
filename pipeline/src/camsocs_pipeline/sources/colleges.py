@@ -48,6 +48,7 @@ from urllib.parse import urljoin
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from camsocs_pipeline.claims import missing_field, parser_field
+from camsocs_pipeline.extract.evidence import normalise_text
 from camsocs_pipeline.models.observation import IdentityHints, Observation, RelObs
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.contact_links import (
@@ -466,18 +467,14 @@ _SCRIPT_APP_TEXT = 200
 _MAIN_SELECTORS = ("main", "article", "[role=main]", "#content", ".content", "#main")
 
 
-def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text.replace("’", "'").replace("\u00a0", " ")).casefold()
-
-
 def names_body(text: str, body: Body) -> str | None:
     """``full`` if `text` shows the body's name or an alias, ``short`` if only
     a match token ("JCR"), else None."""
-    folded = _norm(text)
-    if any(_norm(name) in folded for name in (body.name, *body.aliases)):
+    folded = normalise_text(text)
+    if any(normalise_text(name) in folded for name in (body.name, *body.aliases)):
         return "full"
     for token in body.match:
-        if re.search(rf"(?<![a-z]){re.escape(_norm(token))}(?![a-z])", folded):
+        if re.search(rf"(?<![a-z]){re.escape(normalise_text(token))}(?![a-z])", folded):
             return "short"
     return None
 
@@ -491,9 +488,9 @@ def _main_content(tree: LexborHTMLParser) -> LexborNode | None:
 
 
 def _labelled(text: str, body: Body) -> bool:
-    folded = _norm(text)
+    folded = normalise_text(text)
     return any(
-        re.search(rf"(?<![a-z]){re.escape(_norm(token))}(?![a-z])", folded)
+        re.search(rf"(?<![a-z]){re.escape(normalise_text(token))}(?![a-z])", folded)
         for token in (*body.match, body.name)
     )
 

@@ -72,6 +72,7 @@ from camsocs_pipeline.sources.contact_links import (
     social_link,
 )
 from camsocs_pipeline.sources.observe import Harvest, fetch_info, retrieved_at
+from camsocs_pipeline.sources.sport import gender_of, without_gender
 
 # --- layout ------------------------------------------------------------------------------
 
@@ -170,15 +171,6 @@ def pdf_layout(data: bytes) -> list[PageLayout]:
 _STOP = frozenset(
     {"club", "clubs", "society", "association", "team", "the", "and", "of", "cu", "university"}
 )
-_GENDER_WORDS = {"men": "men", "mens": "men", "women": "women", "womens": "women", "mixed": "mixed"}
-_GENDER_SUFFIX = re.compile(r"(?:\s+[-–]\s*|\s*\()(men|mens|women|womens|mixed)\)?\s*$", re.I)
-
-
-def gender_of(label: str) -> str | None:
-    """ "Basketball - Men" / "Lacrosse (Women)" → the gender; a leading "Mixed"
-    (Mixed Martial Arts) is not one."""
-    match = _GENDER_SUFFIX.search(label.strip())
-    return _GENDER_WORDS[match.group(1).lower()] if match else None
 
 
 def _stem(token: str) -> str:
@@ -189,8 +181,10 @@ def _stem(token: str) -> str:
     return token
 
 
-def name_tokens(label: str) -> frozenset[str]:
-    text = _GENDER_SUFFIX.sub("", label.strip()).lower().replace("&", " and ")
+def match_tokens(label: str) -> frozenset[str]:
+    """Stemmed name words without the gender and filler words, for matching
+    one source's names against another's ("Athletic" ≈ "Athletics")."""
+    text = without_gender(label).lower().replace("&", " and ")
     text = re.sub(r"rock\s*'?\s*n\s*'?\s*roll", "rocknroll", re.sub("[‘’]", "'", text))
     tokens = re.findall(r"[a-z0-9]+", text.replace("'", ""))
     return frozenset(_stem(t) for t in tokens if t not in _STOP)
@@ -201,12 +195,12 @@ def match_names(label: str, candidates: Sequence[str]) -> list[int]:
     genders compatible, best overlap. Several only when they differ by gender
     alone ("Cricket" → "Cricket (Men)" and "Cricket (Women)"); none when the
     best is a tie between different names."""
-    tokens, gender = name_tokens(label), gender_of(label)
+    tokens, gender = match_tokens(label), gender_of(label)
     if not tokens:
         return []
     scored: list[tuple[float, int]] = []
     for index, candidate in enumerate(candidates):
-        other, other_gender = name_tokens(candidate), gender_of(candidate)
+        other, other_gender = match_tokens(candidate), gender_of(candidate)
         if not other or (gender and other_gender and gender != other_gender):
             continue
         if tokens <= other or other <= tokens:
@@ -215,7 +209,7 @@ def match_names(label: str, candidates: Sequence[str]) -> list[int]:
         return []
     best = max(score for score, _ in scored)
     winners = [index for score, index in scored if score == best]
-    if len(winners) > 1 and len({name_tokens(candidates[i]) for i in winners}) > 1:
+    if len(winners) > 1 and len({match_tokens(candidates[i]) for i in winners}) > 1:
         return []
     return winners
 
@@ -581,7 +575,7 @@ def assign_rows(
         if not matches:
             standalone.append(row)
     for index, assigned in list(rows_for.items()):
-        if len({name_tokens(row.label) for row in assigned}) > 1:
+        if len({match_tokens(row.label) for row in assigned}) > 1:
             del rows_for[index]
             standalone.extend(row for row in assigned if row not in standalone)
     return rows_for, standalone
@@ -762,13 +756,12 @@ __all__ = [
     "Section",
     "assign_rows",
     "build_observations",
-    "gender_of",
     "glance_fields",
     "harvest",
     "known_clubs",
     "link_club",
     "match_names",
-    "name_tokens",
+    "match_tokens",
     "parse_glance",
     "parse_sections",
     "pdf_layout",

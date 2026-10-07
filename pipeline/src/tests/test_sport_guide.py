@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from camsocs_pipeline.sources.sport import gender_of
 from camsocs_pipeline.sources.sport_guide import (
     Chunk,
     Glance,
@@ -13,7 +14,6 @@ from camsocs_pipeline.sources.sport_guide import (
     Section,
     assign_rows,
     build_observations,
-    gender_of,
     glance_fields,
     link_club,
     match_names,
