@@ -1,9 +1,9 @@
 import type { EntityType } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
-import type { TermDates } from "./derived"
+import { isWithdrawn, type TermDates } from "./derived"
 import { sameFields } from "./ingest"
-import { type DeriveContext, materialise } from "./materialise"
+import { type DeriveContext, type LatestEvent, materialise } from "./materialise"
 import type { FieldMeta } from "./resolve"
 
 /**
@@ -56,18 +56,32 @@ export async function loadTerms(ctx: QueryCtx): Promise<TermDates[]> {
   }))
 }
 
-/** Start of the latest event before `now` that `orgKey` organised or co-hosted. */
-export async function latestPastEventAt(
+/** How far back `latestPastEvent` looks through an organisation's event rows. */
+const LATEST_EVENT_SCAN = 50
+
+/**
+ * The latest *public* event before `now` that `orgKey` organised or
+ * co-hosted: its start and the provenance of that start. Feeds the public
+ * `lastActiveAt` and `status`, so a `cam_only` or `members_only` event — or a
+ * sponsorship — never moves them (nor reveals when such an event happened).
+ */
+export async function latestPastEvent(
   ctx: QueryCtx,
   orgKey: string,
   now: number,
-): Promise<number | undefined> {
+): Promise<LatestEvent | undefined> {
   const rows = await ctx.db
     .query("eventOrganisers")
     .withIndex("by_org_startsAt", (q) => q.eq("orgKey", orgKey).lte("startsAt", now))
     .order("desc")
-    .take(5)
-  return rows.find((row) => row.role !== "sponsor")?.startsAt
+    .take(LATEST_EVENT_SCAN)
+  const row = rows.find((entry) => entry.role !== "sponsor" && entry.visibility === "public")
+  if (!row) return undefined
+  const event = await ctx.db
+    .query("events")
+    .withIndex("by_key", (q) => q.eq("key", row.eventKey))
+    .unique()
+  return { startsAt: row.startsAt, meta: event?.meta.startsAt }
 }
 
 /** The public directory card of an organisation (schema.ts `orgCardFields`). */
@@ -135,10 +149,10 @@ export async function writeOrgCard(ctx: MutationCtx, org: Doc<"organisations">):
 export async function refreshOrganisation(
   ctx: MutationCtx,
   org: Doc<"organisations">,
-  context: Omit<DeriveContext, "latestEventAt">,
+  context: Omit<DeriveContext, "latestEvent">,
 ): Promise<boolean> {
-  const latestEventAt = await latestPastEventAt(ctx, org.key, context.now)
-  const row = materialise("organisation", org.key, org, {}, { ...context, latestEventAt })
+  const latestEvent = await latestPastEvent(ctx, org.key, context.now)
+  const row = materialise("organisation", org.key, org, {}, { ...context, latestEvent })
   if (sameFields(org, row)) {
     await writeOrgCard(ctx, org)
     return false
@@ -151,24 +165,61 @@ export async function refreshOrganisation(
   return true
 }
 
+/** The fields `eventOrganisers` rows copy from their event. */
+export type EventOrganiserCopy = Pick<Doc<"events">, "startsAt" | "spanEndsAt" | "visibility">
+
+export function eventOrganiserCopy(event: EventOrganiserCopy): EventOrganiserCopy {
+  return { startsAt: event.startsAt, spanEndsAt: event.spanEndsAt, visibility: event.visibility }
+}
+
+/** Whether an event's copied fields changed between two versions. */
+export function organiserCopyChanged(before: EventOrganiserCopy, after: EventOrganiserCopy) {
+  return (
+    before.startsAt !== after.startsAt ||
+    before.spanEndsAt !== after.spanEndsAt ||
+    before.visibility !== after.visibility
+  )
+}
+
 /** Keeps the event's denormalised copies on `eventOrganisers` in step. */
 export async function syncEventOrganiserRows(
   ctx: MutationCtx,
-  event: Pick<Doc<"events">, "key" | "startsAt" | "visibility">,
+  event: Pick<Doc<"events">, "key"> & EventOrganiserCopy,
 ): Promise<string[]> {
   const rows = await ctx.db
     .query("eventOrganisers")
     .withIndex("by_event", (q) => q.eq("eventKey", event.key))
     .take(200)
   for (const row of rows) {
-    if (row.startsAt !== event.startsAt || row.visibility !== event.visibility) {
-      await ctx.db.patch("eventOrganisers", row._id, {
-        startsAt: event.startsAt,
-        visibility: event.visibility,
-      })
+    if (organiserCopyChanged(row, event)) {
+      await ctx.db.patch("eventOrganisers", row._id, eventOrganiserCopy(event))
     }
   }
   return rows.map((row) => row.orgKey)
+}
+
+/**
+ * Whether an event was withdrawn by its listing (lib/derived.ts
+ * `isWithdrawn`): its listing still being read, but no longer showing it.
+ * Looks each listing's newest sighting up once per query.
+ */
+export function withdrawnCheck(ctx: QueryCtx, now: number) {
+  const newest = new Map<string, Promise<number | undefined>>()
+  return async (event: Doc<"events">): Promise<boolean> => {
+    const group = event.sweepGroup
+    if (group === undefined || event.startsAt < now) return false
+    let found = newest.get(group)
+    if (!found) {
+      found = ctx.db
+        .query("events")
+        .withIndex("by_sweepGroup_lastSeenAt", (q) => q.eq("sweepGroup", group))
+        .order("desc")
+        .first()
+        .then((row) => row?.lastSeenAt)
+      newest.set(group, found)
+    }
+    return isWithdrawn(event, await found, now)
+  }
 }
 
 export type MetaMap = Record<string, FieldMeta>

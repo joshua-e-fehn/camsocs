@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { internal } from "../_generated/api"
+import { api, internal } from "../_generated/api"
 import type { Doc } from "../_generated/dataModel"
-import { newTest, type TestConvex } from "../lib/harness.testing"
+import { newTest, signedInAs, type TestConvex } from "../lib/harness.testing"
 import { MAX_BATCH } from "../lib/ingest"
 import type { ClaimInput } from "./claims"
 
@@ -229,6 +229,108 @@ describe("the claim log", () => {
       }),
     ])
     expect((await org(t))?.meta.howToJoin).toMatchObject({ status: "inferred", confidence: 0.5 })
+  })
+})
+
+describe("re-readings", () => {
+  test("a source that goes back to an earlier value is believed again (X → Y → X)", async () => {
+    const t = newTest()
+    const key = "evt-0123456789abcdef0123456789abcdef01234567"
+    const event = (field: string, value: unknown, retrievedAt: number) =>
+      claim(field, value, {
+        entityType: "event",
+        entityKey: key,
+        sourceType: "camdram",
+        retrievedAt,
+      })
+    const at1830 = Date.UTC(2026, 9, 20, 17, 30)
+    const at1845 = Date.UTC(2026, 9, 20, 17, 45)
+    const base = (at: number) => [
+      event("title", "Hamlet", at),
+      event("visibility", "public", at),
+      event("source", "camdram", at),
+      event("externalId", "show-1", at),
+      event("sourceUrl", "https://www.camdram.net/shows/hamlet", at),
+    ]
+    const startsAt = async () =>
+      (
+        await t.run(
+          async (ctx) =>
+            await ctx.db
+              .query("events")
+              .withIndex("by_key", (q) => q.eq("key", key))
+              .unique(),
+        )
+      )?.startsAt
+    await ingest(t, [...base(NOW - 3 * 3_600_000), event("startsAt", at1830, NOW - 3 * 3_600_000)])
+    await ingest(t, [event("startsAt", at1845, NOW - 2 * 3_600_000)], "run-2")
+    expect(await startsAt()).toBe(at1845)
+    const third = await ingest(t, [event("startsAt", at1830, NOW - 3_600_000)], "run-3")
+    expect(third).toMatchObject({ inserted: 0, updated: 1 })
+    expect(await startsAt()).toBe(at1830)
+
+    // Re-posting the old reading itself changes nothing.
+    await ingest(t, [event("startsAt", at1845, NOW - 2 * 3_600_000)], "run-4")
+    expect(await startsAt()).toBe(at1830)
+  })
+
+  test("the same reading of a page whose bytes changed is one claim", async () => {
+    const t = newTest()
+    await ingest(t, [claim("name", "CU Test Society", { contentSha256: "a".repeat(64) })])
+    const again = await ingest(
+      t,
+      [claim("name", "CU Test Society", { contentSha256: "b".repeat(64) })],
+      "run-2",
+    )
+    expect(again).toMatchObject({ inserted: 0, unchanged: 1 })
+  })
+})
+
+describe("event visibility", () => {
+  const key = "evt-1123456789abcdef0123456789abcdef01234567"
+  const mail = (id: string, field: string, value: unknown, retrievedAt: number) =>
+    claim(field, value, {
+      entityType: "event",
+      entityKey: key,
+      method: "llm",
+      extractor: "gpt-6-luna",
+      sourceKey: `src-${id}`,
+      sourceUrl: `inbound:<${id}@lists.cam.ac.uk>`,
+      sourceType: "mailing_list_email",
+      retrievedAt,
+    })
+  const reading = (id: string, visibility: string, retrievedAt: number) => [
+    mail(id, "title", "Committee drinks", retrievedAt),
+    mail(id, "startsAt", Date.UTC(2026, 9, 22, 19), retrievedAt),
+    mail(id, "visibility", visibility, retrievedAt),
+    mail(id, "source", "mailing_list", retrievedAt),
+    mail(id, "externalId", "org-cu-test-society:2026-10-22:committee-drinks", retrievedAt),
+    mail(id, "sourceUrl", `inbound:<${id}@lists.cam.ac.uk>`, retrievedAt),
+  ]
+
+  test("a later mail without 'members only' never opens a members_only event", async () => {
+    const t = newTest()
+    await ingest(t, reading("m1", "members_only", NOW - 2 * 86_400_000))
+    await ingest(t, reading("m2", "cam_only", NOW - 86_400_000), "run-2")
+    const cam = await signedInAs(t, "xy789@cam.ac.uk")
+    expect(await cam.query(api.events.get, { key })).toBeNull()
+    const row = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("events")
+          .withIndex("by_key", (q) => q.eq("key", key))
+          .unique(),
+    )
+    expect(row?.visibility).toBe("members_only")
+  })
+
+  test("a mailing-list event is never public", async () => {
+    const t = newTest()
+    const result = await ingest(t, reading("m1", "public", NOW - 86_400_000))
+    expect(result.rejected.map((r) => r.reason)).toContain(
+      "mailing-list events are never public (source-research §16)",
+    )
+    expect(result.entities.created).toBe(0)
   })
 })
 

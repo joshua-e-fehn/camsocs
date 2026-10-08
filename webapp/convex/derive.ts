@@ -1,8 +1,9 @@
 import { v } from "convex/values"
+import { spanEndOf } from "../lib/calendar"
 import { internal } from "./_generated/api"
 import { internalMutation } from "./_generated/server"
-import { londonIsoDate, termWeekLabel } from "./lib/derived"
-import { loadTerms, refreshOrganisation } from "./lib/entityStore"
+import { londonIsoDate, sweepGroupOf, termWeekLabel } from "./lib/derived"
+import { loadTerms, refreshOrganisation, syncEventOrganiserRows } from "./lib/entityStore"
 
 /**
  * Derived fields that depend on the clock or on other tables (data-model §6),
@@ -11,7 +12,8 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  *
  *  - an organisation's `status` turns `dormant` 180 days after its last
  *    activity, and registrations lapse at the academic-year boundary;
- *  - events' `termWeekLabel` changes when `termDates` change;
+ *  - events' `termWeekLabel` changes when `termDates` change (and their
+ *    `spanEndsAt` is kept current, also for rows written before it existed);
  *  - a person's `stale` flag turns on when `staleAfter` passes.
  *
  * Each walk is paginated and reschedules itself, so no transaction reads a
@@ -57,8 +59,17 @@ export const recomputeEvents = internalMutation({
     let changed = 0
     for (const event of page.page) {
       const label = termWeekLabel(event.startsAt, terms)
-      if (label === event.termWeekLabel) continue
-      await ctx.db.patch("events", event._id, { termWeekLabel: label })
+      const spanEndsAt = spanEndOf(event.startsAt, event.endsAt)
+      const sweepGroup = sweepGroupOf(event.source, event.meta.externalId?.sourceUrl)
+      if (
+        label === event.termWeekLabel &&
+        spanEndsAt === event.spanEndsAt &&
+        sweepGroup === event.sweepGroup
+      ) {
+        continue
+      }
+      await ctx.db.patch("events", event._id, { termWeekLabel: label, spanEndsAt, sweepGroup })
+      await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
       changed++
     }
     if (!page.isDone) {

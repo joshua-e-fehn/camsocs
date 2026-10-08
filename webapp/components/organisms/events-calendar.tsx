@@ -42,6 +42,7 @@ import type { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
 import {
   type CalendarView,
+  eventDays,
   formatDayShort,
   formatRange,
   londonIsoDate,
@@ -63,20 +64,39 @@ const VIEWS: { value: CalendarView; label: string; icon: typeof ListIcon }[] = [
 
 const MONTH_CELL_CHIPS = 3
 
-function groupByDay(events: EventPublic[]): Map<string, EventPublic[]> {
+/**
+ * The view's events by London day. A multi-day event (a run of shows, the
+ * Bumps) sits on every day it covers in the grids (`everyDay`), and once —
+ * on its first day in view — in the list.
+ */
+function groupByDay(
+  events: EventPublic[],
+  viewDays: readonly string[],
+  everyDay: boolean,
+): Map<string, EventPublic[]> {
+  const first = viewDays[0]
+  const last = viewDays[viewDays.length - 1]
   const days = new Map<string, EventPublic[]>()
+  const add = (day: string, event: EventPublic) => days.set(day, [...(days.get(day) ?? []), event])
   for (const event of events) {
-    const day = londonIsoDate(event.startsAt)
-    const list = days.get(day) ?? []
-    list.push(event)
-    days.set(day, list)
+    const covered = eventDays(event).filter((day) => day >= first && day <= last)
+    if (covered.length === 0) covered.push(londonIsoDate(event.startsAt))
+    for (const day of everyDay ? covered : covered.slice(0, 1)) add(day, event)
   }
-  return days
+  return new Map([...days.entries()].sort(([a], [b]) => a.localeCompare(b)))
 }
 
-/** "N more Cambridge-only events — sign in": rendered only when the server
- * could count them; the count itself stays live. */
-function CamOnlyNote({ preloaded }: { preloaded: Preloaded<typeof api.events.restrictedCount> }) {
+/** "N Cambridge-only events in these weeks — sign in": rendered only when the
+ * server could count them; the count itself stays live. The server counts
+ * whole weeks and ignores the filters (so the count cannot reveal what it
+ * counts), hence "around these dates", not "in this view". */
+function CamOnlyNote({
+  preloaded,
+  next,
+}: {
+  preloaded: Preloaded<typeof api.events.restrictedCount>
+  next: string
+}) {
   const { camOnly } = usePreloadedQuery(preloaded)
   if (camOnly === 0) return null
   return (
@@ -84,9 +104,9 @@ function CamOnlyNote({ preloaded }: { preloaded: Preloaded<typeof api.events.res
       <LockIcon />
       <AlertDescription className="text-foreground">
         <span>
-          <span className="font-mono tabular-nums">{camOnly}</span> more Cambridge-only{" "}
-          {camOnly === 1 ? "event" : "events"} in this view —{" "}
-          <Link href={camSignInHref("/events")}>sign in with your @cam.ac.uk email</Link> to see{" "}
+          <span className="font-mono tabular-nums">{camOnly}</span> Cambridge-only{" "}
+          {camOnly === 1 ? "event is" : "events are"} listed in the weeks around these dates —{" "}
+          <Link href={camSignInHref(next)}>sign in with your @cam.ac.uk email</Link> to see{" "}
           {camOnly === 1 ? "it" : "them"}.
         </span>
       </AlertDescription>
@@ -98,10 +118,13 @@ function EventSheet({
   eventKey,
   fallback,
   onClose,
+  signInNext,
 }: {
   eventKey: string | undefined
   fallback: EventPublic | undefined
   onClose: () => void
+  /** Where a Cambridge sign-in lands: this view, with the event open. */
+  signInNext: string
 }) {
   const fetched = useEvent(fallback ? undefined : eventKey)
   const event = fallback ?? fetched ?? undefined
@@ -128,7 +151,7 @@ function EventSheet({
             <SheetTitle>Event not available</SheetTitle>
             <SheetDescription>
               It may have been removed, or it is a Cambridge-only event:{" "}
-              <Link href={camSignInHref("/events")} className="underline underline-offset-4">
+              <Link href={camSignInHref(signInNext)} className="underline underline-offset-4">
                 sign in with your @cam.ac.uk email
               </Link>{" "}
               to see those.
@@ -205,7 +228,7 @@ export function EventsCalendar({
       (state.org ? 1 : 0) +
       (state.q ? 1 : 0) >
     0
-  const byDay = groupByDay(events)
+  const byDay = groupByDay(events, range.days, state.view !== "list")
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-8 sm:px-6">
@@ -320,7 +343,7 @@ export function EventsCalendar({
         </p>
       </div>
 
-      {preloadedRestricted && <CamOnlyNote preloaded={preloadedRestricted} />}
+      {preloadedRestricted && <CamOnlyNote preloaded={preloadedRestricted} next={hrefFor(base)} />}
 
       <div
         aria-busy={isPending}
@@ -483,6 +506,7 @@ export function EventsCalendar({
         eventKey={selectedKey}
         fallback={events.find((event) => event.key === selectedKey)}
         onClose={() => select(undefined)}
+        signInNext={hrefFor({ ...base, event: selectedKey })}
       />
     </div>
   )

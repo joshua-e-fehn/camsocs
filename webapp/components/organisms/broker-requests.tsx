@@ -128,7 +128,10 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
         <CardDescription>
           {KIND_HINT[request.kind]} · {formatDateTime(request.createdAt)} ·{" "}
           <span className="font-mono">{request.submitterEmail}</span>
-          {request.role && ` (${request.role})`}
+          {request.role && ` (${request.role})`} ·{" "}
+          <span title="The form does not confirm the address: reply to it before acting on a removal or objection">
+            address unverified
+          </span>
         </CardDescription>
         <CardAction>
           <Select

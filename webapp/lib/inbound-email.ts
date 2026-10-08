@@ -69,6 +69,9 @@ export type InboundMessage = {
   attachments: InboundAttachment[]
   /** Attachments that were not kept, and why (stored as `extractionNote`). */
   skipped: string[]
+  /** A trusted receiver verified the `From` domain (`senderAuthenticated`).
+   * Only then may the pipeline attribute the mail to an organisation. */
+  senderVerified: boolean
 }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string }
@@ -132,18 +135,132 @@ export function addressesIn(value: unknown): string[] {
 
 /**
  * Whether a mail was addressed to one of the inbound addresses we accept
- * (`INBOUND_EMAIL_RECIPIENTS`, comma-separated). Unset accepts every recipient
- * — the webhook signature already proves the mail came through our inbox —
- * but setting it to an unguessable local part keeps strangers who learn the
- * receiving domain from posting events.
+ * (`INBOUND_EMAIL_RECIPIENTS`, comma-separated). Unset or empty accepts
+ * nothing, like every other secret on this route: a receiving domain takes
+ * mail for any local part and is public in its MX record, so the signature
+ * alone does not keep strangers out — the unguessable address does.
  */
 export function recipientAllowed(allowedRaw: string | undefined, recipients: string[]): boolean {
   const allowed = (allowedRaw ?? "")
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean)
-  if (allowed.length === 0) return true
+  if (allowed.length === 0) return false
   return recipients.some((address) => allowed.includes(address.toLowerCase()))
+}
+
+// --- sender authentication ---------------------------------------------------------------
+
+/**
+ * Receivers whose verdict on a mail's sender we believe, by the authserv-id
+ * they write into `ARC-Authentication-Results` / `Authentication-Results`
+ * (RFC 8601, 8617). Exchange Online seals a redirected message with an ARC set
+ * from `mx.microsoft.com` that records its own DKIM / DMARC check of the
+ * original sender. `INBOUND_TRUSTED_AUTHSERV_IDS` (comma-separated) replaces
+ * the default — add Resend's receiver once a real mail shows its id.
+ */
+export const DEFAULT_TRUSTED_AUTHSERV_IDS = ["mx.microsoft.com"] as const
+
+export function trustedAuthservIds(raw: string | undefined): string[] {
+  const listed = (raw ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  return listed.length > 0 ? listed : [...DEFAULT_TRUSTED_AUTHSERV_IDS]
+}
+
+/** Every value of a header, case-insensitively, in the order given. */
+function headerValues(headers: unknown, name: string): string[] {
+  if (headers === null || typeof headers !== "object") return []
+  const wanted = name.toLowerCase()
+  const out: string[] = []
+  for (const [key, value] of Object.entries(headers as HeaderMap)) {
+    if (key.toLowerCase() !== wanted) continue
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (typeof item === "string" && item.trim()) out.push(item)
+    }
+  }
+  return out
+}
+
+type AuthResult = { method: string; result: string; props: Record<string, string> }
+type AuthResults = { instance?: number; authservId: string; results: AuthResult[] }
+
+/** One `Authentication-Results` (or, with `arc`, `ARC-Authentication-Results`)
+ * value. Null without an authserv-id — a verdict nobody signs for. */
+export function parseAuthResults(value: string, arc: boolean): AuthResults | null {
+  let rest = value
+    .replace(/\([^()]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  let instance: number | undefined
+  if (arc) {
+    const match = /^i\s*=\s*(\d+)\s*;\s*/i.exec(rest)
+    if (!match) return null
+    instance = Number(match[1])
+    rest = rest.slice(match[0].length)
+  }
+  const [head, ...clauses] = rest.split(";")
+  const authservId = head.trim().split(" ")[0]?.toLowerCase() ?? ""
+  if (!authservId || authservId.includes("=")) return null
+  const results: AuthResult[] = []
+  for (const clause of clauses) {
+    const [first, ...props] = clause.trim().split(" ").filter(Boolean)
+    const verdict = /^([a-z0-9-]+)=([a-z]+)$/i.exec(first ?? "")
+    if (!verdict) continue
+    const pairs: Record<string, string> = {}
+    for (const prop of props) {
+      const eq = prop.indexOf("=")
+      if (eq > 0) pairs[prop.slice(0, eq).toLowerCase()] = prop.slice(eq + 1).toLowerCase()
+    }
+    results.push({
+      method: verdict[1].toLowerCase(),
+      result: verdict[2].toLowerCase(),
+      props: pairs,
+    })
+  }
+  return { instance, authservId, results }
+}
+
+/** `d` and the From domain belong together (relaxed DMARC alignment). */
+function aligned(fromDomain: string, domain: string | undefined): boolean {
+  if (!domain) return false
+  const d = domain.replace(/^@/, "").replace(/.*@/, "").replace(/\.$/, "")
+  return fromDomain === d || fromDomain.endsWith(`.${d}`) || d.endsWith(`.${fromDomain}`)
+}
+
+/**
+ * Whether a trusted receiver verified the mail's `From` domain: DMARC pass
+ * for it, or a DKIM pass by an aligned domain.
+ *
+ * Which verdict counts: the highest-instance ARC set (the last sealer — on
+ * the Outlook redirect, Exchange, which a sender cannot forge past), else the
+ * first `Authentication-Results` from a trusted receiver. Verdicts without an
+ * authserv-id, or from anyone else, prove nothing: a sender writes headers
+ * too. Not cryptographic verification — the recipient allowlist is the first
+ * gate; this one decides whether the mail may speak for an organisation.
+ */
+export function senderAuthenticated(headers: unknown, from: string, trusted: string[]): boolean {
+  const fromDomain = addressesIn(from)[0]?.split("@")[1]
+  if (!fromDomain) return false
+  const arc = headerValues(headers, "arc-authentication-results")
+    .map((value) => parseAuthResults(value, true))
+    .filter((entry): entry is AuthResults => entry !== null)
+    .sort((a, b) => (b.instance ?? 0) - (a.instance ?? 0))[0]
+  const chosen =
+    arc && trusted.includes(arc.authservId)
+      ? arc
+      : headerValues(headers, "authentication-results")
+          .map((value) => parseAuthResults(value, false))
+          .find((entry) => entry !== null && trusted.includes(entry.authservId))
+  if (!chosen) return false
+  return chosen.results.some(
+    (entry) =>
+      entry.result === "pass" &&
+      ((entry.method === "dmarc" && aligned(fromDomain, entry.props["header.from"])) ||
+        (entry.method === "dkim" &&
+          aligned(fromDomain, entry.props["header.d"] ?? entry.props["header.i"]))),
+  )
 }
 
 /** Headers that can name the address a redirected or forwarded mail was
@@ -327,7 +444,11 @@ function str(value: unknown): string | undefined {
  * and a body (`text` or `html`). `headers` is a plain object (`List-Id` is read
  * from it); `date` (or a `Date` header) dates the mail.
  */
-export function parseGenericPayload(body: unknown, now: number): Parsed<InboundMessage> {
+export function parseGenericPayload(
+  body: unknown,
+  now: number,
+  trusted: string[] = [],
+): Parsed<InboundMessage> {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     return { ok: false, error: "Body must be a JSON object" }
   }
@@ -387,6 +508,7 @@ export function parseGenericPayload(body: unknown, now: number): Parsed<InboundM
       ...parseListId(headerValue(headers, "list-id")),
       attachments,
       skipped,
+      senderVerified: senderAuthenticated(headers, from, trusted),
     },
   }
 }
@@ -456,6 +578,7 @@ export function resendMessage(
   received: ResendReceived,
   email: ResendEmail,
   now: number,
+  trusted: string[] = [],
 ): InboundMessage {
   const headers = email.headers ?? {}
   const html = typeof email.html === "string" && email.html ? email.html : undefined
@@ -475,6 +598,7 @@ export function resendMessage(
     ...parseListId(headerValue(headers, "list-id")),
     attachments: [],
     skipped: [],
+    senderVerified: senderAuthenticated(headers, from || "", trusted),
   }
 }
 

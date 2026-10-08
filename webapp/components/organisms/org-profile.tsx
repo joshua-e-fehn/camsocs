@@ -98,14 +98,17 @@ function Membership({ membership }: { membership: NonNullable<OrgPublic["members
       {membership.tiers.length > 0 && (
         <ul className="flex flex-col gap-1">
           {membership.tiers.map((tier) => (
-            <li key={`${tier.label}-${tier.period}`} className="flex flex-wrap gap-x-2">
+            <li key={`${tier.label}-${tier.period ?? ""}`} className="flex flex-wrap gap-x-2">
               <span className="font-medium">{tier.label}</span>
               <span className="font-mono tabular-nums">
                 {tier.period === "free"
                   ? "Free"
-                  : tier.pricePence !== undefined
-                    ? `${formatPence(tier.pricePence)} ${MEMBERSHIP_PERIOD_LABELS[tier.period]}`
-                    : MEMBERSHIP_PERIOD_LABELS[tier.period]}
+                  : [
+                      tier.pricePence !== undefined ? formatPence(tier.pricePence) : undefined,
+                      tier.period ? MEMBERSHIP_PERIOD_LABELS[tier.period] : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
               </span>
               {tier.note && <span className="text-muted-foreground">{tier.note}</span>}
             </li>

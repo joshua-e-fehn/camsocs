@@ -3,6 +3,7 @@ import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
 import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
+import { GLOBAL_PER_HOUR } from "./listingRequests"
 
 /**
  * The public read API (docs/webapp.md "Public API"): what a visitor, a
@@ -230,21 +231,216 @@ describe("events.list / events.get", () => {
 })
 
 describe("events.restrictedCount", () => {
-  test("counts the cam_only events a visitor cannot see, under the same filters", async () => {
+  test("counts the cam_only events a visitor cannot see around the dates asked for", async () => {
     const t = newTest()
     await seed(t)
     const window = { from: NOW, to: NOW + 30 * DAY }
     // One cam_only event; the members_only one is never counted or shown.
     expect(await t.query(api.events.restrictedCount, window)).toEqual({ camOnly: 1 })
-    expect(await t.query(api.events.restrictedCount, { ...window, eventTypes: ["talk"] })).toEqual({
-      camOnly: 0,
-    })
     expect(await t.query(api.events.restrictedCount, { ...window, orgKey: "org-chess" })).toEqual({
       camOnly: 1,
     })
 
     const cam = await signedInAs(t, "xy789@cam.ac.uk")
     expect(await cam.query(api.events.restrictedCount, window)).toEqual({ camOnly: 0 })
+  })
+
+  test("is no oracle: search, type and category filters are ignored and windows are whole weeks", async () => {
+    const t = newTest()
+    await seed(t)
+    const window = { from: NOW, to: NOW + 30 * DAY }
+    // A title word that matches and one that does not: the same answer.
+    for (const q of ["blitz", "football"]) {
+      expect(await t.query(api.events.restrictedCount, { ...window, q })).toEqual({ camOnly: 1 })
+    }
+    expect(await t.query(api.events.restrictedCount, { ...window, eventTypes: ["talk"] })).toEqual({
+      camOnly: 1,
+    })
+    expect(await t.query(api.events.restrictedCount, { ...window, categories: ["music"] })).toEqual(
+      { camOnly: 1 },
+    )
+    // A one-millisecond window around the event's start counts its whole week,
+    // so bisecting from/to cannot recover the start time.
+    const startsAt = NOW + 3 * DAY
+    const counts = new Set<number>()
+    for (const [from, to] of [
+      [startsAt, startsAt + 1],
+      [startsAt + 1, startsAt + 2],
+      [startsAt - 1, startsAt],
+    ]) {
+      counts.add((await t.query(api.events.restrictedCount, { from, to })).camOnly)
+    }
+    expect([...counts]).toEqual([1])
+  })
+})
+
+describe("hidden organisations' events", () => {
+  test("an event whose every host is hidden leaves the calendar; its key lists nothing", async () => {
+    await withEnv({ BROKER_EMAILS: "broker@example.com" }, async () => {
+      const t = newTest()
+      const keys = await seed(t)
+      const broker = await signedInAs(t, "broker@example.com")
+      await broker.mutation(api.broker.orgs.setHidden, { orgKey: "org-chess", hidden: true })
+      const window = { from: NOW, to: NOW + 30 * DAY }
+      expect(await t.query(api.events.list, window)).toEqual([])
+      expect(await t.query(api.events.list, { ...window, orgKey: "org-chess" })).toEqual([])
+      expect(await t.query(api.events.get, { key: keys.open })).toBeNull()
+      expect(await t.query(api.events.restrictedCount, window)).toEqual({ camOnly: 0 })
+
+      await broker.mutation(api.broker.orgs.setHidden, { orgKey: "org-chess", hidden: false })
+      expect((await t.query(api.events.list, window)).map((e) => e.title)).toEqual(["Open simul"])
+    })
+  })
+})
+
+describe("multi-day events", () => {
+  test("a run that began before the window still shows, in lists and on the organiser's page", async () => {
+    const t = newTest()
+    await seed(t)
+    const key = eventKey("camdram", "show:1/performance:1")
+    const startsAt = NOW - 20 * DAY
+    const field = (name: string, value: unknown) =>
+      claim(key, name, value, { entityType: "event", sourceType: "camdram" })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        field("title", "Long film run"),
+        field("startsAt", startsAt),
+        field("endsAt", NOW + 40 * DAY),
+        field("allDay", true),
+        field("visibility", "public"),
+        field("source", "camdram"),
+        field("externalId", "show:1/performance:1"),
+        field("sourceUrl", "https://www.camdram.net/shows/film"),
+      ],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: key, organisers: [{ orgKey: "org-chess", role: "organiser" }] }],
+    })
+    const window = { from: NOW, to: NOW + 7 * DAY }
+    expect((await t.query(api.events.list, window)).map((e) => e.title)).toEqual([
+      "Long film run",
+      "Open simul",
+    ])
+    expect(
+      (await t.query(api.events.list, { ...window, orgKey: "org-chess" })).map((e) => e.title),
+    ).toContain("Long film run")
+    expect((await t.query(api.events.list, { ...window, q: "film" })).length).toBe(1)
+    const page = await t.query(api.orgs.getBySlug, { slug: "chess" })
+    expect(page?.events.map((e) => e.title)).toEqual(["Long film run", "Open simul"])
+    // After it ends, it is gone.
+    expect(await t.query(api.events.list, { from: NOW + 41 * DAY, to: NOW + 48 * DAY })).toEqual([])
+  })
+})
+
+describe("withdrawn events", () => {
+  async function listed(
+    t: TestConvex,
+    source: "camdram" | "ics",
+    externalId: string,
+    title: string,
+    startsAt: number,
+    seenAt: number,
+    listing: string,
+  ) {
+    const key = eventKey(source, externalId)
+    const field = (name: string, value: unknown) =>
+      claim(key, name, value, {
+        entityType: "event",
+        sourceType: source === "camdram" ? "camdram" : "ics_feed",
+        sourceKey: `src-${listing}`,
+        sourceUrl: listing,
+        retrievedAt: seenAt,
+      })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        field("title", title),
+        field("startsAt", startsAt),
+        field("visibility", "public"),
+        field("source", source),
+        field("externalId", externalId),
+        field("sourceUrl", listing),
+      ],
+    })
+  }
+
+  test("a Camdram night that moved is gone once the diary is read without it", async () => {
+    const t = newTest()
+    const show = "https://www.camdram.net/shows/hamlet.json"
+    // Read 5 days ago for the 10th; the diary now lists the run on the 11th.
+    await listed(
+      t,
+      "camdram",
+      "show:1/performance:1/a",
+      "Hamlet",
+      NOW + 10 * DAY,
+      NOW - 5 * DAY,
+      show,
+    )
+    await listed(
+      t,
+      "camdram",
+      "show:1/performance:2/b",
+      "Hamlet",
+      NOW + 11 * DAY,
+      NOW - 60_000,
+      show,
+    )
+    const window = { from: NOW, to: NOW + 20 * DAY }
+    const starts = (await t.query(api.events.list, window)).map((e) => e.startsAt)
+    expect(starts).toEqual([NOW + 11 * DAY])
+    expect(
+      await t.query(api.events.get, { key: eventKey("camdram", "show:1/performance:1/a") }),
+    ).toBeNull()
+  })
+
+  test("an ICS occurrence whose time changed falls behind its feed, not another feed", async () => {
+    const t = newTest()
+    const feed = "https://example.org/cal.ics"
+    const other = "https://other.example/cal.ics"
+    await listed(t, "ics", "uid-1/20261110T190000Z", "Talk", NOW + 10 * DAY, NOW - 5 * DAY, feed)
+    await listed(t, "ics", "uid-1/20261110T193000Z", "Talk", NOW + 10 * DAY + 1_800_000, NOW, feed)
+    // A feed nobody has read for as long (unreachable, or the pipeline paused):
+    // its events stay.
+    await listed(t, "ics", "uid-9/20261112T190000Z", "Quiz", NOW + 12 * DAY, NOW - 5 * DAY, other)
+    const titles = (await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })).map((e) => [
+      e.title,
+      e.startsAt,
+    ])
+    expect(titles).toEqual([
+      ["Talk", NOW + 10 * DAY + 1_800_000],
+      ["Quiz", NOW + 12 * DAY],
+    ])
+  })
+})
+
+describe("public meta", () => {
+  test("an inferred value whose other readings are private stays inferred", async () => {
+    const t = newTest()
+    await seed(t)
+    // Two unquoted readings from private mail: conflicting inside, but the
+    // visitor sees neither conflict reading — nor a promotion to "found".
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim("org-chess", "website", "https://a.example/", {
+          method: "llm",
+          extractor: "m",
+          sourceType: "mailing_list_email",
+          sourceKey: "src-m1",
+          sourceUrl: "inbound:<m1>",
+        }),
+        claim("org-chess", "website", "https://b.example/", {
+          method: "llm",
+          extractor: "m",
+          sourceType: "mailing_list_email",
+          sourceKey: "src-m2",
+          sourceUrl: "inbound:<m2>",
+          retrievedAt: NOW - 120_000,
+        }),
+      ],
+    })
+    const meta = (await t.query(api.orgs.getBySlug, { slug: "chess" }))?.org.meta
+    expect(meta?.website.status).toBe("inferred")
+    expect(meta?.website.conflicts).toBeUndefined()
   })
 })
 
@@ -284,6 +480,36 @@ describe("listingRequests.submit", () => {
       })
     }
     await expect(t.mutation(api.listingRequests.submit, request)).rejects.toThrow(/Too many/)
+  })
+})
+
+describe("listingRequests.submit — the removal route stays open", () => {
+  test("a flood of other requests from throwaway addresses cannot lock out a removal", async () => {
+    const t = newTest()
+    await seed(t)
+    for (let i = 0; i < GLOBAL_PER_HOUR; i++) {
+      await t.mutation(api.listingRequests.submit, {
+        kind: "correct",
+        orgKey: "org-chess",
+        submitterEmail: `x${i}@example.org`,
+        message: "Junk correction request.",
+      })
+    }
+    await expect(
+      t.mutation(api.listingRequests.submit, {
+        kind: "claim",
+        orgKey: "org-chess",
+        submitterEmail: "late@example.org",
+        message: "Another junk request.",
+      }),
+    ).rejects.toThrow(/busy/)
+    const { key } = await t.mutation(api.listingRequests.submit, {
+      kind: "remove",
+      orgKey: "org-chess",
+      submitterEmail: "secretary@cuchess.org",
+      message: "Please remove my details.",
+    })
+    expect(key).toMatch(/^lr-/)
   })
 })
 

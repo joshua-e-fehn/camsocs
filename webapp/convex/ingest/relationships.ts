@@ -9,7 +9,7 @@ import {
 } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
-import { loadTerms } from "../lib/entityStore"
+import { eventOrganiserCopy, loadTerms } from "../lib/entityStore"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, emptyBatchResult, recordBatch } from "../lib/ingest"
 import { upsertRelationship } from "../lib/relationships"
@@ -63,6 +63,10 @@ export const upsert = internalMutation({
 export const eventOrganiserSetValidator = v.object({
   eventKey: v.string(),
   organisers: v.array(v.object({ orgKey: v.string(), role: literalUnion(EVENT_ORGANISER_ROLES) })),
+  /** `replace` (default): the set is the event's whole organiser list, and
+   * rows not in it are removed. `merge`: the sender could not resolve every
+   * organiser the source names, so it only adds — nothing known is removed. */
+  mode: v.optional(v.union(v.literal("replace"), v.literal("merge"))),
 })
 
 export const setEventOrganisers = internalMutation({
@@ -93,15 +97,20 @@ export const setEventOrganisers = internalMutation({
         continue
       }
 
+      const merge = set.mode === "merge"
       const wanted = new Map(set.organisers.map((o) => [`${o.orgKey}:${o.role}`, o]))
       const current = await ctx.db
         .query("eventOrganisers")
         .withIndex("by_event", (q) => q.eq("eventKey", event.key))
         .take(200)
+      const kept: { orgKey: string; role: string }[] = []
       let changed = false
       for (const row of current) {
         touchedOrgs.add(row.orgKey)
-        if (wanted.delete(`${row.orgKey}:${row.role}`)) continue
+        if (wanted.delete(`${row.orgKey}:${row.role}`) || merge) {
+          kept.push(row)
+          continue
+        }
         await ctx.db.delete("eventOrganisers", row._id)
         changed = true
       }
@@ -110,15 +119,18 @@ export const setEventOrganisers = internalMutation({
           eventKey: event.key,
           orgKey: organiser.orgKey,
           role: organiser.role,
-          startsAt: event.startsAt,
-          visibility: event.visibility,
+          ...eventOrganiserCopy(event),
         })
+        kept.push(organiser)
         touchedOrgs.add(organiser.orgKey)
         changed = true
       }
 
+      // The event mirrors what is now in the join table (in the order sent,
+      // then any kept rows the sender did not name).
+      const all = [...set.organisers, ...kept]
       const byRole = (role: string) => [
-        ...new Set(set.organisers.filter((o) => o.role === role).map((o) => o.orgKey)),
+        ...new Set(all.filter((o) => o.role === role).map((o) => o.orgKey)),
       ]
       const keys = {
         organiserKeys: byRole("organiser"),

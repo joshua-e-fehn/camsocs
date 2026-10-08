@@ -18,7 +18,8 @@ const ENV = {
   INBOUND_EMAIL_SECRET: INBOUND_SECRET,
   RESEND_WEBHOOK_SECRET: WEBHOOK_SECRET,
   RESEND_API_KEY: "re_test_key",
-  INBOUND_EMAIL_RECIPIENTS: undefined,
+  INBOUND_EMAIL_RECIPIENTS: "inbox@in.example.org",
+  INBOUND_TRUSTED_AUTHSERV_IDS: undefined,
   BETTER_AUTH_SECRET: "test-secret-for-better-auth-0123456789",
 }
 
@@ -146,10 +147,15 @@ describe("POST /api/inbound/email — provider-agnostic JSON", () => {
     })
   })
 
-  test("400 for a malformed body; recipients filter when configured", async () => {
+  test("400 for a malformed body; recipients filter, and unset accepts none", async () => {
     await withEnv(ENV, async () => {
       const t = newTest()
       expect((await postGeneric(t, { ...GENERIC, messageId: undefined })).status).toBe(400)
+    })
+    await withEnv({ ...ENV, INBOUND_EMAIL_RECIPIENTS: undefined }, async () => {
+      const t = newTest()
+      expect(await (await postGeneric(t, GENERIC)).json()).toEqual({ ignored: "recipient" })
+      expect(await inbox(t)).toHaveLength(0)
     })
     await withEnv({ ...ENV, INBOUND_EMAIL_RECIPIENTS: "secret-7f@in.example.org" }, async () => {
       const t = newTest()
@@ -158,6 +164,28 @@ describe("POST /api/inbound/email — provider-agnostic JSON", () => {
       expect(await inbox(t)).toHaveLength(0)
       const addressed = await postGeneric(t, { ...GENERIC, to: ["Secret-7F@in.example.org"] })
       expect(await addressed.json()).toEqual({ stored: true })
+    })
+  })
+
+  test("records whether a trusted receiver verified the sender", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      await postGeneric(t, GENERIC)
+      const sealed = {
+        ...GENERIC,
+        messageId: "<sealed@x>",
+        headers: {
+          ...GENERIC.headers,
+          "ARC-Authentication-Results":
+            "i=1; mx.microsoft.com 1; spf=pass smtp.mailfrom=zz-test.example.org; " +
+            "dmarc=pass (p=none) action=none header.from=zz-test.example.org; " +
+            "dkim=pass (signature was verified) header.d=zz-test.example.org",
+        },
+      }
+      await postGeneric(t, sealed)
+      const rows = await inbox(t)
+      const verified = Object.fromEntries(rows.map((row) => [row.messageId, row.senderVerified]))
+      expect(verified).toEqual({ [GENERIC.messageId]: false, "<sealed@x>": true })
     })
   })
 

@@ -1,3 +1,4 @@
+import { spanEndOf } from "../../lib/calendar"
 import { orgSlugFromKey } from "../../lib/keys"
 import { type EntityType, REGISTRATION_BODIES } from "../../lib/vocab"
 import {
@@ -5,6 +6,7 @@ import {
   deriveOrgStatus,
   missingFields,
   orgSearchText,
+  sweepGroupOf,
   type TermDates,
   termWeekLabel,
 } from "./derived"
@@ -28,9 +30,13 @@ export type DeriveContext = {
   now: number
   /** For events' `termWeekLabel`. */
   terms: readonly TermDates[]
-  /** For organisations: start of the latest past event it organised or co-hosted. */
-  latestEventAt?: number
+  /** For organisations: the latest past public event it organised or
+   * co-hosted — its start, and the provenance of that start (lib/entityStore.ts
+   * `latestPastEvent`). */
+  latestEvent?: LatestEvent
 }
+
+export type LatestEvent = { startsAt: number; meta?: FieldMeta }
 
 /** Fields that are not claims but are never left absent on creation. */
 const EVENT_DEFAULTS: Row = {
@@ -83,8 +89,38 @@ export function materialise(
 
   const row = assemble(entityType, flat, existing)
   const meta = mergeMeta(specs, (existing?.meta as Record<string, FieldMeta>) ?? {}, touched, row)
+  if (entityType === "organisation") {
+    const derived = eventActivityMeta(row.lastActiveAt as number | undefined, context.latestEvent)
+    if (derived) meta.lastActiveAt = derived
+  }
   row.meta = meta
   return { ...row, ...derive(entityType, key, row, meta, context) }
+}
+
+/**
+ * When an organisation's latest past event is later than every claimed
+ * `lastActiveAt`, the shown value comes from that event, so its meta must
+ * too: the provenance of the event's start (its page, its retrieval), not the
+ * claims' (which may say nobody has looked). Undefined when the claims win.
+ */
+function eventActivityMeta(
+  claimed: number | undefined,
+  latest: LatestEvent | undefined,
+): FieldMeta | undefined {
+  if (!latest || (claimed !== undefined && claimed >= latest.startsAt)) return undefined
+  const source = latest.meta
+  if (!source || !hasClaimEvidence(source)) return undefined
+  const status = source.status === "conflicting" ? (source.winnerStatus ?? "found") : source.status
+  return {
+    status,
+    evidence: source.evidence,
+    confidence: source.confidence,
+    sourceUrl: source.sourceUrl,
+    sourceType: source.sourceType,
+    retrievedAt: source.retrievedAt,
+    method: source.method,
+    claimCount: 1,
+  }
 }
 
 /** Dotted sub-fields → nested objects; event defaults; non-claimable carry-overs. */
@@ -122,6 +158,9 @@ function assemble(entityType: EntityType, flat: Row, existing: Row | null): Row 
       row[field] = row[field] ?? fallback
     }
     row.speakers = row.speakers ?? []
+    // A mailing-list event is never public (source-research §16), whatever a
+    // claim — even a manual one — says: it came from a private inbox.
+    if (row.source === "mailing_list" && row.visibility === "public") row.visibility = "cam_only"
     for (const field of ["organiserKeys", "coHostKeys", "sponsorKeys"]) {
       row[field] = (existing?.[field] as string[] | undefined) ?? []
     }
@@ -160,10 +199,9 @@ function derive(
 ): Row {
   if (entityType === "organisation") {
     const claimed = row.lastActiveAt as number | undefined
+    const eventAt = context.latestEvent?.startsAt
     const latest =
-      context.latestEventAt === undefined
-        ? claimed
-        : Math.max(claimed ?? Number.NEGATIVE_INFINITY, context.latestEventAt)
+      eventAt === undefined ? claimed : Math.max(claimed ?? Number.NEGATIVE_INFINITY, eventAt)
     const values = { ...row, lastActiveAt: latest }
     return {
       slug: orgSlugFromKey(key),
@@ -185,6 +223,8 @@ function derive(
       .map((entry) => entry.retrievedAt)
       .filter((value): value is number => value !== undefined)
     return {
+      spanEndsAt: spanEndOf(row.startsAt as number, row.endsAt as number | undefined),
+      sweepGroup: sweepGroupOf(row.source as string, meta.externalId?.sourceUrl),
       termWeekLabel: termWeekLabel(row.startsAt as number, context.terms),
       confidence: confidences.length > 0 ? Math.min(...confidences) : 0.5,
       lastSeenAt: seen.length > 0 ? Math.max(...seen) : context.now,

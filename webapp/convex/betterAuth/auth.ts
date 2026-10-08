@@ -64,6 +64,15 @@ function refuseNonCamEmail(email: unknown): void {
   }
 }
 
+/** The caller's address as the request carries it: the first entry of
+ * `x-forwarded-for` (set by Vercel and passed on by the `/api/auth` hop). A
+ * caller can forge it by going to the Convex site URL directly, so it only
+ * spreads the per-client throttle; the per-address and overall limits stand. */
+export function clientAddress(headers: Headers | undefined): string | undefined {
+  const first = headers?.get("x-forwarded-for")?.split(",")[0]?.trim()
+  return first ? first.slice(0, 100) : undefined
+}
+
 /**
  * The `@cam.ac.uk` sign-in link (Better Auth's magic-link plugin, which
  * @convex-dev/better-auth 0.12.5 supports: its convex plugin sets the JWT
@@ -76,7 +85,7 @@ function refuseNonCamEmail(email: unknown): void {
  *
  * Every refusal happens on the server: `refuseNonCamEmail` in the `before`
  * hook (nothing is stored) and again before sending, and a throttle per
- * address and per deployment (convex/authEmail.ts).
+ * address, per client and per deployment (convex/authEmail.ts).
  */
 function camEmailLink(ctx: GenericCtx<DataModel>) {
   const config = resendConfig()
@@ -84,12 +93,19 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
   return [
     magicLink({
       expiresIn: SIGN_IN_LINK_TTL_SECONDS,
-      sendMagicLink: async ({ email, url }) => {
+      sendMagicLink: async ({ email, url }, endpoint) => {
         refuseNonCamEmail(email)
         if (!("runMutation" in ctx)) {
           throw new APIError("INTERNAL_SERVER_ERROR", { message: "Cannot send email here" })
         }
-        const verdict = await ctx.runMutation(internal.authEmail.reserveSignInLink, { email })
+        const known = await endpoint?.context.internalAdapter
+          .findUserByEmail(normaliseCamEmail(email))
+          .catch(() => null)
+        const verdict = await ctx.runMutation(internal.authEmail.reserveSignInLink, {
+          email,
+          client: clientAddress(endpoint?.request?.headers),
+          knownUser: known?.user.emailVerified === true,
+        })
         if (verdict !== "ok") {
           throw new APIError("TOO_MANY_REQUESTS", {
             message:

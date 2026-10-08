@@ -16,6 +16,8 @@ import {
   plausibleDate,
   recipientAllowed,
   resendMessage,
+  senderAuthenticated,
+  trustedAuthservIds,
   verifySvixSignature,
 } from "./inbound-email"
 
@@ -76,9 +78,9 @@ describe("headers", () => {
     expect(deliveryAddresses(null)).toEqual([])
   })
 
-  test("recipientAllowed: unset accepts all, set requires a match", () => {
-    expect(recipientAllowed(undefined, ["x@y.org"])).toBe(true)
-    expect(recipientAllowed(" , ", ["x@y.org"])).toBe(true)
+  test("recipientAllowed: unset accepts none, set requires a match", () => {
+    expect(recipientAllowed(undefined, ["x@y.org"])).toBe(false)
+    expect(recipientAllowed(" , ", ["x@y.org"])).toBe(false)
     expect(recipientAllowed("in-7f3@in.example.org", ["IN-7F3@in.example.org"])).toBe(true)
     expect(recipientAllowed("in-7f3@in.example.org", ["other@in.example.org"])).toBe(false)
     expect(recipientAllowed("in-7f3@in.example.org", [])).toBe(false)
@@ -93,6 +95,57 @@ describe("headers", () => {
     expect(plausibleDate("Wed, 07 Oct 2026 13:00:00 +0000", NOW)).toBe(NOW)
     expect(plausibleDate("Sat, 10 Oct 2026 12:00:00 +0000", NOW)).toBeUndefined()
     expect(plausibleDate("garbage", NOW)).toBeUndefined()
+  })
+})
+
+describe("senderAuthenticated", () => {
+  const TRUSTED = ["mx.microsoft.com"]
+  const FROM = '"CU German Society" <soc-cugs@lists.cam.ac.uk>'
+  const msArc = (i: number, results: string) =>
+    `i=${i}; mx.microsoft.com 1; spf=pass (sender IP is 1.2.3.4) smtp.mailfrom=lists.cam.ac.uk; ${results}`
+
+  test("Exchange's ARC verdict: DMARC or aligned DKIM pass for the From domain", () => {
+    const pass = msArc(1, "dmarc=pass action=none header.from=lists.cam.ac.uk")
+    expect(senderAuthenticated({ "ARC-Authentication-Results": pass }, FROM, TRUSTED)).toBe(true)
+    const dkim = msArc(1, "dkim=pass (signature was verified) header.d=cam.ac.uk")
+    expect(senderAuthenticated({ "arc-authentication-results": dkim }, FROM, TRUSTED)).toBe(true)
+    const fail = msArc(1, "dmarc=fail action=none header.from=lists.cam.ac.uk")
+    expect(senderAuthenticated({ "ARC-Authentication-Results": fail }, FROM, TRUSTED)).toBe(false)
+    // DKIM by someone else's domain proves nothing about the From domain.
+    const other = msArc(1, "dkim=pass header.d=evil.example")
+    expect(senderAuthenticated({ "ARC-Authentication-Results": other }, FROM, TRUSTED)).toBe(false)
+  })
+
+  test("only the last sealer counts: a forged earlier pass under Exchange's fail is no pass", () => {
+    const headers = {
+      "ARC-Authentication-Results": [
+        msArc(2, "dmarc=fail action=none header.from=lists.cam.ac.uk"),
+        msArc(1, "dmarc=pass action=none header.from=lists.cam.ac.uk"),
+      ],
+    }
+    expect(senderAuthenticated(headers, FROM, TRUSTED)).toBe(false)
+  })
+
+  test("untrusted or id-less verdicts, a missing From, or no headers prove nothing", () => {
+    const forged = "i=1; mx.evil.example; dmarc=pass header.from=lists.cam.ac.uk"
+    expect(senderAuthenticated({ "ARC-Authentication-Results": forged }, FROM, TRUSTED)).toBe(false)
+    // Microsoft's own Authentication-Results carries no authserv-id.
+    const idless = "spf=pass smtp.mailfrom=lists.cam.ac.uk; dmarc=pass header.from=lists.cam.ac.uk"
+    expect(senderAuthenticated({ "Authentication-Results": idless }, FROM, TRUSTED)).toBe(false)
+    const trusted = "mx.microsoft.com; dmarc=pass header.from=lists.cam.ac.uk"
+    expect(senderAuthenticated({ "Authentication-Results": trusted }, FROM, TRUSTED)).toBe(true)
+    expect(senderAuthenticated({ "Authentication-Results": trusted }, "nobody", TRUSTED)).toBe(
+      false,
+    )
+    expect(senderAuthenticated({}, FROM, TRUSTED)).toBe(false)
+  })
+
+  test("trustedAuthservIds defaults to Exchange; the env var replaces it", () => {
+    expect(trustedAuthservIds(undefined)).toEqual(["mx.microsoft.com"])
+    expect(trustedAuthservIds(" Inbound.Resend.example , mx.microsoft.com")).toEqual([
+      "inbound.resend.example",
+      "mx.microsoft.com",
+    ])
   })
 })
 

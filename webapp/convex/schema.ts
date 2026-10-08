@@ -120,6 +120,8 @@ export const fieldMetaValidator = v.object({
   claimCount: v.optional(v.number()),
   /** When `status` is `conflicting`: the readings that disagree with `value`. */
   conflicts: v.optional(v.array(fieldConflictValidator)),
+  /** When `status` is `conflicting`: the displayed value's own status. */
+  winnerStatus: v.optional(literalUnion(FIELD_STATUSES)),
 })
 export type FieldMetaDoc = Infer<typeof fieldMetaValidator>
 
@@ -302,6 +304,9 @@ export const eventFields = {
   description: v.optional(v.string()),
   startsAt: v.number(),
   endsAt: v.optional(v.number()),
+  /** Derived: `endsAt` of a multi-day event (lib/calendar.ts `spanEndOf`),
+   * else absent — indexed, so a run that began before a view still shows. */
+  spanEndsAt: v.optional(v.number()),
   allDay: v.boolean(),
   /** Derived from `termDates`, e.g. "MT26 Wk 3". */
   termWeekLabel: v.optional(v.string()),
@@ -325,6 +330,9 @@ export const eventFields = {
   sourceUrl: v.string(),
   /** Derived: the latest retrieval of any of its claims. */
   lastSeenAt: v.number(),
+  /** Derived: the listing it was read from (lib/derived.ts `sweepGroupOf`);
+   * a future event far behind its listing's newest sighting is withdrawn. */
+  sweepGroup: v.optional(v.string()),
   /** Derived: the lower of `title` and `startsAt` confidence. */
   confidence: v.number(),
   meta: metaValidator,
@@ -497,6 +505,10 @@ export const inboundEmailFields = {
   attachments: v.array(inboundAttachmentValidator),
   /** Resolved organiser, when the pipeline identified one. */
   orgKey: v.optional(v.string()),
+  /** A trusted receiver verified the sender's domain (DKIM / DMARC, read from
+   * `ARC-Authentication-Results` / `Authentication-Results`; lib/inbound-email.ts
+   * `senderAuthenticated`). Unverified mail is never attributed. */
+  senderVerified: v.optional(v.boolean()),
   extraction: literalUnion(INBOUND_EXTRACTION_STATUSES),
   extractedEventKeys: v.array(v.string()),
   extractionNote: v.optional(v.string()),
@@ -610,6 +622,8 @@ export const introductionFields = {
  * log: the address is stored only as a sha256, and rows are pruned after a day. */
 export const signInLinkSendFields = {
   emailHash: v.string(),
+  /** sha256 of the caller's IP, for the per-client limit (convex/authEmail.ts). */
+  clientHash: v.optional(v.string()),
   sentAt: v.number(),
 }
 
@@ -639,16 +653,19 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_startsAt", ["startsAt"])
     .index("by_visibility_startsAt", ["visibility", "startsAt"])
-    .searchIndex("search_title", { searchField: "title", filterFields: ["visibility"] }),
+    .index("by_visibility_spanEndsAt", ["visibility", "spanEndsAt"])
+    .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"]),
   eventOrganisers: defineTable({
     eventKey: v.string(),
     orgKey: v.string(),
     role: literalUnion(EVENT_ORGANISER_ROLES),
     /** Denormalised from the event, kept in step by convex/ingest/claims.ts. */
     startsAt: v.number(),
+    spanEndsAt: v.optional(v.number()),
     visibility: literalUnion(EVENT_VISIBILITIES),
   })
     .index("by_org_startsAt", ["orgKey", "startsAt"])
+    .index("by_org_spanEndsAt", ["orgKey", "spanEndsAt"])
     .index("by_event", ["eventKey"]),
   venues: defineTable(venueFields).index("by_key", ["key"]),
   relationships: defineTable(relationshipFields)
@@ -660,6 +677,7 @@ export default defineSchema({
   // internal, pipeline-owned
   fieldClaims: defineTable(fieldClaimFields)
     .index("by_entity_field", ["entityType", "entityKey", "field", "reviewStatus"])
+    .index("by_entity_review", ["entityType", "entityKey", "reviewStatus"])
     .index("by_run", ["runKey"])
     .index("by_fingerprint", ["fingerprint"]),
   sources: defineTable(sourceFields)
@@ -682,11 +700,13 @@ export default defineSchema({
   listingRequests: defineTable(listingRequestFields)
     .index("by_key", ["key"])
     .index("by_status_createdAt", ["status", "createdAt"])
-    .index("by_submitter_createdAt", ["submitterEmail", "createdAt"]),
+    .index("by_submitter_createdAt", ["submitterEmail", "createdAt"])
+    .index("by_kind_createdAt", ["kind", "createdAt"]),
 
   // internal, auth
   signInLinkSends: defineTable(signInLinkSendFields)
     .index("by_emailHash_sentAt", ["emailHash", "sentAt"])
+    .index("by_clientHash_sentAt", ["clientHash", "sentAt"])
     .index("by_sentAt", ["sentAt"]),
 
   // private broker CRM

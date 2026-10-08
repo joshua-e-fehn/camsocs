@@ -231,8 +231,15 @@ describe("eventOrganisers", () => {
       ["org-adc", "co_hosted", "org-footlights"],
       ["org-bank", "sponsors", "org-adc"],
     ])
-    // The past event makes its organiser active.
+    // The past event makes its organiser active — and lastActiveAt's meta
+    // says where that came from (the event's page), not "not attempted".
     expect(state.adc).toMatchObject({ lastActiveAt: past, status: "active" })
+    expect(state.adc?.meta.lastActiveAt).toMatchObject({
+      status: "found",
+      sourceUrl: "https://www.camdram.net/shows/x",
+      sourceType: "camdram",
+      method: "parser",
+    })
 
     // Replacing the set removes what is no longer listed.
     await t.mutation(internal.ingest.relationships.setEventOrganisers, {
@@ -240,6 +247,83 @@ describe("eventOrganisers", () => {
     })
     const links = await t.run(async (ctx) => await ctx.db.query("eventOrganisers").collect())
     expect(links.map((l) => l.orgKey)).toEqual(["org-adc"])
+  })
+
+  test("a merge set (some organisers unresolved) adds and never removes", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-adc", "org-footlights")
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        event("title", "Revue"),
+        event("startsAt", NOW + 86_400_000),
+        event("visibility", "public"),
+        event("source", "camdram"),
+        event("externalId", "show-9"),
+        event("sourceUrl", "https://www.camdram.net/shows/x"),
+      ],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: key, organisers: [{ orgKey: "org-adc", role: "organiser" }] }],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: key, organisers: [], mode: "merge" }],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [
+        {
+          eventKey: key,
+          organisers: [{ orgKey: "org-footlights", role: "co_host" }],
+          mode: "merge",
+        },
+      ],
+    })
+    const state = await t.run(async (ctx) => ({
+      links: await ctx.db.query("eventOrganisers").collect(),
+      event: await ctx.db
+        .query("events")
+        .withIndex("by_key", (q) => q.eq("key", key))
+        .unique(),
+    }))
+    expect(state.links.map((l) => l.orgKey).sort()).toEqual(["org-adc", "org-footlights"])
+    expect(state.event).toMatchObject({
+      organiserKeys: ["org-adc"],
+      coHostKeys: ["org-footlights"],
+    })
+  })
+
+  test("only public events move an organiser's public activity", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-adc")
+    const mailKey = eventKey("mailing_list", "org-adc:agm")
+    const past = NOW - 5 * 86_400_000
+    const mail = (field: string, value: unknown): ClaimInput => ({
+      ...event(field, value),
+      entityKey: mailKey,
+      sourceType: "mailing_list_email",
+      sourceUrl: "inbound:<agm@lists>",
+    })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        mail("title", "Members' AGM"),
+        mail("startsAt", past),
+        mail("visibility", "members_only"),
+        mail("source", "mailing_list"),
+        mail("externalId", "org-adc:agm"),
+        mail("sourceUrl", "inbound:<agm@lists>"),
+      ],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: mailKey, organisers: [{ orgKey: "org-adc", role: "organiser" }] }],
+    })
+    const adc = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("organisations")
+          .withIndex("by_key", (q) => q.eq("key", "org-adc"))
+          .unique(),
+    )
+    expect(adc?.lastActiveAt).toBeUndefined()
+    expect(adc?.meta.lastActiveAt).toEqual({ status: "missing", missingReason: "not_attempted" })
   })
 })
 

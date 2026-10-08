@@ -36,6 +36,7 @@ export const pendingMailValidator = v.object({
   htmlStorageId: v.optional(v.id("_storage")),
   attachments: v.array(inboundAttachmentValidator),
   orgKey: v.optional(v.string()),
+  senderVerified: v.boolean(),
 })
 
 export const pending = internalQuery({
@@ -58,6 +59,7 @@ export const pending = internalQuery({
       htmlStorageId: row.htmlStorageId,
       attachments: row.attachments,
       orgKey: row.orgKey,
+      senderVerified: row.senderVerified === true,
     }))
   },
 })
@@ -137,6 +139,7 @@ export const receive = internalMutation({
     text: v.string(),
     htmlStorageId: v.optional(v.id("_storage")),
     attachments: v.array(inboundAttachmentValidator),
+    senderVerified: v.optional(v.boolean()),
     note: v.optional(v.string()),
   },
   returns: v.object({ stored: v.boolean() }),

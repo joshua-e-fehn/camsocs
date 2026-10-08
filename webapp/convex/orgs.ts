@@ -1,8 +1,10 @@
 import { paginationOptsValidator } from "convex/server"
 import { v } from "convex/values"
+import { londonMidnight } from "../lib/calendar"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { londonIsoDate } from "./lib/derived"
+import { withdrawnCheck } from "./lib/entityStore"
 import { isHttpUrl } from "./lib/fields"
 import { facetCounts, matches, orgFiltersValidator, selections } from "./lib/orgFilters"
 import {
@@ -33,7 +35,10 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
 /** More cards than this is a directory an order of magnitude past plan; the
  * scan stops rather than reading an unbounded table. */
 const MAX_CARDS = 5_000
-const MAX_SEARCH_RESULTS = 256
+/** Convex's maximum result set for one full-text search query (docs:
+ * production/state/limits). The directory holds fewer listings than this; a
+ * query that fills it says so (`facets.truncated`). */
+const MAX_SEARCH_RESULTS = 1_024
 const MAX_PAGE_SIZE = 100
 const MAX_QUERY_LENGTH = 200
 
@@ -100,8 +105,15 @@ export const facets = query({
     blueStatus: counts,
     gender: counts,
     beginnerFriendly: counts,
+    /** True when a search matched more listings than one query can return:
+     * the counts then cover the best-ranked `MAX_SEARCH_RESULTS` only. */
+    truncated: v.boolean(),
   }),
-  handler: async (ctx, args) => facetCounts(await candidates(ctx, args.q), args),
+  handler: async (ctx, args) => {
+    const cards = await candidates(ctx, args.q)
+    const truncated = Boolean(args.q?.trim()) && cards.length >= MAX_SEARCH_RESULTS
+    return { ...facetCounts(cards, args), truncated }
+  },
 })
 
 /** The colleges, for the college filter: key, slug and name, by name. */
@@ -161,14 +173,22 @@ export const getBySlug = query({
 
     const viewer = await getViewer(ctx)
     const tiers = visibleEventTiers(viewer)
-    // From the start of today (London), so an event later today still shows.
-    const fromIso = londonIsoDate(Date.now())
-    const from = Date.parse(`${fromIso}T00:00:00Z`) - 60 * 60 * 1000
-    const links = await ctx.db
-      .query("eventOrganisers")
-      .withIndex("by_org_startsAt", (i) => i.eq("orgKey", org.key).gte("startsAt", from))
-      .take(UPCOMING_EVENTS * 3)
+    // From the start of today (London), so an event later today still shows,
+    // plus multi-day events that began earlier and are still running.
+    const from = londonMidnight(londonIsoDate(Date.now()))
+    const [running, upcoming] = await Promise.all([
+      ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_org_spanEndsAt", (i) => i.eq("orgKey", org.key).gt("spanEndsAt", from))
+        .take(UPCOMING_EVENTS),
+      ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_org_startsAt", (i) => i.eq("orgKey", org.key).gte("startsAt", from))
+        .take(UPCOMING_EVENTS * 3),
+    ])
+    const links = [...running.filter((link) => link.startsAt < from), ...upcoming]
     const lookup = orgRefCache(ctx)
+    const withdrawn = withdrawnCheck(ctx, Date.now())
     const events: EventPublic[] = []
     const seen = new Set<string>()
     for (const link of links) {
@@ -179,7 +199,7 @@ export const getBySlug = query({
         .query("events")
         .withIndex("by_key", (i) => i.eq("key", link.eventKey))
         .unique()
-      if (event && tiers.includes(event.visibility as never)) {
+      if (event && tiers.includes(event.visibility as never) && !(await withdrawn(event))) {
         events.push(await eventPublic(ctx, event, lookup))
       }
     }

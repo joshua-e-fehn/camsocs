@@ -76,7 +76,8 @@ export const membershipValidator = v.object({
     v.object({
       label: v.string(),
       pricePence: v.optional(v.number()),
-      period: literalUnion(MEMBERSHIP_PERIODS),
+      /** Absent when the source states no period: never assumed. */
+      period: v.optional(literalUnion(MEMBERSHIP_PERIODS)),
       note: v.optional(v.string()),
     }),
   ),
@@ -211,9 +212,13 @@ const INVITE_LINK =
  *    the field `conflicting` unless `compare` is `text`;
  *  - `union`  — array fields: the union of the contributing claims' items,
  *    de-duplicated by `itemKey`;
- *  - `max`    — the largest value wins (a "latest activity" timestamp).
+ *  - `max`    — the largest value wins (a "latest activity" timestamp);
+ *  - `strictest` — the most restrictive value any live claim reports wins,
+ *    by `order` (least to most restrictive), whatever its precedence or age;
+ *    only a manual / owner override can lift it. For privacy gates, where a
+ *    later or better-ranked reading must never widen who can see something.
  */
-export type MergeRule = "single" | "union" | "max"
+export type MergeRule = "single" | "union" | "max" | "strictest"
 
 /** How two values are compared for agreement / conflict. `text` never
  * conflicts: two sources' prose always differs, and that is not a dispute. */
@@ -234,6 +239,12 @@ export type FieldSpec = {
   check?: Check
   /** De-duplication key for one item of a `union` field. */
   itemKey?: (item: unknown) => string
+  /** For `strictest`: the values from least to most restrictive. */
+  order?: readonly string[]
+  /** A URL field whose sources check the URL itself: a negative reading
+   * *from* the URL (it answered 404, a login wall or nothing) sets claims of
+   * that URL aside (lib/resolve.ts `withoutDeadLinks`). */
+  checksLink?: boolean
   /** Counts toward `organisations.missingFields` (the outreach list). */
   tracked?: boolean
   /** When false and nobody claimed the field, its status is `not_applicable`. */
@@ -341,7 +352,7 @@ export const ORGANISATION_SPECS: Record<(typeof ORGANISATION_FIELDS)[number], Fi
   }),
   "sport.kitCostNote": text(500, { applies: isSporty }),
   "sport.venues": union(v.string(), lower, { check: each(maxLength(200)), applies: isSporty }),
-  website: url({ tracked: true }),
+  website: url({ tracked: true, checksLink: true }),
   email: scalar(v.string(), { compare: "email", check: checks.email, tracked: true }),
   roleEmails: union(
     roleEmailValidator,
@@ -385,7 +396,13 @@ export const EVENT_SPECS: Record<(typeof EVENT_FIELDS)[number], FieldSpec> = {
   price: scalar(priceValidator),
   bookingUrl: url(),
   signupRequired: scalar(v.boolean()),
-  visibility: scalar(literalUnion(EVENT_VISIBILITIES), { requiredOnCreate: true }),
+  /** Strictest reading wins: a later mail or post that omits "members only"
+   * never opens an event a live claim restricts (AGENTS.md privacy boundary). */
+  visibility: scalar(literalUnion(EVENT_VISIBILITIES), {
+    merge: "strictest",
+    order: EVENT_VISIBILITIES,
+    requiredOnCreate: true,
+  }),
   eventType: scalar(literalUnion(EVENT_TYPES)),
   image: scalar(imageValidator, { check: urlsIn((i) => [i.sourceUrl]) }),
   cancelled: scalar(v.boolean()),

@@ -9,6 +9,7 @@ import {
   recipientAllowed,
   resendMessage,
   svixHeaders,
+  trustedAuthservIds,
   verifySvixSignature,
 } from "../lib/inbound-email"
 import { fetchReceivedAttachments, fetchReceivedEmail, ResendError } from "../lib/resend-inbound"
@@ -319,9 +320,11 @@ http.route({
  *  - **Anything else** posts the provider-agnostic JSON (lib/inbound-email.ts)
  *    with `Authorization: Bearer $INBOUND_EMAIL_SECRET`.
  *
- * Either secret unset → 401 for that sender: deny-all. Optional
- * `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one
- * of those addresses. Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`;
+ * Either secret unset → 401 for that sender: deny-all. Mail not addressed to
+ * one of `INBOUND_EMAIL_RECIPIENTS` (comma-separated; unset accepts none) is
+ * ignored. Each stored mail records whether a trusted receiver verified its
+ * sender (`senderVerified`, `INBOUND_TRUSTED_AUTHSERV_IDS`); only verified
+ * mail may be attributed to an organisation. Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`;
  * 401 bad signature or secret; 400 malformed; 413 too large; 502/503 when
  * Resend's API failed or is not configured yet — Resend retries those for about
  * a day, and the `messageId` dedupe makes every retry safe.
@@ -362,7 +365,11 @@ http.route({
     } catch {
       return json({ error: "Body must be JSON" }, 400)
     }
-    const parsed = parseGenericPayload(body, now)
+    const parsed = parseGenericPayload(
+      body,
+      now,
+      trustedAuthservIds(process.env.INBOUND_TRUSTED_AUTHSERV_IDS),
+    )
     if (!parsed.ok) return json({ error: parsed.error }, 400)
     if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, parsed.value.to)) {
       return json({ ignored: "recipient" }, 200)
@@ -392,7 +399,12 @@ async function receiveResend(ctx: ActionCtx, raw: string, now: number): Promise<
   if (!apiKey) return json({ error: "Resend API key not configured" }, 503)
   try {
     const email = await fetchReceivedEmail(fetch, apiKey, received.emailId)
-    const message = resendMessage(received, email, now)
+    const message = resendMessage(
+      received,
+      email,
+      now,
+      trustedAuthservIds(process.env.INBOUND_TRUSTED_AUTHSERV_IDS),
+    )
     // Checked after fetching: a redirected list mail keeps the list in `To:`,
     // and only its delivery headers name our inbound address.
     if (!recipientAllowed(process.env.INBOUND_EMAIL_RECIPIENTS, message.to)) {
@@ -446,6 +458,7 @@ async function storeInbound(ctx: ActionCtx, message: InboundMessage): Promise<Re
     text: message.text,
     htmlStorageId,
     attachments,
+    senderVerified: message.senderVerified,
     note: notes.length ? `skipped: ${notes.join("; ")}` : undefined,
   })
   if (!stored) {

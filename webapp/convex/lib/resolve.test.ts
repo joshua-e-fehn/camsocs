@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ORGANISATION_SPECS } from "./fields"
+import { EVENT_SPECS, ORGANISATION_SPECS } from "./fields"
 import {
   baseConfidence,
   comparable,
@@ -397,5 +397,122 @@ describe("resolveField — max", () => {
     const { value, meta } = resolveField(lastActiveAt, [old, recent])
     expect(value).toBe(T0)
     expect(meta.sourceUrl).toBe("https://b.org")
+  })
+})
+
+describe("resolveField — strictest (an event's visibility)", () => {
+  const visibility = EVENT_SPECS.visibility
+  const mail = (value: string, at: number, key: string) =>
+    claim({
+      value,
+      status: "inferred",
+      method: "llm",
+      sourceKey: key,
+      sourceUrl: `inbound:${key}`,
+      sourceType: "mailing_list_email",
+      retrievedAt: at,
+    })
+
+  test("a later, better-ranked reading never widens it", () => {
+    const membersOnly = mail("members_only", T0, "m1")
+    const camOnly = mail("cam_only", T0 + DAY, "m2")
+    const publicFound = claim({ value: "public", retrievedAt: T0 + 2 * DAY, sourceKey: "src-p" })
+    expect(resolveField(visibility, [membersOnly, camOnly]).value).toBe("members_only")
+    expect(resolveField(visibility, [camOnly, publicFound]).value).toBe("cam_only")
+    expect(resolveField(visibility, [publicFound, camOnly, membersOnly]).value).toBe("members_only")
+  })
+
+  test("only a manual override lifts it", () => {
+    const membersOnly = mail("members_only", T0, "m1")
+    const manual = claim({ value: "cam_only", status: "manual", method: "manual", sourceKey: "m" })
+    expect(resolveField(visibility, [membersOnly, manual]).value).toBe("cam_only")
+  })
+})
+
+describe("resolveField — conflicts keep the winner's own status", () => {
+  test("an inferred winner of a conflict says so in winnerStatus", () => {
+    const a = claim({ value: "a@x.org", status: "inferred", method: "llm", sourceKey: "src-a" })
+    const b = claim({
+      value: "b@x.org",
+      status: "inferred",
+      method: "llm",
+      sourceKey: "src-b",
+      retrievedAt: T0 - DAY,
+    })
+    expect(resolveField(email, [a, b]).meta).toMatchObject({
+      status: "conflicting",
+      winnerStatus: "inferred",
+    })
+  })
+})
+
+describe("resolveField — URLs whose own page is dead", () => {
+  const website = ORGANISATION_SPECS.website
+  const register = claim({
+    value: "https://gone.example/",
+    evidence: "secondary",
+    sourceKey: "src-su",
+    sourceUrl: "https://www.cambridgesu.co.uk/organisation/1/",
+    sourceType: "su_profile",
+    retrievedAt: T0 + 3 * DAY,
+  })
+  const dead = claim({
+    value: undefined,
+    status: "missing",
+    missingReason: "not_found",
+    sourceKey: "src-gone",
+    sourceUrl: "https://gone.example/",
+    retrievedAt: T0 + DAY,
+  })
+
+  test("a 404 from the stated site itself sets the register's link aside", () => {
+    const { value, meta } = resolveField(website, [register, dead])
+    expect(value).toBeUndefined()
+    expect(meta).toMatchObject({ status: "missing", missingReason: "not_found" })
+    expect(meta.sourceUrl).toBe("https://gone.example/")
+  })
+
+  test("another stated website still shows", () => {
+    const other = claim({
+      value: "https://alive.example/",
+      evidence: "secondary",
+      sourceKey: "src-pr",
+      sourceUrl: "https://www.proctors.cam.ac.uk/x",
+      sourceType: "proctors_register",
+    })
+    expect(resolveField(website, [register, dead, other]).value).toBe("https://alive.example/")
+  })
+
+  test("only a link-checked field: a page that merely lacks a join link is no dead link", () => {
+    const joinUrl = ORGANISATION_SPECS.joinUrl
+    const parser = claim({ value: "https://site.example/join", sourceKey: "src-home" })
+    const llmNegative = claim({
+      value: undefined,
+      status: "missing",
+      missingReason: "not_found",
+      method: "llm",
+      sourceKey: "src-join",
+      sourceUrl: "https://site.example/join",
+      retrievedAt: T0 + DAY,
+    })
+    expect(resolveField(joinUrl, [parser, llmNegative]).value).toBe("https://site.example/join")
+  })
+
+  test("a later answer from the site lifts it", () => {
+    const answered = claim({
+      value: "https://gone.example/",
+      sourceKey: "src-gone",
+      sourceUrl: "https://gone.example/",
+      retrievedAt: T0 + 2 * DAY,
+    })
+    expect(resolveField(website, [register, dead, answered]).value).toBe("https://gone.example/")
+  })
+})
+
+describe("liveClaims — a reading seen again counts from its last sighting", () => {
+  test("X → Y → X: the revived X is the live reading", () => {
+    const x = claim({ value: "x@x.org", retrievedAt: T0, lastSeenAt: T0 + 2 * DAY })
+    const y = claim({ value: "y@x.org", retrievedAt: T0 + DAY })
+    expect(liveClaims([x, y]).map((c) => c.value)).toEqual(["x@x.org"])
   })
 })

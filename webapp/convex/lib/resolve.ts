@@ -76,6 +76,9 @@ export type FieldConflict = {
 
 export type FieldMeta = {
   status: FieldStatus
+  /** When `status` is `conflicting`: the displayed value's own status
+   * (`found`, `inferred`, …), for a view that cannot show the conflict. */
+  winnerStatus?: FieldStatus
   evidence?: EvidenceKind
   missingReason?: MissingReason
   confidence?: number
@@ -141,14 +144,16 @@ export function precedenceTier(claim: ResolvableClaim): number {
 
 const recency = (claim: ResolvableClaim) => claim.lastSeenAt ?? claim.retrievedAt
 
-/** Rule 1: drop rejected / superseded, keep the newest claim per (sourceKey, method). */
+/** Rule 1: drop rejected / superseded, keep the newest claim per (sourceKey,
+ * method) — newest by latest sighting, so a reading seen again (a value the
+ * page went back to) counts from when it was last seen. */
 export function liveClaims<C extends ResolvableClaim>(claims: readonly C[]): C[] {
   const latest = new Map<string, C>()
   for (const claim of claims) {
     if (claim.reviewStatus === "rejected" || claim.reviewStatus === "superseded") continue
     const group = `${claim.sourceKey}\u0000${claim.method}`
     const current = latest.get(group)
-    if (!current || claim.retrievedAt > current.retrievedAt) latest.set(group, claim)
+    if (!current || recency(claim) > recency(current)) latest.set(group, claim)
   }
   return [...latest.values()]
 }
@@ -198,16 +203,58 @@ function provenance(claim: ResolvableClaim): Omit<FieldMeta, "status"> {
  * `applicable` false turns "nobody claimed it" into `not_applicable`.
  */
 export function resolveField(
-  spec: Pick<FieldSpec, "merge" | "compare" | "itemKey">,
+  spec: Pick<FieldSpec, "merge" | "compare" | "itemKey" | "order" | "checksLink">,
   claims: readonly ResolvableClaim[],
   options: { applicable?: boolean } = {},
 ): Resolution {
-  const live = liveClaims(claims)
+  const live = spec.checksLink ? withoutDeadLinks(liveClaims(claims)) : liveClaims(claims)
   const values = live.filter(hasValue).sort(byPrecedence)
   if (values.length === 0) return resolveAbsent(live, options.applicable ?? true)
   if (spec.merge === "union") return resolveUnion(spec, values)
   if (spec.merge === "max") return resolveMax(values)
+  if (spec.merge === "strictest") return resolveStrictest(spec.order ?? [], values)
   return resolveSingle(spec.compare, values)
+}
+
+/** Why a URL's own page counts as dead. */
+const DEAD_LINK_REASONS: ReadonlySet<MissingReason> = new Set([
+  "not_found",
+  "access_restricted",
+  "unreachable",
+])
+
+/**
+ * Link-checked URL fields (`checksLink`: `website`): a link is only as good as
+ * what is at it. When the latest
+ * primary reading *from the URL itself* says it is dead (the stated website
+ * answered 404, a login wall, or nothing at all), claims whose value is that
+ * URL are set aside — a register still listing it does not make it a working
+ * site — and the field falls to another value or to that reading's
+ * `missingReason`. A later reading from the URL that answers lifts it.
+ */
+function withoutDeadLinks(live: ResolvableClaim[]): ResolvableClaim[] {
+  const latestFromUrl = new Map<string, ResolvableClaim>()
+  for (const claim of live) {
+    if (claim.evidence !== "primary") continue
+    const url = normaliseUrl(claim.sourceUrl)
+    const current = latestFromUrl.get(url)
+    if (!current || recency(claim) > recency(current)) latestFromUrl.set(url, claim)
+  }
+  const dead = new Set<string>()
+  for (const [url, claim] of latestFromUrl) {
+    if (
+      !hasValue(claim) &&
+      claim.status === "missing" &&
+      DEAD_LINK_REASONS.has(claim.missingReason ?? "not_found")
+    ) {
+      dead.add(url)
+    }
+  }
+  if (dead.size === 0) return live
+  return live.filter(
+    (claim) =>
+      !hasValue(claim) || typeof claim.value !== "string" || !dead.has(normaliseUrl(claim.value)),
+  )
 }
 
 function resolveAbsent(live: readonly ResolvableClaim[], applicable: boolean): Resolution {
@@ -271,10 +318,47 @@ function resolveSingle(rule: CompareRule, values: readonly ResolvableClaim[]): R
     value: winner.value,
     meta: {
       status: conflicts.length > 0 ? "conflicting" : winner.status,
+      ...(conflicts.length > 0 ? { winnerStatus: storedOf(winner) } : {}),
       confidence: round2(confidence),
       ...provenance(winner),
       claimCount: hosts.size,
       ...(conflicts.length > 0 ? { conflicts } : {}),
+    },
+  }
+}
+
+/** A stored claim's status (never `conflicting`: that is a resolution outcome). */
+function storedOf(claim: ResolvableClaim): StoredClaimStatus {
+  return claim.status === "conflicting" ? "found" : claim.status
+}
+
+/**
+ * `strictest` fields (an event's `visibility`): the most restrictive value any
+ * live claim reports, ranked by `order` (least → most restrictive) before
+ * precedence or age, so a newer, better-ranked or merely different reading
+ * can never widen it. A manual / owner override is the one way to lift it.
+ */
+function resolveStrictest(
+  order: readonly string[],
+  values: readonly ResolvableClaim[],
+): Resolution {
+  const rank = (claim: ResolvableClaim) => order.indexOf(String(claim.value))
+  const overrides = values.filter((claim) => precedenceTier(claim) === 0)
+  const winner =
+    overrides[0] ?? [...values].sort((a, b) => rank(b) - rank(a) || byPrecedence(a, b))[0]
+  const agreeing = values.filter((claim) => claim.value === winner.value)
+  const hosts = new Set(agreeing.map((claim) => hostOf(claim.sourceUrl)))
+  const confidence =
+    precedenceTier(winner) === 0
+      ? 1
+      : Math.min(0.99, baseConfidence(winner) + 0.05 * (hosts.size - 1))
+  return {
+    value: winner.value,
+    meta: {
+      status: winner.status,
+      confidence: round2(confidence),
+      ...provenance(winner),
+      claimCount: hosts.size,
     },
   }
 }

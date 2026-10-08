@@ -73,6 +73,12 @@ describe("termWeekLabel", () => {
     expect(termWeekLabel(london("2026-12-04T12:00:00"), TERMS)).toBe("MT26 Wk 9")
   })
 
+  test("the last week stops with Full Term (Fri 4 Dec), not on its Wednesday", () => {
+    expect(termWeekLabel(london("2026-12-04T23:30:00"), TERMS)).toBe("MT26 Wk 9")
+    expect(termWeekLabel(london("2026-12-05T12:00:00"), TERMS)).toBeUndefined()
+    expect(termWeekLabel(london("2026-12-09T12:00:00"), TERMS)).toBeUndefined()
+  })
+
   test("Lent and Easter use the calendar year of their start", () => {
     expect(termWeekLabel(london("2027-01-21T12:00:00"), TERMS)).toBe("LT27 Wk 1")
     expect(termWeekLabel(london("2027-05-01T12:00:00"), TERMS)).toBe("ET27 Wk 1")

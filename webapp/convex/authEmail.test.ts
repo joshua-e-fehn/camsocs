@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { isCamEmail } from "../lib/cam-email"
-import { api, components } from "./_generated/api"
+import { api, components, internal } from "./_generated/api"
+import { LINKS_PER_CLIENT, LINKS_PER_HOUR } from "./authEmail"
 import { NOT_CAM_EMAIL } from "./betterAuth/auth"
 import { newTest, type TestConvex, withEnv } from "./lib/harness.testing"
 import { buildSignInEmail, RESEND_ENDPOINT, resendConfig } from "./lib/signInEmail"
@@ -44,10 +45,14 @@ afterEach(() => {
   globalThis.fetch = realFetch
 })
 
-function requestLink(t: TestConvex, email: string) {
+function requestLink(t: TestConvex, email: string, forwardedFor?: string) {
   return t.fetch("/api/auth/sign-in/magic-link", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Origin: SITE },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: SITE,
+      ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}),
+    },
     body: JSON.stringify({ email, callbackURL: "/" }),
   })
 }
@@ -152,6 +157,18 @@ describe("POST /api/auth/sign-in/magic-link", () => {
     })
   })
 
+  test("throttles one client asking for links to many addresses", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      const statuses: number[] = []
+      for (let i = 0; i <= LINKS_PER_CLIENT; i++) {
+        statuses.push((await requestLink(t, `zz${i}@cam.ac.uk`, "203.0.113.7, 10.0.0.1")).status)
+      }
+      expect(statuses.filter((status) => status === 200)).toHaveLength(LINKS_PER_CLIENT)
+      expect(statuses[LINKS_PER_CLIENT]).toBe(429)
+    })
+  })
+
   test("reports a Resend failure as 502 without leaking the key or the link", async () => {
     await withEnv(ENV, async () => {
       globalThis.fetch = (async () =>
@@ -172,6 +189,52 @@ describe("POST /api/auth/sign-in/magic-link", () => {
         logged.mockRestore()
       }
     })
+  })
+})
+
+describe("reserveSignInLink", () => {
+  test("one client cycling through addresses is stopped before the overall cap", async () => {
+    const t = newTest()
+    const verdicts: string[] = []
+    for (let i = 0; i < LINKS_PER_CLIENT + 1; i++) {
+      verdicts.push(
+        await t.mutation(internal.authEmail.reserveSignInLink, {
+          email: `zz${i}@cam.ac.uk`,
+          client: "203.0.113.7",
+        }),
+      )
+    }
+    expect(verdicts.slice(0, LINKS_PER_CLIENT).every((v) => v === "ok")).toBe(true)
+    expect(verdicts[LINKS_PER_CLIENT]).toBe("client_limit")
+    // Another client is unaffected.
+    expect(
+      await t.mutation(internal.authEmail.reserveSignInLink, {
+        email: "ab123@cam.ac.uk",
+        client: "198.51.100.2",
+      }),
+    ).toBe("ok")
+    // The client is stored only hashed.
+    const rows = await t.run(async (ctx) => await ctx.db.query("signInLinkSends").collect())
+    expect(JSON.stringify(rows)).not.toContain("203.0.113.7")
+  })
+
+  test("the overall cap never locks out an address that has signed in before", async () => {
+    const t = newTest()
+    for (let i = 0; i < LINKS_PER_HOUR; i++) {
+      await t.mutation(internal.authEmail.reserveSignInLink, {
+        email: `zz${i}@cam.ac.uk`,
+        client: `client-${i}`,
+      })
+    }
+    const fresh = { email: "new1@cam.ac.uk", client: "client-new" }
+    expect(await t.mutation(internal.authEmail.reserveSignInLink, fresh)).toBe("global_limit")
+    expect(
+      await t.mutation(internal.authEmail.reserveSignInLink, {
+        email: "known1@cam.ac.uk",
+        client: "client-known",
+        knownUser: true,
+      }),
+    ).toBe("ok")
   })
 })
 

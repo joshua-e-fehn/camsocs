@@ -7,7 +7,7 @@ import {
   REGISTRATION_BODIES,
   type Term,
 } from "../../lib/vocab"
-import type { ApplicabilityContext, FieldSpec } from "./fields"
+import { type ApplicabilityContext, type FieldSpec, normaliseUrl } from "./fields"
 import type { FieldMeta } from "./resolve"
 
 /**
@@ -59,7 +59,8 @@ const TERM_PREFIX: Record<Term, string> = { michaelmas: "MT", lent: "LT", easter
  * Cambridge convention (as Camdram and CUCBC label weeks): Full Term starts
  * on a Tuesday, and a "week" runs Thursday to Wednesday, so Week 1 begins on
  * the first Thursday of Full Term. Week 0 is the week before. Labels run from
- * Week 0 to the week containing the last day of Full Term.
+ * Week 0 to the last day of Full Term: the last week ends with Full Term
+ * (Michaelmas 2026: Week 9 = Thu 3 – Fri 4 Dec; source-research §19).
  */
 export function termWeekLabel(ms: number, terms: readonly TermDates[]): string | undefined {
   const day = isoDateMs(londonIsoDate(ms))
@@ -68,12 +69,60 @@ export function termWeekLabel(ms: number, terms: readonly TermDates[]): string |
     const end = isoDateMs(term.fullTermEnd)
     const firstThursday = start + ((4 - new Date(start).getUTCDay() + 7) % 7) * DAY_MS
     const week = Math.floor((day - firstThursday) / (7 * DAY_MS)) + 1
-    const lastWeek = Math.floor((end - firstThursday) / (7 * DAY_MS)) + 1
-    if (week < 0 || week > lastWeek) continue
+    if (week < 0 || day > end) continue
     const year = new Date(start).getUTCFullYear() % 100
     return `${TERM_PREFIX[term.term]}${String(year).padStart(2, "0")} Wk ${week}`
   }
   return undefined
+}
+
+// --- withdrawn events --------------------------------------------------------------------------
+
+/**
+ * Sources that list every current event each time they are read, by how far
+ * one reading reaches: the whole source (one diary or listing) or one listing
+ * URL (a feed, a talks list, a league). An event such a listing stops showing
+ * was withdrawn — moved, renamed or dropped — even though nobody says so.
+ * Mail, posts, termcards and manual entries are one-off readings: never.
+ */
+const WHOLE_SOURCE_LISTINGS = new Set(["camdram", "cucbc", "su_whatson"])
+const PER_URL_LISTINGS = new Set([
+  "talks_cam",
+  "ics",
+  "luma",
+  "google_calendar",
+  "playwaze",
+  "uni_events_api",
+])
+
+/** How far a listed event's last sighting may lag its listing's newest
+ * before it counts as no longer listed: a few daily runs. */
+export const WITHDRAWN_AFTER_MS = 3 * DAY_MS
+
+/**
+ * The listing an event was read from (`events.sweepGroup`), or undefined for
+ * a one-off source. Its newest sighting is what the event's own `lastSeenAt`
+ * is compared with: a listing that is read again re-sights everything it
+ * still shows, so an event it dropped falls behind — and a pipeline that
+ * stops running stops every sighting at once, which hides nothing.
+ */
+export function sweepGroupOf(source: string, listingUrl: string | undefined): string | undefined {
+  if (WHOLE_SOURCE_LISTINGS.has(source)) return source
+  if (PER_URL_LISTINGS.has(source) && listingUrl) return `${source}:${normaliseUrl(listingUrl)}`
+  return undefined
+}
+
+/** Whether a future event has fallen behind its listing (`sweepGroupOf`). */
+export function isWithdrawn(
+  event: { startsAt: number; lastSeenAt: number },
+  listingNewest: number | undefined,
+  now: number,
+): boolean {
+  return (
+    event.startsAt >= now &&
+    listingNewest !== undefined &&
+    listingNewest - event.lastSeenAt > WITHDRAWN_AFTER_MS
+  )
 }
 
 // --- organisation status --------------------------------------------------------------------
@@ -139,6 +188,11 @@ const WEBMAIL_DOMAINS = new Set([
 /** A Cambridge CRSid: 2–5 letters then digits (e.g. `jf123`). */
 const CRSID_LOCAL = /^[a-z]{2,5}[0-9]{1,5}$/
 
+/** Domains outside cam.ac.uk that give every member an address at their
+ * CRSid: SRCF user mail (`<crsid>@srcf.net`) and the alumni forwarding
+ * services. A CRSid there names a person just as on cam.ac.uk. */
+const CRSID_MAIL_DOMAINS = new Set(["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"])
+
 /**
  * What kind of address an email is (`EMAIL_TYPES`). Derived on the server from
  * the resolved address — never claimed — because the public projection
@@ -149,10 +203,12 @@ export function classifyEmail(email: string): EmailType {
   const at = address.lastIndexOf("@")
   const local = address.slice(0, at)
   const domain = address.slice(at + 1)
-  // On cam.ac.uk or any subdomain (hermes, college domains): a CRSid-shaped
-  // local part names a person. Errs toward hiding a role address like `jcr1@`.
-  const camDomain = domain === "cam.ac.uk" || domain.endsWith(".cam.ac.uk")
-  if (camDomain && domain !== "lists.cam.ac.uk" && CRSID_LOCAL.test(local)) {
+  // On cam.ac.uk or any subdomain (hermes, college domains), SRCF or cantab:
+  // a CRSid-shaped local part names a person. Errs toward hiding a role
+  // address like `jcr1@`.
+  const camDomain =
+    (domain === "cam.ac.uk" || domain.endsWith(".cam.ac.uk")) && domain !== "lists.cam.ac.uk"
+  if ((camDomain || CRSID_MAIL_DOMAINS.has(domain)) && CRSID_LOCAL.test(local)) {
     return "personal_crsid"
   }
   if (/(^|\.)cusu\./.test(domain) || domain === "cusu.org") return "legacy_cusu"

@@ -18,8 +18,9 @@ import {
   ENTITY_TABLES,
   type EntityDoc,
   findEntity,
-  latestPastEventAt,
+  latestPastEvent,
   loadTerms,
+  organiserCopyChanged,
   refreshOrganisation,
   syncEventOrganiserRows,
   writeOrgCard,
@@ -228,6 +229,14 @@ export function validateClaim(input: ClaimInput, now: number): string | null {
     return `a ${input.status} claim must not carry a value`
   }
   if (input.missingReason !== undefined) return "missingReason belongs to a missing claim"
+  if (
+    input.entityType === "event" &&
+    input.field === "visibility" &&
+    input.value === "public" &&
+    input.sourceType === "mailing_list_email"
+  ) {
+    return "mailing-list events are never public (source-research §16)"
+  }
   return checkValue(spec.validator, input.value) ?? spec.check?.(input.value) ?? null
 }
 
@@ -278,6 +287,10 @@ function prepare(input: ClaimInput, runKey: string | undefined, now: number) {
     confidence: baseConfidence({ method: input.method, status, evidence: input.evidence }),
     reviewStatus: "accepted" as const,
     runKey,
+    // Not over `contentSha256`: a page's bytes change on every fetch when it
+    // carries per-request tokens (the SU's ASP.NET __VIEWSTATE), and the same
+    // reading of the same page must stay one claim (re-posting is a no-op).
+    // The hash is still stored on the row as provenance.
     fingerprint: claimFingerprint({
       entityType: input.entityType,
       entityKey: input.entityKey,
@@ -286,7 +299,6 @@ function prepare(input: ClaimInput, runKey: string | undefined, now: number) {
       status,
       missingReason,
       sourceUrl: input.sourceUrl,
-      contentSha256: input.contentSha256,
       method: input.method,
     }),
     createdAt: now,
@@ -298,6 +310,11 @@ function prepare(input: ClaimInput, runKey: string | undefined, now: number) {
  * is re-observed a day or more later (its `lastSeenAt` advances). A new claim
  * supersedes the older live claims of the same (source, method); if a newer
  * one already exists, the new claim is stored already superseded.
+ *
+ * A known claim that a later reading superseded is *revived* when the source
+ * says it again (X → Y → X): it is the newest reading of that (source,
+ * method) once more, so it is accepted again and supersedes Y (data-model §1
+ * rule 1). A rejected claim stays rejected — that is the broker's verdict.
  */
 async function appendClaim(
   ctx: MutationCtx,
@@ -311,12 +328,40 @@ async function appendClaim(
     .query("fieldClaims")
     .withIndex("by_fingerprint", (q) => q.eq("fingerprint", row.fingerprint))
     .first()
+  if (known && known.reviewStatus === "superseded") {
+    if (row.retrievedAt <= known.lastSeenAt) return "unchanged"
+    if (await supersedeOthers(ctx, row, known._id)) return "unchanged"
+    await ctx.db.patch("fieldClaims", known._id, {
+      reviewStatus: "accepted",
+      lastSeenAt: row.retrievedAt,
+      runKey: row.runKey,
+    })
+    return "updated"
+  }
   if (known) {
     if (row.retrievedAt < known.lastSeenAt + REFRESH_INTERVAL_MS) return "unchanged"
     await ctx.db.patch("fieldClaims", known._id, { lastSeenAt: row.retrievedAt })
     return "updated"
   }
 
+  const newerExists = await supersedeOthers(ctx, row)
+  await ctx.db.insert("fieldClaims", {
+    ...row,
+    reviewStatus: newerExists ? "superseded" : "accepted",
+  })
+  return "inserted"
+}
+
+/**
+ * Supersedes the live claims of `row`'s (source, method) that are older than
+ * it, except `keep`. Returns true — and supersedes nothing — when one of them
+ * was seen later than `row` (then `row` is the older reading, posted late).
+ */
+async function supersedeOthers(
+  ctx: MutationCtx,
+  row: Prepared["row"],
+  keep?: Doc<"fieldClaims">["_id"],
+): Promise<boolean> {
   const live = await ctx.db
     .query("fieldClaims")
     .withIndex("by_entity_field", (q) =>
@@ -327,17 +372,15 @@ async function appendClaim(
         .eq("reviewStatus", "accepted"),
     )
     .take(1_000)
-  let newerExists = false
-  for (const claim of live) {
-    if (claim.sourceKey !== row.sourceKey || claim.method !== row.method) continue
-    if (claim.retrievedAt > row.retrievedAt) newerExists = true
-    else await ctx.db.patch("fieldClaims", claim._id, { reviewStatus: "superseded" })
+  const same = live.filter(
+    (claim) =>
+      claim._id !== keep && claim.sourceKey === row.sourceKey && claim.method === row.method,
+  )
+  if (same.some((claim) => claim.lastSeenAt > row.retrievedAt)) return true
+  for (const claim of same) {
+    await ctx.db.patch("fieldClaims", claim._id, { reviewStatus: "superseded" })
   }
-  await ctx.db.insert("fieldClaims", {
-    ...row,
-    reviewStatus: newerExists ? "superseded" : "accepted",
-  })
-  return "inserted"
+  return false
 }
 
 /** Above this many fields, one range read of the entity's whole claim log is
@@ -349,7 +392,11 @@ const WHOLE_ENTITY_READ_FROM = 8
 const ENTITY_CLAIMS_CAP = 8_000
 const FIELD_CLAIMS_CAP = 2_000
 
-/** Resolves `fields` of one entity from every claim recorded for them. */
+/** The review statuses resolution reads (rule 1 ignores the others), so the
+ * superseded history an entity accumulates is never read again. */
+const LIVE_REVIEW_STATUSES = ["accepted", "proposed"] as const
+
+/** Resolves `fields` of one entity from every live claim recorded for them. */
 async function resolveFields(
   ctx: MutationCtx,
   entityType: EntityType,
@@ -360,24 +407,38 @@ async function resolveFields(
   const byField = new Map<string, Doc<"fieldClaims">[]>()
   if (fields.length >= WHOLE_ENTITY_READ_FROM) {
     const wanted = new Set(fields)
-    const all = await ctx.db
-      .query("fieldClaims")
-      .withIndex("by_entity_field", (q) =>
-        q.eq("entityType", entityType).eq("entityKey", entityKey),
-      )
-      .take(ENTITY_CLAIMS_CAP)
-    for (const claim of all) {
-      if (!wanted.has(claim.field)) continue
-      byField.set(claim.field, [...(byField.get(claim.field) ?? []), claim])
+    for (const reviewStatus of LIVE_REVIEW_STATUSES) {
+      const all = await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_review", (q) =>
+          q
+            .eq("entityType", entityType)
+            .eq("entityKey", entityKey)
+            .eq("reviewStatus", reviewStatus),
+        )
+        .take(ENTITY_CLAIMS_CAP)
+      for (const claim of all) {
+        if (!wanted.has(claim.field)) continue
+        byField.set(claim.field, [...(byField.get(claim.field) ?? []), claim])
+      }
     }
   } else {
     for (const field of fields) {
-      const claims = await ctx.db
-        .query("fieldClaims")
-        .withIndex("by_entity_field", (q) =>
-          q.eq("entityType", entityType).eq("entityKey", entityKey).eq("field", field),
+      const claims: Doc<"fieldClaims">[] = []
+      for (const reviewStatus of LIVE_REVIEW_STATUSES) {
+        claims.push(
+          ...(await ctx.db
+            .query("fieldClaims")
+            .withIndex("by_entity_field", (q) =>
+              q
+                .eq("entityType", entityType)
+                .eq("entityKey", entityKey)
+                .eq("field", field)
+                .eq("reviewStatus", reviewStatus),
+            )
+            .take(FIELD_CLAIMS_CAP)),
         )
-        .take(FIELD_CLAIMS_CAP)
+      }
       byField.set(field, claims)
     }
   }
@@ -400,14 +461,14 @@ async function writeEntity(
   context: { now: number; terms: TermDates[] },
 ): Promise<"created" | "updated" | "unchanged"> {
   const table = ENTITY_TABLES[entityType]
-  const latestEventAt =
-    entityType === "organisation" ? await latestPastEventAt(ctx, entityKey, context.now) : undefined
+  const latestEvent =
+    entityType === "organisation" ? await latestPastEvent(ctx, entityKey, context.now) : undefined
   const row = materialise(
     entityType,
     entityKey,
     existing as Record<string, unknown> | null,
     resolutions,
-    { ...context, latestEventAt },
+    { ...context, latestEvent },
   )
 
   let outcome: "created" | "updated" | "unchanged"
@@ -435,7 +496,7 @@ async function writeEntity(
   if (entityType === "event") {
     const event = written as Doc<"events">
     const before = existing as Doc<"events"> | null
-    if (before && (before.startsAt !== event.startsAt || before.visibility !== event.visibility)) {
+    if (before && organiserCopyChanged(before, event)) {
       const orgKeys = await syncEventOrganiserRows(ctx, event)
       await refreshOrganisations(ctx, orgKeys, context)
     }

@@ -121,8 +121,16 @@ export function publicFieldMeta(field: string, meta: FieldMeta): PublicFieldMeta
       retrievedAt: reading.retrievedAt,
       method: reading.method,
     }))
+  // A conflict whose other readings are all private is no conflict to this
+  // viewer: show the displayed value's own status (an `inferred` value stays
+  // `inferred`). Meta written before `winnerStatus` existed falls back to the
+  // confidence band: an inferred winner never reaches 0.75 (data-model §1.1).
+  const status =
+    meta.status === "conflicting" && conflicts?.length === 0
+      ? (meta.winnerStatus ?? ((meta.confidence ?? 0) < 0.75 ? "inferred" : "found"))
+      : meta.status
   return {
-    status: meta.status === "conflicting" && conflicts?.length === 0 ? "found" : meta.status,
+    status,
     evidence: meta.evidence,
     missingReason: meta.missingReason,
     confidence: meta.confidence,

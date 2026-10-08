@@ -269,6 +269,7 @@ export function OrgDirectory({
                     · {firstShown}–{lastShown}
                   </span>
                 )}
+                {facets.truncated && <span> · best matches only; try a narrower search</span>}
               </>
             )}
           </p>

@@ -82,6 +82,30 @@ export function addMonths(iso: string, months: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+// --- multi-day events --------------------------------------------------------------------
+
+/** An event longer than this covers several days (a run of shows, the Bumps):
+ * it belongs on every day it covers. 25 h, so a single all-day event on the
+ * day the clocks go back (25 h long) is still one day. */
+export const MULTI_DAY_MS = 25 * HOUR_MS
+
+/** The end of a multi-day event, or undefined for an event within one day. */
+export function spanEndOf(startsAt: number, endsAt: number | undefined): number | undefined {
+  return endsAt !== undefined && endsAt - startsAt > MULTI_DAY_MS ? endsAt : undefined
+}
+
+/** The London dates an event covers, first to last (one for a single-day
+ * event; an end at midnight belongs to the day before). */
+export function eventDays(event: { startsAt: number; endsAt?: number }): string[] {
+  const first = londonIsoDate(event.startsAt)
+  const end = spanEndOf(event.startsAt, event.endsAt)
+  if (end === undefined) return [first]
+  const last = londonIsoDate(end - 1)
+  const days = [first]
+  while (days[days.length - 1] < last) days.push(addDays(days[days.length - 1], 1))
+  return days
+}
+
 // --- calendar views ------------------------------------------------------------------------
 
 export const CALENDAR_VIEWS = ["list", "week", "month"] as const

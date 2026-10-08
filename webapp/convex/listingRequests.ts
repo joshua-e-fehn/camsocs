@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values"
 import { sha1Hex } from "../lib/hash"
 import { LISTING_REQUEST_KINDS } from "../lib/vocab"
-import { mutation } from "./_generated/server"
+import { type MutationCtx, mutation } from "./_generated/server"
 import { isEmail } from "./lib/fields"
 import { literalUnion } from "./lib/validators"
 
@@ -14,8 +14,13 @@ import { literalUnion } from "./lib/validators"
  * with `method: "owner_submitted"` — never a direct edit.
  *
  * Abuse limits: every string is length-limited; one address may submit at
- * most `PER_EMAIL_PER_HOUR` requests an hour, and the whole form at most
- * `GLOBAL_PER_HOUR`.
+ * most `PER_EMAIL_PER_HOUR` requests an hour. Claims, corrections and
+ * additions share a budget of `GLOBAL_PER_HOUR` an hour; removals and
+ * objections — the GDPR route while there is no contact address — have their
+ * own, larger `REMOVAL_PER_HOUR`, so a flood of other requests can never shut
+ * them out. The submitter's address is not verified (the broker inbox says
+ * so): nothing here acts on a request; the broker replies to the address
+ * before hiding a listing.
  *
  * Refusals are `ConvexError`s carrying the user-readable message as `data`:
  * a production deployment replaces a plain `Error`'s message with "Server
@@ -24,7 +29,32 @@ import { literalUnion } from "./lib/validators"
 
 export const PER_EMAIL_PER_HOUR = 5
 export const GLOBAL_PER_HOUR = 200
+export const REMOVAL_PER_HOUR = 1_000
 const HOUR_MS = 60 * 60 * 1000
+
+/** Requests that ask for a listing to come down: their own budget. */
+const REMOVAL_KINDS = ["remove", "object"] as const
+const OTHER_KINDS = ["claim", "correct", "add"] as const
+type Kind = (typeof LISTING_REQUEST_KINDS)[number]
+
+/** Requests of `kinds` made since `since`, counted up to `cap`. */
+async function recentOfKinds(
+  ctx: MutationCtx,
+  kinds: readonly Kind[],
+  since: number,
+  cap: number,
+): Promise<number> {
+  let count = 0
+  for (const kind of kinds) {
+    if (count >= cap) break
+    const rows = await ctx.db
+      .query("listingRequests")
+      .withIndex("by_kind_createdAt", (q) => q.eq("kind", kind).gt("createdAt", since))
+      .take(cap - count)
+    count += rows.length
+  }
+  return count
+}
 
 const LIMITS = {
   email: 254,
@@ -92,13 +122,15 @@ export const submit = mutation({
     if (recentFromEmail.length >= PER_EMAIL_PER_HOUR) {
       throw new ConvexError("Too many requests from this address; please try again in an hour")
     }
-    const recentOpen = await ctx.db
-      .query("listingRequests")
-      .withIndex("by_status_createdAt", (q) =>
-        q.eq("status", "open").gt("createdAt", now - HOUR_MS),
-      )
-      .take(GLOBAL_PER_HOUR)
-    if (recentOpen.length >= GLOBAL_PER_HOUR) {
+    const removal = (REMOVAL_KINDS as readonly Kind[]).includes(args.kind)
+    const budget = removal ? REMOVAL_PER_HOUR : GLOBAL_PER_HOUR
+    const recent = await recentOfKinds(
+      ctx,
+      removal ? REMOVAL_KINDS : OTHER_KINDS,
+      now - HOUR_MS,
+      budget,
+    )
+    if (recent >= budget) {
       throw new ConvexError("The form is busy; please try again later")
     }
 
