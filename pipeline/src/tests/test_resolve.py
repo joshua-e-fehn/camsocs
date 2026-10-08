@@ -20,6 +20,7 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.models.wire import CrosswalkRow
 from camsocs_pipeline.resolve import Crosswalk, Decisions, resolve_records
+from camsocs_pipeline.resolve.crosswalk import CrosswalkEntry
 from camsocs_pipeline.resolve.names import name_parts, site_identity, split_parenthetical
 from camsocs_pipeline.resolve.resolver import Resolution, ref_of
 
@@ -601,6 +602,18 @@ def test_an_unlinked_guide_row_never_joins_a_club_by_its_sport_word() -> None:
     assert by_ref["sport_guide_pdf:rowing-boat-club"] == by_ref["sport_az:boat-club-rowing"]
     assert "sport_guide_pdf:rowing-college" not in by_ref
     assert "sport_guide_pdf:rowing-college" in resolution.held_refs
+
+    # Not even when an earlier run's crosswalk keyed the row by name.
+    crosswalk = Crosswalk()
+    crosswalk.upsert(
+        CrosswalkEntry(
+            key=by_ref["sport_az:boat-club-rowing"],
+            name="Boat Club (Rowing)",
+            ids=["ref:sport_guide_pdf:rowing-college", "sport:boat-club-rowing"],
+        )
+    )
+    again = resolve_records([cubc, linked, college_rowing], crosswalk=crosswalk)
+    assert "sport_guide_pdf:rowing-college" in again.held_refs
 
 
 def test_a_cucbc_directory_page_identifies_no_club() -> None:

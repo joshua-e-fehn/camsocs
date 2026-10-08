@@ -239,6 +239,13 @@ def _evidence_of(fields: Iterable[FieldObs]) -> str:
     return "primary" if any(f.evidence == "primary" for f in fields) else "secondary"
 
 
+def _unlinked_guide_row(anchor: _Anchor) -> bool:
+    """A Sports Club Guide row the A–Z does not link (no Sport slug)."""
+    return anchor.record.source_type == "sport_guide_pdf" and not anchor.identity.explicit_of(
+        "sport"
+    )
+
+
 class Resolver:
     """One resolution run over staged records. See the module docstring."""
 
@@ -469,7 +476,10 @@ class Resolver:
                 keys.add(identity.known_key)
             if identity.college:
                 keys.add(COLLEGES_BY_ID[identity.college].key)
-            keys |= self.crosswalk.keys_for(identity.explicit | {ident("ref", anchor.ref)})
+            # An unlinked guide row's own ref is not trusted either: an earlier
+            # run may have keyed it by name before that tier skipped it.
+            refs = set() if _unlinked_guide_row(anchor) else {ident("ref", anchor.ref)}
+            keys |= self.crosswalk.keys_for(identity.explicit | refs)
             if len(keys) > 1 and not identity.known_key and not identity.college:
                 self._held[anchor.index] = QuarantineItem(
                     kind="held",
@@ -516,9 +526,7 @@ class Resolver:
         names (source-research §4), so "Rowing (College)" must not join CUBC
         on the word "rowing". It joins only through a slug, or is held as a
         group no source names."""
-        if anchor.record.source_type == "sport_guide_pdf" and not anchor.identity.explicit_of(
-            "sport"
-        ):
+        if _unlinked_guide_row(anchor):
             return []
         return sorted(anchor.identity.signatures)
 
