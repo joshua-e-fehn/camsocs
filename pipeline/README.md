@@ -108,11 +108,11 @@ Read from `pipeline/.env` (gitignored) or the environment:
 | `LLM_BASE_URL`, `LLM_API_KEY` | OpenAI-compatible endpoint |
 | `LLM_MODEL_BULK`, `LLM_MODEL_STRONG` | Model ids; any id starting with `claude` is refused |
 | `LLM_CONCURRENCY` | Parallel LLM calls (default 8) |
-| `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL; browser-like strings are refused |
+| `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL, `camsocs-bot/0.1 (+https://camsocs.vercel.app/about)`; browser-like strings and any email address are refused |
 | `CAMSOCS_CACHE_DIR` | Raw response cache (default `<repo>/var/cache`) |
 | `CAMSOCS_STAGING_DIR` | Staged observations (default `<repo>/var/staging`) |
 | `CAMSOCS_STATE_PATH` | Run state file (default `<repo>/.camsocs-state.json`) |
-| `CAMSOCS_MIN_HOST_INTERVAL` | Minimum seconds between requests to one host (default 1.0) |
+| `CAMSOCS_MIN_HOST_INTERVAL` | Minimum seconds between requests to one host (default 1.0; less than 1 is refused) |
 | `CAMDRAM_API_KEY` | Optional Camdram API access token (Bearer); without it the Camdram events stage paces itself at 3 s |
 | `CAMSOCS_REPORTS_DIR` | Reports such as the mailing-list worklist (default `<repo>/var/reports`) |
 | `META_IG_USER_ID`, `META_ACCESS_TOKEN` | Instagram Business Discovery (both unset: the `instagram` stage skips itself); setup in `docs/setup/inbox-instagram.md` |

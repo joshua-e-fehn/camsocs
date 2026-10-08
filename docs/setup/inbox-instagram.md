@@ -46,7 +46,7 @@ Open the webhook's page and copy its **signing secret** (`whsec_…`).
 - If you want least privilege, keep a separate sending-only key for T10 as `RESEND_API_KEY`.
 - Put the full-access key in `RESEND_INBOUND_API_KEY`. The webhook prefers it and falls back to `RESEND_API_KEY`.
 
-**6. Choose the inbound address.** Any address at `inbound.<domain>` reaches the webhook. Pick an unguessable local part, e.g. `lists-<random>@inbound.<domain>`, and allow only that one (step 7). Then a stranger who learns the domain cannot post events.
+**6. Choose the inbound address.** Any address at `inbound.<domain>` reaches the webhook, and the domain is public in its MX record. Pick an unguessable local part, e.g. `lists-<random>@inbound.<domain>`, and allow only that one (step 7). The route accepts nothing until `INBOUND_EMAIL_RECIPIENTS` is set.
 
 **7. Set the Convex env** (dev shown; add `--prod` for production):
 
@@ -54,7 +54,9 @@ Open the webhook's page and copy its **signing secret** (`whsec_…`).
 cd webapp && unset CONVEX_DEPLOY_KEY
 bunx convex env set RESEND_WEBHOOK_SECRET 'whsec_…'          # step 4
 bunx convex env set RESEND_INBOUND_API_KEY 're_…'            # step 5 (full access)
-bunx convex env set INBOUND_EMAIL_RECIPIENTS 'lists-<random>@inbound.<domain>'
+bunx convex env set INBOUND_EMAIL_RECIPIENTS 'lists-<random>@inbound.<domain>'   # required: unset accepts no mail
+# Optional: receivers whose DKIM / DMARC verdict is trusted (default mx.microsoft.com, see J4 step 1)
+# bunx convex env set INBOUND_TRUSTED_AUTHSERV_IDS 'mx.microsoft.com'
 # Only if you also post mail from another provider (generic JSON, Bearer auth):
 # bunx convex env set INBOUND_EMAIL_SECRET "$(openssl rand -hex 32)"
 ```
@@ -76,7 +78,9 @@ The route is deployed with the T7 code. `bunx convex dev --once` pushes it to de
 
 If you ever forward by hand, forward *as attachment* or redirect, for the same reason.
 
-**Check the first redirected list mail** in Resend's webhook log. It should answer `{"stored":true}`. If it answers `{"ignored":"recipient"}`, the redirect did not name the inbound address in any delivery header. In that case, unset `INBOUND_EMAIL_RECIPIENTS` (`bunx convex env remove INBOUND_EMAIL_RECIPIENTS`): the Svix signature still proves each mail came through your Resend inbox, and the unguessable address keeps strangers out.
+**Check the first redirected list mail** in Resend's webhook log. It should answer `{"stored":true}`. If it answers `{"ignored":"recipient"}`, compare the address in `INBOUND_EMAIL_RECIPIENTS` with the one the redirect used: the check reads `To`, `Cc`, the webhook's `received_for` (the envelope recipient Resend reports) and the delivery headers. Fix the value or add the address the mail shows (comma-separated). Never unset it: unset, the route accepts no mail at all, because the receiving domain takes mail for any address and is public in its MX record.
+
+**Check that the sender was verified.** The route records, per mail, whether a trusted receiver verified the sender (`senderVerified` on the `inboundEmails` row in the Convex dashboard). On the Outlook redirect that is Exchange's ARC verdict: the `ARC-Authentication-Results` header with the highest `i=` should start `i=N; mx.microsoft.com` and show `dmarc=pass` or a `dkim=pass` for the list's domain. Only verified mail is attributed to a society (and counts as its activity); unverified mail still yields unattributed Cambridge-only events. If the highest ARC set names another receiver, or Resend adds its own `Authentication-Results` that you want to trust, set `INBOUND_TRUSTED_AUTHSERV_IDS` to those ids (comma-separated; it replaces the default).
 
 **2. External forwarding.** Cambridge Exchange Online allows external forwarding (Engineering IT help: https://help.eng.cam.ac.uk/email/forwarding-your-email/). If redirected mail never reaches Resend, check whether Microsoft has blocked automatic forwarding for the tenant. In that case, ask UIS (or Engineering IT) about the outbound spam policy for your mailbox.
 

@@ -39,7 +39,7 @@ camsocs is a verified, current database of Cambridge student societies and sport
   - Public queries return the public projection only.
   - `cam_only` events need a verified `@cam.ac.uk` session.
   - `members_only` events are never shown.
-- **LLM guard:** `extract/llm.py` refuses any model id starting with `claude`. Never route Claude subscription credentials through cliproxy; Anthropic's terms prohibit it.
+- **LLM guard:** `extract/llm.py` refuses any model id containing `claude` or `anthropic` (any provider prefix or separator), and any id that is not plain printable ASCII. Never route Claude subscription credentials through cliproxy; Anthropic's terms prohibit it.
 - **talks.cam content is parsed deterministically and is never passed to the LLM.** Its robots.txt blocks AI agents; see source-research §6.
 - `webapp/convex/_generated/` is committed, and `check:codegen` guards it.
 - Convex test files need two dots in their names (`*.test.ts`, `*.testing.ts`) so they are never deployed. Register any new module in `convex/lib/harness.testing.ts`.

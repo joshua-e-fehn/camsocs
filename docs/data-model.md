@@ -50,6 +50,7 @@ FieldMeta = {
   method?: "parser" | "llm" | "manual" | "owner_submitted",
   claimCount?: number,                          // independent sources (distinct hosts) that agree
   conflicts?: { value, sourceUrl, sourceType, retrievedAt, method }[],  // when status = conflicting: the other readings
+  winnerStatus?: FieldStatus,                   // when status = conflicting: the displayed value's own status (found, inferred, …)
 }
 ```
 
@@ -57,9 +58,10 @@ A field nobody has claimed has `{status: "missing", missingReason: "not_attempte
 
 The engine is `webapp/convex/lib/resolve.ts` (pure, unit-tested). Its rules, in order:
 
-1. **Live claims.** `rejected` and `superseded` claims are ignored. Of the rest, only the newest claim per (`sourceKey`, `method`) counts: a newer reading of the same page by the same method replaces the older one (the server marks it `superseded`), so a page that stops listing an email retracts it. A parser and an LLM reading the same page are separate readings.
+1. **Live claims.** `rejected` and `superseded` claims are ignored. Of the rest, only the newest claim per (`sourceKey`, `method`) counts, by latest sighting: a newer reading of the same page by the same method replaces the older one (the server marks it `superseded`), so a page that stops listing an email retracts it. A page that goes back to an earlier value (X → Y → X) revives the earlier claim: it is accepted again and Y is superseded. A parser and an LLM reading the same page are separate readings.
 2. **Status is normalised on the server**, whatever the caller asks for: `manual` → `manual`; `owner_submitted` → `owner_confirmed`; an LLM claim is `found` only with a non-empty `evidenceQuote` and `quoteCheck` `exact` or `normalised`, otherwise `inferred`; a parser claim is `found` unless it says `inferred` (a heuristic). A claim without a value is `missing` (with a `missingReason`, default `not_found`) or `not_applicable`. An empty array is not a value: it counts as `not_found`.
-3. **Merge rules per field** (`webapp/convex/lib/fields.ts`): `single` fields take the precedence winner (§1.2); array fields (`aliases`, `categories`, `socials`, `roleEmails`, …) take the **union** of every `found` claim's items (de-duplicated: URLs by normalised URL, role emails by role + address), or of the `inferred` ones when nothing was found, and a manual claim replaces the union; `lastActiveAt` takes the **maximum**.
+3. **Merge rules per field** (`webapp/convex/lib/fields.ts`): `single` fields take the precedence winner (§1.2); array fields (`aliases`, `categories`, `socials`, `roleEmails`, …) take the **union** of every `found` claim's items (de-duplicated: URLs by normalised URL, role emails by role + address), or of the `inferred` ones when nothing was found, and a manual claim replaces the union; `lastActiveAt` takes the **maximum**; an event's `visibility` takes the **strictest** live reading (`members_only` > `cam_only` > `public`), whatever its precedence or age — only a manual / owner claim lifts it.
+   - **Dead links (`website`).** When the newest primary reading *from a URL itself* is negative (`not_found`, `access_restricted`, `unreachable`: the stated website answered 404, a login wall or nothing), claims whose value is that URL are set aside, so a register's stale link is not shown as a working site; a later answer from the URL lifts it.
 4. **Missing.** With no live value claim, the best negative claim (primary first, then newest) gives `status` and `missingReason`; a value from any source beats a negative claim from another.
 
 ### 1.1 Confidence (by rule, not by asking the LLM)
@@ -107,7 +109,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | defunct | boolean? | Marked defunct by a source (a college's inactive list) or manually; makes `status` `archived` |
 | hidden | boolean? | Hidden from the public site by the broker after a remove / object request (`broker.orgs.setHidden`). Not claimable; the pipeline never sets it and re-resolution keeps it. A hidden organisation has no `orgCards` row, so no public query lists, names or links it, and `orgs.getBySlug` is null |
 | status | `active \| dormant \| archived \| unknown` | Derived (§6) |
-| lastActiveAt | number? | Latest dated activity: the maximum of claimed values (a post, a page update) and the start of the latest past event it organised or co-hosted (derived) |
+| lastActiveAt | number? | Latest dated activity: the maximum of claimed values (a post, a page update) and the start of the latest past **public** event it organised or co-hosted (derived; its meta then is that event's start's provenance). `cam_only` / `members_only` events never move it |
 | registrations | object | `{ su?, proctors?, sportsService?, camdram?, cucbc? }`, each `{ registered: boolean, year?: string, sourceUrl?: string }`, `year` an academic year like `2026-27`. Claimed per register as `registrations.su`, `registrations.proctors`, … These lapse independently. |
 | categories | vocab[] `CATEGORIES` | Our taxonomy (§5). An organisation can have several. |
 | activityTypes | vocab[] `ACTIVITY_TYPES` | talks, socials, competitions, performances, workshops, trips, training, publications, volunteering, careers_events, formals, worship, meetings |
@@ -121,7 +123,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | description | string? | Long description in markdown |
 | howToJoin | string? | |
 | joinUrl | string? | |
-| membership | `{ tiers: { label, pricePence?, period: "life"\|"year"\|"term"\|"one_off"\|"free", note? }[], bursaryNote?, collegeReimbursable?: boolean }`? | |
+| membership | `{ tiers: { label, pricePence?, period?: "life"\|"year"\|"term"\|"one_off"\|"free", note? }[], bursaryNote?, collegeReimbursable?: boolean }`? | `period` only when the source states it, never assumed |
 | beginnerFriendly | boolean? | |
 | trials | `{ required: boolean, dates?: string[], note? }`? | Trials or auditions. `dates` are as the source wrote them ("open on 4th October"), ISO `YYYY-MM-DD` only when it gave a full date; the UI formats ISO and shows the rest verbatim |
 | timeCommitment | string? | Free text, e.g. "2 trainings/week + Wed matches" |
@@ -130,7 +132,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | sport | object? | `{ sport?, blueStatus?: "full"\|"full_some"\|"discretionary_full"\|"half"\|"none", varsity?: boolean, bucs?: boolean, collegeCompetition?: boolean, genderCategories: ("men"\|"women"\|"open"\|"mixed")[], kitCostNote?, venues?: string[] }`. Each part is claimed separately (`sport.blueStatus`, `sport.genderCategories`, …) because different sources state different parts; the object exists once any part has a value |
 | website | string? | Final URL after redirects |
 | email | string? | General contact address, published by the organisation or a register |
-| emailType | vocab? `EMAIL_TYPES` | role_own_domain, cambridgesu, srcf, lists_cam, college_domain, webmail, personal_crsid, legacy_cusu. **Derived on the server** from `email` (`classifyEmail`), never claimed: the public projection depends on it |
+| emailType | vocab? `EMAIL_TYPES` | role_own_domain, cambridgesu, srcf, lists_cam, college_domain, webmail, personal_crsid, legacy_cusu. **Derived on the server** from `email` (`classifyEmail`), never claimed: the public projection depends on it. `personal_crsid` = a CRSid-shaped local part on cam.ac.uk or a subdomain (not lists.cam.ac.uk), or on srcf.net, srcf.ucam.org, cantab.ac.uk or cantab.net, which issue addresses by CRSid |
 | roleEmails | `{ role: vocab ROLES, email }[]` | president, secretary, treasurer, sponsorship, events, publicity, welfare, captain, other. Only addresses the organisation publishes. |
 | contactFormUrl | string? | |
 | mailingList | `{ platform?: "sympa"\|"mailchimp"\|"google_group"\|"other", address?, signupUrl? }`? | Public shows the sign-up only |
@@ -189,6 +191,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | description | string? | |
 | startsAt | number | |
 | endsAt | number? | |
+| spanEndsAt | number? | Derived: `endsAt` of a multi-day event (longer than 25 h), so a run that began before a view still shows in it |
 | allDay | boolean | Default false |
 | termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`, §6) |
 | venueKey / venueText | string? | |
@@ -197,7 +200,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | price | `{ free: boolean, minPence?, maxPence?, text? }`? | |
 | bookingUrl | string? | |
 | signupRequired | boolean? | |
-| visibility | `public \| cam_only \| members_only` | Required. Mailing-list-derived events default to `cam_only`. `members_only` is never shown publicly. |
+| visibility | `public \| cam_only \| members_only` | Required. Mailing-list-derived events default to `cam_only` and are never `public` (refused on ingest, clamped on materialise). The strictest live reading wins (§1 rule 3). `members_only` is never shown publicly. |
 | eventType | vocab `EVENT_TYPES` | talk, social, performance, competition, match, workshop, trip, formal, careers, meeting, training, worship, fair, other. Default `other` |
 | image | `{ storageId?, sourceUrl? }`? | Our own stored copy |
 | cancelled | boolean | Default false |
@@ -206,6 +209,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | externalId | string | |
 | sourceUrl | string | The event's page, or an opaque internal URI (`inbound:<message-id>`) for mailing-list events, never shown |
 | lastSeenAt | number | Derived: latest sighting of any of its claims |
+| sweepGroup | string? | Derived: the listing it was read from — the source (Camdram, CUCBC, SU What's On) or source + listing URL (a feed, a talks list, a league); none for mail, posts, termcards. A **future event whose `lastSeenAt` lags its listing's newest sighting by more than 3 days is withdrawn** (moved, renamed or dropped by a listing that is still read) and no public query returns it; a listing nobody reads any more (a feed down, the pipeline paused) withdraws nothing |
 | confidence | number | Derived: the lower of `title` and `startsAt` confidence |
 | meta | `Record<string, FieldMeta>` | |
 
@@ -224,9 +228,9 @@ An event row is created by its first claims, which must include `title`, `starts
 
 **Event images** are our own copy (as logos): a stage that finds an image checks it (raster, ≤ 2 MB) and stages `image: {sourceUrl}`; the load stage uploads the bytes (`/api/pipeline/files`) and posts `{storageId, sourceUrl}`. An image it cannot store is not posted (`pipeline/.../media.py`).
 
-**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, plus a search index `search_title` on title (filter: visibility).
+**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, `by_visibility_spanEndsAt`, `by_sweepGroup_lastSeenAt`. A title search filters the window's events (every word in the title).
 
-`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, visibility }` (the last two denormalised from the event and kept in step), with indexes `by_org_startsAt` and `by_event`. It exists for "events of organisation X". The pipeline replaces an event's whole organiser set at once.
+`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, spanEndsAt?, visibility }` (the last three denormalised from the event and kept in step), with indexes `by_org_startsAt`, `by_org_spanEndsAt` and `by_event`. It exists for "events of organisation X". The pipeline sends an event's organiser set whole (`replace`), or — when the source names organisers it could not resolve — as `merge`, which adds and never removes.
 
 ### venues
 
@@ -294,9 +298,9 @@ These are never returned by public queries.
   | fingerprint | sha256 (`claimFingerprint` in lib/keys.ts) |
   | createdAt | number |
 
-  Indexes: `by_entity_field` (entityType, entityKey, field, reviewStatus), `by_run`, `by_fingerprint`.
+  Indexes: `by_entity_field` (entityType, entityKey, field, reviewStatus), `by_entity_review` (entityType, entityKey, reviewStatus), `by_run`, `by_fingerprint`.
 
-  `status`, `confidence` and `fingerprint` are computed by the server; the API refuses a posted `confidence`. The fingerprint is sha256 over entity, field, canonical JSON of the value (or `!status:missingReason` for a negative claim), `sourceUrl`, `contentSha256` and `method`: re-posting the same observation of the same page content is a no-op.
+  `status`, `confidence` and `fingerprint` are computed by the server; the API refuses a posted `confidence`. The fingerprint is sha256 over entity, field, canonical JSON of the value (or `!status:missingReason` for a negative claim), `sourceUrl` and `method` — not `contentSha256`, which is stored but changes on every fetch of a page with per-request tokens (the SU's `__VIEWSTATE`): re-posting the same reading of the same page is a no-op. Resolution reads only live (`accepted` / `proposed`) claims (index `by_entity_review`).
 - **sources**: one row per fetched URL.
 
   | Field | Type |
@@ -342,6 +346,7 @@ These are never returned by public queries.
   | htmlStorageId | Id? |
   | attachments | `{ storageId, filename, contentType }[]` |
   | orgKey | string?, resolved |
+  | senderVerified | boolean? — a trusted receiver verified the `From` domain (DKIM / DMARC); only then may the mail be attributed |
   | extraction | `pending \| done \| failed \| skipped` |
   | extractedEventKeys | string[] |
   | extractionNote | string? |
@@ -362,8 +367,8 @@ These are never returned by public queries.
   | createdAt | number |
   | resolvedAt | number? |
 
-  Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour and 200 open per hour overall). Accepted corrections become `owner_submitted` claims, never direct edits.
-- **signInLinkSends**: `{ emailHash, sentAt }`, indexes `by_emailHash_sentAt`, `by_sentAt`. The throttle for the `@cam.ac.uk` sign-in link (`convex/authEmail.ts`): one row per link sent, the address only as a sha256 of its normalised form, rows pruned after a day. Not pipeline-owned and never read by a public query.
+  Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour; claims, corrections and additions at most 200 an hour overall, removals and objections their own 1,000 an hour so a flood of the others never shuts the GDPR route). The submitter's address is not verified (the broker inbox says so). Accepted corrections become `owner_submitted` claims, never direct edits. Index `by_kind_createdAt` besides those below.
+- **signInLinkSends**: `{ emailHash, clientHash?, sentAt }`, indexes `by_emailHash_sentAt`, `by_clientHash_sentAt`, `by_sentAt`. The throttle for the `@cam.ac.uk` sign-in link (`convex/authEmail.ts`): one row per link sent, the address only as a sha256 of its normalised form and the caller's IP only as a sha256, rows pruned after a day. Limits per address, per client and overall; an address that has signed in before is never refused by the overall cap. Not pipeline-owned and never read by a public query.
 - **storedFiles**: `{ sha256, storageId, contentType, size, createdAt }`, index `by_sha256`. Our own copies of logos, event images and termcards, uploaded through `/api/pipeline/files` (≤ 2 MB; PNG, JPEG, WebP, GIF, AVIF or PDF, checked against the bytes; never SVG) and de-duplicated by content.
 
 ## 4. Broker tables (private)
@@ -462,7 +467,7 @@ These are computed in Convex by `convex/derive.ts`, which runs on ingest and fro
 - **missingFields**: the *tracked* fields (the ones worth asking a society about: description, contacts, socials, membership, categories, sport basics, …; `tracked` in fields.ts) whose status is `missing`. Empty for counterparts.
 - **searchText**: name, aliases, short name, short description, tags and category labels, lowercased.
 - **emailType**: from `email` (§2).
-- **termWeekLabel**: `MT26 Wk 3` / `LT27 Wk 1` / `ET27 Wk 1`; Week 1 starts on the first Thursday of Full Term, Week 0 is the week before; none outside Week 0 … the last week of Full Term (source-research §19).
+- **termWeekLabel**: `MT26 Wk 3` / `LT27 Wk 1` / `ET27 Wk 1`; Week 1 starts on the first Thursday of Full Term, Week 0 is the week before; none outside Week 0 … the last day of Full Term (the last week ends with Full Term, source-research §19).
 - **event confidence / lastSeenAt**: §2.
 - **staleAfter** for people, which defaults to the next 30 June; **stale** turns on once it has passed.
 
@@ -470,8 +475,8 @@ These are computed in Convex by `convex/derive.ts`, which runs on ingest and fro
 
 Implemented in `webapp/convex/lib/projections.ts`; the projections are the `returns` validators of the public queries, so nothing else can leave.
 
-- **Hidden organisations** (`hidden: true`) are absent from every public query: no card, `getBySlug` null, dropped from event organisers and relationship counterparts.
-- **orgPublic** removes `orgInternal`, the broker data, `searchText`, and any `meta.sourceUrl` (and conflict reading) from an internal source (`mailing_list_email`, `manual`) or that is not `http(s)`, and keeps the rest. A `personal_crsid` email is removed (its meta reads `missing` / `not_published`), personal role emails are dropped, and the mailing list shows only `platform` and `signupUrl`. Stored logos become URLs.
+- **Hidden organisations** (`hidden: true`) are absent from every public query: no card, `getBySlug` null, dropped from event organisers and relationship counterparts; an event whose every organiser and co-host is hidden is not shown, and `events.list` with a hidden organisation's key lists nothing.
+- **orgPublic** removes `orgInternal`, the broker data, `searchText`, and any `meta.sourceUrl` (and conflict reading) from an internal source (`mailing_list_email`, `manual`) or that is not `http(s)`, and keeps the rest. A `conflicting` field whose other readings are all removed shows its winner's own status (`winnerStatus`), never a promotion to `found`. A `personal_crsid` email is removed (its meta reads `missing` / `not_published`), personal role emails are dropped, and the mailing list shows only `platform` and `signupUrl`. Stored logos become URLs.
 - **eventPublic** is `visibility === "public"`; `cam_only` needs a verified `@cam.ac.uk` session (or the broker); `members_only` is never shown. A mailing-list event has no `sourceUrl`. Organisers are resolved to `{key, slug, name, role}`.
 - **relationships**: only `visibility === "public"` edges, with the counterpart's name and the `http(s)` evidence URLs.
-- **Counts and times, not rows.** Two public queries read past the gate but return only a number: `events.restrictedCount` (how many `cam_only` events the viewer cannot see, for the sign-in prompt) and `runs.lastHarvest` (the finish time of the last run that wrote data; nothing else from `harvestRuns`).
+- **Counts and times, not rows.** Two public queries read past the gate but return only a number: `events.restrictedCount` (how many `cam_only` events the viewer cannot see, for the sign-in prompt — deliberately coarse: text, type, category and college filters are ignored and the window is widened to whole London weeks, at least four with an organisation, so the count cannot spell out titles or bisect start times) and `runs.lastHarvest` (the finish time of the last run that wrote data; nothing else from `harvestRuns`).

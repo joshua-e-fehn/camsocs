@@ -106,6 +106,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   | None | 3 |
 
 - Two entries carry a second, stray anchor. Only the first is the entry's link.
+- A link into another register's directory (a CUCBC club page `cucbc.org/node/N`, a Camdram society page) is that directory's entry, not the society's website: no claim (`classify_link` → `directory`); cucbc.org identifies no club in the resolver.
 
 **robots.txt** (fetched 2026-10-07): standard Drupal rules only (`Disallow: /core/ /profiles/ /admin/ /search/ /user/…`). The register page is allowed. There is no `Crawl-delay`.
 
@@ -128,6 +129,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - The A–Z is the Sports Service's register of recognised University sports clubs: `registrations.sportsService` (primary; the page states no year), `orgType` sports_club, `level` university, `categories` sport (data-model §5 rule).
 - Club page: the full name as the bold lead ("**Cambridge University Athletic Club (CUAC)** is …" → name + `shortName`) or, without bold, in the lead sentence; the description; one Instagram link.
 - The page's "Contact" is the Sports Service's generic `support@sport.cam.ac.uk`. It is **never** claimed as the club's address.
+- A social link whose text names a different account than its target (fencing-club, 2026-10-08: text `@c_u_f_c`, link `instagram.com/cudct/`, the Dance Competition Team's) is dropped: neither a social nor an identity hint.
 
 **Traps**
 - Some pages carry the typo `support@sport.ac.uk` (in the `mailto:` only).
@@ -165,7 +167,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - College Competition → `sport.collegeCompetition`.
 - Intermediate and Elite have no field.
 
-**Not clubs on the A–Z:** "Rowing (College)" (college rowing, see §7) and "Disability Multisport" (CADMuS, a community club). The guide never claims `name` (its headings are sports, not club names), so these create no organisation.
+**Not clubs on the A–Z:** "Rowing (College)" (college rowing, see §7) and "Disability Multisport" (CADMuS, a community club). The guide never claims `name` (its headings are sports, not club names), so these create no organisation; a guide row the A–Z does not link (no Sport slug) never joins a club by its name either (the resolver's name tier skips it), so "Rowing (College)" cannot merge into CUBC on the word "rowing" — it is held.
 
 **Harvester:** stage `sport_guide_pdf`, `sources/sport_guide.py`.
 
@@ -252,7 +254,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - an officers table of named people, which is **never read**.
 - "Lady Margaret Boat Club" names no college. https://www.ladymargaretboatclub.org/ states "The Lady Margaret Boat Club is the rowing club of St John's College, Cambridge". The harvester re-checks that page on each run before claiming the college.
 
-**Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Details pages are reused from the cache for a week.
+**Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Details pages are reused from the cache for a week. What only a details page states (the full name, the hidden address) is that page's own observation, attributed to its URL; the club's college, when its own site names it, is claimed from that site (primary).
 
 **Events harvester (T6, re-verified 2026-10-07)** — `events/cucbc.py`, stage `cucbc_events`.
 - robots.txt: `Crawl-delay: 10`; disallows Drupal internals only (`/admin/`, `/user/…`, `/search/`, `/node/add/`, …).
@@ -369,7 +371,9 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - **Which site:** the website a register states (SU profile first, then Proctors, Sport, …), never a social network, the SU or Sport directory, Camdram, talks.cam, a form, a ticket shop or a chat invite; a short link that lands on one of those is dropped. A site claimed by two organisations is read as neither's. A "website" that is a page of a bigger site (a club's page on its parent club's or the RAF's site) is read for its own content only: its header, navigation and footer belong to the host site.
 - **Pages:** the home page plus at most one page per kind (about, join, committee, contact, events, sponsors), inside the site and under the starting path. Never: files, login / account / members-only paths, a redirect into a login service (Raven `raven.cam.ac.uk`, SRCF's WLS `nevar.srcf.net`, Microsoft or Google sign-in) — recorded `access_restricted`. Cached pages younger than 3 days are not fetched again; one retry for a site that is down.
 - **robots:** robots.txt per host as for every source. A page with `<meta name="robots" content="noindex">` is not read; `nofollow` stops the discovery of further pages.
-- **No LLM when a site keeps AI out:** if the host's robots.txt disallows any AI crawler by name (GPTBot, ChatGPT-User, ClaudeBot, CCBot, Google-Extended, PerplexityBot, …) or says `Content-Signal: ai-input=no`, or the page says `noai`, its text never reaches the LLM — the talks.cam rule (§6) applied to every site. Such sites are read deterministically (links, emails, feeds) only.
+- **No LLM when a site keeps AI out:** if the host's robots.txt disallows any AI crawler by name (GPTBot, ChatGPT-User, ClaudeBot, CCBot, Google-Extended, PerplexityBot, …) or says `Content-Signal: ai-input=no`, or the page says `noai`, its text never reaches the LLM — the talks.cam rule (§6) applied to every site. Checked **per page**: a sub-page whose URL an AI crawler is disallowed from, or that says `noai`, is left out of the prompt even when the home page may go in. Such sites are read deterministically (links, emails, feeds) only.
+- **Free text the model writes is `inferred`.** A description, summary or "one neutral sentence" is `found` only when its words are themselves on the page; a verbatim quote supports the gist, not a paraphrase. Each reading restates every LLM field on every page read (a value, `not_found`, or `not_published` where a value was withheld for naming someone or carrying an address), so a page's older reading never lingers. A membership period is claimed only where the text states it.
+- **Dead and hidden.** A stated website whose home page answers 404/410, a login wall or nothing gets a primary `website` negative claim from that URL (`not_found` / `access_restricted` / `unreachable`), which sets the register's link aside until the site answers again (data-model §1). Addresses a site hides (Cloudflare email protection) make `email` / `roleEmails` `access_restricted`, not `not_found`; with the contact page unreadable no address claim is made.
 - **Never stored:** personal addresses (CRSids, `jane.smith@…`, anything that names someone), obfuscated addresses (Cloudflare email protection, "name [at] domain"), LinkedIn `/in/` profiles, chat invite links. Committee members' names go to the private broker `people` table only, and a public text that names one is dropped.
 - **Parked domains:** a site whose page does not mention the organisation, or says the domain is for sale, yields only its health.
 
@@ -400,14 +404,15 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **The route** (`POST /api/inbound/email`)
 - Two senders: Resend (Svix-signed, `RESEND_WEBHOOK_SECRET`; content fetched with `RESEND_INBOUND_API_KEY` or `RESEND_API_KEY`, which needs full access) and a provider-agnostic JSON body behind `Authorization: Bearer $INBOUND_EMAIL_SECRET` (`webapp/lib/inbound-email.ts` documents the shape). Either secret unset → 401 for that sender.
-- Optional `INBOUND_EMAIL_RECIPIENTS` (comma-separated) drops mail not addressed to one of those addresses: use an unguessable local part, so strangers who learn the receiving domain cannot post events. A redirected list mail keeps the list's address in `To:`, so the check also reads `Delivered-To`, `X-Original-To`, `Resent-To` and the `for <…>` of `Received` headers, after fetching them.
+- `INBOUND_EMAIL_RECIPIENTS` (comma-separated, required: unset accepts no mail) drops mail not addressed to one of those addresses: use an unguessable local part, so strangers who learn the receiving domain (public in its MX record) cannot post events. A redirected list mail keeps the list's address in `To:`, so the check also reads Resend's `received_for`, `Delivered-To`, `X-Original-To`, `Resent-To` and the `for <…>` of `Received` headers, after fetching them.
+- **Sender verification.** Headers and body are written by whoever sends a mail. The route records `senderVerified`: a trusted receiver (`INBOUND_TRUSTED_AUTHSERV_IDS`, default `mx.microsoft.com`) reported DMARC pass, or an aligned DKIM pass, for the `From` domain — in the highest-instance `ARC-Authentication-Results` (on the Outlook redirect, Exchange's own seal, which a sender cannot place above), else the first trusted `Authentication-Results`. Verdicts without an authserv-id prove nothing. This reads verdicts; it does not verify signatures — the recipient allowlist is the first gate.
 - Limits: 15 MB per request, 100 000 characters of text, HTML ≤ 2 MB (to storage), at most 10 attachments of ≤ 5 MB each. Only images, PDF and calendar files are kept, never SVG; skipped files are named in `extractionNote`.
 - `receivedAt` is the mail's `Date` header when it lies between a week before and a day after receipt, clamped to now (the claims API refuses future retrieval times); else when Resend received it.
 - Nothing in `inboundEmails` is returned by a public function. Files reach the pipeline only through `POST /api/pipeline/inbound/file`, which serves a file only for the mail it belongs to.
 
 **Extraction** (stage `inbox`)
 - Mail without a list signal (no `List-Id`, no lists.cam.ac.uk sender, no inline-forwarded list header) and not from a known organisation is `skipped` before any LLM call.
-- The sender is identified deterministically, strongest first: `List-Id` → Sympa list on record (and its society component, `soc-cugs-news` → `soc-cugs`); exact sender address; the sender's own domain (never webmail, cam.ac.uk or other shared domains); display or list name against known names. A society name the model reads from the sign-off counts only when its quote is verified.
+- The sender is identified deterministically, and only for a verified sender (above), strongest first: `List-Id` → Sympa list on record (and its society component, `soc-cugs-news` → `soc-cugs`); exact sender address; the sender's own domain (never webmail, cam.ac.uk or other shared domains). Never from a display name, a list's name phrase or an inline-forwarded header block. A society name the model reads from the sign-off of a verified list mail counts only when its quote is verified. An unverified mail is never attributed: its events have no organiser, and it claims no organisation's activity (`lastActiveAt`).
 - E-mail addresses and phone numbers are redacted before the text goes to the LLM (bulk model, prompt `email_events_v1`). Quotes are checked against that redacted text.
 - Dates such as "Wednesday of Week 3" are resolved in code from the verified Full Term dates (§19) and the mail's date, never by the model.
 - Attached images and PDFs (posters, termcards) are read with the strong model's vision when the text found no events, says to see the attachment, or the file is named like a termcard. Values read only from an image cannot be checked and stay `inferred`.
@@ -492,7 +497,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Cambridge SU resources** (`/resources/<id>/<name>/`, e.g. https://www.cambridgesu.co.uk/resources/8721/CUHCS-Michaelmas-Term-Card/): checked **2026-10-07**, the resource page answered "Sorry, there was a problem" to an anonymous request, and MSL serves resource files under `/asset/` and `/resourcehandler/`, which the SU's robots.txt disallows for every crawler (`User-agent: *`). **SU-hosted termcards are therefore never fetched**; the stage records them as skipped.
 
-**Fetch:** through the polite client (§ Global rules), at most weekly per card. A page is followed to the first file it links or embeds whose name, label or alt text says termcard / programme / poster, one level deep, robots-checked.
+**Fetch:** through the polite client (§ Global rules), at most weekly per card. A page is followed to the first file it links or embeds whose name, label or alt text says termcard / programme / poster, one level deep, robots-checked. Never fetched, recorded as skipped before any request: SU-hosted cards (any `cambridgesu.co.uk` URL — `/file/<id>/Termcard/` is robots-allowed but redirects to the login page, seen 2026-10-08), talks.cam (§6), and Instagram, Facebook, LinkedIn and the other networks. A card reaches the model only when every host it came through lets AI read it (§14: no AI crawler disallowed by name, no `ai-input=no`, no `noai` on the page that embeds it); otherwise it is skipped ("host keeps AI out").
 
 **Read:** strong-model vision (`image_events_v1`). PDFs are rendered page by page (at most four pages, pypdfium2) and their **text layer** goes along: quotes are checked against it, so PDF values can be `found`. An image-only card has no text to check against, so its values stay `inferred`. Replies are cached by the file's content hash.
 

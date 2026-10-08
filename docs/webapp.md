@@ -163,8 +163,10 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   sent from the `/api/auth/*` HTTP action through Resend's HTTP API (`convex/lib/signInEmail.ts`),
   works once and expires in 10 minutes. The server refuses any address that is not exactly
   `@cam.ac.uk` (`lib/cam-email.ts`, the same rule `getViewer` uses) before storing anything, and
-  throttles to 3 links per address per 15 minutes and 60 per hour overall (`convex/authEmail.ts`,
-  table `signInLinkSends`, sha256 of the address only, pruned after a day). A verified link means
+  throttles to 3 links per address per 15 minutes, 10 per client (a sha256 of the
+  `x-forwarded-for` IP) per hour and 60 per hour overall — a cap an address that has signed in
+  before never hits (`convex/authEmail.ts`, table `signInLinkSends`, hashes only, pruned after a
+  day). A verified link means
   `emailVerified: true`, so `getViewer(ctx).isCamVerified` holds for that session.
 - `auth.getSignInOptions` → `{ google, camEmail }` (booleans) and `auth.getViewerTier` →
   `{ signedIn, isBroker, isCamVerified }` are public queries for the UI.
@@ -192,7 +194,9 @@ Dev and prod are separate Convex deployments of the `camsocs` project with indep
 - Inbound list mail (all optional; each unset means that sender is denied):
   `RESEND_WEBHOOK_SECRET` (the Resend webhook's `whsec_…` signing secret),
   `RESEND_INBOUND_API_KEY` (full-access key for the Receiving API; falls back to `RESEND_API_KEY`),
-  `INBOUND_EMAIL_RECIPIENTS` (comma-separated addresses to accept; unset accepts all),
+  `INBOUND_EMAIL_RECIPIENTS` (comma-separated addresses to accept; unset accepts none),
+  `INBOUND_TRUSTED_AUTHSERV_IDS` (receivers whose DKIM / DMARC verdict counts; default
+  `mx.microsoft.com`),
   `INBOUND_EMAIL_SECRET` (Bearer secret for the provider-agnostic JSON sender).
   Setup: `docs/setup/inbox-instagram.md`.
 
@@ -255,8 +259,8 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 | Function | Args | Returns |
 |---|---|---|
 | `orgs.list` | `OrgFilters & { paginationOpts }` | `{ page: OrgCardPublic[], isDone, continueCursor }` — name order, or search relevance with `q`; works with `usePaginatedQuery` (cursor = offset) |
-| `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly }`, each `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns |
-| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventPublic[], relationships: RelationshipPublic[] }`; events are upcoming (from today, London), at most 50, gated by the viewer; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
+| `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly, truncated }`, each but the last `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns; `truncated` when a search matched more than one query returns (1,024, Convex's limit) and the counts cover the best matches only |
+| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventPublic[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 
 `OrgCardPublic`: `key, slug, name, shortName?, shortDescription?, orgType?, level?, status,
@@ -276,9 +280,9 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventPublic[]` by start time (≤ 1000), gated by the viewer; `categories` / `collegeKeys` match the organisers' or co-hosts' |
-| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it) |
-| `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events match but are hidden from this viewer (0 when they can see them) — a count only, for the "N more Cambridge-only events, sign in" note |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventPublic[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'. Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
+| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
+| `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic`: `key, title, description?, startsAt, endsAt?, allDay, termWeekLabel?, venueKey?,
 venueText?, organisers: {key, slug, name, role}[], speakers, price?, bookingUrl?, signupRequired?,
@@ -292,7 +296,7 @@ events), lastSeenAt, confidence, meta`.
 | `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, or more than 5 requests per address per hour (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, more than 5 requests per address per hour, or a full hourly budget (removals and objections have their own, larger one) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
@@ -360,9 +364,13 @@ pipeline API and does not accept the pipeline key.
 - Deduplicated by `Message-ID`; HTML (≤ 2 MB) and kept attachments (images, PDF,
   calendars; ≤ 5 MB each, at most 10; never SVG) go to storage; `List-Id` is parsed into
   `listId` / `listName`; `receivedAt` is the `Date` header clamped to now.
-- `INBOUND_EMAIL_RECIPIENTS`, when set, must match `To`/`Cc` or a delivery header
+- `INBOUND_EMAIL_RECIPIENTS` (unset accepts no mail) must match `To`/`Cc` or a delivery header
   (`Delivered-To`, `X-Original-To`, `Resent-To`, `Received … for <…>`); for Resend this is
   checked after the headers are fetched.
+- `senderVerified` is recorded per mail (`lib/inbound-email.ts` `senderAuthenticated`): a
+  trusted receiver's DMARC or aligned DKIM pass for the `From` domain, read from the
+  highest-instance `ARC-Authentication-Results`, else a trusted `Authentication-Results`.
+  The pipeline attributes only verified mail to an organisation.
 - Answers: 200 `{stored}` / `{duplicate}` / `{ignored}`; 401 bad signature or secret;
   400 malformed; 413 too large; 502/503 when Resend's API failed or is not configured
   (Resend retries for about a day).
