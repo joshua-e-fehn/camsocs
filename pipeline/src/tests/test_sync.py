@@ -216,16 +216,18 @@ def test_the_load_stage_posts_keyed_staged_observations(make_settings) -> None:
         identity=IdentityHints(name="CU Chess Club"),
         fields=[parser_field("name", "CU Chess Club", extractor="su.name", evidence="secondary")],
     )
+    held = observation.model_copy(update={"source_key": "6790"})
     store = StagingStore(settings.staging_dir)
-    store.write("su_directory", "r1", [observation])
+    store.write("su_directory", "r1", [observation, held])
     store.write(RESOLVED, "r1", [observation.model_copy(update={"entity_key": "org-cu-chess"})])
 
     report = run_sync(settings=settings, dry_run=True, stages=["load"])
 
     [load_report] = report.stages
     assert load_report.ok
+    # The original the resolver copied is not waiting; the one it held is.
     assert load_report.skipped == 1, "the unkeyed harvest record waits for resolve"
-    assert "2 records from su_directory, _resolved; 1 awaiting resolve" in load_report.notes
+    assert "3 records from su_directory, _resolved; 1 awaiting resolve" in load_report.notes
 
 
 def test_load_posts_resolved_organisations_before_their_enrichment(

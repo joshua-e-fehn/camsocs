@@ -21,7 +21,7 @@ from itertools import islice
 
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
-from camsocs_pipeline.staging.store import RESOLVED
+from camsocs_pipeline.staging.store import RESOLVED, Record
 
 #: Rejection reasons shown in the stage notes; the rest are counted.
 MAX_REJECTION_NOTES = 10
@@ -40,7 +40,14 @@ def run(ctx: StageContext) -> None:
     ordered += [name for name in directories if name != RESOLVED]
     records = [record for name in ordered for record in ctx.staging.read_latest(name)]
     total = len(records)
-    awaiting = sum(1 for record in records if not record.is_keyed)
+    # A harvest directory keeps its unkeyed originals after resolve has
+    # written their keyed copies to `_resolved`; only an original with no
+    # keyed copy (held in the quarantine, or staged after resolve ran) is
+    # still waiting.
+    keyed_refs = {_ref(record) for record in records if record.is_keyed}
+    awaiting = sum(
+        1 for record in records if not record.is_keyed and _ref(record) not in keyed_refs
+    )
     records = [record for record in records if record.is_keyed]
     if ctx.limit is not None:
         records = list(islice(records, ctx.limit))
@@ -85,3 +92,7 @@ def _describe(item: object) -> str:
     if isinstance(item, dict):
         return f"{item.get('entityKey')}.{item.get('field')}: {item.get('reason')}"
     return f"not found: {item}"
+
+
+def _ref(record: Record) -> tuple[str, str]:
+    return (record.source_type, record.source_key)
