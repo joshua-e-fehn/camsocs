@@ -12,6 +12,7 @@ import pytest
 
 import camsocs_pipeline.pipeline.load as load
 from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.extract.llm import NoLLMHost
 from camsocs_pipeline.extract.when import TermCalendar
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.sync import run_sync
@@ -108,6 +109,90 @@ def test_robots_blocked_files_and_missing_cards_are_skipped(tmp_path, net) -> No
     assert isinstance(blocked, Skipped) and "without a readable" in blocked.reason
     assert asset.call_count == 0
     assert isinstance(missing, Skipped) and missing.reason.startswith("not_found")
+
+
+@pytest.mark.parametrize(
+    ("url", "reason"),
+    [
+        # §21: SU termcards are never fetched — /file/ is robots-allowed but
+        # redirects to the login page.
+        ("https://www.cambridgesu.co.uk/file/7501/Termcard/", "SU-hosted"),
+        ("https://talks.cam.ac.uk/show/index/201664", "keeps AI out"),
+        ("https://www.instagram.com/p/abc123/", "social network"),
+        ("https://www.facebook.com/cuorrery/photos/1", "social network"),
+        ("https://www.linkedin.com/company/orrery/", "social network"),
+    ],
+)
+def test_never_fetched_hosts_are_skipped_without_a_request(
+    tmp_path, net, url: str, reason: str
+) -> None:
+    with client(tmp_path) as polite:
+        skipped = fetch_termcard(polite, url)
+    assert isinstance(skipped, Skipped) and reason in skipped.reason
+    assert not net.calls
+
+
+def test_a_card_from_a_host_that_keeps_ai_out_never_reaches_the_model(tmp_path, net) -> None:
+    # Fetching is allowed for our crawler; GPTBot is disallowed by name.
+    net.get("https://orrery.example.org/robots.txt").mock(
+        return_value=httpx.Response(200, text="User-agent: GPTBot\nDisallow: /\n")
+    )
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, content=PDF, headers={"content-type": "application/pdf"})
+    )
+    with client(tmp_path) as polite:
+        skipped = fetch_termcard(polite, CARD_PAGE)
+    assert isinstance(skipped, Skipped) and skipped.reason == "host keeps AI out"
+
+
+def test_a_linked_file_on_a_host_that_keeps_ai_out_is_skipped(tmp_path, net) -> None:
+    net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
+    page = '<a href="https://files.example.net/MT26-termcard.pdf">Our termcard</a>'
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, text=page, headers={"content-type": "text/html"})
+    )
+    net.get("https://files.example.net/robots.txt").mock(
+        return_value=httpx.Response(200, text="User-agent: *\nContent-Signal: ai-input=no\n")
+    )
+    net.get("https://files.example.net/MT26-termcard.pdf").mock(
+        return_value=httpx.Response(200, content=PDF)
+    )
+    with client(tmp_path) as polite:
+        skipped = fetch_termcard(polite, CARD_PAGE)
+    assert isinstance(skipped, Skipped) and skipped.reason == "host keeps AI out"
+
+
+def test_a_noai_page_is_not_followed(tmp_path, net) -> None:
+    net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
+    page = (
+        '<html><head><meta name="robots" content="noai, noimageai"></head>'
+        '<body><a href="/files/MT26-termcard.pdf">Our termcard</a></body></html>'
+    )
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, text=page, headers={"content-type": "text/html"})
+    )
+    linked = net.get("https://orrery.example.org/files/MT26-termcard.pdf")
+    with client(tmp_path) as polite:
+        skipped = fetch_termcard(polite, CARD_PAGE)
+    assert isinstance(skipped, Skipped) and skipped.reason == "host keeps AI out"
+    assert linked.call_count == 0
+
+
+def test_card_events_refuse_a_talks_cam_card_before_the_model() -> None:
+    llm = FakeLLM(lambda _text, _tier: TERMCARD_REPLY)
+    with pytest.raises(NoLLMHost):
+        card_events(
+            card("https://talks.cam.ac.uk/talk/abc.pdf"),
+            org_key=ORRERY_KEY,
+            org_name="Cambridge University Orrery Club",
+            listed_url="https://talks.cam.ac.uk/talk/abc.pdf",
+            now=datetime(2026, 10, 7, 12, tzinfo=UTC),
+            llm=llm,
+            memo=None,
+            calendar=TermCalendar.default(),
+            notes=[],
+        )
+    assert llm.calls == []
 
 
 def card(url: str = CARD_PAGE) -> TermcardFile:

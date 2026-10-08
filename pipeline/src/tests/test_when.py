@@ -32,6 +32,9 @@ def test_week_arithmetic_matches_the_university_convention() -> None:
     # Michaelmas 2026 ends Fri 4 Dec, in Week 9 (source-research §19).
     assert MT26.last_week == 9
     assert MT26.week_of(date(2026, 12, 4)) == 9
+    # Full Term ends on Fri 4 Dec: the rest of that Thursday-Wednesday week is unlabelled.
+    assert MT26.week_of(date(2026, 12, 5)) is None
+    assert MT26.week_of(date(2026, 12, 9)) is None
     assert MT26.week_of(date(2026, 9, 1)) is None
     assert MT26.label(3) == "MT26 Wk 3"
 

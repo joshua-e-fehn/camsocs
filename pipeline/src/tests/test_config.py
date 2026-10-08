@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
-from camsocs_pipeline.config import ENV_FILE, REPO_ROOT, ConfigError, Settings
+from camsocs_pipeline.config import (
+    DOCUMENTED_USER_AGENT,
+    ENV_FILE,
+    REPO_ROOT,
+    ConfigError,
+    Settings,
+)
 
 
 def test_paths_resolve_to_the_repo() -> None:
@@ -49,13 +56,31 @@ def test_environment_variables_are_read(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.parametrize(
     "ua",
-    ["", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"],
+    [
+        "",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "camsocs-bot/0.1 (+https://example.org/camsocs; ops@example.org)",
+        "camsocs-bot/0.1 (mailto:ops at example.org)",
+    ],
 )
-def test_the_user_agent_must_be_set_and_honest(make_settings, ua: str) -> None:
+def test_the_user_agent_must_be_set_honest_and_without_an_email(make_settings, ua: str) -> None:
     with pytest.raises(ConfigError):
         make_settings(user_agent=ua).require_user_agent()
 
 
-def test_an_honest_user_agent_is_accepted(make_settings) -> None:
-    ua = "camsocs-bot/0.1 (+https://example.org/camsocs; ops@example.org)"
-    assert make_settings(user_agent=ua).require_user_agent() == ua
+def test_the_documented_user_agent_is_accepted(make_settings) -> None:
+    assert make_settings(user_agent=DOCUMENTED_USER_AGENT).require_user_agent() == (
+        DOCUMENTED_USER_AGENT
+    )
+
+
+def test_the_error_suggests_no_email(make_settings) -> None:
+    with pytest.raises(ConfigError) as error:
+        make_settings(user_agent="").require_user_agent()
+    assert "@" not in str(error.value)
+
+
+def test_the_host_interval_is_at_least_one_second(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CAMSOCS_MIN_HOST_INTERVAL", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

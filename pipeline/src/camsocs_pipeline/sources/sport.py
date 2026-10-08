@@ -31,7 +31,12 @@ from selectolax.lexbor import LexborNode
 from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.contact_links import dedupe_socials, instagram_handle, social_link
+from camsocs_pipeline.sources.contact_links import (
+    dedupe_socials,
+    instagram_handle,
+    link_text_disagrees,
+    social_link,
+)
 from camsocs_pipeline.sources.observe import (
     Harvest,
     clean_text,
@@ -182,7 +187,9 @@ def parse_club_page(html: str, base_url: str) -> ClubPage:
     for anchor in block.css("a"):
         href = anchor.attributes.get("href") or ""
         entry = social_link(urljoin(base_url, href)) if href else None
-        if entry is not None:
+        # A link whose text names another account than its target (a pasted
+        # link of another club) is neither a social nor an identity hint.
+        if entry is not None and not link_text_disagrees(entry, anchor.text()):
             socials.append(entry)
     page.socials = dedupe_socials(socials)
     return page

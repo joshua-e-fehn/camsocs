@@ -34,7 +34,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from camsocs_pipeline.claims import epoch_ms, llm_field, parser_field
-from camsocs_pipeline.extract.evidence import normalise_text
+from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote, normalise_text
 from camsocs_pipeline.extract.llm import LLMClient, Tier, vision_message
 from camsocs_pipeline.extract.memo import LLMMemo, memo_key
 from camsocs_pipeline.extract.when import (
@@ -139,6 +139,9 @@ class LlmEvent(BaseModel):
     cancelled: bool = Field(False, description="True if the text says it is cancelled.")
     cancelled_quote: str | None = None
     tbc: bool = Field(False, description="True if the date or details are 'TBC'.")
+    tbc_quote: str | None = Field(
+        None, description="Verbatim words from the text that say it is TBC / to be confirmed."
+    )
     speakers: list[LlmSpeaker] = Field(default_factory=list)
     speakers_quote: str | None = None
 
@@ -269,10 +272,14 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
         )
 
     when_quote = event.when_quote
+    # Without a stated time the event is filed as all day at midnight: a
+    # representation of "no time given", not a fact the text states — both
+    # are `inferred`, with no quote (the date's words stay in valueRaw).
+    timed = not when.all_day
     fields: list[FieldObs] = [
         llm("title", title[:300], _quote_or_value(event.title_quote, title)),
-        llm("startsAt", epoch_ms(when.starts_at), when_quote),
-        llm("allDay", when.all_day, when_quote),
+        llm("startsAt", epoch_ms(when.starts_at), when_quote if timed else None),
+        llm("allDay", when.all_day, when_quote if timed else None),
     ]
     fields[1].value_raw = when_quote
     if when.ends_at is not None:
@@ -296,14 +303,21 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
     if event.cancelled:
         fields.append(llm("cancelled", True, event.cancelled_quote))
     if event.tbc:
-        fields.append(llm("status", "tbc", when_quote))
+        # Its own words ("TBC", "to be confirmed"), never the date's.
+        fields.append(llm("status", "tbc", event.tbc_quote))
     speakers = [
         {"name": " ".join(s.name.split()), "affiliation": s.affiliation or None}
         for s in event.speakers
         if s.name and s.name.strip()
     ]
     if speakers:
-        fields.append(llm("speakers", speakers, event.speakers_quote))
+        # One quote for the list: it supports the list only if every name is
+        # in the text too.
+        named = all(
+            check_quote(speaker["name"], context.source_text) is not EvidenceMatch.ABSENT
+            for speaker in speakers
+        )
+        fields.append(llm("speakers", speakers, event.speakers_quote if named else None))
     if context.image:
         fields.append(
             parser_field(

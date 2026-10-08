@@ -292,7 +292,14 @@ def claims_for_observation(obs: Observation) -> list[ClaimInput]:
     its resolved parent (a JCR inside its college) and `collegeKeys` from its
     resolved ``member_college`` relationships — harvesters never mint keys, so
     these key-valued fields can only be claimed once the resolver has keyed
-    the identities they point at."""
+    the identities they point at.
+
+    A derived claim carries the provenance of the reading that established
+    it: `collegeKeys` the relationship's own `evidence_url` and evidence kind
+    (the page that names the college, which need not be this one), and
+    `parentKey` / `orgKey` the observation's — primary only when every field
+    of it is (one primary registration fact does not make a listing primary
+    for everything else)."""
     if obs.entity_key is None:
         raise ValueError("observation is not resolved: entity_key is None")
     fields = list(obs.fields)
@@ -311,23 +318,38 @@ def claims_for_observation(obs: Observation) -> list[ClaimInput]:
                     evidence=evidence,
                 )
             )
-    colleges = [
-        rel.to_identity.known_key
-        for rel in obs.relationships
-        if rel.type == "member_college"
-        and rel.direction == "outgoing"
-        and rel.to_identity.known_key is not None
-    ]
-    if obs.entity_type == "organisation" and colleges and "collegeKeys" not in present:
-        fields.append(
-            parser_field(
-                "collegeKeys",
-                sorted(set(colleges)),
-                extractor="resolve.member_college",
-                evidence=evidence,
+    claims = _claims(fields, obs, obs.entity_type, obs.entity_key)
+    if obs.entity_type != "organisation" or "collegeKeys" in present:
+        return claims
+    # One claim per page that names a college, from that page.
+    colleges: dict[tuple[str, str], set[str]] = {}
+    for rel in obs.relationships:
+        if (
+            rel.type == "member_college"
+            and rel.direction == "outgoing"
+            and rel.to_identity.known_key is not None
+        ):
+            colleges.setdefault((rel.evidence_url, rel.evidence), set()).add(
+                rel.to_identity.known_key
+            )
+    for (url, rel_evidence), keys in sorted(colleges.items()):
+        claims.append(
+            build_claim(
+                parser_field(
+                    "collegeKeys",
+                    sorted(keys),
+                    extractor="resolve.member_college",
+                    evidence=rel_evidence,
+                ),
+                entity_type="organisation",
+                entity_key=obs.entity_key,
+                source_url=url,
+                source_type=obs.source_type,
+                retrieved_at=obs.retrieved_at,
+                content_sha256=obs.content_sha256 if url == obs.source_url else None,
             )
         )
-    return _claims(fields, obs, obs.entity_type, obs.entity_key)
+    return claims
 
 
 def claims_for_event(obs: EventObservation) -> list[ClaimInput]:
@@ -362,8 +384,10 @@ def claims_for_event(obs: EventObservation) -> list[ClaimInput]:
 
 
 def _evidence_of(fields: Iterable[FieldObs]) -> str:
-    """Identity claims inherit the evidence kind of the observation's fields."""
-    return "primary" if any(f.evidence == "primary" for f in fields) else "secondary"
+    """Identity claims inherit the evidence kind of the observation's fields:
+    primary only when all of them are."""
+    kinds = {f.evidence for f in fields}
+    return "primary" if kinds == {"primary"} else "secondary"
 
 
 __all__ = [

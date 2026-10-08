@@ -115,6 +115,9 @@ def test_register_names_are_read_back_into_display_order(raw, name, aliases) -> 
         ("http://cuams.soc.ucam.org", "srcf"),
         ("https://www.cmp.cam.ac.uk/opportunities/entry/x/", "cam"),
         ("https://cuats.co.uk", "website"),
+        # Another register's entry for the society, never its website.
+        ("https://www.cucbc.org/node/122", "directory"),
+        ("https://www.camdram.net/societies/x", "directory"),
     ],
 )
 def test_links_are_classified_by_shape(url, kind) -> None:

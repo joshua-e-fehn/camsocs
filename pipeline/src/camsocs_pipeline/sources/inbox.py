@@ -6,20 +6,25 @@ which known organisation sent a mail from deterministic signals, strongest
 first:
 
 1. the organisation the server already recorded (`orgKey` on the row);
-2. the `List-Id` (`soc-cugs.lists.cam.ac.uk`) against the Sympa lists on
-   record, then its society component (`soc-cugs-news` → `soc-cugs`);
-3. the sender's exact address, then its own domain (never a shared one:
-   webmail, cam.ac.uk, the SU, SRCF);
-4. the sender's display name (`"CU German Society" <…>`) and the list's
-   name phrase against known names and aliases.
+2. **only for a mail whose sender a trusted receiver verified**
+   (`sender_verified`: DKIM / DMARC pass for its From domain, checked by the
+   server at receipt): the `List-Id` (`soc-cugs.lists.cam.ac.uk`) or a
+   lists.cam.ac.uk sender against the Sympa lists on record, then its society
+   component (`soc-cugs-news` → `soc-cugs`); then the sender's exact address,
+   then its own domain (never a shared one: webmail, cam.ac.uk, the SU, SRCF).
 
-The same signals are read from an inline-forwarded header block ("From: … /
-Subject: …" under "Forwarded message"), for mail forwarded rather than
-redirected. A sign-off the LLM reads ("— The CUGS Committee") is the last
-resort, applied by the stage once the quote is verified.
+Headers and body text are written by whoever sends the mail, so an
+unverified mail is never attributed to an organisation (its events stay
+unattributed `cam_only` events and it says nothing about anyone's activity),
+and nothing is ever attributed from a display name, a list's name phrase or
+an inline-forwarded header block ("From: … / Subject: …" under "Forwarded
+message") — those are body text and labels anyone can write. The stage may
+still use a verified list mail's sign-off ("— The CUGS Committee") once the
+model's quote checks out.
 
 `is_list_mail` keeps the inbox to list mail: anything without a list
-signal and not from a known organisation is skipped before the LLM sees it.
+signal (including a forwarded header block) and not from a known organisation
+is skipped before the LLM sees it.
 """
 
 from __future__ import annotations
@@ -80,18 +85,24 @@ def forwarded_headers(text: str) -> ForwardedHeaders | None:
     return ForwardedHeaders(sender, headers.get("subject"), list_name)
 
 
-def list_name_of(mail: PendingMail) -> str | None:
-    """The Sympa list name of a mail (`soc-cugs`), when it came through
-    lists.cam.ac.uk."""
+def header_list_name(mail: PendingMail) -> str | None:
+    """The Sympa list name (`soc-cugs`) from the mail's own headers — its
+    `List-Id` or a lists.cam.ac.uk sender — never from the body."""
     if mail.list_id:
         found = sympa_list_name(mail.list_id)
         if found:
             return found
     sender = parse_sender(mail.from_)
-    if sender.address:
-        found = sympa_list_name(sender.address)
-        if found:
-            return found
+    return sympa_list_name(sender.address) if sender.address else None
+
+
+def list_name_of(mail: PendingMail) -> str | None:
+    """The Sympa list name of a mail (`soc-cugs`), when it came through
+    lists.cam.ac.uk — from its headers, else an inline-forwarded block (a
+    list signal and a scope for its events, never an attribution)."""
+    found = header_list_name(mail)
+    if found:
+        return found
     forwarded = forwarded_headers(mail.text)
     return forwarded.list_name if forwarded else None
 
@@ -110,31 +121,24 @@ class Identified:
 
 
 def identify_sender(mail: PendingMail, known: KnownOrgs) -> Identified:
-    """The organisation a mail is from, by deterministic signals only."""
+    """The organisation a mail is from, by deterministic signals from a
+    verified sender only (module docstring)."""
     if mail.org_key:
         return Identified(mail.org_key, "recorded on the mail")
-    list_name = list_name_of(mail)
+    if not mail.sender_verified:
+        return Identified(None, "sender not verified (no trusted DKIM / DMARC pass)")
+    list_name = header_list_name(mail)
     for candidate in (mail.list_id, list_name):
         found = known.by_list(candidate)
         if found:
             return Identified(found, f"list {list_name or candidate}")
-
-    senders = [parse_sender(mail.from_)]
-    forwarded = forwarded_headers(mail.text)
-    if forwarded:
-        senders.append(forwarded.sender)
-    for sender in senders:
-        found = known.by_address(sender.address)
-        if found:
-            return Identified(found, "sender address")
-    for sender in senders:
-        found = known.by_domain(sender.address)
-        if found:
-            return Identified(found, "sender domain")
-    for name in [s.display_name for s in senders] + [mail.list_name]:
-        found = known.by_name(name)
-        if found:
-            return Identified(found, "sender or list name")
+    sender = parse_sender(mail.from_)
+    found = known.by_address(sender.address)
+    if found:
+        return Identified(found, "sender address")
+    found = known.by_domain(sender.address)
+    if found:
+        return Identified(found, "sender domain")
     return Identified(None, f"no known organisation for list {list_name or mail.list_id or '-'}")
 
 
@@ -143,6 +147,7 @@ __all__ = [
     "Identified",
     "Sender",
     "forwarded_headers",
+    "header_list_name",
     "identify_sender",
     "is_list_mail",
     "list_name_of",

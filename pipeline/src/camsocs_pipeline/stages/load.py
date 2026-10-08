@@ -67,6 +67,13 @@ def run(ctx: StageContext) -> None:
     ctx.report.notes.append(
         f"{total} records from {', '.join(directories)}; {report.skipped} awaiting resolve"
     )
+    if report.collisions:
+        ctx.report.notes.append(
+            f"{len(report.collisions)} fields not posted: one source gave one entity "
+            "two different readings"
+        )
+        for collision in report.collisions[:MAX_REJECTION_NOTES]:
+            ctx.report.notes.append(f"  {collision}")
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
             f"images: {report.files_stored} stored, {report.files_dropped} not available"

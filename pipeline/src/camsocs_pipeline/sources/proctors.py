@@ -18,7 +18,9 @@ Each entry becomes one ``proctors_register`` observation:
 - the link, classified by shape (`classify_link`): a website (own domain,
   SRCF, a cam.ac.uk page), a social (Instagram, Facebook, LinkedIn, Linktree,
   WeChat, X), or an SU profile, which is identity only (the SU harvester
-  reads the profile itself). Links are never fetched.
+  reads the profile itself). A page in another directory of organisations
+  (a CUCBC club page, a Camdram society page) is that directory's entry, not
+  the society's website: it claims nothing. Links are never fetched.
 
 Evidence: the register is the official source for the registration fact
 (``primary``); for a society's name and links it is a third party
@@ -51,7 +53,11 @@ from camsocs_pipeline.sources.markdown import html_to_text
 
 REGISTER_URL = "https://www.proctors.cam.ac.uk/clubsandsocs/registered-societies"
 
-LinkKind = Literal["website", "srcf", "cam", "social", "su_profile"]
+LinkKind = Literal["website", "srcf", "cam", "social", "su_profile", "directory"]
+
+#: Hosts whose pages are other registers' entries for many organisations:
+#: a link there is a reference to that register, never a society's website.
+DIRECTORY_HOSTS = ("cucbc.org", "camdram.net")
 
 
 @dataclass(frozen=True)
@@ -146,6 +152,8 @@ def classify_link(url: str) -> LinkKind:
         return "su_profile"
     if is_social_host(url):
         return "social"
+    if any(host == domain or host.endswith("." + domain) for domain in DIRECTORY_HOSTS):
+        return "directory"
     if host in ("srcf.net", "srcf.ucam.org") or host.endswith((".srcf.net", ".soc.ucam.org")):
         return "srcf"
     if host == "cam.ac.uk" or host.endswith(".cam.ac.uk"):

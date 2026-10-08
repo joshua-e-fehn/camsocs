@@ -144,17 +144,20 @@ def club_observation(
     *,
     college_confirmed: bool = True,
 ) -> Observation:
-    """One club as CUCBC lists it. ``college_confirmed`` false: the page that
-    names the club's college (`NAMED_ELSEWHERE`) did not confirm it this run,
-    so no college is claimed."""
+    """One club as CUCBC's ``/clubs`` lists it. What only the club's details
+    page states (its full name, the hidden address) is that page's own
+    observation (`details_observation`), attributed to that page.
+    ``college_confirmed`` false: the page that names the club's college
+    (`NAMED_ELSEWHERE`) did not confirm it this run, so no college is
+    claimed."""
     extractor = "cucbc.clubs"
     evidence = "secondary"
     org_type, level, stated, college, college_evidence = classify(row.name)
     if not college_confirmed:
         college, college_evidence = None, None
-    name = (details.full_name if details and details.full_name else None) or row.name
+    full_name = details.full_name if details and details.full_name else None
+    name = full_name or row.name
     fields = [
-        parser_field("name", name, extractor=f"{extractor}.name", evidence=evidence),
         parser_field(
             "registrations.cucbc",
             {"registered": True, "sourceUrl": listing.final_url},
@@ -169,7 +172,11 @@ def club_observation(
         parser_field("categories", ["sport"], extractor=f"{extractor}.category_rule",
                      evidence=evidence, inferred=True),
     ]  # fmt: skip
-    if row.name != name:
+    if full_name is None:
+        fields.insert(
+            0, parser_field("name", row.name, extractor=f"{extractor}.name", evidence=evidence)
+        )
+    elif row.name != full_name:
         fields.append(
             parser_field("aliases", [row.name], extractor=f"{extractor}.name", evidence=evidence)
         )
@@ -189,16 +196,14 @@ def club_observation(
                     "website", website, extractor=f"{extractor}.website", evidence=evidence
                 )
             )
-    if details and details.email_obfuscated:
-        # Written "name[at]cucbc.org" to keep it from harvesters: not decoded.
-        fields.append(
-            missing_field(
-                "email", "access_restricted", extractor=f"{extractor}.email", evidence=evidence
-            )
-        )
     relationships = []
     if college:
-        relationships = college_relationships(college, college_evidence or listing.final_url)
+        # The club's own site, when it is what names the college, is primary.
+        relationships = college_relationships(
+            college,
+            college_evidence or listing.final_url,
+            evidence="primary" if college_evidence else "secondary",
+        )
     internal: dict[str, object] = {}
     if details and details.short_name:
         internal["cucbc_club"] = details.short_name
@@ -227,6 +232,41 @@ def club_observation(
     )
 
 
+def details_observation(
+    listed: Observation, page: FetchResult, client: PoliteClient, details: ClubDetails
+) -> Observation | None:
+    """What the club's details page states, from that page: its full name,
+    and that its "CUCBC Email" is hidden (written ``name[at]cucbc.org`` to
+    keep it from harvesters; never decoded). Same identity as the listing."""
+    extractor, evidence = "cucbc.details", "secondary"
+    fields = []
+    if details.full_name:
+        fields.append(
+            parser_field(
+                "name", details.full_name, extractor=f"{extractor}.name", evidence=evidence
+            )
+        )
+    if details.email_obfuscated:
+        fields.append(
+            missing_field(
+                "email", "access_restricted", extractor=f"{extractor}.email", evidence=evidence
+            )
+        )
+    if not fields:
+        return None
+    return Observation(
+        source_type="cucbc",
+        source_key=page.final_url,
+        source_url=page.final_url,
+        retrieved_at=retrieved_at(page),
+        content_sha256=page.content_sha256,
+        fetch=fetch_info(client, page),
+        entity_type="organisation",
+        identity=listed.identity,
+        fields=fields,
+    )
+
+
 def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
     out = Harvest()
     listing = client.fetch(CLUBS_URL)
@@ -242,6 +282,7 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
         rows = rows[:limit]
     for row in rows:
         details: ClubDetails | None = None
+        page: FetchResult | None = None
         if row.details_url:
             page = client.fetch(row.details_url, fresh_for=DETAILS_FRESH_FOR)
             out.fetched += 1
@@ -256,7 +297,12 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
             out.fetched += 1
             if not confirmed:
                 out.notes.append(f"{row.name}: {elsewhere[1]} no longer names {elsewhere[0]}")
-        out.add(club_observation(row, listing, client, details, college_confirmed=confirmed))
+        listed = club_observation(row, listing, client, details, college_confirmed=confirmed)
+        out.add(listed)
+        if details is not None and page is not None:
+            detailed = details_observation(listed, page, client, details)
+            if detailed is not None:
+                out.add(detailed)
     unplaced = [
         row.name
         for row in rows
@@ -286,6 +332,7 @@ __all__ = [
     "classify",
     "club_observation",
     "confirms_college",
+    "details_observation",
     "harvest",
     "parse_clubs",
     "parse_details",

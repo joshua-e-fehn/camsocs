@@ -286,6 +286,9 @@ NO_IDENTITY_HOSTS = frozenset(
         "sport.cam.ac.uk",
         "live-cambridge-sports-cwp.pantheonsite.io",
         "camdram.net",
+        # CUCBC's site is a directory of its clubs (/node/N): a club page
+        # there is not the club's own site, so it identifies no one.
+        "cucbc.org",
         "talks.cam.ac.uk",
         "lists.cam.ac.uk",
         "proctors.cam.ac.uk",

@@ -157,7 +157,44 @@ class TestPlan:
         assert plan.event_organisers[0].to_wire() == {
             "eventKey": key,
             "organisers": [{"orgKey": "org-cu-german-society", "role": "organiser"}],
+            "mode": "replace",
         }
+
+    def test_an_event_with_unresolved_organisers_only_adds(self) -> None:
+        # An empty or partial index (a fresh machine, a --limit run) must not
+        # remove the organisers Convex already knows.
+        unresolved = event()
+        unresolved.unresolved_organisers = [
+            OrganiserObs(identity=IdentityHints(name="CU Somebody Society"))
+        ]
+        assert plan_observations([unresolved]).event_organisers[0].mode == "merge"
+
+    def test_two_readings_of_one_field_from_one_source_are_not_posted(self) -> None:
+        # Two rows of one PDF resolved to one organisation: whichever arrived
+        # last would win. Neither does; the collision is reported.
+        def guide_row(key: str, value: bool) -> Observation:
+            return Observation(
+                source_type="sport_guide_pdf",
+                source_key=key,
+                source_url="https://www.sport.cam.ac.uk/guide.pdf",
+                retrieved_at=AT,
+                entity_type="organisation",
+                identity=IdentityHints(name="Rowing"),
+                entity_key="org-boat-club-rowing",
+                fields=[
+                    parser_field(
+                        "sport.collegeCompetition", value, extractor="guide", evidence="primary"
+                    ),
+                    parser_field("sport.sport", "Rowing", extractor="guide", evidence="primary"),
+                ],
+            )
+
+        plan = plan_observations([guide_row("a", True), guide_row("b", False)])
+        fields = {claim.field for claim in plan.claims}
+        assert "sport.collegeCompetition" not in fields and "sport.sport" in fields
+        assert plan.collisions == [
+            "org-boat-club-rowing sport.collegeCompetition: 2 readings from one source"
+        ]
 
     def test_internal_source_urls_make_no_source_row(self) -> None:
         mail = event(

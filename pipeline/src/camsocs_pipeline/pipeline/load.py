@@ -41,6 +41,7 @@ import json
 import logging
 import random
 import time
+from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from types import TracebackType
@@ -50,7 +51,7 @@ import httpx
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.claims import claims_for_event, claims_for_observation, epoch_ms
-from camsocs_pipeline.keys import event_key, person_key, source_key
+from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
 from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
@@ -502,7 +503,7 @@ class ConvexLoader:
         (they wait for the resolve stage) and counted. With `media`, image
         values that name only a ``sourceUrl`` are uploaded first."""
         plan = plan_observations(records)
-        report = LoadReport(skipped=plan.skipped)
+        report = LoadReport(skipped=plan.skipped, collisions=plan.collisions)
         report.sources = self.upsert_sources(plan.sources)
         if media is not None and not self.dry_run:
             plan.claims, report.files_stored, report.files_dropped = attach_stored_files(
@@ -542,6 +543,8 @@ class LoadReport:
     """What `post_observations` wrote, per route."""
 
     skipped: int = 0
+    #: Fields not posted because one source gave one entity two readings.
+    collisions: list[str] = field(default_factory=list)
     #: Image claims given a stored copy, and those dropped for want of one.
     files_stored: int = 0
     files_dropped: int = 0
@@ -575,6 +578,8 @@ class LoadPlan:
     event_organisers: list[EventOrganiserSet] = field(default_factory=list)
     broker_profiles: list[BrokerProfileInput] = field(default_factory=list)
     people: list[PersonInput] = field(default_factory=list)
+    #: Fields left out because one source gave one entity two readings.
+    collisions: list[str] = field(default_factory=list)
 
 
 def attach_stored_files(
@@ -632,6 +637,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
         org_key: str | None = None
         if isinstance(record, EventObservation):
             plan.claims.extend(claims_for_event(record))
+            unresolved = bool(record.unresolved_organisers) or any(
+                not o.identity.known_key for o in record.organisers
+            )
             plan.event_organisers.append(
                 EventOrganiserSet(
                     event_key=event_key(record.event_source, record.external_id),
@@ -640,6 +648,10 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
                         for o in record.organisers
                         if o.identity.known_key
                     ],
+                    # Organisers the source names but this run could not
+                    # resolve (a fresh machine, a --limit run, an ambiguous
+                    # name): add what is known, remove nothing.
+                    mode="merge" if unresolved else "replace",
                 )
             )
         else:
@@ -659,9 +671,41 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     for url, keys in owners.items():
         if len(keys) > 1:
             sources[url] = sources[url].model_copy(update={"org_key": None})
+    plan.claims, plan.collisions = _without_collisions(plan.claims)
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)
     return plan
+
+
+def _without_collisions(claims: list[ClaimInput]) -> tuple[list[ClaimInput], list[str]]:
+    """Drops claims that would overwrite each other: two different readings of
+    one field of one entity from the same source and method (two rows of one
+    PDF resolved to one organisation). The server keeps only the newest per
+    (source, method), so either would win by arrival order — neither is
+    posted, and the collision is reported."""
+    readings: dict[tuple[str, str, str, str, str], set[str]] = defaultdict(set)
+    for claim in claims:
+        group = (claim.entity_type, claim.entity_key, claim.field, claim.source_key, claim.method)
+        readings[group].add(
+            canonical_json(claim.value)
+            if claim.value is not None
+            else f"!{claim.status}:{claim.missing_reason}"
+        )
+    clashing = {group for group, values in readings.items() if len(values) > 1}
+    if not clashing:
+        return claims, []
+    kept = [
+        claim
+        for claim in claims
+        if (claim.entity_type, claim.entity_key, claim.field, claim.source_key, claim.method)
+        not in clashing
+    ]
+    notes = sorted(
+        f"{entity_key} {field_name}: {len(readings[group])} readings from one source"
+        for group in clashing
+        for _type, entity_key, field_name, _source, _method in [group]
+    )
+    return kept, notes
 
 
 def _claims_counterpart(record: Observation) -> bool:

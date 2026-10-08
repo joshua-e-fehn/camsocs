@@ -206,9 +206,9 @@ class TestText:
         assert clean_text("x" * 50, max_length=10) == "xxxxxxxxx…"
 
     def test_event_types_are_guessed_from_title_keywords_and_say_so(self) -> None:
-        assert infer_event_type("Annual Careers Fair") == ("careers", True)
-        assert infer_event_type("Speaker Event: In Conversation with X") == ("talk", True)
-        assert infer_event_type("Something") == ("other", False)
+        assert infer_event_type("Annual Careers Fair") == "careers"
+        assert infer_event_type("Speaker Event: In Conversation with X") == "talk"
+        assert infer_event_type("Something") == "other"
 
 
 class TestOrganiserIndex:

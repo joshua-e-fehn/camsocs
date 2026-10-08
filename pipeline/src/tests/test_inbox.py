@@ -38,7 +38,6 @@ from tests.fakes import (
     FORWARDED,
     FORWARDED_REPLY,
     NOT_LIST,
-    ORRERY_KEY,
     QUOKKA_KEY,
     WEEKLY,
     WEEKLY_REPLY,
@@ -107,21 +106,31 @@ def test_sender_helpers() -> None:
     assert not is_list_mail(NOT_LIST)
 
 
-def test_identify_sender_by_list_forward_address_and_name() -> None:
+def test_identify_sender_by_list_and_address_of_a_verified_sender() -> None:
     known = KnownOrgs.from_records(known_orgs_records())
     assert identify_sender(WEEKLY, known).org_key == QUOKKA_KEY
-    assert identify_sender(FORWARDED, known).org_key == ORRERY_KEY
     assert identify_sender(NOT_LIST, known).org_key is None
     direct = WEEKLY.model_copy(
         update={"list_id": None, "from_": "Committee <committee@cuqas.example.org>"}
     )
     assert identify_sender(direct, known).how == "sender address"
+    recorded = NOT_LIST.model_copy(update={"org_key": "org-x"})
+    assert identify_sender(recorded, known).org_key == "org-x"
+
+
+def test_what_a_sender_writes_never_attributes_a_mail() -> None:
+    known = KnownOrgs.from_records(known_orgs_records())
+    # Unverified: a forged List-Id or sender address speaks for nobody.
+    forged = WEEKLY.model_copy(update={"sender_verified": False})
+    assert identify_sender(forged, known).org_key is None
+    assert identify_sender(forged, known).how.startswith("sender not verified")
+    # A display name alone, even on a verified (webmail) sender.
     by_name = WEEKLY.model_copy(
         update={"list_id": None, "from_": '"CU Orrery Club" <someone@gmail.com>'}
     )
-    assert identify_sender(by_name, known).org_key == ORRERY_KEY
-    recorded = NOT_LIST.model_copy(update={"org_key": "org-x"})
-    assert identify_sender(recorded, known).org_key == "org-x"
+    assert identify_sender(by_name, known).org_key is None
+    # An inline-forwarded header block is body text.
+    assert identify_sender(FORWARDED, known).org_key is None
 
 
 # --- one mail at a time ----------------------------------------------------------------------
@@ -161,9 +170,13 @@ def test_a_weekly_newsletter_becomes_dated_cam_only_events() -> None:
     assert activity.fields[0].value == WEEKLY.received_at
 
 
-def test_an_inline_forward_resolves_through_its_header_block() -> None:
+def test_an_inline_forward_is_read_but_not_attributed() -> None:
     outcome = inbox.process_mail(FORWARDED, tools())
-    assert outcome.extraction == "done" and outcome.org_key == ORRERY_KEY
+    # Its header block is a list signal, never an attribution: the events are
+    # read, unattributed, and claim no organisation's activity.
+    assert outcome.extraction == "done" and outcome.org_key is None
+    assert outcome.extra == []
+    assert all(event.organisers == [] for event in outcome.events)
     found = titles(outcome)
     # Week 1 Thursday 8pm BST = 19:00 UTC; Week 4 Tuesday 7pm GMT.
     assert starts(found["Freshers' Stargazing"]) == int(
@@ -185,6 +198,14 @@ def test_a_mail_without_events_is_skipped_but_still_counts_as_activity() -> None
     outcome = inbox.process_mail(WELCOME, tools())
     assert outcome.extraction == "skipped" and "no events" in outcome.notes
     assert outcome.org_key == QUOKKA_KEY and len(outcome.extra) == 1
+
+
+def test_an_unverified_mail_claims_no_activity() -> None:
+    forged = WEEKLY.model_copy(update={"sender_verified": False})
+    outcome = inbox.process_mail(forged, tools())
+    assert outcome.org_key is None and outcome.extra == []
+    assert all(event.organisers == [] for event in outcome.events)
+    assert {f.evidence for e in outcome.events for f in e.fields} == {"secondary"}
 
 
 def test_an_invalid_reply_fails_and_a_transport_error_leaves_it_pending() -> None:

@@ -95,6 +95,28 @@ def test_the_weekly_mail_becomes_three_resolved_events() -> None:
     assert all(e.organisers[0].identity.known_key == QUOKKA_KEY for e in events)
 
 
+def test_no_stated_time_is_an_inferred_all_day_event_and_tbc_needs_its_own_words() -> None:
+    text = "Quiz night on 28 October. Speaker: Dr Ada Example and Prof Nobody. Venue TBC."
+    event = LlmEvent(
+        title="Quiz night",
+        title_quote="Quiz night",
+        date="2026-10-28",
+        when_quote="28 October",
+        tbc=True,
+        tbc_quote="Venue TBC",
+        speakers=[{"name": "Dr Ada Example"}, {"name": "Prof Invented"}],
+        speakers_quote="Speaker: Dr Ada Example",
+    )
+    fields = fields_of(build_event(event, context(source_text=text)))
+    # The date is read; "all day at midnight" is our filing, not the text's.
+    assert fields["startsAt"].status == "inferred" and fields["startsAt"].evidence_quote is None
+    assert fields["startsAt"].value_raw == "28 October"
+    assert fields["allDay"].value is True and fields["allDay"].status == "inferred"
+    assert fields["status"].evidence_quote == "Venue TBC" and fields["status"].status is None
+    # One speaker the text never names: the list is not verified.
+    assert fields["speakers"].status == "inferred"
+
+
 def test_external_ids_are_scoped_and_stable() -> None:
     events, _ = build_events(LlmEvents.model_validate(WEEKLY_REPLY), context())
     quiz = next(e for e in events if fields_of(e)["title"].value == "Pub Quiz")

@@ -107,8 +107,8 @@ def match_society(event: IcsEvent, names: list[_Name]) -> str | None:
 
 
 def event_draft(event: IcsEvent, org_key: str, org_name: str) -> EventDraft:
-    event_type, guessed = infer_event_type(event.title)
-    inferred = {"eventType"} if guessed else set()
+    event_type = infer_event_type(event.title)
+    inferred = {"eventType"}
     if event.zone_corrected:
         inferred |= {"startsAt", "endsAt"}
     return EventDraft(

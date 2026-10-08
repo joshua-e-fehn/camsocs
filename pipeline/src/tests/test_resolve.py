@@ -531,3 +531,78 @@ def test_unrelated_groups_with_one_shared_word_are_only_flagged() -> None:
     resolution = resolve_records([a, b])
     assert len(set(keys(resolution).values())) == 2
     assert any(item.reason == "similar names, not merged" for item in resolution.report.review)
+
+
+# --- shared handles, unlinked guide rows, directory pages ------------------------------------
+
+
+def test_a_handle_two_sport_clubs_share_fuses_nobody() -> None:
+    """CURA's and CUSBC's Sport pages both link ig:cambridgeuniversityrifle;
+    the SU's "Smallbore Club" links it too. Whichever pair came first used to
+    be fused and the real match split off."""
+    site = parser_field(
+        "website", "https://cusmallbore.weebly.com/", extractor="test", evidence="secondary"
+    )
+    smallbore_su = org(
+        "su_directory", "13182", "Smallbore Club", su_id="13182",
+        instagram_handle="cambridgeuniversityrifle", fields=[site],
+    )  # fmt: skip
+    rifle = org(
+        "sport_club_page", "rifle-association", "Cambridge University Rifle Association",
+        sport_slug="rifle-association", level="university",
+        instagram_handle="cambridgeuniversityrifle",
+    )  # fmt: skip
+    small_bore = org(
+        "sport_club_page", "small-bore", "Small Bore Club",
+        sport_slug="small-bore", level="university",
+        instagram_handle="cambridgeuniversityrifle", fields=[site],
+    )  # fmt: skip
+    resolution = resolve_records([smallbore_su, rifle, small_bore])
+    by_ref = keys(resolution)
+    assert by_ref["su_directory:13182"] != by_ref["sport_club_page:rifle-association"]
+    assert by_ref["su_directory:13182"] == by_ref["sport_club_page:small-bore"]
+    assert any("separate entries" in item.reason for item in resolution.report.review)
+
+
+def test_a_handle_two_proctors_entries_share_does_not_split_the_true_match() -> None:
+    """ClinSoc (SU) and the Proctors' "Clinsoc Volleyball Society" share
+    ig:medicsofcambridge; the Proctors' Clinical Students Society is ClinSoc."""
+    clinsoc = org(
+        "su_directory", "8131", "Cambridge University Clinical Students Society",
+        su_id="8131", instagram_handle="medicsofcambridge",
+    )  # fmt: skip
+    volleyball = org(
+        "proctors_register", "clinsoc-volleyball", "Clinsoc Volleyball Society",
+        proctors_name="Clinsoc Volleyball Society", instagram_handle="medicsofcambridge",
+    )  # fmt: skip
+    clinical = org(
+        "proctors_register", "clinical", "Cambridge University Clinical Students Society",
+        proctors_name="Clinical Students Society (CU)",
+    )  # fmt: skip
+    by_ref = keys(resolve_records([clinsoc, volleyball, clinical]))
+    assert by_ref["su_directory:8131"] == by_ref["proctors_register:clinical"]
+    assert by_ref["proctors_register:clinsoc-volleyball"] != by_ref["su_directory:8131"]
+
+
+def test_an_unlinked_guide_row_never_joins_a_club_by_its_sport_word() -> None:
+    """§4: "Rowing (College)" is college rowing, not a club; only the guide's
+    "Rowing (Boat Club)" row, which the A–Z links, is CUBC's."""
+    cubc = org(
+        "sport_az", "boat-club-rowing", "Boat Club (Rowing)",
+        sport_slug="boat-club-rowing", level="university",
+    )  # fmt: skip
+    linked = org("sport_guide_pdf", "rowing-boat-club", "Rowing (Boat Club)",
+                 sport_slug="boat-club-rowing")  # fmt: skip
+    college_rowing = org("sport_guide_pdf", "rowing-college", "Rowing (College)")
+    for row in (linked, college_rowing):
+        row.fields = [f for f in row.fields if f.field != "name"]  # the guide claims no names
+    resolution = resolve_records([cubc, linked, college_rowing])
+    by_ref = keys(resolution)
+    assert by_ref["sport_guide_pdf:rowing-boat-club"] == by_ref["sport_az:boat-club-rowing"]
+    assert "sport_guide_pdf:rowing-college" not in by_ref
+    assert "sport_guide_pdf:rowing-college" in resolution.held_refs
+
+
+def test_a_cucbc_directory_page_identifies_no_club() -> None:
+    assert site_identity("https://www.cucbc.org/node/122") is None
+    assert site_identity("http://www.cucbc.org") is None

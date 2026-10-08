@@ -258,10 +258,13 @@ class EventOrganiser(WireModel):
 
 
 class EventOrganiserSet(WireModel):
-    """Replaces the event's whole organiser set."""
+    """The event's organiser set. ``replace`` (the default) makes it the whole
+    set; ``merge`` only adds — sent when the source names organisers this run
+    could not resolve, so a partial or empty index never removes known ones."""
 
     event_key: str
     organisers: list[EventOrganiser]
+    mode: Literal["replace", "merge"] = "replace"
 
 
 class EventOrganisersBatch(WireModel):
@@ -359,6 +362,9 @@ class PendingMail(WireModel):
     html_storage_id: str | None = None
     attachments: list[InboundAttachment] = Field(default_factory=list)
     org_key: str | None = None
+    #: A trusted receiver verified the From domain (DKIM / DMARC; the server's
+    #: `senderAuthenticated`). Only then may the mail speak for an organisation.
+    sender_verified: bool = False
 
 
 class CrosswalkRequest(WireModel):

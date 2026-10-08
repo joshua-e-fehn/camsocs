@@ -54,6 +54,9 @@ CONVEX_SITE_HOST_SUFFIX = ".convex.site"
 
 DEFAULT_LLM_CONCURRENCY = 8
 DEFAULT_MIN_HOST_INTERVAL = 1.0
+#: The User-Agent source-research "Global rules" documents: a token and the
+#: About page, never an email address.
+DOCUMENTED_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"
 
 
 class ConfigError(RuntimeError):
@@ -88,8 +91,10 @@ class Settings(BaseSettings):
     staging_dir: Path = Field(default=DEFAULT_STAGING_DIR, validation_alias="CAMSOCS_STAGING_DIR")
     state_path: Path = Field(default=DEFAULT_STATE_PATH, validation_alias="CAMSOCS_STATE_PATH")
     reports_dir: Path = Field(default=DEFAULT_REPORTS_DIR, validation_alias="CAMSOCS_REPORTS_DIR")
+    #: Seconds between two requests to one host: at least 1 (source-research
+    #: "Global rules"). Tests that must not wait replace it after validation.
     min_host_interval: float = Field(
-        default=DEFAULT_MIN_HOST_INTERVAL, ge=0.0, validation_alias="CAMSOCS_MIN_HOST_INTERVAL"
+        default=DEFAULT_MIN_HOST_INTERVAL, ge=1.0, validation_alias="CAMSOCS_MIN_HOST_INTERVAL"
     )
 
     #: Optional. A Camdram API access token (source-research §5): sent as a
@@ -193,19 +198,27 @@ class Settings(BaseSettings):
     def require_user_agent(self) -> str:
         """The crawler's User-Agent, or a readable error.
 
-        Honest by rule: it names this crawler and a contact, so a webmaster can
-        recognise it and ask us to slow down. A browser-like string is refused —
-        disguising the crawler would be a way around a site's robots.txt.
+        Honest by rule: it names this crawler and a page about it, so a
+        webmaster can recognise it and ask us to slow down. A browser-like
+        string is refused — disguising the crawler would be a way around a
+        site's robots.txt — and so is any email address: the User-Agent goes to
+        every site we fetch, and it contains no personal email
+        (source-research "Global rules"); the contact is the About page.
         """
         ua = self.user_agent
         if not ua:
             raise ConfigError(
-                "CAMSOCS_USER_AGENT is not set. Use an honest token plus a contact, e.g. "
-                '"camsocs-bot/0.1 (+https://example.org/camsocs; you@example.org)".'
+                "CAMSOCS_USER_AGENT is not set. Use the documented crawler token, "
+                f'"{DOCUMENTED_USER_AGENT}".'
             )
         if "mozilla/" in ua.lower():
             raise ConfigError(
                 "CAMSOCS_USER_AGENT looks like a browser. The crawler must identify itself."
+            )
+        if "@" in ua or "mailto:" in ua.lower():
+            raise ConfigError(
+                "CAMSOCS_USER_AGENT contains an email address. It must not: link the About "
+                f'page instead, "{DOCUMENTED_USER_AGENT}".'
             )
         return ua
 

@@ -35,9 +35,11 @@ import json
 import logging
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 import openai
@@ -67,22 +69,54 @@ class ModelRefused(ValueError):
     """The configured model id is not allowed for this pipeline."""
 
 
+class NoLLMHost(ValueError):
+    """Content from a host that keeps AI out was about to reach the model."""
+
+
+#: Hosts whose content never reaches a language model, whatever the stage:
+#: their robots.txt blocks AI agents by name (source-research "Global rules",
+#: §6). A stage checks each page's own host with `PoliteClient.
+#: ai_input_allowed` as well; this list holds even when that check is missed.
+NO_LLM_HOSTS = ("talks.cam.ac.uk", "tbc.xyz")
+
+
+def assert_llm_source_allowed(url: str) -> None:
+    """Raise `NoLLMHost` when `url` is on a host whose content never reaches
+    the model. Called by every stage before it sends fetched content."""
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    if any(host == blocked or host.endswith("." + blocked) for blocked in NO_LLM_HOSTS):
+        raise NoLLMHost(f"{host} content is never passed to the LLM (source-research §6)")
+
+
 class LLMValidationError(RuntimeError):
     """The model's reply did not validate, even after one corrective retry."""
+
+
+#: Words that mark an Anthropic model however a gateway spells its id
+#: (`claude-…`, `anthropic/claude-…`, Bedrock `us.anthropic.claude-…`,
+#: Vertex `vertex_ai:claude-…`).
+_REFUSED_MODEL_WORDS = ("claude", "anthropic")
 
 
 def assert_model_allowed(model: str) -> str:
     """Return the stripped model id, or raise `ModelRefused`.
 
-    Refuses empty ids and any id where the name or a `/`-separated segment
-    starts with `claude`, case-insensitively (`claude-…`, `Claude-…`,
-    `anthropic/claude-…`).
+    Refuses an empty id, any id that is not plain printable ASCII after NFKC
+    normalisation (a zero-width space or a Cyrillic capital Es would otherwise slip
+    a `claude` id past the check), and any id that contains `claude` or
+    `anthropic` anywhere, case-insensitively — whatever the provider prefix or
+    separator (`/`, `:`, `.`, `@`).
     """
     stripped = model.strip()
     if not stripped:
         raise ModelRefused("No model id configured.")
-    segments = [segment.strip() for segment in stripped.lower().split("/")]
-    if any(segment.startswith("claude") for segment in segments):
+    normalised = unicodedata.normalize("NFKC", stripped)
+    if not (normalised.isascii() and normalised.isprintable()) or normalised != stripped:
+        raise ModelRefused(
+            f"Model {stripped!r} is refused: a model id must be plain printable ASCII."
+        )
+    lowered = normalised.lower()
+    if any(word in lowered for word in _REFUSED_MODEL_WORDS):
         raise ModelRefused(
             f"Model {stripped!r} is refused: this pipeline must not call claude* models. "
             "Set LLM_MODEL_BULK / LLM_MODEL_STRONG to another model."

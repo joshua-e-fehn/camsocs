@@ -73,6 +73,24 @@ class TestClubPage:
             }
         ]
 
+    def test_a_link_whose_text_names_another_account_is_dropped(self) -> None:
+        # The fencing page's pasted link: text @c_u_f_c, target the Dance
+        # Competition Team's account. Neither is the page's own social.
+        html = fixture("sport_club.html").replace(
+            'href="https://www.instagram.com/cuac_example/?hl=en">@cuac_example',
+            'href="https://www.instagram.com/cudct/?hl=en">@c_u_f_c',
+        )
+        page = sport.parse_club_page(html, "https://x.example/")
+        assert page.socials == []
+        assert sport.instagram_handle(page.socials) is None
+        # Text written as a URL that agrees with the target is fine.
+        agreeing = fixture("sport_club.html").replace(
+            ">@cuac_example<", ">instagram.com/cuac_example<"
+        )
+        assert sport.parse_club_page(agreeing, "https://x.example/").socials[0]["handle"] == (
+            "cuac_example"
+        )
+
     def test_finds_the_name_in_the_lead_when_it_is_not_bold(self) -> None:
         page = sport.parse_club_page(fixture("sport_club_lead.html"), "https://x.example/")
         assert (page.name, page.short_name) == (

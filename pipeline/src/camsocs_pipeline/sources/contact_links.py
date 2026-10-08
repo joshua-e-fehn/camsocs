@@ -31,12 +31,12 @@ from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from camsocs_pipeline.keys import slugify
+from camsocs_pipeline.sources.links import is_crsid_address
 
 # --- emails ------------------------------------------------------------------------------
 
 #: Same shape as the server's check (lib/fields.ts `isEmail`), plus a word boundary.
 EMAIL_PATTERN = re.compile(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+", re.IGNORECASE)
-_CRSID_LOCAL = re.compile(r"^[a-z]{2,5}[0-9]{1,5}$")
 #: TLD typos seen in published contacts (source-research §4: one ``gmail.comm``).
 _BAD_TLDS = frozenset({"comm", "con", "cmo", "ocm", "coom", "uk1"})
 
@@ -197,10 +197,11 @@ def _split(address: str) -> tuple[str, str]:
 
 
 def is_personal_crsid(address: str) -> bool:
-    """A CRSid-shaped address on cam.ac.uk or a subdomain (not lists.cam.ac.uk)."""
+    """A CRSid-shaped address on cam.ac.uk or a subdomain (not lists.cam.ac.uk),
+    or on a domain that issues addresses by CRSid (SRCF, cantab) —
+    `links.is_crsid_address`."""
     local, domain = _split(address)
-    cam = domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")
-    return cam and domain != "lists.cam.ac.uk" and bool(_CRSID_LOCAL.match(local))
+    return is_crsid_address(local, domain)
 
 
 def has_bad_tld(address: str) -> bool:
@@ -490,6 +491,24 @@ def social_link(url: str) -> dict[str, str] | None:
     return entry
 
 
+def link_text_disagrees(entry: dict[str, str], text: str) -> bool:
+    """Whether a social link's visible text names a *different* account than
+    its href — `<a href="instagram.com/cudct/">@c_u_f_c</a>`. Then neither can
+    be trusted as the page's own account."""
+    href_handle = (entry.get("handle") or "").lower()
+    shown = " ".join(text.split())
+    if not href_handle or not shown:
+        return False
+    at = re.fullmatch(r"@([\w.]{1,40})", shown)
+    if at:
+        return at.group(1).lower() != href_handle
+    if re.match(r"^(https?://)?(www\.)?[a-z0-9.-]+\.[a-z]{2,}/\S+$", shown, re.I):
+        written = social_link(shown if shown.lower().startswith("http") else f"https://{shown}")
+        if written is not None and written["platform"] == entry["platform"]:
+            return (written.get("handle") or "").lower() != href_handle
+    return False
+
+
 def instagram_from_handle(handle: str) -> dict[str, str] | None:
     """A printed ``@handle`` as its profile link."""
     handle = handle.strip().lstrip("@").strip("/")
@@ -549,6 +568,7 @@ __all__ = [
     "is_personal_crsid",
     "is_social_host",
     "label_role",
+    "link_text_disagrees",
     "name_tokens",
     "normalise_email",
     "read_contacts",

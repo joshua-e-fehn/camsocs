@@ -90,13 +90,14 @@ class QuotedBool(_Model):
 class Tier(_Model):
     label: str
     price_pence: int | None = Field(default=None, ge=0, le=1_000_000)
-    period: Literal[MEMBERSHIP_PERIODS] = "year"
+    #: None when the model gives none or an unknown one: never assumed.
+    period: Literal[MEMBERSHIP_PERIODS] | None = None
     note: str | None = None
 
     @field_validator("period", mode="before")
     @classmethod
     def _period(cls, value: Any) -> Any:
-        return value if value in MEMBERSHIP_PERIODS else "year"
+        return value if value in MEMBERSHIP_PERIODS else None
 
 
 class Membership(_Model):

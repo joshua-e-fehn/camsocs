@@ -60,7 +60,10 @@ def harvest(lmbc_page: str = "The Lady Margaret Boat Club is the rowing club of 
 
 
 def club(result, name: str):
-    return next(o for o in result.observations if o.identity.name == name)
+    """The club's /clubs observation."""
+    return next(
+        o for o in result.observations if o.identity.name == name and o.source_url == LISTING
+    )
 
 
 def test_harvest_places_college_clubs_and_records_what_it_could_not_read() -> None:
@@ -69,7 +72,13 @@ def test_harvest_places_college_clubs_and_records_what_it_could_not_read() -> No
     fields = {f.field: f for f in caius.fields}
     assert fields["registrations.cucbc"].value == {"registered": True, "sourceUrl": LISTING}
     assert fields["registrations.cucbc"].evidence == "primary"
-    assert (fields["email"].status, fields["email"].missing_reason) == (
+    # What only the details page states is that page's own observation.
+    assert "email" not in fields and "name" not in fields
+    (details,) = [o for o in result.observations if o.source_url == DETAILS]
+    assert details.identity == caius.identity
+    detail_fields = {f.field: f for f in details.fields}
+    assert detail_fields["name"].value == "Caius Boat Club"
+    assert (detail_fields["email"].status, detail_fields["email"].missing_reason) == (
         "missing",
         "access_restricted",
     )
@@ -89,8 +98,8 @@ def test_harvest_places_college_clubs_and_records_what_it_could_not_read() -> No
 def test_a_college_named_elsewhere_is_confirmed_on_that_page() -> None:
     result, client = harvest()
     lmbc = club(result, "Lady Margaret Boat Club")
-    assert [(r.to_identity.name, r.evidence_url) for r in lmbc.relationships] == [
-        ("St John's College", LMBC_PAGE)
+    assert [(r.to_identity.name, r.evidence_url, r.evidence) for r in lmbc.relationships] == [
+        ("St John's College", LMBC_PAGE, "primary")
     ]
     assert LMBC_PAGE in client.asked
 

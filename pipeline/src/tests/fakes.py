@@ -170,6 +170,8 @@ WEEKLY = PendingMail(
     list_name="CUQAS announcements",
     subject="CUQAS This Week: Pub Quiz, Marsupials Talk & Punting!",
     text=WEEKLY_TEXT,
+    # Exchange's ARC verdict passed DKIM for the sender (server-side check).
+    sender_verified=True,
 )
 
 WEEKLY_REPLY: dict[str, Any] = {
@@ -244,6 +246,7 @@ FORWARDED = PendingMail(
     **{"from": "J Q <jq999@cam.ac.uk>"},
     subject="Fwd: Orrery Club: Michaelmas termcard",
     text=FORWARDED_TEXT,
+    sender_verified=True,
 )
 
 FORWARDED_REPLY: dict[str, Any] = {
@@ -286,6 +289,7 @@ WELCOME = PendingMail(
     list_id="soc-cuqas.lists.cam.ac.uk",
     subject="Welcome to list soc-cuqas",
     text="Welcome to list soc-cuqas. To unsubscribe, send a message to sympa.",
+    sender_verified=True,
 )
 
 EXPECTED_WEEKLY_STARTS = {

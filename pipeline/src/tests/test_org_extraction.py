@@ -38,7 +38,8 @@ def test_items_outside_our_vocabularies_are_dropped_not_fatal() -> None:
     assert [n.item for n in extraction.needs] == ["sponsorship"]
     assert extraction.sessions[0].day == "wednesday"
     assert extraction.sessions[0].term_scope is None
-    assert extraction.membership.tiers[0].period == "year"
+    # "yearly" is not a period we know: left out, never assumed.
+    assert extraction.membership.tiers[0].period is None
     assert (extraction.sponsors_partners[0].relation, extraction.sponsors_partners[0].kind) == (
         "partner",
         "other",

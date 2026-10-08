@@ -263,6 +263,7 @@ class Resolver:
         self._counterpart_keys: set[str] = set()
         self._venues: dict[str, str] = {}
         self._held_roots: dict[int, QuarantineItem] = {}
+        self._by_signature: dict[str, list[int]] = {}
         self.report = QuarantineReport(run_key=run_key, generated_at=datetime.now(UTC).isoformat())
         self.counts: dict[str, int] = defaultdict(int)
         distinct = {frozenset(pair) for pair in self.decisions.distinct if len(pair) == 2}
@@ -373,7 +374,20 @@ class Resolver:
         del self._groups[root_b]
         return True
 
-    def _link_tier(self, tier: str, values_of) -> None:
+    def _link_tier(self, tier: str, values_of, *, shared_is_ambiguous: bool = False) -> None:
+        """Unions the anchors sharing a value of this tier.
+
+        `shared_is_ambiguous` (Instagram, website): a value is identifying
+        only if every group it would join is compatible with every other. If
+        any two conflict (two Sport slugs, two Proctors entries, two colleges
+        share one handle), the value is shared, not identifying: nothing is
+        unioned on it — whichever compatible pair happened to come first would
+        otherwise be fused, and the true match split off — and each
+        conflicting pair goes to the quarantine as before. The same holds when
+        a member's exact-name twin outside the bucket is listed separately
+        from another member by one source: the SU's ClinSoc shares a handle
+        with the Proctors' "Clinsoc Volleyball Society", but its name is the
+        Proctors' "Clinical Students Society", a separate Proctors entry."""
         index: dict[str, list[int]] = defaultdict(list)
         for anchor in self.anchors:
             if anchor.index in self._held:
@@ -382,13 +396,65 @@ class Resolver:
                 index[value].append(anchor.index)
         for value in sorted(index):
             members = index[value]
+            if shared_is_ambiguous and self._record_bucket_conflicts(tier, value, members):
+                self.counts[f"shared_{tier}"] += 1
+                continue
             first = members[0]
             for other in members[1:]:
                 if self._union(first, other, tier, value):
                     self.counts[f"merged_by_{tier}"] += 1
 
+    def _record_bucket_conflicts(self, tier: str, value: str, members: list[int]) -> bool:
+        """Records a conflict for every incompatible pair of the groups in
+        `members`, and for every member whose name twin (outside the bucket)
+        a source lists separately from another member; True if there was any."""
+        firsts: dict[int, int] = {}
+        for member in members:
+            firsts.setdefault(self._find(member), member)
+        roots = list(firsts)
+        found = False
+        for i, root_a in enumerate(roots):
+            for root_b in roots[i + 1 :]:
+                problem = self._problem(self._groups[root_a], self._groups[root_b])
+                if problem is not None:
+                    self._conflicts.append(
+                        _Conflict(tier, value, firsts[root_a], firsts[root_b], *problem)
+                    )
+                    found = True
+        if found or len(roots) < 2:
+            return found
+        for root_m, member in firsts.items():
+            twins = {
+                self._find(twin)
+                for signature in self.anchors[member].identity.signatures
+                for twin in self._by_signature.get(signature, ())
+            } - set(roots)
+            for twin_root in twins:
+                for root_y, other in firsts.items():
+                    if root_y == root_m:
+                        continue
+                    problem = self._problem(self._groups[twin_root], self._groups[root_y])
+                    if problem is not None and problem[0] == "distinct":
+                        self._conflicts.append(
+                            _Conflict(
+                                tier,
+                                value,
+                                member,
+                                other,
+                                "distinct",
+                                f"its name matches another entry: {problem[1]}",
+                            )
+                        )
+                        found = True
+        return found
+
     def _link(self) -> None:
         by_ref = {anchor.ref: anchor.index for anchor in self.anchors}
+        #: name signature → anchors, for the ambiguity check of shared handles.
+        self._by_signature: dict[str, list[int]] = defaultdict(list)
+        for anchor in self.anchors:
+            for signature in self._name_signatures(anchor):
+                self._by_signature[signature].append(anchor.index)
         # 0. Operator decisions.
         for group in self.decisions.same:
             members = [by_ref[ref] for ref in group if ref in by_ref]
@@ -432,12 +498,29 @@ class Resolver:
             lambda a: sorted(v for kind in other_kinds for v in a.identity.explicit_of(kind)),
         )
         self._link_tier(
-            "instagram", lambda a: sorted(v for v in a.identity.strong if v.startswith("ig:"))
+            "instagram",
+            lambda a: sorted(v for v in a.identity.strong if v.startswith("ig:")),
+            shared_is_ambiguous=True,
         )
         self._link_tier(
-            "website", lambda a: sorted(v for v in a.identity.strong if v.startswith("site:"))
+            "website",
+            lambda a: sorted(v for v in a.identity.strong if v.startswith("site:")),
+            shared_is_ambiguous=True,
         )
-        self._link_tier("name", lambda a: sorted(a.identity.signatures))
+        self._link_tier("name", self._name_signatures)
+
+    @staticmethod
+    def _name_signatures(anchor: _Anchor) -> list[str]:
+        """Name-tier values. A Sports Club Guide row that the A–Z does not
+        link (no Sport slug) has none: its headings are sports, not club
+        names (source-research §4), so "Rowing (College)" must not join CUBC
+        on the word "rowing". It joins only through a slug, or is held as a
+        group no source names."""
+        if anchor.record.source_type == "sport_guide_pdf" and not anchor.identity.explicit_of(
+            "sport"
+        ):
+            return []
+        return sorted(anchor.identity.signatures)
 
     # -- holds -----------------------------------------------------------------------
 

@@ -61,6 +61,7 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
+from camsocs_pipeline.sources.links import is_crsid_address
 from camsocs_pipeline.staging.store import Record, events_directory
 
 LONDON = ZoneInfo("Europe/London")
@@ -188,17 +189,14 @@ def clean_text(text: str | None, *, max_length: int | None = None) -> str | None
 
 
 _EMAIL = re.compile(r"(?<![\w.+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")
-#: A CRSid-shaped local part (webapp/convex/lib/derived.ts `CRSID_LOCAL`).
-_CRSID_LOCAL = re.compile(r"^[a-z]{2,5}[0-9]{1,5}$")
 WITHHELD = "[personal email withheld]"
 
 
 def is_personal_crsid(local: str, domain: str) -> bool:
-    """The server's `classifyEmail` rule for `personal_crsid`: a CRSid-shaped
-    address on cam.ac.uk or a subdomain (not lists.cam.ac.uk)."""
-    domain = domain.lower().rstrip(".")
-    on_cam = domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")
-    return on_cam and domain != "lists.cam.ac.uk" and bool(_CRSID_LOCAL.match(local.lower()))
+    """The server's `classifyEmail` rule for `personal_crsid`
+    (`links.is_crsid_address`): a CRSid-shaped address on cam.ac.uk or a
+    subdomain (not lists.cam.ac.uk), SRCF or cantab."""
+    return is_crsid_address(local, domain)
 
 
 def redact_personal_emails(text: str | None) -> str | None:
@@ -237,14 +235,15 @@ _TYPE_KEYWORDS: tuple[tuple[str, str], ...] = (
 )
 
 
-def infer_event_type(title: str, default: str = "other") -> tuple[str, bool]:
-    """An event type from title keywords: ``(type, inferred)``. ``inferred`` is
-    True when a keyword decided it (a heuristic), False for the default."""
+def infer_event_type(title: str, default: str = "other") -> str:
+    """An event type from title keywords, else `default`. Either way a guess,
+    not something the source states: callers claim it as ``inferred``
+    (a source's own type field, where it has one, is read instead)."""
     lowered = title.lower()
     for pattern, event_type in _TYPE_KEYWORDS:
         if re.search(rf"\b(?:{pattern})\b", lowered):
-            return event_type, True
-    return default, False
+            return event_type
+    return default
 
 
 # --- the draft --------------------------------------------------------------------------

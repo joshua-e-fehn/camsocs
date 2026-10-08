@@ -194,9 +194,13 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     assert fields["shortDescription"].status is None
     assert fields["howToJoin"].status == "inferred"
     assert fields["howToJoin"].quote_check == "absent"
-    assert "description" not in fields or fields["description"].value is None
+    # Withheld for naming someone: recorded as not published, not as absent.
+    assert fields["description"].value is None
+    assert fields["description"].missing_reason == "not_published"
     assert fields["joinUrl"].value == "https://www.cuats.co.uk/register/"
-    assert "termcardUrl" not in fields  # not a link on the page: never invented
+    # Not a link on the page: never invented.
+    assert fields["termcardUrl"].value is None
+    assert fields["termcardUrl"].missing_reason == "not_found"
     assert fields["categories"].value == ["science_tech", "careers_professional"]
     assert fields["categories"].status is None
     assert fields["tags"].value == ["algorithmic-trading"]
@@ -262,13 +266,103 @@ def test_a_dead_or_parked_site_yields_only_its_health(
     (record,) = dead.website
     assert record.fetch.http_status == 404
     assert record.internal["website_health"]["last_status"] == 404
-    assert record.fields == []
+    # The stated site itself answers 404: a primary not_found from that URL,
+    # so the register's link is not shown as a working site.
+    assert [(o.field, o.status, o.missing_reason) for o in record.fields] == [
+        ("website", "missing", "not_found")
+    ]
+    assert record.source_url == "https://gone.example/"
 
     parked = enricher.enrich(
         Target(key="org-parked", name="Croquet Society", website="https://parked.example/")
     )
     assert parked.stats.not_about == 1
     assert all(obs.field != "website" for r in parked.website for obs in r.fields)
+
+
+def test_a_website_behind_a_login_is_recorded_access_restricted(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://walled.example/robots.txt").respond(404)
+    net.get("https://walled.example/").respond(
+        302, headers={"location": "https://nevar.srcf.net/login?return=x"}
+    )
+    result = Enricher(polite(tmp_path), None).enrich(
+        Target(key="org-walled", name="Walled Society", website="https://walled.example/")
+    )
+    claims = [(r.source_url, o.field, o.missing_reason) for r in result.website for o in r.fields]
+    assert claims == [("https://walled.example/", "website", "access_restricted")]
+
+
+def test_a_host_that_does_not_answer_is_recorded_unreachable(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://gone-dns.example/robots.txt").mock(side_effect=httpx.ConnectError("dns"))
+    result = Enricher(polite(tmp_path), None).enrich(
+        Target(key="org-gone-dns", name="Gone DNS Society", website="https://gone-dns.example/")
+    )
+    claims = [(o.field, o.missing_reason) for r in result.website for o in r.fields]
+    assert claims == [("website", "unreachable")]
+    assert result.website[0].internal["website_health"]["last_status"] == 0
+
+
+def test_addresses_the_site_hides_are_access_restricted_not_absent(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://hidden.example/robots.txt").respond(404)
+    net.get("https://hidden.example/").mock(
+        return_value=html(
+            "<html><head><title>Hidden Astronomy Society</title></head><body><main>"
+            "<h1>Hidden Astronomy Society</h1><p>Write to us: "
+            '<a href="/cdn-cgi/l/email-protection#abc"><span class="__cf_email__" '
+            'data-cfemail="abc">[email&#160;protected]</span></a></p></main></body></html>'
+        )
+    )
+    result = Enricher(polite(tmp_path), None).enrich(
+        Target(key="org-hidden", name="Hidden Astronomy Society", website="https://hidden.example/")
+    )
+    fields = by_field(result)
+    assert fields["email"].missing_reason == "access_restricted"
+    assert fields["roleEmails"].missing_reason == "access_restricted"
+    assert fields["socials"].missing_reason == "not_found"
+
+
+def test_a_sub_page_that_keeps_ai_out_never_reaches_the_model(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    site = "https://subpage.example"
+    net.get(f"{site}/robots.txt").respond(
+        200, text="User-agent: GPTBot\nDisallow: /committee\n\nUser-agent: *\nAllow: /\n"
+    )
+    net.get(f"{site}/").mock(
+        return_value=html(
+            "<html><head><title>Subpage Chess Society</title></head><body><main>"
+            "<h1>Subpage Chess Society</h1><p>We play chess every Tuesday evening.</p>"
+            '<a href="/committee/">Committee</a><a href="/about/">About us</a>'
+            "</main></body></html>"
+        )
+    )
+    net.get(url__regex=rf"{site}/committee/?$").mock(
+        return_value=html("<html><body><main><p>SECRET COMMITTEE TEXT</p></main></body></html>")
+    )
+    net.get(url__regex=rf"{site}/about/?$").mock(
+        return_value=html(
+            '<html><head><meta name="robots" content="noai"></head>'
+            "<body><main><p>NOAI ABOUT TEXT</p></main></body></html>"
+        )
+    )
+    llm = net.post(f"{LLM_BASE}/chat/completions").mock(
+        return_value=completion({"is_about_organisation": True})
+    )
+    result = Enricher(polite(tmp_path), llm_client()).enrich(
+        Target(key="org-subpage", name="Subpage Chess Society", website=f"{site}/")
+    )
+    assert llm.call_count == 1
+    sent = llm.calls[0].request.content.decode()
+    assert "every Tuesday evening" in sent
+    assert "SECRET COMMITTEE TEXT" not in sent
+    assert "NOAI ABOUT TEXT" not in sent
+    assert any("keep AI out" in note for note in result.notes)
 
 
 def test_a_site_the_llm_disowns_keeps_only_its_health(

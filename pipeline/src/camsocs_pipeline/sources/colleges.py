@@ -171,15 +171,19 @@ def college_identity(college: str) -> IdentityHints:
     return IdentityHints(name=college, org_type="college", level="college")
 
 
-def college_relationships(college: str, evidence_url: str, *, parent: bool = False) -> list[RelObs]:
+def college_relationships(
+    college: str, evidence_url: str, *, parent: bool = False, evidence: str = "secondary"
+) -> list[RelObs]:
     """``member_college`` from the observed group to its college, and (for a
-    JCR/MCR) the college as ``parent_of`` it."""
+    JCR/MCR) the college as ``parent_of`` it. `evidence`: of the page at
+    `evidence_url` (primary when it is the group's own)."""
     rels = [
         RelObs(
             type="member_college",
             to_identity=college_identity(college),
             evidence_url=evidence_url,
             direction="outgoing",
+            evidence=evidence,
         )
     ]
     if parent:

@@ -100,6 +100,12 @@ def _clean_text(text: str) -> str:
     return _BLANKS.sub("\n\n", joined).strip()
 
 
+def robots_directives(html: str) -> frozenset[str]:
+    """The ``<meta name="robots">`` directives of a page (``noindex``,
+    ``noai``, …), lowercased."""
+    return _robots_meta(LexborHTMLParser(html))
+
+
 def _robots_meta(tree: LexborHTMLParser) -> frozenset[str]:
     directives: set[str] = set()
     for meta in tree.css("meta[name]"):

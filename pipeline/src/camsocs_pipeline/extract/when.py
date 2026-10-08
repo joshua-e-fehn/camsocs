@@ -123,9 +123,11 @@ class Term:
         return self.week_start(week) + timedelta(days=offset)
 
     def week_of(self, day: date) -> int | None:
-        """The term week holding `day`, or None outside Week 0 … the last week."""
+        """The term week holding `day`, or None outside Week 0 … the last day of
+        Full Term (the last week ends with Full Term, not on its Wednesday;
+        source-research §19)."""
         week = (day - self.week1_start).days // 7 + 1
-        return week if 0 <= week <= self.last_week else None
+        return week if week >= 0 and day <= self.end else None
 
     def label(self, week: int) -> str:
         """`MT26 Wk 3` — the same label Convex derives (data-model §6)."""

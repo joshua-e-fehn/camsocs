@@ -230,12 +230,19 @@ def _clock(hour: str, minute: str | None, ampm: str | None) -> time | None:
 
 def _times(text: str | None) -> list[time]:
     """Clock times in "6pm - 8:45pm" / "18:00 - 20:00" / "6 - 8pm" (a start
-    without am/pm shares the end's). A lone time needs minutes or am/pm."""
+    without am/pm shares the end's, unless that would put it after the end:
+    "11 - 1pm" is 11am to 1pm, "10 - 12pm" 10am to noon). A lone time needs
+    minutes or am/pm."""
     text = text or ""
     span = _RANGE.search(text)
     if span:
-        start = _clock(span["h1"], span["m1"], span["a1"] or span["a2"])
         end = _clock(span["h2"], span["m2"], span["a2"])
+        start = _clock(span["h1"], span["m1"], span["a1"] or span["a2"])
+        if not span["a1"] and span["a2"] and start and end and start >= end:
+            other = "am" if span["a2"].lower() == "pm" else "pm"
+            flipped = _clock(span["h1"], span["m1"], other)
+            if flipped and flipped < end:
+                start = flipped
         return [t for t in (start, end) if t is not None]
     for match in _TIME.finditer(text):
         if match["m"] or match["ampm"]:
@@ -272,7 +279,7 @@ def event_draft(item: ListingItem, page: EventPage) -> EventDraft | None:
         return None
     start, end, all_day = when
     title = page.title or item.title
-    event_type, guessed = infer_event_type(title)
+    event_type = infer_event_type(title)
     location = page.location or item.location
     return EventDraft(
         event_source=EVENT_SOURCE,
@@ -291,7 +298,7 @@ def event_draft(item: ListingItem, page: EventPage) -> EventDraft | None:
                 role="organiser",
             )
         ],
-        inferred={"eventType"} if guessed else set(),
+        inferred={"eventType"},
         covers=COVERS,
     )
 

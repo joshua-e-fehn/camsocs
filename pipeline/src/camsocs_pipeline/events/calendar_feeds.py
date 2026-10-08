@@ -145,8 +145,8 @@ def event_draft(
         luma_page, description = clean_luma(event.description)
         page = page or luma_page
         booking = luma_page
-    event_type, guessed = infer_event_type(event.title)
-    inferred = {"eventType"} if guessed else set()
+    event_type = infer_event_type(event.title)
+    inferred = {"eventType"}
     if event.zone_corrected:
         inferred |= {"startsAt", "endsAt"}
     tentative = event.status == "TENTATIVE" and kind != "luma"

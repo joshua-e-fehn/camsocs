@@ -268,6 +268,41 @@ def test_an_organisation_gets_parent_and_college_keys_once_resolved() -> None:
     assert claims["collegeKeys"].extractor == "resolve.member_college"
 
 
+def test_derived_identity_claims_carry_their_own_reading() -> None:
+    # CUCBC's /clubs: secondary except the registration it is the register for;
+    # the college is named on the club's own site, not on /clubs.
+    college = IdentityHints(name="St John's College", org_type="college", known_key="org-st-johns")
+    listing = org_observation(
+        source_type="cucbc",
+        source_url="https://www.cucbc.org/clubs",
+        source_key="https://www.cucbc.org/clubs",
+        entity_key="org-lmbc",
+        parent=college,
+        fields=[
+            parser_field("name", "Lady Margaret", extractor="cucbc.name", evidence="secondary"),
+            parser_field(
+                "registrations.cucbc", {"registered": True}, extractor="x", evidence="primary"
+            ),
+        ],
+        relationships=[
+            RelObs(
+                type="member_college",
+                to_identity=college,
+                evidence_url="https://www.ladymargaretboatclub.org/",
+                direction="outgoing",
+                evidence="primary",
+            )
+        ],
+    )
+    claims = {claim.field: claim for claim in claims_for_observation(listing)}
+    assert claims["collegeKeys"].source_url == "https://www.ladymargaretboatclub.org/"
+    assert claims["collegeKeys"].evidence == "primary"
+    assert claims["collegeKeys"].content_sha256 is None
+    # One primary field does not make the listing primary for its parent.
+    assert claims["parentKey"].evidence == "secondary"
+    assert claims["parentKey"].source_url == "https://www.cucbc.org/clubs"
+
+
 def test_an_unresolved_parent_cannot_become_a_claim() -> None:
     observation = org_observation(parent=IdentityHints(name="Jesus College"))
     assert not observation.is_keyed

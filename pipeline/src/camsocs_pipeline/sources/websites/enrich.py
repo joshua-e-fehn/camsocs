@@ -44,6 +44,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import timedelta
 from html import unescape as html_unescape
 from typing import Any
@@ -53,7 +54,7 @@ from camsocs_pipeline.claims import (
     missing_field,
     parser_field,
 )
-from camsocs_pipeline.extract.llm import LLMClient
+from camsocs_pipeline.extract.llm import LLMClient, NoLLMHost, assert_llm_source_allowed
 from camsocs_pipeline.extract.org import (
     PromptPage,
     extract_org,
@@ -323,6 +324,16 @@ class Enricher:
             what = "unreachable" if outcome == "disallowed_by_robots" else outcome
             status = home.result.status or ""
             result.notes.append(f"{target.key}: {target.website} → {what} {status}".rstrip())
+            dead = _dead_reason(home.result)
+            if dead is not None:
+                # The stated website itself answered dead: say so from that
+                # URL (primary), so a register's stale link is not shown as a
+                # working site (AGENTS.md: a 404 is recorded as not_found).
+                at = self._stated_url_record(target, home, buckets)
+                buckets.add(
+                    at,
+                    missing_field("website", dead, extractor=f"{PARSER}.health", evidence=EVIDENCE),
+                )
             return
         home_record.internal["website_domain"] = host_of(home.url)
         page = home.page
@@ -335,32 +346,64 @@ class Enricher:
             return
 
         fetched = [home]
+        unread: set[str] = set()  # kinds of page chosen but not read
         nofollow = "nofollow" in page.robots
         for kind, url in choose_pages(home.url, page.links, nofollow=nofollow).items():
             other = _fetch(self.client, kind, url)
             if other.page is not None and not ({"noindex", "none"} & other.page.robots):
                 fetched.append(other)
                 buckets.page(other)
+            elif other.page is None:
+                unread.add(kind)
         result.stats.pages += len(fetched)
 
-        buckets.add(
-            home.url,
-            parser_field(
-                "website", _canonical(home.url), extractor=f"{PARSER}.final_url", evidence=EVIDENCE
-            ),
+        website = parser_field(
+            "website", _canonical(home.url), extractor=f"{PARSER}.final_url", evidence=EVIDENCE
         )
-        found = self._deterministic(target, fetched, buckets, home_record)
+        buckets.add(home.url, website)
+        if _canonical(home.url) != _canonical(target.website):
+            # The site's answer about the stated URL (it redirects here), from
+            # that URL — it replaces any earlier dead-link reading of it.
+            buckets.add(self._stated_url_record(target, home, buckets), website)
+        found = self._deterministic(target, fetched, buckets, home_record, unread=unread)
 
-        ai_allowed = self.client.ai_input_allowed(home.url) and "noai" not in page.robots
         if self.llm is None:
             return
-        if not ai_allowed:
+        # §14: a page reaches the model only if its host lets AI read it (no
+        # AI crawler disallowed from that URL, no `ai-input=no`) and the page
+        # itself does not say `noai`. Checked per page, not just for home.
+        ai_pages = [f for f in fetched if self._ai_allowed(f)]
+        if not ai_pages or ai_pages[0] is not home:
             result.stats.llm_skipped_robots += 1
             result.notes.append(
                 f"{target.key}: robots.txt keeps AI agents out — read without the LLM"
             )
             return
-        self._llm(target, fetched, buckets, found, result)
+        if len(ai_pages) < len(fetched):
+            result.notes.append(
+                f"{target.key}: {len(fetched) - len(ai_pages)} page(s) keep AI out — "
+                "read without the LLM"
+            )
+        self._llm(target, ai_pages, buckets, found, result)
+
+    def _ai_allowed(self, page: Fetched) -> bool:
+        """Whether this page's text may reach the model (§14)."""
+        if page.page is None or {"noai", "noimageai"} & page.page.robots:
+            return False
+        try:
+            assert_llm_source_allowed(page.url)
+        except NoLLMHost:
+            return False
+        return self.client.ai_input_allowed(page.url)
+
+    @staticmethod
+    def _stated_url_record(target: Target, home: Fetched, buckets: SiteRecords) -> str:
+        """The record for the website as the register states it (which may
+        redirect elsewhere), for readings about that URL itself."""
+        assert target.website is not None
+        stated = Fetched(home.kind, replace(home.result, final_url=target.website))
+        buckets.page(stated)
+        return stated.url
 
     @staticmethod
     def _mentions(target: Target, page: Page) -> bool:
@@ -389,9 +432,11 @@ class Enricher:
         fetched: list[Fetched],
         buckets: SiteRecords,
         home_record: Observation,
+        *,
+        unread: set[str] | frozenset[str] = frozenset(),
     ) -> set[str]:
         """Socials, emails, feeds, mailing list, join / termcard links. Returns
-        the fields found."""
+        the fields found. `unread`: kinds of page chosen but not fetched."""
         found: set[str] = set()
         pages = [f for f in fetched if f.page is not None]
         # A "website" that is a page of a bigger site (a club's page on its
@@ -528,14 +573,24 @@ class Enricher:
                 }
             )
 
+        # What the pages read do not give. Addresses the site hides (Cloudflare
+        # email protection, never decoded) are `access_restricted`, not absent;
+        # with its contact page unread the site was not fully read, so no
+        # claim about its addresses is made at all.
+        hidden = any(item.page.obfuscated_emails > 0 for item in pages if item.page)
         for name in ("email", "roleEmails", "socials"):
-            if name not in found:
-                buckets.add(
-                    fetched[0].url,
-                    missing_field(
-                        name, "not_found", extractor=f"{PARSER}.{name}", evidence=EVIDENCE
-                    ),
-                )
+            if name in found:
+                continue
+            reason = "not_found"
+            if name in ("email", "roleEmails"):
+                if "contact" in unread:
+                    continue
+                if hidden:
+                    reason = "access_restricted"
+            buckets.add(
+                fetched[0].url,
+                missing_field(name, reason, extractor=f"{PARSER}.{name}", evidence=EVIDENCE),
+            )
         return found
 
     # -- the LLM ---------------------------------------------------------------------------------
@@ -666,6 +721,24 @@ def _clean_url(url: str) -> str:
         if pair and not _TRACKING.match(pair.split("=", 1)[0])
     )
     return urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
+
+
+def _dead_reason(result: FetchResult) -> str | None:
+    """The `missingReason` a stated website earns when its home page does not
+    answer: 404/410 `not_found`, a login wall or 401/403 `access_restricted`,
+    no connection (robots.txt included) or a server error `unreachable`. None
+    for anything that is not a verdict on the site (a robots.txt rule, an odd
+    4xx)."""
+    if result.outcome in ("not_found", "access_restricted"):
+        return result.outcome
+    if result.outcome == "unreachable":
+        return "unreachable"
+    if result.outcome == "disallowed_by_robots" and "unreachable" in (result.detail or ""):
+        # robots.txt itself could not be fetched: the host does not answer.
+        return "unreachable"
+    if result.outcome == "http_error" and (result.status or 0) >= 500:
+        return "unreachable"
+    return None
 
 
 def _canonical(url: str) -> str:

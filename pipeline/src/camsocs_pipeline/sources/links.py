@@ -350,6 +350,23 @@ WEBMAIL_DOMAINS = frozenset(
 #: A Cambridge CRSid: 2–5 letters then digits (e.g. ``jf123``).
 _CRSID_LOCAL = re.compile(r"^[a-z]{2,5}[0-9]{1,5}$")
 
+#: Domains outside cam.ac.uk that give every member an address at their
+#: CRSid: SRCF user mail (``<crsid>@srcf.net``) and the alumni forwarding
+#: services. A CRSid there names a person just as on cam.ac.uk.
+_CRSID_MAIL_DOMAINS = frozenset({"srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"})
+
+
+def is_crsid_address(local: str, domain: str) -> bool:
+    """`classifyEmail`'s ``personal_crsid`` rule (webapp/convex/lib/derived.ts):
+    a CRSid-shaped local part on cam.ac.uk or a subdomain (not
+    lists.cam.ac.uk), or on a domain that issues addresses by CRSid."""
+    local = local.strip().lower()
+    domain = domain.strip().lower().rstrip(".")
+    on_cam = (domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")) and (
+        domain != "lists.cam.ac.uk"
+    )
+    return (on_cam or domain in _CRSID_MAIL_DOMAINS) and bool(_CRSID_LOCAL.match(local))
+
 
 def is_email(value: str) -> bool:
     """Plausible syntax only — never a reason to guess an address."""
@@ -367,8 +384,7 @@ def classify_email(email: str) -> EmailType:
     at = address.rfind("@")
     local = address[:at]
     domain = address[at + 1 :]
-    cam_domain = domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")
-    if cam_domain and domain != "lists.cam.ac.uk" and _CRSID_LOCAL.match(local):
+    if is_crsid_address(local, domain):
         return "personal_crsid"
     if re.search(r"(^|\.)cusu\.", domain) or domain == "cusu.org":
         return "legacy_cusu"

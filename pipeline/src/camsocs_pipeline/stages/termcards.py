@@ -3,8 +3,11 @@
 1. **Inputs**: every `termcardUrl` an organisation has in staging
    (`KnownOrgs.termcards`; the SU, website and enrichment harvesters claim it).
 2. **Fetch** politely (`sources.termcards.fetch_termcard`): the file, or the
-   first termcard file a page links or embeds. Robots-blocked, 401/403 and 404
-   cards are skipped with the reason — never "found".
+   first termcard file a page links or embeds. SU-hosted cards (§21),
+   talks.cam and social networks are never fetched; robots-blocked, 401/403
+   and 404 cards, and cards from a host that keeps AI out (§14: an AI crawler
+   disallowed by name, `Content-Signal: ai-input=no`, a `noai` page), are
+   skipped with the reason — never "found", never sent to the model.
 3. **Read** with the strong model's vision (`image_events_v1`): PDFs are
    rendered page by page (`extract.images.render_pdf`, at most four pages) and
    their text layer goes along; images are sent as they are (shrunk). Quotes
@@ -38,7 +41,7 @@ from camsocs_pipeline.extract.events import (
     redact_contacts,
 )
 from camsocs_pipeline.extract.images import render_pdf, vision_image
-from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
+from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
 from camsocs_pipeline.known_orgs import KnownOrgs
@@ -161,6 +164,10 @@ def card_events(
         notes.append(f"  unreadable termcard file for {org_key}")
         return []
 
+    # The host guard in front of the model call: never talks.cam (§6), even
+    # if a card's URL got past the fetch-time checks.
+    assert_llm_source_allowed(listed_url)
+    assert_llm_source_allowed(card.url)
     prompt, version = load_prompt("image_events_v1")
     request = calendar.context(anchor)
     if text_layer:

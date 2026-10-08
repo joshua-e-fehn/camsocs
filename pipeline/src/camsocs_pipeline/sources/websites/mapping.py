@@ -5,12 +5,23 @@ Every value is attributed to the page whose text contains its evidence quote
 home page as ``inferred`` (`claims.llm_field`). Things that would create
 rows — sessions, people, partners — are kept only with a verified quote.
 Public text never names a committee member and never carries an address.
+
+Free text the model *wrote* (a summary, a "neutral sentence") is ``inferred``
+even when its quote is verbatim: the quote supports the gist, not the words.
+Only text that is itself on the page is ``found`` (`FREE_TEXT_FIELDS`).
+
+Every reading of a site restates every LLM field for every page it read: a
+page that gave a value this time gets it, one that did not gets a
+``not_found`` (``not_published`` where the value was withheld because it names
+someone or carries an address), so an item a page dropped is retracted rather
+than kept by an older reading of that page.
 """
 
 from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 from camsocs_pipeline.claims import llm_field, llm_items_field, missing_field
@@ -31,17 +42,45 @@ from camsocs_pipeline.sources.websites.site import (
 #: Page kinds whose named people are committee members.
 PEOPLE_PAGES = frozenset({"committee", "contact", "about"})
 
-#: Tracked fields an LLM reading that finds nothing records as `not_found`.
-LLM_NEGATIVE_FIELDS = (
+#: Fields the LLM reading may claim. Each reading claims each of them on every
+#: page it read — a value, or `not_found` / `not_published` — so a page's
+#: earlier reading is always replaced (`ExtractionMapper.restate`).
+LLM_FIELDS = (
     "shortDescription",
     "description",
     "howToJoin",
-    "membership",
-    "beginnerFriendly",
     "timeCommitment",
+    "accessibilityNote",
+    "beginnerFriendly",
+    "joinUrl",
+    "termcardUrl",
+    "membership",
+    "trials",
+    "categories",
     "activityTypes",
     "audiences",
+    "languages",
+    "tags",
 )
+
+#: Text the model may compose rather than copy: `found` only when the value
+#: itself is on the page, else `inferred` (module docstring).
+FREE_TEXT_FIELDS = frozenset(
+    {"shortDescription", "description", "howToJoin", "timeCommitment", "accessibilityNote"}
+)
+
+#: Longest trial date kept, as written; a longer entry is dropped, never cut.
+MAX_TRIAL_DATE_CHARS = 120
+
+#: Words that state a membership period; a period the text does not state is
+#: left out rather than assumed.
+_PERIOD_WORDS = {
+    "life": re.compile(r"\blife(time|long)?\b", re.I),
+    "year": re.compile(r"\b(year|years|yearly|annual|annually|p\.?\s?a\.?)\b", re.I),
+    "term": re.compile(r"\b(term|terms|termly)\b", re.I),
+    "one_off": re.compile(r"\b(one[- ]off|one[- ]time|once)\b", re.I),
+    "free": re.compile(r"\b(free|no (fee|charge|cost))\b", re.I),
+}
 
 _PARTNER_TYPES = {
     "company": "company",
@@ -87,6 +126,10 @@ class ExtractionMapper:
         self.texts = {page.url: page.page.text if page.page else "" for page in pages}
         self.kinds = {page.url: page.kind for page in pages}
         self.people: set[str] = set()
+        #: Fields the deterministic reading already claimed (the LLM never does).
+        self.deterministic = frozenset(found)
+        #: field → page whose value was withheld (names someone / an address).
+        self.withheld: dict[str, str] = {}
 
     # -- attribution ---------------------------------------------------------------------
 
@@ -115,8 +158,24 @@ class ExtractionMapper:
             prompt_version=self.call.prompt_version,
             evidence=EVIDENCE,
         )
+        if name in FREE_TEXT_FIELDS and not _on_page(value, self.texts[url]):
+            # The quote is there; these words are the model's. A summary is
+            # never "read from a published source".
+            obs.status = "inferred"
         self.buckets.add(url, obs)
         self.found.add(name)
+
+    def put_text(self, name: str, item: Any, limit: int) -> None:
+        """A free-text field: withheld (never stored, recorded as such) when
+        it names a committee member or carries an address."""
+        if item is None or name in self.found:
+            return
+        value = self.public_text(item.value, limit)
+        if value is None:
+            if item.value and item.value.strip():
+                self.withheld.setdefault(name, self.locate(item.evidence_quote)[0])
+            return
+        self.put(name, value, item.evidence_quote)
 
     def put_items(self, name: str, items: list[tuple[Any, str]]) -> None:
         if not items or name in self.found:
@@ -160,8 +219,7 @@ class ExtractionMapper:
             ("timeCommitment", x.time_commitment, 500),
             ("accessibilityNote", x.accessibility_note, 2_000),
         ):
-            if item is not None:
-                self.put(name, self.public_text(item.value, limit), item.evidence_quote)
+            self.put_text(name, item, limit)
         if x.beginner_friendly is not None:
             self.put(
                 "beginnerFriendly", x.beginner_friendly.value, x.beginner_friendly.evidence_quote
@@ -170,10 +228,20 @@ class ExtractionMapper:
             if item is not None and (url := self.known_link(item.value)):
                 self.put(name, url, item.evidence_quote)
         if x.membership is not None:
-            self.put("membership", _membership_value(x.membership), x.membership.evidence_quote)
+            self.put(
+                "membership",
+                _membership_value(x.membership, self.public_text),
+                x.membership.evidence_quote,
+            )
         if x.trials is not None:
             trials: dict[str, Any] = {"required": x.trials.required}
-            dates = [d.strip()[:40] for d in x.trials.dates if _DATE_LIKE.search(d)][:10]
+            # As written, or not at all: a date cut mid-phrase would be stored
+            # as words the source never wrote.
+            dates = [
+                " ".join(d.split())
+                for d in x.trials.dates
+                if _DATE_LIKE.search(d) and len(" ".join(d.split())) <= MAX_TRIAL_DATE_CHARS
+            ][:10]
             if dates:
                 trials["dates"] = dates
             if note := self.public_text(x.trials.note, 300):
@@ -213,13 +281,25 @@ class ExtractionMapper:
         self.sessions(x)
         self.needs_offers(x)
         self.partners(x)
-        for name in LLM_NEGATIVE_FIELDS:
-            if name not in self.found:
+        self.restate()
+
+    def restate(self) -> None:
+        """Every LLM field on every page read: the value it gave, else a
+        negative claim — `not_published` where a value was withheld, else
+        `not_found` — so this reading replaces each page's previous one."""
+        for name in LLM_FIELDS:
+            if name in self.deterministic:
+                continue
+            for url in self.texts:
+                record = self.buckets.by_url[url]
+                if any(obs.field == name for obs in record.fields):
+                    continue
+                reason = "not_published" if self.withheld.get(name) == url else "not_found"
                 absent = missing_field(
-                    name, "not_found", extractor=self.call.model, evidence=EVIDENCE, method="llm"
+                    name, reason, extractor=self.call.model, evidence=EVIDENCE, method="llm"
                 )
                 absent.prompt_version = self.call.prompt_version
-                self.buckets.add(self.home, absent)
+                self.buckets.add(url, absent)
 
     def known_link(self, url: str | None) -> str | None:
         """`url` only if it is one of the links the model was shown."""
@@ -376,23 +456,50 @@ def _names(name: str, text: str) -> bool:
     return re.search(pattern, text, flags) is not None
 
 
-def _membership_value(membership: Any) -> dict[str, Any] | None:
+def _on_page(value: Any, page_text: str) -> bool:
+    """Whether a free-text value is itself on the page (a trailing "…" from
+    our own trimming aside)."""
+    if not isinstance(value, str):
+        return False
+    text = value.removesuffix("…").strip()
+    return check_quote(text, page_text) is not EvidenceMatch.ABSENT
+
+
+def _stated_period(period: str | None, *texts: str | None) -> str | None:
+    """`period` only when the tier's own words or the quote state it."""
+    if period is None:
+        return None
+    words = _PERIOD_WORDS.get(period)
+    return period if words and any(t and words.search(t) for t in texts) else None
+
+
+def _membership_value(
+    membership: Any, public_text: Callable[[str | None, int], str | None]
+) -> dict[str, Any] | None:
+    """The membership value, with every text through `public_text` (a label
+    that names someone drops its tier; a note or bursary note is left out) and
+    a period only where the text states it."""
     tiers = []
     for tier in membership.tiers:
-        label = " ".join((tier.label or "").split())[:120]
+        label = public_text(tier.label, 120)
         if not label:
             continue
-        entry: dict[str, Any] = {"label": label, "period": tier.period}
-        if tier.price_pence is not None and tier.period != "free":
+        note = public_text(tier.note, 300)
+        period = _stated_period(tier.period, tier.label, tier.note, membership.evidence_quote)
+        entry: dict[str, Any] = {"label": label}
+        if period is not None:
+            entry["period"] = period
+        if tier.price_pence is not None and period != "free":
             entry["pricePence"] = int(tier.price_pence)
-        if tier.note:
-            entry["note"] = " ".join(tier.note.split())[:300]
+        if note:
+            entry["note"] = note
         tiers.append(entry)
-    if not tiers and not membership.bursary_note:
+    bursary = public_text(membership.bursary_note, 500)
+    if not tiers and not bursary:
         return None
     value: dict[str, Any] = {"tiers": tiers}
-    if membership.bursary_note:
-        value["bursaryNote"] = " ".join(membership.bursary_note.split())[:500]
+    if bursary:
+        value["bursaryNote"] = bursary
     if membership.college_reimbursable is not None:
         value["collegeReimbursable"] = membership.college_reimbursable
     return value
@@ -417,4 +524,4 @@ def _plausible_name(name: str) -> bool:
     )
 
 
-__all__ = ["LLM_NEGATIVE_FIELDS", "PEOPLE_PAGES", "ExtractionMapper"]
+__all__ = ["FREE_TEXT_FIELDS", "LLM_FIELDS", "PEOPLE_PAGES", "ExtractionMapper"]

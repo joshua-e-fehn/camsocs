@@ -337,7 +337,7 @@ def run(
                 continue
             calendar_events += len(calendar.events)
             for event in calendar.events:
-                event_type, guessed = infer_event_type(event.title, default="competition")
+                event_type = infer_event_type(event.title, default="competition")
                 pending.append(
                     Sourced(
                         EventDraft(
@@ -353,7 +353,7 @@ def run(
                             event_type=event_type,
                             cancelled=event.status == "CANCELLED",
                             organisers=[OrganiserObs(identity=CUCBC, role="organiser")],
-                            inferred=({"eventType"} if guessed else set())
+                            inferred={"eventType"}
                             | ({"startsAt", "endsAt"} if event.zone_corrected else set()),
                         ),
                         url,

@@ -5,9 +5,10 @@ For each `pending` mail in Convex (`ConvexLoader.inbound_pending`):
 1. **Skip non-list mail** before any LLM call: no `List-Id`, no
    lists.cam.ac.uk sender and no known organisation → `skipped`.
 2. **Identify the sender** deterministically (`sources.inbox.identify_sender`:
-   recorded org, List-Id → Sympa list on record, sender address / own domain,
-   display or list name), against the organisations in staging
-   (`known_orgs.KnownOrgs`).
+   recorded org; then, only for a mail whose sender a trusted receiver
+   verified, List-Id → Sympa list on record, sender address / own domain),
+   against the organisations in staging (`known_orgs.KnownOrgs`). An
+   unverified mail is never attributed and claims no activity.
 3. **Extract events** with the bulk model (`extract/prompts/email_events_v1.md`)
    from the subject and text, with e-mail addresses and phone numbers redacted
    first. One mail often lists a week of events with dates like "Wednesday of
@@ -64,7 +65,12 @@ from camsocs_pipeline.models.observation import EventObservation, IdentityHints,
 from camsocs_pipeline.models.wire import InboundMark, PendingMail
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader
-from camsocs_pipeline.sources.inbox import identify_sender, is_list_mail, list_name_of
+from camsocs_pipeline.sources.inbox import (
+    header_list_name,
+    identify_sender,
+    is_list_mail,
+    list_name_of,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +216,14 @@ def _process(mail: PendingMail, tools: InboxTools) -> MailOutcome:
             text=f"{calendar_note}\n\n--- EMAIL ---\n{source_text}",
         )
         extracted, model = result.value, result.model
-        if org_key is None and quote_supported(extracted.society_name_quote, source_text):
+        # A sign-off names the society only on a verified list mail: anyone
+        # can sign a mail with a society's name.
+        if (
+            org_key is None
+            and mail.sender_verified
+            and header_list_name(mail) is not None
+            and quote_supported(extracted.society_name_quote, source_text)
+        ):
             org_key = tools.known.by_name(extracted.society_name)
             if org_key:
                 notes[0] = "sender: society name in the mail"

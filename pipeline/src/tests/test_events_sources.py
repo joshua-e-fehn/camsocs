@@ -530,6 +530,10 @@ class TestSuWhatsOn:
             ("Friday 09 October 2026", "18:00 - 20:00", ((9, 18, 0), (9, 20, 0), False)),
             ("Friday 09 October 2026", "6 - 8pm", ((9, 18, 0), (9, 20, 0), False)),
             ("Friday 09 October 2026", "10pm - 1am", ((9, 22, 0), (10, 1, 0), False)),
+            # The start borrows the end's pm only if it then starts before the end.
+            ("Friday 09 October 2026", "11 - 1pm", ((9, 11, 0), (9, 13, 0), False)),
+            ("Friday 09 October 2026", "10 - 12pm", ((9, 10, 0), (9, 12, 0), False)),
+            ("Friday 09 October 2026", "12 - 2pm", ((9, 12, 0), (9, 14, 0), False)),
             ("Friday 09 October 2026", None, ((9, 0, 0), (10, 0, 0), True)),
         ],
     )

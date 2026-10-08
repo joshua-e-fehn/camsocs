@@ -72,7 +72,25 @@ def client(**kwargs) -> tuple[LLMClient, list[float]]:
 
 @pytest.mark.parametrize(
     "model",
-    ["claude-3-5-sonnet", "Claude-Opus", " claude ", "anthropic/claude-x", "vendor/Claude-haiku"],
+    [
+        "claude-3-5-sonnet",
+        "Claude-Opus",
+        " claude ",
+        "anthropic/claude-x",
+        "vendor/Claude-haiku",
+        # Gateway spellings: Bedrock, Vertex, provider prefixes and versions.
+        "us.anthropic.claude-sonnet-4",
+        "anthropic.claude-opus-4",
+        "vertex_ai:claude-sonnet",
+        "bedrock/us.anthropic.claude-3",
+        "claude-3@20240229",
+        "my-claudette",
+        "anthropic-proxy/some-model",
+        # Disguised: a zero-width space, a Cyrillic capital Es, full-width letters.
+        "\u200bclaude-3",
+        "\u0421laude-3",
+        "\uff43laude-3",
+    ],
 )
 def test_claude_models_are_refused(model: str) -> None:
     with pytest.raises(ModelRefused):
@@ -80,10 +98,9 @@ def test_claude_models_are_refused(model: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "model", ["gpt-5-mini", "gemini-2.5-flash", "openai/gpt-4.1", "my-claudette"]
+    "model", ["gpt-5-mini", "gemini-2.5-flash", "openai/gpt-4.1", "gpt-6-luna", "gpt-6.1-sol"]
 )
 def test_other_models_are_allowed(model: str) -> None:
-    # "my-claudette" does not *start* with claude in any segment.
     assert assert_model_allowed(model) == model.strip()
 
 

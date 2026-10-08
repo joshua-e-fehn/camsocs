@@ -90,7 +90,13 @@ def make_settings(tmp_path: Path):
             "reports_dir": tmp_path / "reports",
             "user_agent": TEST_UA,
         }
+        # Settings refuse a host interval under 1 s; offline tests that must
+        # not wait set one after validation.
+        interval = overrides.pop("min_host_interval", None)
         values.update(overrides)
-        return Settings(_env_file=None, **values)
+        settings = Settings(_env_file=None, **values)
+        if interval is not None:
+            settings = settings.model_copy(update={"min_host_interval": interval})
+        return settings
 
     return build
