@@ -23,6 +23,7 @@ instead (`canonical_url`).
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -35,6 +36,7 @@ from camsocs_pipeline.sources.contact_links import (
     dedupe_socials,
     instagram_handle,
     link_text_disagrees,
+    link_text_names,
     social_link,
 )
 from camsocs_pipeline.sources.observe import (
@@ -115,6 +117,8 @@ class ClubPage:
     description: str | None = None
     short_description: str | None = None
     socials: list[dict[str, str]] = field(default_factory=list)
+    #: Social URLs whose link text names the account ("@cudct").
+    named: set[str] = field(default_factory=set)
 
 
 _ACRONYM = re.compile(r"^(?P<name>.*?)\s*\((?P<short>[A-Z][A-Za-z&]{1,11})\)\s*$")
@@ -191,6 +195,8 @@ def parse_club_page(html: str, base_url: str) -> ClubPage:
         # link of another club) is neither a social nor an identity hint.
         if entry is not None and not link_text_disagrees(entry, anchor.text()):
             socials.append(entry)
+            if link_text_names(entry, anchor.text()):
+                page.named.add(entry["url"])
     page.socials = dedupe_socials(socials)
     return page
 
@@ -262,13 +268,22 @@ def az_observation(entry: AzEntry, result: FetchResult, client: PoliteClient) ->
     )
 
 
-def club_observation(entry: AzEntry, result: FetchResult, client: PoliteClient) -> Observation:
-    """What the club's page says; a failed fetch is recorded as such."""
+def club_observation(
+    entry: AzEntry,
+    result: FetchResult,
+    client: PoliteClient,
+    *,
+    shared: frozenset[str] | set[str] = frozenset(),
+) -> Observation:
+    """What the club's page says; a failed fetch is recorded as such.
+    `shared`: social URLs several club pages link — kept only where the link
+    text names that account (the page template's pasted link otherwise)."""
     extractor = "sport_club_page"
     fields = []
     page = ClubPage()
     if result.ok:
         page = parse_club_page(result.text, result.final_url)
+        page.socials = [s for s in page.socials if s["url"] not in shared or s["url"] in page.named]
         name = page.name or page.heading or entry.name
         fields.append(
             parser_field("name", name, extractor=f"{extractor}.name", evidence="secondary")
@@ -368,6 +383,7 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
     out.notes.append(f"{len(entries)} clubs on the A–Z")
     if limit is not None:
         entries = entries[:limit]
+    pages: list[tuple[AzEntry, FetchResult]] = []
     for entry in entries:
         out.add(az_observation(entry, az, client))
         page = client.fetch(entry.url)
@@ -375,7 +391,20 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
         if not page.ok:
             out.failed += 1
             out.notes.append(f"{entry.name}: {page.outcome} ({page.detail or page.status})")
-        out.add(club_observation(entry, page, client))
+        pages.append((entry, page))
+    # A social URL on several clubs' pages (one club's link pasted into
+    # others' text) belongs at most to the page whose link text names it.
+    linked = Counter(
+        url
+        for _entry, page in pages
+        if page.ok
+        for url in {s["url"] for s in parse_club_page(page.text, page.final_url).socials}
+    )
+    shared = {url for url, count in linked.items() if count > 1}
+    if shared:
+        out.notes.append(f"{len(shared)} social links on several clubs' pages: kept where named")
+    for entry, page in pages:
+        out.add(club_observation(entry, page, client, shared=shared))
     with_instagram = sum(
         1
         for o in out.observations

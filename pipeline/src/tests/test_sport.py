@@ -142,3 +142,33 @@ def test_harvest_never_touches_the_platform_host() -> None:
     assert not [url for url in client.asked if "pantheonsite.io" in url]
     assert len(harvest.observations) == 10  # 5 register entries + 5 pages (4 of them 404)
     assert harvest.failed == 4
+
+
+def test_a_link_pasted_into_other_clubs_pages_stays_only_where_named() -> None:
+    """2026-10-08: the Dance Competition Team's link (@cudct) also sits on the
+    cricket ("@") and karate (empty text) pages."""
+    base = "https://www.sport.cam.ac.uk/university-sports-clubs-0"
+    page = fixture("sport_club.html")
+
+    def club(text: str) -> str:
+        return page.replace(
+            'href="https://www.instagram.com/cuac_example/?hl=en">@cuac_example',
+            f'href="https://www.instagram.com/cudct/?hl=en">{text}',
+        )
+
+    client = FakeClient(
+        {
+            AZ: ok(AZ, fixture("sport_az.html"), final_url=FINAL_AZ),
+            f"{base}/aikido-club": ok(f"{base}/aikido-club", club(" ")),
+            f"{base}/athletic-club": ok(f"{base}/athletic-club", club("@cudct")),
+            f"{base}/bowmen-archery-club": ok(f"{base}/bowmen-archery-club", club("@")),
+        }
+    )
+    harvest = sport.harvest(client)
+    handles = {
+        o.source_key: o.identity.instagram_handle
+        for o in harvest.observations
+        if o.source_type == "sport_club_page"
+    }
+    assert handles["athletic-club"] == "cudct"
+    assert handles["aikido-club"] is None and handles["bowmen-archery-club"] is None

@@ -491,22 +491,37 @@ def social_link(url: str) -> dict[str, str] | None:
     return entry
 
 
-def link_text_disagrees(entry: dict[str, str], text: str) -> bool:
-    """Whether a social link's visible text names a *different* account than
-    its href — `<a href="instagram.com/cudct/">@c_u_f_c</a>`. Then neither can
-    be trusted as the page's own account."""
-    href_handle = (entry.get("handle") or "").lower()
+def _shown_handle(entry: dict[str, str], text: str) -> str | None:
+    """The account a link's visible text names (``@handle`` or a profile URL
+    on the same platform), lower-cased; "" for a bare "@"; None if it names
+    none."""
     shown = " ".join(text.split())
-    if not href_handle or not shown:
-        return False
+    if shown == "@":
+        return ""
     at = re.fullmatch(r"@([\w.]{1,40})", shown)
     if at:
-        return at.group(1).lower() != href_handle
+        return at.group(1).lower()
     if re.match(r"^(https?://)?(www\.)?[a-z0-9.-]+\.[a-z]{2,}/\S+$", shown, re.I):
         written = social_link(shown if shown.lower().startswith("http") else f"https://{shown}")
         if written is not None and written["platform"] == entry["platform"]:
-            return (written.get("handle") or "").lower() != href_handle
-    return False
+            return (written.get("handle") or "").lower()
+    return None
+
+
+def link_text_disagrees(entry: dict[str, str], text: str) -> bool:
+    """Whether a social link's visible text names a *different* account than
+    its href — `<a href="instagram.com/cudct/">@c_u_f_c</a>`, or a bare "@"
+    left over from pasting one. Then neither can be trusted as the page's own
+    account."""
+    href_handle = (entry.get("handle") or "").lower()
+    shown = _shown_handle(entry, text)
+    return bool(href_handle) and shown is not None and shown != href_handle
+
+
+def link_text_names(entry: dict[str, str], text: str) -> bool:
+    """Whether a social link's visible text names the account it links."""
+    href_handle = (entry.get("handle") or "").lower()
+    return bool(href_handle) and _shown_handle(entry, text) == href_handle
 
 
 def instagram_from_handle(handle: str) -> dict[str, str] | None:
@@ -569,6 +584,7 @@ __all__ = [
     "is_social_host",
     "label_role",
     "link_text_disagrees",
+    "link_text_names",
     "name_tokens",
     "normalise_email",
     "read_contacts",
