@@ -82,7 +82,11 @@ work — a cron that sees success because most of it worked is how a broken sour
   `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
   Images staged as `{sourceUrl}` are uploaded first (our own copy, never a hotlink;
-  `media.py`). `--limit N` loads the first N keyed records.
+  `media.py`). `--limit N` loads the first N keyed records. Claims travel in batches that
+  keep each entity's claims together (the server creates an entity only from a request that
+  carries its required fields); a batch too heavy for one mutation is posted again in halves.
+- **resolve holds** a new organisation no observation names (a guide row whose A–Z club is
+  not staged) and keys an organisation's `parent` like any reference, or drops it.
 
 Contracts shared with the webapp, each guarded by a test:
 
