@@ -456,6 +456,39 @@ def test_references_are_keyed_counterparts_created_unknowns_dropped() -> None:
     assert dropped == {"Nobody We Know Society", "Someone Else Entirely"}
 
 
+def test_an_organisations_parent_is_keyed_or_dropped() -> None:
+    college = org("college_list", "christs", "Christ's College", org_type="college")
+    mcr = org("society_website", "christs/mcr", "Christ's College MCR", org_type="mcr")
+    mcr.parent = IdentityHints(name="Christ's College", org_type="college", level="college")
+    orphan = org("society_website", "nowhere/mcr", "Nowhere MCR", org_type="mcr")
+    orphan.parent = IdentityHints(name="Nobody We Know Society")
+
+    resolution = resolve_records([college, mcr, orphan])
+    by_ref = {ref_of(r): r for r in resolution.records if isinstance(r, Observation)}
+
+    keyed = by_ref["society_website:christs/mcr"]
+    assert keyed.parent.known_key == "org-christs-college"
+    assert keyed.is_keyed
+    dropped = by_ref["society_website:nowhere/mcr"]
+    assert dropped.parent is None and dropped.is_keyed
+    assert {item.names[0] for item in resolution.report.dropped_references} == {
+        "Nobody We Know Society"
+    }
+
+
+def test_a_new_organisation_no_source_names_is_held() -> None:
+    guide = org("sport_guide_pdf", "dancesport", "Dancesport & Rock n Roll")
+    guide.fields = [f for f in guide.fields if f.field != "name"]
+    named = org("sport_az", "chess", "Chess Club")
+
+    resolution = resolve_records([guide, named])
+
+    assert set(keys(resolution)) == {"sport_az:chess"}
+    [held] = resolution.report.held
+    assert held.refs == ["sport_guide_pdf:dancesport"]
+    assert "names it" in held.reason
+
+
 def test_college_keys_and_the_sport_category_are_derived() -> None:
     college = org("college_list", "jesus", "Jesus College", org_type="college")
     boat = org(

@@ -93,8 +93,13 @@ def harvest(ctx: StageContext, client: PoliteClient) -> None:
     if ctx.dry_run:
         ctx.report.notes.append("dry run: replayed from cache, nothing staged")
     else:
-        ctx.staging.write("su_directory", ctx.run.run_key, directory_records, part=ctx.report.name)
-        ctx.staging.write("su_profile", ctx.run.run_key, profile_records, part=ctx.report.name)
+        part = ctx.report.name
+        ctx.report.inserted += ctx.staging.write(
+            "su_directory", ctx.run.run_key, directory_records, part=part
+        )
+        ctx.report.inserted += ctx.staging.write(
+            "su_profile", ctx.run.run_key, profile_records, part=part
+        )
 
     ctx.report.skipped += len(unreadable)
     ctx.report.notes.append(

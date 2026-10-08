@@ -306,6 +306,7 @@ class Resolver:
                     others.append(child)
         for record in keyed_orgs:
             self._key_relationships(record)
+            self._key_parent(record)
 
         self._review_shared_clubs()
         self._review_similar_names()
@@ -556,6 +557,14 @@ class Resolver:
                 return candidate
         return None
 
+    def _named(self, group: _Group) -> bool:
+        """Whether any member observation claims a `name` value."""
+        return any(
+            obs.field == "name" and obs.value
+            for member in group.members
+            for obs in self.anchors[member].record.fields
+        )
+
     def _assign_keys(self) -> None:
         for root in self._live_roots():
             group = self._groups[root]
@@ -582,6 +591,12 @@ class Resolver:
                 if key is not None:
                     self.counts["keys_kept"] += 1
                 else:
+                    if not self._named(group):
+                        # Convex creates an organisation only from a `name`
+                        # claim; a new group no source names (a Sports Club
+                        # Guide entry without its A–Z club) would be refused.
+                        self._hold_group(root, "no source names it yet; nothing can create it")
+                        continue
                     best = self._best(group)
                     names = [self._qualified_name(group, best), best.identity.name]
                     names += [self.anchors[i].identity.name for i in group.members]
@@ -829,6 +844,19 @@ class Resolver:
             relationship.to_identity.known_key = key
             kept.append(relationship)
         record.relationships = kept
+
+    def _key_parent(self, record: Observation) -> None:
+        """An organisation's parent (a JCR's college, a team club's University
+        club) is a reference like a relationship target: keyed, or dropped —
+        never left unkeyed, which would hold the whole observation back."""
+        if record.parent is None or record.parent.known_key is not None:
+            return
+        key = self.reference_key(record.parent, record)
+        if key is None or key == record.entity_key:
+            self._drop(record, record.parent, "parent")
+            record.parent = None
+            return
+        record.parent.known_key = key
 
     def _keyed_child(self, record: Observation) -> Observation | None:
         assert record.parent is not None  # Observation validates it

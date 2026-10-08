@@ -37,7 +37,9 @@ def run(ctx: StageContext) -> None:
     if ctx.dry_run:
         ctx.report.notes.append("dry run: replayed from cache, nothing staged")
     else:
-        ctx.staging.write("proctors_register", ctx.run.run_key, records, part=ctx.report.name)
+        ctx.report.inserted += ctx.staging.write(
+            "proctors_register", ctx.run.run_key, records, part=ctx.report.name
+        )
 
     kinds = Counter(entry.link_kind or "no link" for entry in entries)
     ctx.report.notes.append(f"{listed} listed; {len(records)} observations")
