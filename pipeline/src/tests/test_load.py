@@ -79,6 +79,24 @@ def test_claim_batches_never_split_an_entity() -> None:
     assert entity_batches([]) == []
 
 
+def test_a_claims_batch_too_heavy_for_one_mutation_is_halved(net: respx.MockRouter) -> None:
+    sizes: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        claims = json.loads(request.content)["claims"]
+        sizes.append(len(claims))
+        if len(claims) > 2:
+            message = "Your request timed out performing too many system operations."
+            return httpx.Response(400, text=message)
+        return httpx.Response(200, json={"inserted": len(claims), "updated": 0, "unchanged": 0})
+
+    net.post(f"{SITE}/api/pipeline/claims").mock(side_effect=answer)
+    result = loader().post_claims([claim(f"org-{i}") for i in range(5)])
+
+    assert sizes == [5, 3, 2, 1, 2]
+    assert result.inserted == 5
+
+
 def test_large_inputs_are_split_and_counted(net: respx.MockRouter) -> None:
     route = net.post(f"{SITE}/api/pipeline/societies").mock(
         return_value=httpx.Response(200, json={"inserted": 1, "updated": 2, "unchanged": 3})

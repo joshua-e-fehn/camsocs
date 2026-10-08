@@ -340,6 +340,15 @@ async function appendClaim(
   return "inserted"
 }
 
+/** Above this many fields, one range read of the entity's whole claim log is
+ * cheaper than one read per field: a new organisation resolves ~70 fields, and
+ * a batch creating dozens of them must stay well inside a mutation's limit on
+ * database calls. */
+const WHOLE_ENTITY_READ_FROM = 8
+/** Claims read per entity (whole-log read) or per field. */
+const ENTITY_CLAIMS_CAP = 8_000
+const FIELD_CLAIMS_CAP = 2_000
+
 /** Resolves `fields` of one entity from every claim recorded for them. */
 async function resolveFields(
   ctx: MutationCtx,
@@ -348,14 +357,33 @@ async function resolveFields(
   fields: readonly string[],
 ): Promise<Record<string, Resolution>> {
   const specs = FIELD_SPECS[entityType]
-  const out: Record<string, Resolution> = {}
-  for (const field of fields) {
-    const claims = await ctx.db
+  const byField = new Map<string, Doc<"fieldClaims">[]>()
+  if (fields.length >= WHOLE_ENTITY_READ_FROM) {
+    const wanted = new Set(fields)
+    const all = await ctx.db
       .query("fieldClaims")
       .withIndex("by_entity_field", (q) =>
-        q.eq("entityType", entityType).eq("entityKey", entityKey).eq("field", field),
+        q.eq("entityType", entityType).eq("entityKey", entityKey),
       )
-      .take(2_000)
+      .take(ENTITY_CLAIMS_CAP)
+    for (const claim of all) {
+      if (!wanted.has(claim.field)) continue
+      byField.set(claim.field, [...(byField.get(claim.field) ?? []), claim])
+    }
+  } else {
+    for (const field of fields) {
+      const claims = await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_field", (q) =>
+          q.eq("entityType", entityType).eq("entityKey", entityKey).eq("field", field),
+        )
+        .take(FIELD_CLAIMS_CAP)
+      byField.set(field, claims)
+    }
+  }
+  const out: Record<string, Resolution> = {}
+  for (const field of fields) {
+    const claims = byField.get(field) ?? []
     if (claims.length === 0) continue
     out[field] = resolveField(specs[field], claims)
   }

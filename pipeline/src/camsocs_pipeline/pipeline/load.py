@@ -153,6 +153,16 @@ def chunked(items: Sequence[Any], size: int = MAX_BATCH) -> Iterator[Sequence[An
         yield items[start : start + size]
 
 
+_TOO_HEAVY = ("too many", "timed out")
+
+
+def _is_too_heavy(error: ConvexError) -> bool:
+    """Whether Convex refused a request for exceeding a function's limits
+    (database calls, reads, time) rather than for its content."""
+    message = str(error).lower()
+    return any(marker in message for marker in _TOO_HEAVY)
+
+
 def entity_batches(claims: Sequence[ClaimInput], size: int = MAX_BATCH) -> list[list[ClaimInput]]:
     """Claims in batches that never split one entity's claims, in first-seen
     entity order.
@@ -339,12 +349,28 @@ class ConvexLoader:
         extra = {"runKey": run_key} if run_key else None
         result = BatchResult("claims")
         for batch in entity_batches(claims):
-            result.record(
-                self.post("claims", {**(extra or {}), "claims": [c.to_wire() for c in batch]})
-            )
+            self._post_claim_batch(batch, extra, result)
         if result.requests:
             logger.info("claims → %s", result)
         return result
+
+    def _post_claim_batch(
+        self, batch: list[ClaimInput], extra: dict[str, Any] | None, result: BatchResult
+    ) -> None:
+        """One claims request. A batch the server cannot finish inside one
+        mutation's limits (many new entities, each resolved in full) fails as
+        a whole — a mutation is atomic, so nothing was written — and is posted
+        again in halves, still never splitting an entity's claims."""
+        try:
+            result.record(
+                self.post("claims", {**(extra or {}), "claims": [c.to_wire() for c in batch]})
+            )
+        except ConvexError as error:
+            if len(batch) < 2 or not _is_too_heavy(error):
+                raise
+            logger.warning("claims batch of %d too heavy for one mutation; halving", len(batch))
+            for half in entity_batches(batch, size=(len(batch) + 1) // 2):
+                self._post_claim_batch(half, extra, result)
 
     def upsert_sources(self, sources: Sequence[SourceInput]) -> BatchResult:
         return self.post_batches("sources", "sources", sources)
