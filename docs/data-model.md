@@ -123,7 +123,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | joinUrl | string? | |
 | membership | `{ tiers: { label, pricePence?, period: "life"\|"year"\|"term"\|"one_off"\|"free", note? }[], bursaryNote?, collegeReimbursable?: boolean }`? | |
 | beginnerFriendly | boolean? | |
-| trials | `{ required: boolean, dates?: string[], note? }`? | Trials or auditions |
+| trials | `{ required: boolean, dates?: string[], note? }`? | Trials or auditions. `dates` are as the source wrote them ("open on 4th October"), ISO `YYYY-MM-DD` only when it gave a full date; the UI formats ISO and shows the rest verbatim |
 | timeCommitment | string? | Free text, e.g. "2 trainings/week + Wed matches" |
 | termcardUrl | string? | |
 | accessibilityNote | string? | |

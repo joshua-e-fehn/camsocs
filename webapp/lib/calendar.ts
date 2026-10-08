@@ -191,6 +191,12 @@ export function formatDate(iso: string): string {
   return `${day} ${MONTHS[month - 1]} ${year}`
 }
 
+/** An ISO date as "8 Oct 2026"; anything else (a date as a source wrote it,
+ * "open on 4th October") unchanged. */
+export function formatDateOrText(value: string): string {
+  return isIsoDate(value) ? formatDate(value) : value
+}
+
 /** "October 2026" */
 export function formatMonth(iso: string): string {
   const [year, month] = iso.split("-").map(Number)

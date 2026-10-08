@@ -16,7 +16,7 @@ import { SourceLine } from "@/components/molecules/source-line"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { dayName, formatDate, formatInstantDate } from "@/lib/calendar"
+import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
 import { formatPence, languageName, paragraphs } from "@/lib/format"
 import type { OrgPage, OrgPublic, RelationshipPublic, SessionPublic } from "@/lib/public-api"
 import { camSignInHref } from "@/lib/site"
@@ -335,7 +335,7 @@ export function OrgProfile({
                     <span>{org.trials.required ? "Required" : "Not required"}</span>
                     {org.trials.dates && org.trials.dates.length > 0 && (
                       <span className="font-mono text-xs">
-                        {org.trials.dates.map(formatDate).join(", ")}
+                        {org.trials.dates.map(formatDateOrText).join(", ")}
                       </span>
                     )}
                     {org.trials.note && (

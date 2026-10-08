@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   addMonths,
+  formatDateOrText,
   formatEventTime,
   formatEventWhen,
   formatRange,
@@ -92,6 +93,11 @@ describe("views", () => {
 })
 
 describe("display", () => {
+  test("a date as a source wrote it stays as written", () => {
+    expect(formatDateOrText("2026-10-04")).toBe("4 Oct 2026")
+    expect(formatDateOrText("open on 4th October")).toBe("open on 4th October")
+  })
+
   test("event times in London", () => {
     const startsAt = Date.UTC(2026, 9, 8, 18, 30)
     expect(formatEventWhen({ startsAt, allDay: false })).toBe("Thu 8 Oct, 19:30")
