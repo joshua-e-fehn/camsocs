@@ -106,7 +106,10 @@ class TestGlance:
         ]
         assert fields["beginnerFriendly"].value is True
         assert fields["sport.collegeCompetition"].value is False
-        assert "sport.blueStatus" not in fields  # a tick says *some* Blue, not which
+        # A tick says *some* Blue, not which: the level is not published (and
+        # an earlier "none" from this table is retracted).
+        assert fields["sport.blueStatus"].value is None
+        assert fields["sport.blueStatus"].missing_reason == "not_published"
         assert fields["sport.genderCategories"].value == ["men", "women"]
 
     def test_no_blue_tick_is_a_published_none(self) -> None:
@@ -237,7 +240,7 @@ class TestSections:
         fields = {f.field: f for f in merged.fields}
         assert fields["email"].value == "swim@sport.cam.ac.uk"
         assert fields["audiences"].value == ["undergraduates", "postgraduates"]
-        assert "sport.blueStatus" not in fields
+        assert fields["sport.blueStatus"].value is None  # one entry has a Blue tick
         assert all("name" not in {f.field for f in o.fields} for o in observations)
         assert any("merged Swimming, Water Polo" in note for note in notes)
         # The personal CRSid in a contact line never becomes a value.

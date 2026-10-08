@@ -163,7 +163,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - Students → audiences undergraduates + postgraduates.
 - Staff → audiences staff.
 - Beginner → audiences beginners and `beginnerFriendly`; an empty cell is a published "no".
-- No Blue/Half Blue tick → `sport.blueStatus` none (primary). A tick says *some* Blue status without saying which, so the level is not claimed. The Hawks' Club list (LB §6.2) is undated, secondary and internally inconsistent: ice hockey and rugby league appear in two categories. It is not used.
+- No Blue/Half Blue tick → `sport.blueStatus` none (primary). A tick says *some* Blue status without saying which, so the level is claimed as missing / `not_published` (which also retracts an earlier "none" from the table). The Hawks' Club list (LB §6.2) is undated, secondary and internally inconsistent: ice hockey and rugby league appear in two categories. It is not used.
 - College Competition → `sport.collegeCompetition`.
 - Intermediate and Elite have no field.
 

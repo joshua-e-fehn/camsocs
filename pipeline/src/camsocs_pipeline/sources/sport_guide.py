@@ -26,7 +26,7 @@ Read deterministically with pypdf, in two steps:
      Columns → fields: Students → audiences undergraduates + postgraduates;
      Staff → staff; Beginner → audiences beginners and ``beginnerFriendly``;
      Blue, Half Blue → no tick is ``sport.blueStatus`` none (a tick says *some*
-     Blue status without saying which, so it is not claimed); College
+     Blue status without saying which: missing / ``not_published``); College
      Competition → ``sport.collegeCompetition``. An empty cell is a published
      "no". Intermediate and Elite have no field.
 
@@ -55,7 +55,7 @@ from itertools import pairwise
 
 import pypdf
 
-from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import FieldObs, IdentityHints, Observation
 from camsocs_pipeline.sources import sport
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
@@ -496,6 +496,14 @@ def glance_fields(rows: Sequence[GlanceRow]) -> list[FieldObs]:
         fields.append(
             parser_field("sport.blueStatus", "none", extractor=extractor, evidence="primary")
         )
+    else:
+        # Some Blue status, the table does not say which: the level is not
+        # published — which also retracts an earlier "none" from this table.
+        fields.append(
+            missing_field(
+                "sport.blueStatus", "not_published", extractor=extractor, evidence="primary"
+            )
+        )
     genders = sorted({g for g in (gender_of(row.label) for row in rows) if g})
     if genders:
         fields.append(
@@ -606,7 +614,7 @@ def _merge(drafts: Sequence[_Draft]) -> _Draft:
     )
     for draft in drafts:
         for obs in draft.fields:
-            if obs.field == "sport.blueStatus" and blue_none < blue_rows:
+            if obs.field == "sport.blueStatus" and obs.value == "none" and blue_none < blue_rows:
                 continue
             if obs.field not in merged:
                 merged[obs.field] = obs.model_copy(deep=True)
