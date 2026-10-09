@@ -114,13 +114,34 @@ def test_the_duplicate_adds_claims_to_the_primary_event_only() -> None:
     identity = {c.field: c.value for c in plan.claims if c.source_url == CAMDRAM.source_url}
     assert identity["source"] == "camdram"
     assert identity["sourceUrl"] == CAMDRAM.source_url + "#page"
-    # Camdram's organiser set first (replace), then the duplicate's (merge).
-    assert [(s.event_key, s.mode) for s in plan.event_organisers] == [
-        (primary_key, "replace"),
-        (primary_key, "merge"),
-    ]
+    # Camdram's organiser set (replace); the duplicate names no one else, so
+    # it adds no set of its own — but its page still gets its sources row.
+    assert [(s.event_key, s.mode) for s in plan.event_organisers] == [(primary_key, "replace")]
+    assert {r.url for r in plan.sources} == {CAMDRAM.source_url, SU.source_url}
     assert plan.duplicates.notes() == [
         "1 event readings merged into another source's event: 1 su_whatson → camdram"
+    ]
+
+
+def test_a_duplicate_adds_new_organisers_and_never_a_second_role() -> None:
+    """2026-10-09: Camdram lists a show by the ADC with the Footlights as
+    co-host; the Footlights' site calls it its own. A second role for the
+    Footlights was removed by every load's replace and re-added by the merge."""
+    show = reading("camdram", "show:9/performance:9/2026-10-15", "Revue", ms(2026, 10, 15, 19, 30))
+    show.organisers = [
+        OrganiserObs(identity=IdentityHints(name="ADC", known_key=ORG)),
+        OrganiserObs(identity=IdentityHints(name="FL", known_key="org-fl"), role="co_host"),
+    ]
+    site = reading("website", "org-fl:2026-10-15:revue", "Revue", ms(2026, 10, 15, 19, 30))
+    site.organisers = [
+        OrganiserObs(identity=IdentityHints(name="FL", known_key="org-fl")),
+        OrganiserObs(identity=IdentityHints(name="Guest", known_key="org-guest")),
+    ]
+    plan = plan_observations([site, show])
+    sets = [(s.mode, [(o.org_key, o.role) for o in s.organisers]) for s in plan.event_organisers]
+    assert sets == [
+        ("replace", [(ORG, "organiser"), ("org-fl", "co_host")]),
+        ("merge", [("org-guest", "organiser")]),
     ]
 
 

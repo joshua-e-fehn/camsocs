@@ -892,6 +892,8 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     #: The organisations each fetched page was observed for. A page observed
     #: for several (a directory, a register, an A–Z) belongs to none of them.
     owners: dict[str, set[str]] = {}
+    #: The organisations each event's organiser sets so far name.
+    planned_organisers: dict[str, set[str]] = {}
     for record in primaries_first(items, duplicates):
         assert isinstance(record, Observation | EventObservation)
         if not record.is_keyed:
@@ -905,21 +907,32 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
             unresolved = bool(record.unresolved_organisers) or any(
                 not o.identity.known_key for o in record.organisers
             )
-            plan.event_organisers.append(
-                EventOrganiserSet(
-                    event_key=event_key(*(primary or event_identity(record))),
-                    organisers=[
-                        EventOrganiser(org_key=o.identity.known_key, role=o.role)
-                        for o in record.organisers
-                        if o.identity.known_key
-                    ],
-                    # Organisers the source names but this run could not
-                    # resolve (a fresh machine, a --limit run, an ambiguous
-                    # name), or a second source's reading of an event: add
-                    # what is known, remove nothing.
-                    mode="merge" if unresolved or primary else "replace",
+            target = event_key(*(primary or event_identity(record)))
+            known = planned_organisers.setdefault(target, set())
+            organisers = [
+                EventOrganiser(org_key=o.identity.known_key, role=o.role)
+                for o in record.organisers
+                if o.identity.known_key
+                # A second source's reading adds only organisations the
+                # event's own reading does not name: Camdram's co-host stays a
+                # co-host when the co-host's site calls the show its own (a
+                # role added beside it would be removed and re-added by every
+                # load's replace-then-merge).
+                and not (primary and o.identity.known_key in known)
+            ]
+            known.update(o.org_key for o in organisers)
+            if organisers or not primary:
+                plan.event_organisers.append(
+                    EventOrganiserSet(
+                        event_key=target,
+                        organisers=organisers,
+                        # Organisers the source names but this run could not
+                        # resolve (a fresh machine, a --limit run, an
+                        # ambiguous name), or a second source's reading of an
+                        # event: add what is known, remove nothing.
+                        mode="merge" if unresolved or primary else "replace",
+                    )
                 )
-            )
         else:
             plan.claims.extend(claims_for_observation(record))
             if record.entity_type == "organisation":
