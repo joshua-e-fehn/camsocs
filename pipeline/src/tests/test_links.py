@@ -396,3 +396,49 @@ def test_account_of_names_pages_without_a_handle() -> None:
 def test_the_crsid_rule_covers_srcf_and_cantab(address: str, kind: str) -> None:
     assert classify_email(address).kind == kind
     assert is_personal_crsid(address) == (kind == "personal")
+
+
+@pytest.mark.parametrize(
+    ("address", "names", "site", "expected"),
+    [
+        # Initials of the name: "Cambridge University Blind Wine Tasting Society".
+        ("cubwts@gmail.com", ("Cambridge University Blind Wine Tasting Society",), None,
+         ("general", None)),
+        ("mscsec@phil.cam.ac.uk", ("Cambridge University Moral Sciences Club",),
+         "www.phil.cam.ac.uk", ("general", None)),
+        # The site's own name, on its domain or a sibling one.
+        ("cucss@cucss.uk", ("Czech and Slovak Society",), "cucss.uk", ("general", None)),
+        ("cucaadmin@gmail.com", ("Conservative Association",), "www.cuca.org.uk",
+         ("general", None)),
+        ("info@cambridgenightline.org", ("Cambridge Nightline",), "www.cambridgenightline.org.uk",
+         ("general", None)),
+        ("committee@cuhags.cam", ("Heraldic and Genealogical Society",), "cuhags.soc.srcf.net",
+         ("general", None)),
+        ("webmaster@ciccu.org.uk", ("CICCU",), "ciccu.org.uk", ("general", None)),
+        # Posts.
+        ("archim-external-secretary@srcf.net", ("The Archimedeans",), None, ("role", "other")),
+        ("jcr.bame@newn.cam.ac.uk", ("Newnham JCR",), "newn.cam.ac.uk", ("role", "other")),
+        ("membership@cupoloclub.com", ("Polo Club",), None, ("role", "other")),
+        ("cubb-chair@srcf.ucam.org", ("Brass Band Society",), None, ("role", "president")),
+        # The name in pieces is no post.
+        ("foundation.medtech@gmail.com", ("MedTech Foundation (Cambridge)",), None,
+         ("general", None)),
+        # Still never a person's.
+        ("alice.smith@gmail.com", ("Ice Hockey Club",), None, ("unknown", None)),
+        ("support@sport.cam.ac.uk", ("Fencing Club",), "fencing.example", ("unknown", None)),
+    ],
+)  # fmt: skip
+def test_one_reading_of_addresses_for_seeds_and_sites(address, names, site, expected) -> None:
+    reading = classify_email(address, name_tokens(*names), site_host=site)
+    assert (reading.kind, reading.role) == expected
+
+
+def test_a_webmaster_named_on_a_committee_list_is_a_post() -> None:
+    reading = classify_email("webmaster@cuadc.org", name_tokens("CUADC"), label="Webmaster")
+    assert (reading.kind, reading.role) == ("role", "other")
+
+
+def test_facebook_people_pages_only_of_organisations() -> None:
+    page = "https://www.facebook.com/people/Cambridge-University-Immunology-Society/61554/"
+    assert social_link(page) == {"platform": "facebook_page", "url": page}
+    assert social_link("https://www.facebook.com/people/Jane-Smith/1000123/") is None

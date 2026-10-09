@@ -251,13 +251,16 @@ _FACEBOOK_RESERVED = frozenset(
         "photos",
         "permalink.php",
         "story.php",
-        "people",
         "search",
         "hashtag",
     }
 )
 _X_RESERVED = frozenset(
     {"i", "intent", "share", "home", "search", "hashtag", "explore", "settings", "login"}
+)
+#: Words that make a Facebook ``/people/`` page an organisation's.
+_ORGANISATION_WORDS = (
+    r"(society|soc|club|cambridge|university|association|union|team|group|network|college)"
 )
 #: LinkedIn pages of an organisation; ``/in/<person>`` is a person, never stored.
 _LINKEDIN_ORGANISATIONS = frozenset({"company", "school", "showcase", "groups"})
@@ -332,6 +335,13 @@ def social_link(url: str) -> dict[str, str] | None:
             return None
         if lowered == "groups":
             return {"platform": "facebook_group", "url": clean} if len(segments) > 1 else None
+        if lowered == "people":
+            # facebook.com/people/<Name>/<id>/ is a person's profile or a newer
+            # Page: kept only when the name reads as an organisation's.
+            name = segments[1].lower() if len(segments) > 1 else ""
+            if not re.search(_ORGANISATION_WORDS, name):
+                return None
+            return {"platform": "facebook_page", "url": clean}
         if lowered == "profile.php":
             profile_id = parse_qs(urlsplit(absolute).query).get("id")
             if not profile_id:
@@ -733,8 +743,6 @@ OTHER_ROLE_WORDS = frozenset(
         "tech",
         "td",
         "sm",
-        "webmaster",
-        "web",
         "computerofficer",
         "access",
         "accessibility",
@@ -828,15 +836,25 @@ GENERIC_LOCALS = frozenset(
         "committee",
         "support",
         "exec",
+        "executive",
         "board",
         "members",
+        "web",
+        "webmaster",
         "society",
         "soc",
         "club",
         "jcr",
         "mcr",
+        "cambridge",
     }
 )
+#: A college body's own prefix: ``jcr.bame@``, ``mcr.speaker@`` are its officers.
+_BODY_PREFIXES = frozenset({"jcr", "mcr", "jcsu", "gsb"})
+#: Words that say where, not which post ("ospreys.cam@").
+_PLACE_WORDS = frozenset({"cam", "cambridge", "cu", "uk", "official"})
+#: Words that make a named post another one: an external secretary is not the secretary.
+_POST_MODIFIERS = frozenset({"external", "internal", "assistant"})
 #: Words too common to show an address belongs to *this* organisation.
 _STOP_TOKENS = frozenset(
     {
@@ -877,9 +895,12 @@ def _local_tokens(local: str) -> list[str]:
 
 
 def _role_of_words(words: list[str]) -> str | None:
-    """The role a run of words names: a deputy is ``other``; a named role
-    wins over a qualifier ("womens president"); an unnamed post is ``other``."""
+    """The role a run of words names: a deputy, an external or an assistant
+    post is ``other``; a named role wins over a qualifier ("womens
+    president"); an unnamed post is ``other``."""
     if any(word.startswith("vice") or word in ("vp", "deputy") for word in words):
+        return "other"
+    if len(words) > 1 and any(word in _POST_MODIFIERS for word in words):
         return "other"
     for word in words:
         if word in ROLE_WORDS:
@@ -911,14 +932,29 @@ def role_of(address: str) -> str | None:
     return None
 
 
+#: Posts a link's text may name that are a mailbox when only the address
+#: says them (``webmaster@`` is the site's general address; "Webmaster" in a
+#: committee list is a post).
+_LABEL_POSTS = frozenset({"webmaster", "web"})
+
+
 def label_role(label: str) -> str | None:
-    """The role a link's text names ("Club Publicist", "Actors' Rep")."""
-    return _role_of_words(re.findall(r"[a-z]+", label.lower()))
+    """The role a link's text names ("Club Publicist", "Actors' Rep", "Webmaster")."""
+    words = re.findall(r"[a-z]+", label.lower())
+    role = _role_of_words(words)
+    if role is None and any(word in _LABEL_POSTS for word in words):
+        return "other"
+    return role
+
+
+_UNIVERSITY_PREFIXES = (("cambridge", "university"), ("university", "of", "cambridge"), ("cu",))
 
 
 def name_tokens(*names: str | None) -> set[str]:
-    """Distinctive lower-case tokens (≥ 4 characters) of an organisation's names
-    and acronyms, for recognising its own addresses (``cuadc@…``)."""
+    """Distinctive lower-case tokens of an organisation's names, for
+    recognising its own addresses (``cuadc@…``): words of at least four
+    letters, a short name as written ("jcsu"), and the initials of the name
+    with and without its "Cambridge University" ("cubwts", "msc")."""
     tokens: set[str] = set()
     for name in names:
         if not name:
@@ -927,12 +963,23 @@ def name_tokens(*names: str | None) -> set[str]:
             slug = slugify(name)
         except ValueError:
             continue
-        for token in slug.split("-"):
+        words = slug.split("-")
+        for token in words:
             if len(token) >= 4 and token not in _STOP_TOKENS:
                 tokens.add(token)
         compact = slug.replace("-", "")
         if 3 <= len(compact) <= 8:
             tokens.add(compact)  # acronyms: "cuadc", "jcsu"
+        if len(words) >= 3:
+            bare = list(words)
+            for prefix in _UNIVERSITY_PREFIXES:
+                if tuple(bare[: len(prefix)]) == prefix:
+                    bare = bare[len(prefix) :]
+                    break
+            for run in (words, bare):
+                initials = "".join(word[0] for word in run if word not in ("the", "of"))
+                if 3 <= len(initials) <= 8:
+                    tokens.add(initials)
     return tokens
 
 
@@ -947,12 +994,30 @@ def registrable(host: str) -> str:
     return ".".join(labels[-2:])
 
 
+def site_label(host: str | None) -> str | None:
+    """The name a site goes by: ``cucss`` for cucss.uk, ``cuhags`` for
+    cuhags.soc.srcf.net; None for a college's or department's site."""
+    if not host:
+        return None
+    host = host.lower().removeprefix("www.")
+    if host.endswith((".soc.srcf.net", ".soc.ucam.org")):
+        return host.split(".")[0]
+    if host == "cam.ac.uk" or host.endswith(".cam.ac.uk"):
+        return None
+    return registrable(host).split(".")[0]
+
+
 def _owns_domain(domain: str, site_host: str | None) -> bool:
     if site_host is None:
         return True
     if any(domain == shared or domain.endswith("." + shared) for shared in _SHARED_MAIL_HOSTS):
         return True
-    return registrable(domain) == registrable(site_host)
+    if registrable(domain) == registrable(site_host):
+        return True
+    # The same name on another domain: cambridgenightline.org on the
+    # cambridgenightline.org.uk site, cuhags.cam on cuhags.soc.srcf.net.
+    label = site_label(site_host)
+    return label is not None and len(label) >= 4 and site_label(domain) == label
 
 
 def is_generic(
@@ -1022,12 +1087,25 @@ def classify_email(
     tokens = _local_tokens(local)
     if (
         len(tokens) > 1
-        and tokens[0] in own_tokens
+        and (tokens[0] in own_tokens or tokens[0] in _BODY_PREFIXES)
         and not any(t in GENERIC_LOCALS for t in tokens[1:])
+        # The name in pieces ("foundation.medtech", "ospreys.cam") is no post.
+        and not all(t in own_tokens or t in _PLACE_WORDS for t in tokens[1:])
     ):
         return EmailReading(address, "role", "other")
     if is_generic(address, own_tokens, site_host) or labelled:
         return EmailReading(address, "general")
+    # Named after the site it is published on: cucss@cucss.uk,
+    # cucaadmin@gmail.com on cuca.org.uk.
+    label = site_label(site_host)
+    compact = re.sub(r"[._+\-]", "", local)
+    if (
+        label is not None
+        and len(label) >= 4
+        and len(compact) >= 4
+        and (label in compact or compact in label)
+    ):
+        return EmailReading(address, "general", reason="named after its site")
     if (
         domain in _SOCIETY_MAIL_DOMAINS
         and not _NAME_LIKE.match(local)
@@ -1122,6 +1200,7 @@ __all__ = [
     "read_contacts",
     "registrable",
     "role_of",
+    "site_label",
     "social_key",
     "social_link",
     "unwrap_redirect",
