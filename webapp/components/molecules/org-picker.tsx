@@ -20,12 +20,15 @@ import { cn } from "@/lib/utils"
 /**
  * Pick one society by typing part of its name (server-side search over the
  * directory). `value` is the current choice; `onChange(null)` clears it.
+ * Without a `<label htmlFor={id}>`, pass `label`: a `role="combobox"` button
+ * takes no name from its text, so it would be announced as nothing.
  */
 export function OrgPicker({
   value,
   onChange,
   placeholder = "Any society",
   id,
+  label,
   className,
   "aria-invalid": invalid,
 }: {
@@ -33,6 +36,8 @@ export function OrgPicker({
   onChange: (org: OrgRef | null) => void
   placeholder?: string
   id?: string
+  /** The accessible name when no `<label>` points at `id`. */
+  label?: string
   className?: string
   "aria-invalid"?: boolean
 }) {
@@ -51,6 +56,7 @@ export function OrgPicker({
             role="combobox"
             aria-expanded={open}
             aria-invalid={invalid}
+            aria-label={label ? `${label}: ${value ? value.name : placeholder}` : undefined}
             className="h-9 min-w-0 flex-1 justify-between font-normal"
           >
             <span className={cn("truncate", !value && "text-muted-foreground")}>

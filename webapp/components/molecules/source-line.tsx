@@ -79,14 +79,6 @@ function Source({ source }: { source: SourceRef }) {
   )
 }
 
-function Separator() {
-  return (
-    <span aria-hidden className="text-border">
-      /
-    </span>
-  )
-}
-
 export function SourceLine({
   meta,
   className,
@@ -110,33 +102,32 @@ export function SourceLine({
     )
   }
 
+  // Parts are spaced, not separated: a wrapped line never starts with a "/".
   return (
     <div className={cn("flex flex-col gap-1 text-xs text-muted-foreground", className)}>
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 font-mono">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <StatusChip status={model.status} />
-        <Source source={model.source} />
+        <span className="font-mono">
+          <Source source={model.source} />
+        </span>
         {model.retrievedOn && (
-          <>
-            <Separator />
-            <span>
-              <span className="sr-only">retrieved </span>
-              {model.retrievedOn}
-            </span>
-          </>
+          <span className="font-mono whitespace-nowrap">
+            <span className="sr-only">retrieved </span>
+            {model.retrievedOn}
+          </span>
         )}
         {model.confidence !== undefined && (
-          <>
-            <Separator />
-            <span title="Confidence, computed by rule from how the value was read">
-              {model.confidence}%<span className="sr-only"> confidence</span>
-            </span>
-          </>
+          <span
+            className="font-mono whitespace-nowrap"
+            title="Confidence, computed by rule from how the value was read"
+          >
+            {model.confidence}%<span className="sr-only"> confidence</span>
+          </span>
         )}
         {model.agreeing !== undefined && (
-          <>
-            <Separator />
-            <span>{model.agreeing} sources agree</span>
-          </>
+          <span className="whitespace-nowrap" title="Independent sources that give the same value">
+            {model.agreeing} sources agree
+          </span>
         )}
       </p>
       {model.conflicts.length > 0 && (
@@ -144,19 +135,15 @@ export function SourceLine({
           {model.conflicts.map((reading) => (
             <li
               key={`${reading.value}|${reading.source.kind === "link" ? reading.source.url : "private"}|${reading.retrievedOn}`}
-              className="flex flex-wrap items-center gap-x-1.5"
+              className="flex flex-wrap items-center gap-x-2"
             >
               <span>Also reported:</span>
-              <span className="font-medium break-all text-foreground">{reading.value}</span>
-              <Separator />
+              <span className="font-medium wrap-anywhere text-foreground">{reading.value}</span>
               <span className="font-mono">
                 <Source source={reading.source} />
               </span>
               {reading.retrievedOn && (
-                <>
-                  <Separator />
-                  <span className="font-mono">{reading.retrievedOn}</span>
-                </>
+                <span className="font-mono whitespace-nowrap">{reading.retrievedOn}</span>
               )}
             </li>
           ))}

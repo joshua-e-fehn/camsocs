@@ -3,12 +3,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { EventFlags } from "@/components/molecules/event-item"
 import { ExternalLink } from "@/components/molecules/external-link"
+import { RichText } from "@/components/molecules/rich-text"
 import { SourceLine } from "@/components/molecules/source-line"
 import { Badge } from "@/components/ui/badge"
 import { formatEventWhen, formatInstantDate } from "@/lib/calendar"
-import { formatEventPrice, paragraphs } from "@/lib/format"
+import { formatEventPrice } from "@/lib/format"
 import type { EventPublic } from "@/lib/public-api"
-import { displayHost, hasValue } from "@/lib/source-line"
+import { displayHost, hasValue, sourceLine } from "@/lib/source-line"
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS } from "@/lib/vocab"
 
 const ROLE = { organiser: "Organiser", co_host: "Co-host", sponsor: "Sponsor" } as const
@@ -33,6 +34,21 @@ function Row({
   )
 }
 
+/** A row whose value nobody has published: one muted line, not an empty
+ * value over a provenance line. */
+function Unknown({ what, meta }: { what: string; meta: EventPublic["meta"][string] | undefined }) {
+  const model = sourceLine(meta)
+  const reason = model.kind === "missing" ? model.label.toLowerCase() : "not published yet"
+  return (
+    <span
+      className="text-muted-foreground"
+      title={model.kind === "missing" ? model.detail : undefined}
+    >
+      {what} {reason}
+    </span>
+  )
+}
+
 /**
  * Everything public about one event: when (London time, with the term week),
  * where, who organises it, price and booking, speakers, description — and
@@ -53,7 +69,9 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
           width={640}
           height={360}
           sizes="(min-width: 640px) 28rem, 100vw"
-          className="aspect-video w-full rounded-lg border object-cover"
+          // In a sheet that just opened: load now, not when scrolled to.
+          loading="eager"
+          className="aspect-video w-full rounded-lg border bg-muted object-cover"
         />
       )}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -75,10 +93,16 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
           <SourceLine meta={event.meta.startsAt} />
         </Row>
         <Row icon={MapPinIcon} label="Where">
-          {where ? <span>{where}</span> : null}
-          <SourceLine
-            meta={hasValue(event.meta.venueText) ? event.meta.venueText : event.meta.venueKey}
-          />
+          {where ? (
+            <>
+              <span>{where}</span>
+              <SourceLine
+                meta={hasValue(event.meta.venueText) ? event.meta.venueText : event.meta.venueKey}
+              />
+            </>
+          ) : (
+            <Unknown what="Venue" meta={event.meta.venueText} />
+          )}
         </Row>
         {event.organisers.length > 0 && (
           <Row icon={UsersIcon} label="Organised by">
@@ -103,7 +127,11 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
           {price && <span>{price}</span>}
           {event.signupRequired && <span>Sign-up required</span>}
           {event.bookingUrl && <ExternalLink href={event.bookingUrl}>Book or sign up</ExternalLink>}
-          <SourceLine meta={event.meta.price} />
+          {price ? (
+            <SourceLine meta={event.meta.price} />
+          ) : (
+            <Unknown what="Price" meta={event.meta.price} />
+          )}
         </Row>
       </div>
 
@@ -126,12 +154,8 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
       )}
 
       {event.description && (
-        <div className="flex flex-col gap-2 text-sm leading-relaxed">
-          {paragraphs(event.description).map((paragraph) => (
-            <p key={paragraph} className="whitespace-pre-line">
-              {paragraph}
-            </p>
-          ))}
+        <div className="flex flex-col gap-2">
+          <RichText text={event.description} />
           <SourceLine meta={event.meta.description} />
         </div>
       )}

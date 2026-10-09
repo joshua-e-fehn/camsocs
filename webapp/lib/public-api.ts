@@ -15,5 +15,8 @@ export type OrgPublic = OrgPage["org"]
 export type TeamPublic = OrgPage["teams"][number]
 export type SessionPublic = OrgPage["sessions"][number]
 export type RelationshipPublic = OrgPage["relationships"][number]
-export type EventPublic = FunctionReturnType<typeof api.events.list>[number]
+/** An event in a list or calendar (`events.list`, a profile's upcoming events). */
+export type EventListItem = FunctionReturnType<typeof api.events.list>[number]
+/** One event with its details and provenance (`events.get`, the details sheet). */
+export type EventPublic = NonNullable<FunctionReturnType<typeof api.events.get>>
 export type VenuePublic = FunctionReturnType<typeof api.venues.list>[number]

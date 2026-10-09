@@ -9,12 +9,16 @@ import {
   monthShort,
   weekdayShort,
 } from "@/lib/calendar"
-import type { EventPublic } from "@/lib/public-api"
+import type { EventListItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
 import { EVENT_TYPE_LABELS } from "@/lib/vocab"
 
 /** "Cambridge only", "Cancelled", "Time TBC" — words, not colours. */
-export function EventFlags({ event }: { event: EventPublic }) {
+export function EventFlags({
+  event,
+}: {
+  event: Pick<EventListItem, "visibility" | "cancelled" | "status">
+}) {
   return (
     <>
       {event.visibility === "cam_only" && (
@@ -50,22 +54,26 @@ function selectHandler(onSelect: (() => void) | undefined) {
   }
 }
 
-function organiserLine(event: EventPublic): string | undefined {
+function organiserLine(event: EventListItem): string | undefined {
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
   return names.length > 0 ? names.join(", ") : undefined
 }
 
 /** One event in a list: date block, time, title, organisers and venue. Links
- * to its details (`href`, usually the calendar URL with `event=` set). */
+ * to its details (`href`, usually the calendar URL with `event=` set). With
+ * `runLabel` it stands for a run of the same show (lib/event-runs.ts): the
+ * label ("Tue 27 Oct – Sat 31 Oct · 6 performances") replaces the time. */
 export function EventItem({
   event,
   href,
   onSelect,
+  runLabel,
   className,
 }: {
-  event: EventPublic
+  event: EventListItem
   href: string
   onSelect?: () => void
+  runLabel?: string
   className?: string
 }) {
   const day = londonIsoDate(event.startsAt)
@@ -96,9 +104,9 @@ export function EventItem({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <time dateTime={new Date(event.startsAt).toISOString()} className="font-mono">
-            {formatEventTime(event)}
+            {runLabel ?? formatEventTime(event)}
           </time>
-          {event.termWeekLabel && (
+          {!runLabel && event.termWeekLabel && (
             <span className="font-mono text-[11px] tracking-tight">· {event.termWeekLabel}</span>
           )}
           <Badge variant="secondary" className="font-normal">
@@ -130,7 +138,7 @@ export function EventChip({
   href,
   onSelect,
 }: {
-  event: EventPublic
+  event: EventListItem
   href: string
   onSelect?: () => void
 }) {

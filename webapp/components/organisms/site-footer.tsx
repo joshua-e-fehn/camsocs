@@ -33,13 +33,17 @@ const COLUMNS = [
 export function SiteFooter() {
   return (
     <footer className="border-t bg-muted/30">
-      <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-        <div className="flex flex-col gap-3">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-x-6 gap-y-8 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)] md:gap-10">
+        <div className="col-span-2 flex flex-col gap-3 md:col-span-1">
           <Wordmark />
           <p className="max-w-xs text-sm text-muted-foreground">{SITE_TAGLINE}.</p>
         </div>
         {COLUMNS.map((column) => (
-          <nav key={column.title} aria-label={column.title} className="flex flex-col gap-2">
+          <nav
+            key={column.title}
+            aria-label={column.title}
+            className="flex flex-col gap-1 md:gap-2"
+          >
             <h2 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
               {column.title}
             </h2>
@@ -47,7 +51,7 @@ export function SiteFooter() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm transition-colors duration-150 hover:text-muted-foreground"
+                className="flex min-h-9 items-center text-sm transition-colors duration-150 hover:text-muted-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring md:min-h-0"
               >
                 {link.label}
               </Link>

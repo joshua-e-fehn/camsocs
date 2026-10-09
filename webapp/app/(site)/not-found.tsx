@@ -19,7 +19,9 @@ export default function SiteNotFound() {
           <EmptyMedia variant="icon">
             <SearchXIcon />
           </EmptyMedia>
-          <EmptyTitle>Not found</EmptyTitle>
+          <EmptyTitle>
+            <h1 className="text-base font-semibold">Not found</h1>
+          </EmptyTitle>
           <EmptyDescription>
             There is no page or listing at this address. A society may have been renamed or removed
             at its own request.

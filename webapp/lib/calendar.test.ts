@@ -119,6 +119,14 @@ describe("display", () => {
       "19:30–20:30",
     )
     expect(formatEventTime({ startsAt, allDay: true })).toBe("All day")
+    // An all-day run: its last day (the end is exclusive midnight).
+    const may29 = londonMidnight("2026-05-29")
+    expect(
+      formatEventTime({ startsAt: may29, endsAt: londonMidnight("2026-12-19"), allDay: true }),
+    ).toBe("All day, until Fri 18 Dec")
+    expect(
+      formatEventTime({ startsAt: may29, endsAt: londonMidnight("2026-05-30"), allDay: true }),
+    ).toBe("All day")
   })
 
   test("range labels", () => {
