@@ -706,6 +706,10 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     current_set = [*carried, *events]
     if current_set:
         ctx.staging.write(events_directory(SOURCE_TYPE), ctx.run.run_key, current_set)
+    # Staged: the events read this run are new; carried ones are unchanged
+    # (as termcards and instagram count them; `load` reports what reached Convex).
+    ctx.report.inserted += len(events)
+    ctx.report.unchanged += len(carried)
     tally = Tally()
     for result in results:
         for reason, count in result.tally.dropped.items():

@@ -293,13 +293,17 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     staged = staging.read_latest("society_website.events")
     assert sorted(values(e)["title"] for e in staged) == ["Burrow building", "Quokka Quiz"]
     assert any("1 read for events" in n and "2 events from 1 sites" in n for n in ctx.report.notes)
+    # What it staged is the stage's output, so the run report does not say "nothing to do".
+    assert (ctx.report.inserted, ctx.report.unchanged) == (2, 0)
 
     # A --limit run that reaches no site keeps the events it did not re-read.
     ctx.limit = 0
     ctx.report.notes.clear()
+    ctx.report.inserted = 0
     website.run(ctx, now=NOW)
     assert len(staging.read_latest("society_website.events")) == 2
     assert any("2 carried forward" in n for n in ctx.report.notes)
+    assert (ctx.report.inserted, ctx.report.unchanged) == (0, 2)
 
 
 @pytest.mark.parametrize(
