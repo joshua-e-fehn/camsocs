@@ -235,9 +235,15 @@ export function formatInstantDate(ms: number): string {
 type Timed = { startsAt: number; endsAt?: number; allDay: boolean }
 
 /** The time part of an event, London time: "19:30–21:30", "19:30",
- * "18:00 – Sun 11 Oct, 12:00" across days, "All day". */
+ * "18:00 – Sun 11 Oct, 12:00" across days, "All day", or "All day, until Fri
+ * 18 Dec" for an all-day event over several days. */
 export function formatEventTime(event: Timed): string {
-  if (event.allDay) return "All day"
+  if (event.allDay) {
+    const lastDay = event.endsAt === undefined ? undefined : londonIsoDate(event.endsAt - 1)
+    return lastDay !== undefined && lastDay > londonIsoDate(event.startsAt)
+      ? `All day, until ${formatDayShort(lastDay)}`
+      : "All day"
+  }
   const start = londonTime(event.startsAt)
   if (event.endsAt === undefined || event.endsAt <= event.startsAt) return start
   const endDay = londonIsoDate(event.endsAt)

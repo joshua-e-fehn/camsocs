@@ -2,10 +2,9 @@
  * Site-wide facts the public pages, metadata and compliance pages state.
  *
  * `CONTACT_EMAIL` is Joshua's decision D4 (PLAN.md, 2026-10-08); he creates the
- * alias. ⚠ `ICO_REGISTRATION_NUMBER` stays empty until the fee is paid (PLAN.md
- * J6). The pages handle an empty value by pointing at the request form, which
- * is always a working electronic route for objections, removals and complaints.
- * Never put a guessed value here.
+ * alias. ⚠ `ICO_REGISTRATION_NUMBER` is deliberately empty until Joshua fills it
+ * in (PLAN.md J6 and the privacy notice); the pages leave the line out while it
+ * is. Never put a guessed value here.
  */
 
 export const SITE_NAME = "camsocs"
@@ -24,7 +23,9 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.ve
 /** The data controller (UK GDPR Art 4(7)): an individual, not an organisation. */
 export const CONTROLLER_NAME = "Joshua Fehn"
 
-/** Contact address for privacy requests, takedowns and complaints (D4). */
+/** Contact address for privacy requests, takedowns and complaints, beside the
+ * request form (D4: an alias Joshua creates; it forwards to him). The pages
+ * fall back to the form alone if this is empty. */
 export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 
 /** The Information Commission data protection fee registration number, once
@@ -45,6 +46,9 @@ export const CAM_SIGN_IN_HREF = "/sign-in?cam=1"
 export function camSignInHref(next: string): string {
   return `${CAM_SIGN_IN_HREF}&next=${encodeURIComponent(next)}`
 }
+
+/** What the share image shows, for its alt text (app/opengraph-image.tsx). */
+export const SHARE_IMAGE_ALT = `camsocs — ${SITE_TAGLINE.charAt(0).toLowerCase()}${SITE_TAGLINE.slice(1)}`
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =

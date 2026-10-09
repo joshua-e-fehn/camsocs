@@ -5,7 +5,14 @@ import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { DAY_MS, londonIsoDate } from "./lib/derived"
 import { withdrawnCheck } from "./lib/entityStore"
-import { type EventPublic, eventPublic, eventPublicValidator, orgRefCache } from "./lib/projections"
+import {
+  type EventListItem,
+  eventListItem,
+  eventListItemValidator,
+  eventPublic,
+  eventPublicValidator,
+  orgRefCache,
+} from "./lib/projections"
 import { literalUnion } from "./lib/validators"
 import { getViewer, visibleEventTiers } from "./lib/viewer"
 
@@ -166,15 +173,16 @@ async function matchingEvents(
   return out
 }
 
+/** The events of a window, as list items (`events.get` has the details). */
 export const list = query({
   args: listArgs,
-  returns: v.array(eventPublicValidator),
+  returns: v.array(eventListItemValidator),
   handler: async (ctx, args) => {
     const tiers = visibleEventTiers(await getViewer(ctx))
     const lookup = orgRefCache(ctx)
     const events = await matchingEvents(ctx, args, tiers, lookup)
-    const out: EventPublic[] = []
-    for (const event of events) out.push(await eventPublic(ctx, event, lookup))
+    const out: EventListItem[] = []
+    for (const event of events) out.push(await eventListItem(event, lookup))
     return out
   },
 })

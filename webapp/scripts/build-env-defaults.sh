@@ -111,10 +111,16 @@ else
     "(compile check only; this build cannot serve data)" >&2
 fi
 
-# `NEXT_PUBLIC_SITE_URL` is where the app is served from. Unlike the pair above
-# it has no validator, and .env.example documents localhost as its development
-# value, so the same default is the honest one for a build going nowhere.
-: "${NEXT_PUBLIC_SITE_URL:=http://localhost:3000}"
-export NEXT_PUBLIC_SITE_URL
+# `NEXT_PUBLIC_SITE_URL` is where the app is served from (metadataBase, the
+# sitemap, robots, canonical links). Unlike the pair above it has no validator.
+# For a build going nowhere, .env.example's development value is the honest
+# default. A deploying build that leaves it unset gets no default here:
+# lib/site.ts then falls back to the production origin
+# (https://camsocs.vercel.app), never to localhost — a shipped sitemap full of
+# http://localhost:3000 links would be served without complaint.
+if [ "$deploying" = false ]; then
+  : "${NEXT_PUBLIC_SITE_URL:=http://localhost:3000}"
+  export NEXT_PUBLIC_SITE_URL
+fi
 
 exec "$@"

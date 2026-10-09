@@ -4,17 +4,18 @@ import Link from "next/link"
 import { RequestForm } from "@/components/organisms/request-form"
 import { api } from "@/convex/_generated/api"
 import { isRequestKind } from "@/lib/listing-request"
+import { pageMetadata } from "@/lib/page-metadata"
 import { CONTACT_EMAIL } from "@/lib/site"
 import { firstParam, isOrgSlug, type SearchParams } from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Claim, correct or remove a listing",
   description:
     "Societies can claim, correct or remove their camsocs listing, ask for a missing society to be added, or object to how their data is used.",
-  alternates: { canonical: "/request" },
-}
+  path: "/request",
+})
 
 export default async function RequestPage({ searchParams }: Props) {
   const params = await searchParams

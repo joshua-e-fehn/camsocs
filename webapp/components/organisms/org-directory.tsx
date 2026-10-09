@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { FacetList, type FacetOption } from "@/components/molecules/facet-list"
 import { OrgCard } from "@/components/molecules/org-card"
 import { SearchField } from "@/components/molecules/search-field"
@@ -25,9 +25,19 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import type { api } from "@/convex/_generated/api"
+import { pageNumbers } from "@/lib/pagination"
 import {
   activeDirectoryFilterCount,
   DIRECTORY_PAGE_SIZE,
@@ -53,7 +63,7 @@ import {
   ORG_STATUSES,
 } from "@/lib/vocab"
 
-type ListFacet =
+type DirectoryFacet =
   | "categories"
   | "levels"
   | "collegeKeys"
@@ -97,13 +107,14 @@ export function OrgDirectory({
   const colleges = usePreloadedQuery(preloadedColleges)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const collegeNames = Object.fromEntries(colleges.map((college) => [college.key, college.name]))
   const hrefFor = (next: DirectoryState) => `/societies${serializeDirectoryState(next)}`
   const navigate = (next: DirectoryState) =>
     startTransition(() => router.push(hrefFor(next), { scroll: false }))
 
-  const toggle = (facet: ListFacet, value: string, checked: boolean) => {
+  const toggle = (facet: DirectoryFacet, value: string, checked: boolean) => {
     const current = state[facet] as string[]
     const values = checked ? [...current, value] : current.filter((item) => item !== value)
     navigate({ ...state, [facet]: values, page: 1 })
@@ -114,11 +125,18 @@ export function OrgDirectory({
   const firstShown = facets.total === 0 ? 0 : (state.page - 1) * DIRECTORY_PAGE_SIZE + 1
   const lastShown = (state.page - 1) * DIRECTORY_PAGE_SIZE + list.page.length
 
-  const groups: { facet: ListFacet; legend: string; options: FacetOption[] }[] = [
+  const groups: {
+    facet: DirectoryFacet
+    legend: string
+    options: FacetOption[]
+    collapseAfter?: number
+  }[] = [
     {
       facet: "categories",
       legend: "Category",
       options: options(CATEGORIES, CATEGORY_LABELS, facets.categories),
+      // The main way in: all sixteen, never folded.
+      collapseAfter: CATEGORIES.length,
     },
     {
       facet: "levels",
@@ -193,13 +211,14 @@ export function OrgDirectory({
           options={group.options}
           selected={state[group.facet] as string[]}
           onToggle={(value, checked) => toggle(group.facet, value, checked)}
+          collapseAfter={group.collapseAfter}
         />
       ))}
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
           For beginners
         </legend>
-        <div className="flex min-h-7 items-center gap-2.5">
+        <div className="flex min-h-9 items-center gap-2.5 lg:min-h-7">
           <Checkbox
             id="filter-beginner"
             checked={state.beginnerFriendly === true}
@@ -234,7 +253,9 @@ export function OrgDirectory({
             placeholder="Search by name, topic or tag"
             onSearch={(q) => navigate({ ...state, q: q || undefined, page: 1 })}
           />
-          <Sheet>
+          {/* Below lg the filters live in a sheet: each tick applies at once
+              (the count in the footer follows), and the footer closes it. */}
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" className="h-10 lg:hidden">
                 <SlidersHorizontalIcon data-icon="inline-start" />
@@ -244,11 +265,33 @@ export function OrgDirectory({
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[85vw] max-w-sm overflow-y-auto">
-              <SheetHeader>
+            <SheetContent side="left" className="w-[88vw] max-w-sm gap-0">
+              <SheetHeader className="border-b">
                 <SheetTitle>Filters</SheetTitle>
+                <SheetDescription>Any value within a group, all groups together.</SheetDescription>
               </SheetHeader>
-              <div className="px-4 pb-8">{filters}</div>
+              <div className="flex-1 overflow-y-auto px-4 py-5">{filters}</div>
+              <SheetFooter className="flex-row items-center gap-2 border-t bg-background">
+                <Button
+                  variant="ghost"
+                  disabled={filterCount === 0}
+                  onClick={() => navigate({ ...EMPTY_DIRECTORY, q: state.q })}
+                >
+                  Clear
+                </Button>
+                <SheetClose asChild>
+                  <Button className="flex-1">
+                    {isPending ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <>
+                        Show <span className="font-mono tabular-nums">{facets.total}</span>{" "}
+                        {facets.total === 1 ? "result" : "results"}
+                      </>
+                    )}
+                  </Button>
+                </SheetClose>
+              </SheetFooter>
             </SheetContent>
           </Sheet>
         </div>
@@ -296,6 +339,8 @@ export function OrgDirectory({
           aria-busy={isPending}
           className={cn("transition-opacity duration-200", isPending && "opacity-60")}
         >
+          {/* Cards are h3s: this keeps the outline h1 → h2 → h3. */}
+          <h2 className="sr-only">Results</h2>
           {list.page.length > 0 ? (
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {list.page.map((card) => (
@@ -330,40 +375,67 @@ export function OrgDirectory({
 
         {pages > 1 && (
           <nav aria-label="Pages" className="flex items-center justify-between gap-2 pt-2">
-            <Button variant="outline" size="sm" asChild={state.page > 1} disabled={state.page <= 1}>
-              {state.page > 1 ? (
+            {state.page > 1 ? (
+              <Button variant="outline" size="sm" asChild>
                 <Link href={hrefFor({ ...state, page: state.page - 1 })} scroll>
                   <ChevronLeftIcon data-icon="inline-start" />
                   Previous
                 </Link>
-              ) : (
-                <span>
-                  <ChevronLeftIcon data-icon="inline-start" />
-                  Previous
-                </span>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                <ChevronLeftIcon data-icon="inline-start" />
+                Previous
+              </Button>
+            )}
+            <ol className="hidden items-center gap-1 sm:flex">
+              {pageNumbers(state.page, pages).map((page, index) =>
+                page === "gap" ? (
+                  <li
+                    // biome-ignore lint/suspicious/noArrayIndexKey: at most two gaps, in place
+                    key={`gap-${index}`}
+                    aria-hidden
+                    className="px-1 font-mono text-sm text-muted-foreground"
+                  >
+                    …
+                  </li>
+                ) : (
+                  <li key={page}>
+                    <Button
+                      variant={page === state.page ? "secondary" : "ghost"}
+                      size="sm"
+                      className="min-w-8 font-mono tabular-nums"
+                      asChild
+                    >
+                      <Link
+                        href={hrefFor({ ...state, page })}
+                        scroll
+                        aria-current={page === state.page ? "page" : undefined}
+                        aria-label={`Page ${page}`}
+                      >
+                        {page}
+                      </Link>
+                    </Button>
+                  </li>
+                ),
               )}
-            </Button>
-            <span className="font-mono text-sm text-muted-foreground tabular-nums">
+            </ol>
+            <span className="font-mono text-sm text-muted-foreground tabular-nums sm:hidden">
               Page {state.page} of {pages}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild={state.page < pages}
-              disabled={state.page >= pages}
-            >
-              {state.page < pages ? (
+            {state.page < pages ? (
+              <Button variant="outline" size="sm" asChild>
                 <Link href={hrefFor({ ...state, page: state.page + 1 })} scroll>
                   Next
                   <ChevronRightIcon data-icon="inline-end" />
                 </Link>
-              ) : (
-                <span>
-                  Next
-                  <ChevronRightIcon data-icon="inline-end" />
-                </span>
-              )}
-            </Button>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                Next
+                <ChevronRightIcon data-icon="inline-end" />
+              </Button>
+            )}
           </nav>
         )}
       </div>

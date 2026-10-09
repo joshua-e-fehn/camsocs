@@ -8,25 +8,26 @@ import { cn } from "@/lib/utils"
 
 export type FacetOption = { value: string; label: string; count?: number }
 
-const COLLAPSED = 8
-
 /**
  * A multi-select filter group: checkboxes with the number of results each
  * would give (OR within the group). Options with no results are hidden unless
  * selected, so the list only offers choices that lead somewhere; long lists
- * fold after eight.
+ * fold after `collapseAfter` (8). Rows are 36 px tall below `lg` (the filter
+ * sheet on a phone), 28 px beside the desktop grid.
  */
 export function FacetList({
   legend,
   options,
   selected,
   onToggle,
+  collapseAfter = 8,
   className,
 }: {
   legend: string
   options: FacetOption[]
   selected: readonly string[]
   onToggle: (value: string, checked: boolean) => void
+  collapseAfter?: number
   className?: string
 }) {
   const id = useId()
@@ -34,7 +35,7 @@ export function FacetList({
   const visible = options.filter(
     (option) => option.count === undefined || option.count > 0 || selected.includes(option.value),
   )
-  const shown = expanded ? visible : visible.slice(0, COLLAPSED)
+  const shown = expanded ? visible : visible.slice(0, collapseAfter)
 
   return (
     <fieldset className={cn("flex flex-col gap-2", className)}>
@@ -46,7 +47,7 @@ export function FacetList({
         const inputId = `${id}-${option.value}`
         const checked = selected.includes(option.value)
         return (
-          <div key={option.value} className="flex min-h-7 items-center gap-2.5">
+          <div key={option.value} className="flex min-h-9 items-center gap-2.5 lg:min-h-7">
             <Checkbox
               id={inputId}
               checked={checked}
@@ -63,7 +64,7 @@ export function FacetList({
           </div>
         )
       })}
-      {visible.length > COLLAPSED && (
+      {visible.length > collapseAfter && (
         <Button
           type="button"
           variant="link"

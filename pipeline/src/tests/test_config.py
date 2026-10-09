@@ -6,11 +6,16 @@ import pytest
 from pydantic import ValidationError
 
 from camsocs_pipeline.config import (
+    DEFAULT_ENV,
     DOCUMENTED_USER_AGENT,
     ENV_FILE,
+    ENV_FILE_VARIABLE,
     REPO_ROOT,
     ConfigError,
+    EnvChoice,
     Settings,
+    choose_env,
+    load_settings,
 )
 
 
@@ -84,3 +89,122 @@ def test_the_host_interval_is_at_least_one_second(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("CAMSOCS_MIN_HOST_INTERVAL", "0")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+# --- environments (`--env`, CAMSOCS_ENV_FILE) --------------------------------------------------
+
+
+def test_the_default_environment_is_dev_and_pipeline_env() -> None:
+    choice = choose_env(None, environ={})
+    assert choice == EnvChoice(DEFAULT_ENV, ENV_FILE)
+    assert choice.is_default
+
+
+def test_a_named_environment_reads_its_own_file() -> None:
+    assert choose_env("prod", environ={}).path == REPO_ROOT / "pipeline" / ".env.prod"
+    assert choose_env("dev", environ={}).path == ENV_FILE
+
+
+@pytest.mark.parametrize("name", ["Prod", "../prod", "prod/x", "", "-prod"])
+def test_environment_names_are_plain(name: str) -> None:
+    with pytest.raises(ConfigError, match="not an environment name"):
+        choose_env(name, environ={})
+
+
+def test_env_file_variable_names_a_file_relative_to_the_repo() -> None:
+    choice = choose_env(None, environ={ENV_FILE_VARIABLE: "pipeline/.env.prod"})
+    assert choice == EnvChoice("prod", REPO_ROOT / "pipeline" / ".env.prod")
+    custom = choose_env(None, environ={ENV_FILE_VARIABLE: "/tmp/somewhere.env"})
+    assert custom.name == "custom"
+    assert choose_env(None, environ={ENV_FILE_VARIABLE: "pipeline/.env"}).is_default
+
+
+def test_the_flag_wins_over_the_variable() -> None:
+    choice = choose_env("staging", environ={ENV_FILE_VARIABLE: "pipeline/.env.prod"})
+    assert choice.name == "staging"
+
+
+@pytest.fixture
+def base_env(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """A stand-in for pipeline/.env (the real one holds real keys and is never
+    read by a test): the dev deployment plus shared LLM settings."""
+    import camsocs_pipeline.config as config
+
+    base = tmp_path / ".env"
+    base.write_text(
+        "CONVEX_HTTP_URL=https://hushed-rhinoceros-215.convex.site\n"
+        "PIPELINE_API_KEY=dev-key\n"
+        "LLM_MODEL_BULK=bulk-model\n"
+    )
+    monkeypatch.setattr(config, "ENV_FILE", base)
+    return base
+
+
+def test_a_missing_env_file_is_an_error_not_a_fallback(tmp_path, base_env) -> None:
+    choice = EnvChoice("prod", tmp_path / ".env.prod")
+    with pytest.raises(ConfigError, match="does not exist"):
+        load_settings(choice, environ={})
+
+
+def test_a_named_environment_layers_on_pipeline_env(tmp_path, base_env) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(
+        "CONVEX_HTTP_URL=https://calm-heron-42.convex.site/\nPIPELINE_API_KEY=prod-key\n"
+    )
+    settings = load_settings(EnvChoice("prod", env_file), environ={})
+    assert settings.require_convex_http_url() == "https://calm-heron-42.convex.site"
+    assert settings.require_pipeline_api_key() == "prod-key"
+    # Shared settings come from pipeline/.env.
+    assert settings.llm_model_bulk == "bulk-model"
+    assert settings.state_path == REPO_ROOT / ".camsocs-state.prod.json"
+
+
+def test_an_explicit_state_path_is_kept(tmp_path, base_env) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(
+        "CONVEX_HTTP_URL=https://calm-heron-42.convex.site\nPIPELINE_API_KEY=prod-key\n"
+        f"CAMSOCS_STATE_PATH={tmp_path / 'state.json'}\n"
+    )
+    settings = load_settings(EnvChoice("prod", env_file), environ={})
+    assert settings.state_path == tmp_path / "state.json"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        # Nothing about the deployment: dev's URL and key would be used.
+        "LLM_MODEL_BULK=other\n",
+        # A key but no URL: dev's URL would be used.
+        "PIPELINE_API_KEY=prod-key\n",
+        # CONVEX_URL alone: dev's CONVEX_HTTP_URL would win over it.
+        "CONVEX_URL=https://calm-heron-42.convex.cloud\nPIPELINE_API_KEY=prod-key\n",
+    ],
+)
+def test_deployment_variables_are_never_inherited_from_dev(tmp_path, base_env, content) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(content)
+    with pytest.raises(ConfigError, match="would come from"):
+        load_settings(EnvChoice("prod", env_file), environ={})
+
+
+def test_an_empty_value_unsets_an_inherited_variable(tmp_path, base_env) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(
+        "CONVEX_URL=https://calm-heron-42.convex.cloud\nCONVEX_HTTP_URL=\n"
+        "PIPELINE_API_KEY=prod-key\n"
+    )
+    settings = load_settings(EnvChoice("prod", env_file), environ={})
+    assert settings.require_convex_http_url() == "https://calm-heron-42.convex.site"
+
+
+@pytest.mark.parametrize("variable", ["CONVEX_URL", "CONVEX_HTTP_URL", "PIPELINE_API_KEY"])
+def test_a_shell_variable_may_not_override_a_named_env_file(
+    tmp_path, base_env, monkeypatch: pytest.MonkeyPatch, variable: str
+) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(
+        "CONVEX_HTTP_URL=https://calm-heron-42.convex.site\nPIPELINE_API_KEY=prod-key\n"
+    )
+    monkeypatch.setenv(variable, "https://hushed-rhinoceros-215.convex.site")
+    with pytest.raises(ConfigError, match="would override"):
+        load_settings(EnvChoice("prod", env_file))

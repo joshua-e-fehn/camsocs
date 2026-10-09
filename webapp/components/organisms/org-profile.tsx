@@ -12,15 +12,18 @@ import { EventItem } from "@/components/molecules/event-item"
 import { ExternalLink } from "@/components/molecules/external-link"
 import { Fact } from "@/components/molecules/fact"
 import { OrgLogo, OrgStatusLabel } from "@/components/molecules/org-card"
+import { RichText } from "@/components/molecules/rich-text"
 import { SourceLine } from "@/components/molecules/source-line"
+import { UnknownFacts } from "@/components/molecules/unknown-facts"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
-import { formatPence, languageName, paragraphs } from "@/lib/format"
+import { groupRuns, runSummary } from "@/lib/event-runs"
+import { formatPence, languageName } from "@/lib/format"
 import type { OrgPage, OrgPublic, RelationshipPublic, SessionPublic } from "@/lib/public-api"
 import { camSignInHref } from "@/lib/site"
-import { hasValue } from "@/lib/source-line"
+import { hasValue, type PublicFieldMeta } from "@/lib/source-line"
 import {
   ACTIVITY_TYPE_LABELS,
   AUDIENCE_LABELS,
@@ -37,6 +40,7 @@ import {
   REGISTRATION_BODIES,
   REGISTRATION_BODY_LABELS,
   ROLE_LABELS,
+  ROLES,
   SOCIAL_PLATFORM_LABELS,
   TERM_SCOPE_LABELS,
 } from "@/lib/vocab"
@@ -92,6 +96,126 @@ function requestHref(org: OrgPublic, kind: "claim" | "correct" | "remove" | "obj
   return `/request?kind=${kind}&org=${org.slug}`
 }
 
+type FactSpec = {
+  label: string
+  meta: PublicFieldMeta | undefined
+  /** The rendered value; null / false / "" when there is none. */
+  value: React.ReactNode
+}
+
+function hasContent(value: React.ReactNode): boolean {
+  return value !== null && value !== undefined && value !== false && value !== ""
+}
+
+/**
+ * A section's facts: those with a value as rows with their SourceLine, the
+ * rest folded into one "Not yet known" line (UnknownFacts). Facts that do not
+ * apply (`not_applicable`) are left out.
+ */
+function FactList({
+  facts,
+  correctHref,
+  stacked = false,
+}: {
+  facts: FactSpec[]
+  correctHref: string
+  /** Label above value (the narrow sidebar), not beside it. */
+  stacked?: boolean
+}) {
+  const applicable = facts.filter((fact) => fact.meta?.status !== "not_applicable")
+  const known = applicable.filter((fact) => hasValue(fact.meta) && hasContent(fact.value))
+  const unknown = applicable.filter((fact) => !known.includes(fact))
+  return (
+    <div className="flex flex-col gap-3">
+      {known.length > 0 && (
+        <dl className="divide-y">
+          {known.map((fact) => (
+            <Fact
+              key={fact.label}
+              label={fact.label}
+              meta={fact.meta}
+              className={stacked ? "sm:grid-cols-1 sm:gap-1" : undefined}
+            >
+              {fact.value}
+            </Fact>
+          ))}
+        </dl>
+      )}
+      <UnknownFacts
+        facts={unknown.map(({ label, meta }) => ({ label, meta }))}
+        correctHref={correctHref}
+      />
+    </div>
+  )
+}
+
+/** Addresses shown before the rest fold away. */
+const ROLE_EMAILS_SHOWN = 6
+
+/** Role addresses, named roles first (president, secretary, …) and the
+ * organisation's other addresses after them without a label; a long list
+ * folds after six. */
+function RoleEmails({ entries }: { entries: OrgPublic["roleEmails"] }) {
+  const sorted = [...entries].sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role))
+  const item = (entry: OrgPublic["roleEmails"][number]) => (
+    <li key={`${entry.role}-${entry.email}`} className="min-w-0">
+      {entry.role !== "other" && (
+        <span className="text-muted-foreground">{ROLE_LABELS[entry.role]}: </span>
+      )}
+      <a
+        href={`mailto:${entry.email}`}
+        className="wrap-anywhere underline-offset-4 hover:underline"
+      >
+        {entry.email}
+      </a>
+    </li>
+  )
+  const shown = sorted.slice(0, ROLE_EMAILS_SHOWN)
+  const rest = sorted.slice(ROLE_EMAILS_SHOWN)
+  return (
+    <div className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-1">{shown.map(item)}</ul>
+      {rest.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">{rest.length} more addresses</span>
+            <span className="hidden group-open:inline">Fewer addresses</span>
+          </summary>
+          <ul className="mt-1 flex flex-col gap-1">{rest.map(item)}</ul>
+        </details>
+      )}
+    </div>
+  )
+}
+
+/** Social links, one per account: the same platform and handle twice (an
+ * x.com and a twitter.com link) is shown once. */
+function Socials({ socials }: { socials: OrgPublic["socials"] }) {
+  const seen = new Set<string>()
+  const unique = socials.filter((social) => {
+    const id = `${social.platform}:${(social.handle ?? social.url).replace(/^@/, "").toLowerCase()}`
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+  return (
+    <ul className="flex flex-col gap-1">
+      {unique.map((social) => (
+        <li key={social.url} className="min-w-0">
+          <ExternalLink href={social.url} className="max-w-full">
+            <span className="shrink-0">{SOCIAL_PLATFORM_LABELS[social.platform]}</span>
+            {social.handle && (
+              <span className="ml-1 min-w-0 truncate font-mono text-xs text-muted-foreground">
+                {social.handle.startsWith("@") ? social.handle : `@${social.handle}`}
+              </span>
+            )}
+          </ExternalLink>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Membership({ membership }: { membership: NonNullable<OrgPublic["membership"]> }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -123,7 +247,7 @@ function Membership({ membership }: { membership: NonNullable<OrgPublic["members
   )
 }
 
-function Session({ session }: { session: SessionPublic }) {
+function Session({ session, showSource }: { session: SessionPublic; showSource: boolean }) {
   const when = [
     session.dayOfWeek !== undefined ? dayName(session.dayOfWeek) : undefined,
     session.startTime
@@ -150,15 +274,37 @@ function Session({ session }: { session: SessionPublic }) {
           {[session.venueText, session.note].filter(Boolean).join(" · ")}
         </p>
       )}
-      <SourceLine meta={session.meta.title} />
+      {showSource && <SourceLine meta={session.meta.title} />}
     </li>
   )
 }
+
+/** Whether every session was read from the same page with the same status:
+ * then one SourceLine under the list says so for all of them. */
+function sharedSessionSource(sessions: SessionPublic[]): PublicFieldMeta | undefined {
+  const first = sessions[0]?.meta.title
+  if (!first?.sourceUrl) return undefined
+  return sessions.every(
+    (session) =>
+      session.meta.title?.sourceUrl === first.sourceUrl &&
+      session.meta.title?.status === first.status,
+  )
+    ? first
+    : undefined
+}
+
+/** Upcoming events listed on a profile before "all in the calendar". */
+const UPCOMING_RUNS_SHOWN = 8
 
 function relationshipText(edge: RelationshipPublic): string {
   if (edge.type === "sponsors") return edge.direction === "outgoing" ? "Sponsors" : "Sponsored by"
   if (edge.type === "co_hosted") return "Co-hosted events with"
   return edge.type.replaceAll("_", " ")
+}
+
+/** An edge's evidence pages, each once (a page can back several events). */
+function evidenceUrls(edge: RelationshipPublic): string[] {
+  return [...new Set(edge.evidence.map((entry) => entry.sourceUrl))].slice(0, 3)
 }
 
 const SPORT_FIELDS = [
@@ -197,6 +343,10 @@ export function OrgProfile({
   const missing = org.missingFields.filter(
     (field): field is OrganisationField => field in ORGANISATION_FIELD_LABELS,
   )
+  const correctHref = requestHref(org, "correct")
+  const calendarHref = `/events?org=${org.slug}`
+  const runs = groupRuns(events)
+  const sessionSource = sessions.length > 1 ? sharedSessionSource(sessions) : undefined
 
   return (
     <article>
@@ -220,6 +370,7 @@ export function OrgProfile({
                 name={org.name}
                 shortName={org.shortName}
                 url={org.logo?.url}
+                category={org.categories[0]}
                 size={72}
                 className="rounded-xl"
               />
@@ -287,7 +438,7 @@ export function OrgProfile({
               <AlertTitle>Marked as no longer active</AlertTitle>
               <AlertDescription>
                 A source lists this group as defunct. If it is running again,{" "}
-                <Link href={requestHref(org, "correct")}>tell us</Link>.
+                <Link href={correctHref}>tell us</Link>.
               </AlertDescription>
             </Alert>
           )}
@@ -304,116 +455,158 @@ export function OrgProfile({
           <Section id="about" title="About">
             {org.description ? (
               <div className="flex flex-col gap-3">
-                <div className="flex max-w-prose flex-col gap-3 text-sm leading-relaxed">
-                  {paragraphs(org.description).map((paragraph) => (
-                    <p key={paragraph} className="whitespace-pre-line">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
+                <RichText text={org.description} />
                 <SourceLine meta={meta.description} />
               </div>
             ) : (
-              <SourceLine meta={meta.description} />
+              <UnknownFacts
+                facts={[{ label: "Description", meta: meta.description }]}
+                correctHref={correctHref}
+              />
             )}
           </Section>
 
           <Section id="practical" title="Practical information">
-            <dl className="divide-y">
-              <Fact label="How to join" meta={meta.howToJoin}>
-                {org.howToJoin && <p className="whitespace-pre-line">{org.howToJoin}</p>}
-              </Fact>
-              <Fact label="Join link" meta={meta.joinUrl}>
-                {org.joinUrl && <ExternalLink href={org.joinUrl} />}
-              </Fact>
-              <Fact label="Membership" meta={meta.membership}>
-                {org.membership && <Membership membership={org.membership} />}
-              </Fact>
-              <Fact label="Beginner-friendly" meta={meta.beginnerFriendly}>
-                {yesNo(org.beginnerFriendly)}
-              </Fact>
-              <Fact label="Trials or auditions" meta={meta.trials}>
-                {org.trials && (
-                  <div className="flex flex-col gap-1">
-                    <span>{org.trials.required ? "Required" : "Not required"}</span>
-                    {org.trials.dates && org.trials.dates.length > 0 && (
-                      <span className="font-mono text-xs">
-                        {org.trials.dates.map(formatDateOrText).join(", ")}
-                      </span>
-                    )}
-                    {org.trials.note && (
-                      <span className="text-muted-foreground">{org.trials.note}</span>
-                    )}
-                  </div>
-                )}
-              </Fact>
-              <Fact label="Time commitment" meta={meta.timeCommitment}>
-                {org.timeCommitment}
-              </Fact>
-              <Fact label="Activities" meta={meta.activityTypes}>
-                {org.activityTypes.length > 0 && (
-                  <Badges items={org.activityTypes.map((item) => ACTIVITY_TYPE_LABELS[item])} />
-                )}
-              </Fact>
-              <Fact label="Who it is for" meta={meta.audiences}>
-                {org.audiences.length > 0 && (
-                  <Badges items={org.audiences.map((item) => AUDIENCE_LABELS[item])} />
-                )}
-              </Fact>
-              <Fact label="Languages" meta={meta.languages}>
-                {org.languages.length > 0 && org.languages.map(languageName).join(", ")}
-              </Fact>
-              <Fact label="Accessibility" meta={meta.accessibilityNote}>
-                {org.accessibilityNote}
-              </Fact>
-              <Fact label="Termcard" meta={meta.termcardUrl}>
-                {org.termcardUrl && <ExternalLink href={org.termcardUrl}>Termcard</ExternalLink>}
-              </Fact>
-            </dl>
+            <FactList
+              correctHref={correctHref}
+              facts={[
+                {
+                  label: "How to join",
+                  meta: meta.howToJoin,
+                  value: org.howToJoin && <RichText text={org.howToJoin} />,
+                },
+                {
+                  label: "Join link",
+                  meta: meta.joinUrl,
+                  value: org.joinUrl && <ExternalLink href={org.joinUrl} />,
+                },
+                {
+                  label: "Membership",
+                  meta: meta.membership,
+                  value: org.membership && <Membership membership={org.membership} />,
+                },
+                {
+                  label: "Beginner-friendly",
+                  meta: meta.beginnerFriendly,
+                  value: yesNo(org.beginnerFriendly),
+                },
+                {
+                  label: "Trials or auditions",
+                  meta: meta.trials,
+                  value: org.trials && (
+                    <div className="flex flex-col gap-1">
+                      <span>{org.trials.required ? "Required" : "Not required"}</span>
+                      {org.trials.dates && org.trials.dates.length > 0 && (
+                        <span className="font-mono text-xs">
+                          {org.trials.dates.map(formatDateOrText).join(", ")}
+                        </span>
+                      )}
+                      {org.trials.note && (
+                        <span className="text-muted-foreground">{org.trials.note}</span>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  label: "Time commitment",
+                  meta: meta.timeCommitment,
+                  value: org.timeCommitment,
+                },
+                {
+                  label: "Activities",
+                  meta: meta.activityTypes,
+                  value: org.activityTypes.length > 0 && (
+                    <Badges items={org.activityTypes.map((item) => ACTIVITY_TYPE_LABELS[item])} />
+                  ),
+                },
+                {
+                  label: "Who it is for",
+                  meta: meta.audiences,
+                  value: org.audiences.length > 0 && (
+                    <Badges items={org.audiences.map((item) => AUDIENCE_LABELS[item])} />
+                  ),
+                },
+                {
+                  label: "Languages",
+                  meta: meta.languages,
+                  value: org.languages.length > 0 && org.languages.map(languageName).join(", "),
+                },
+                {
+                  label: "Accessibility",
+                  meta: meta.accessibilityNote,
+                  value: org.accessibilityNote,
+                },
+                {
+                  label: "Termcard",
+                  meta: meta.termcardUrl,
+                  value: org.termcardUrl && (
+                    <ExternalLink href={org.termcardUrl}>Termcard</ExternalLink>
+                  ),
+                },
+              ]}
+            />
           </Section>
 
           {sessions.length > 0 && (
             <Section id="sessions" title="Regular sessions">
               <ul className="divide-y">
                 {sessions.map((session) => (
-                  <Session key={session.key} session={session} />
+                  <Session key={session.key} session={session} showSource={!sessionSource} />
                 ))}
               </ul>
+              {sessionSource && <SourceLine meta={sessionSource} />}
             </Section>
           )}
 
           {hasSport && (
             <Section id="sport" title="Sport">
-              <dl className="divide-y">
-                <Fact label="Sport" meta={meta["sport.sport"]}>
-                  {org.sport?.sport}
-                </Fact>
-                <Fact label="Blue status" meta={meta["sport.blueStatus"]}>
-                  {org.sport?.blueStatus && BLUE_STATUS_LABELS[org.sport.blueStatus]}
-                </Fact>
-                <Fact label="Varsity match" meta={meta["sport.varsity"]}>
-                  {yesNo(org.sport?.varsity)}
-                </Fact>
-                <Fact label="BUCS competition" meta={meta["sport.bucs"]}>
-                  {yesNo(org.sport?.bucs)}
-                </Fact>
-                <Fact label="College competition" meta={meta["sport.collegeCompetition"]}>
-                  {yesNo(org.sport?.collegeCompetition)}
-                </Fact>
-                <Fact label="Gender categories" meta={meta["sport.genderCategories"]}>
-                  {org.sport && org.sport.genderCategories.length > 0 && (
-                    <Badges
-                      items={org.sport.genderCategories.map((item) => GENDER_CATEGORY_LABELS[item])}
-                    />
-                  )}
-                </Fact>
-                <Fact label="Kit costs" meta={meta["sport.kitCostNote"]}>
-                  {org.sport?.kitCostNote}
-                </Fact>
-                <Fact label="Training venues" meta={meta["sport.venues"]}>
-                  {org.sport?.venues?.join(", ")}
-                </Fact>
-              </dl>
+              <FactList
+                correctHref={correctHref}
+                facts={[
+                  { label: "Sport", meta: meta["sport.sport"], value: org.sport?.sport },
+                  {
+                    label: "Blue status",
+                    meta: meta["sport.blueStatus"],
+                    value: org.sport?.blueStatus && BLUE_STATUS_LABELS[org.sport.blueStatus],
+                  },
+                  {
+                    label: "Varsity match",
+                    meta: meta["sport.varsity"],
+                    value: yesNo(org.sport?.varsity),
+                  },
+                  {
+                    label: "BUCS competition",
+                    meta: meta["sport.bucs"],
+                    value: yesNo(org.sport?.bucs),
+                  },
+                  {
+                    label: "College competition",
+                    meta: meta["sport.collegeCompetition"],
+                    value: yesNo(org.sport?.collegeCompetition),
+                  },
+                  {
+                    label: "Gender categories",
+                    meta: meta["sport.genderCategories"],
+                    value: org.sport && org.sport.genderCategories.length > 0 && (
+                      <Badges
+                        items={org.sport.genderCategories.map(
+                          (item) => GENDER_CATEGORY_LABELS[item],
+                        )}
+                      />
+                    ),
+                  },
+                  {
+                    label: "Kit costs",
+                    meta: meta["sport.kitCostNote"],
+                    value: org.sport?.kitCostNote,
+                  },
+                  {
+                    label: "Training venues",
+                    meta: meta["sport.venues"],
+                    value: org.sport?.venues?.join(", "),
+                  },
+                ]}
+              />
               {teams.length > 0 && (
                 <div className="flex flex-col gap-2 pt-2">
                   <h3 className="text-sm font-medium">Teams</h3>
@@ -447,18 +640,22 @@ export function OrgProfile({
             title="Upcoming events"
             action={
               <Link
-                href={`/events?org=${org.slug}`}
-                className="text-sm text-muted-foreground hover:text-foreground"
+                href={calendarHref}
+                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
                 In the calendar
               </Link>
             }
           >
-            {events.length > 0 ? (
+            {runs.length > 0 ? (
               <ul className="flex flex-col gap-2">
-                {events.map((event) => (
-                  <li key={event.key} className="min-w-0">
-                    <EventItem event={event} href={`/events?org=${org.slug}&event=${event.key}`} />
+                {runs.slice(0, UPCOMING_RUNS_SHOWN).map((run) => (
+                  <li key={run.key} className="min-w-0">
+                    <EventItem
+                      event={run.events[0]}
+                      href={`${calendarHref}&event=${run.key}`}
+                      runLabel={run.events.length > 1 ? runSummary(run) : undefined}
+                    />
                   </li>
                 ))}
               </ul>
@@ -467,6 +664,15 @@ export function OrgProfile({
                 <CalendarDaysIcon aria-hidden className="size-4" />
                 No upcoming events found in the sources we read.
               </p>
+            )}
+            {runs.length > UPCOMING_RUNS_SHOWN && (
+              <Link
+                href={calendarHref}
+                className="inline-flex items-center gap-1 self-start text-sm underline-offset-4 hover:underline"
+              >
+                All {events.length} upcoming events in the calendar
+                <ArrowRightIcon aria-hidden className="size-3.5" />
+              </Link>
             )}
             {hiddenEvents !== null && hiddenEvents > 0 && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -499,8 +705,8 @@ export function OrgProfile({
                       </Link>
                     </p>
                     <p className="flex flex-wrap items-center gap-x-2 font-mono text-xs text-muted-foreground">
-                      {edge.evidence.slice(0, 3).map((entry) => (
-                        <ExternalLink key={entry.sourceUrl} href={entry.sourceUrl} />
+                      {evidenceUrls(edge).map((url) => (
+                        <ExternalLink key={url} href={url} />
                       ))}
                       <span>last seen {formatInstantDate(edge.lastSeenAt)}</span>
                       <span>{Math.round(edge.confidence * 100)}%</span>
@@ -512,109 +718,94 @@ export function OrgProfile({
           )}
         </div>
 
-        <aside className="flex flex-col gap-8">
+        <aside className="flex min-w-0 flex-col gap-8">
           <Section id="contact" title="Contact">
-            <dl className="divide-y">
-              <Fact label="Website" meta={meta.website} className="sm:grid-cols-1 sm:gap-1">
-                {org.website && <ExternalLink href={org.website} />}
-              </Fact>
-              <Fact label="General email" meta={meta.email} className="sm:grid-cols-1 sm:gap-1">
-                {org.email && (
-                  <a
-                    href={`mailto:${org.email}`}
-                    className="break-all underline-offset-4 hover:underline"
-                  >
-                    {org.email}
-                  </a>
-                )}
-              </Fact>
-              <Fact
-                label="Role addresses"
-                meta={meta.roleEmails}
-                className="sm:grid-cols-1 sm:gap-1"
-              >
-                {org.roleEmails.length > 0 && (
-                  <ul className="flex flex-col gap-1">
-                    {org.roleEmails.map((entry) => (
-                      <li key={`${entry.role}-${entry.email}`}>
-                        <span className="text-muted-foreground">{ROLE_LABELS[entry.role]}: </span>
-                        <a
-                          href={`mailto:${entry.email}`}
-                          className="break-all underline-offset-4 hover:underline"
-                        >
-                          {entry.email}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Fact>
-              <Fact label="Social media" meta={meta.socials} className="sm:grid-cols-1 sm:gap-1">
-                {org.socials.length > 0 && (
-                  <ul className="flex flex-col gap-1">
-                    {org.socials.map((social) => (
-                      <li key={social.url}>
-                        <ExternalLink href={social.url}>
-                          {SOCIAL_PLATFORM_LABELS[social.platform]}
-                          {social.handle && (
-                            <span className="ml-1 font-mono text-xs text-muted-foreground">
-                              {social.handle.startsWith("@") ? social.handle : `@${social.handle}`}
-                            </span>
-                          )}
-                        </ExternalLink>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Fact>
-              <Fact
-                label="Mailing list"
-                meta={meta.mailingList}
-                className="sm:grid-cols-1 sm:gap-1"
-              >
-                {org.mailingList && (
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    {org.mailingList.signupUrl && (
-                      <ExternalLink href={org.mailingList.signupUrl}>Sign up</ExternalLink>
-                    )}
-                    {org.mailingList.platform && (
-                      <span className="text-muted-foreground">
-                        {MAILING_LIST_PLATFORM_LABELS[org.mailingList.platform]}
-                      </span>
-                    )}
-                  </span>
-                )}
-              </Fact>
-              {(hasValue(meta.contactFormUrl) || org.contactFormUrl) && (
-                <Fact
-                  label="Contact form"
-                  meta={meta.contactFormUrl}
-                  className="sm:grid-cols-1 sm:gap-1"
-                >
-                  {org.contactFormUrl && <ExternalLink href={org.contactFormUrl} />}
-                </Fact>
-              )}
-              {org.chatChannels.length > 0 && (
-                <Fact
-                  label="Group chats"
-                  meta={meta.chatChannels}
-                  className="sm:grid-cols-1 sm:gap-1"
-                >
-                  <ul className="flex flex-col gap-1">
-                    {org.chatChannels.map((channel) => (
-                      <li key={channel.platform}>
-                        <span className="font-medium">
-                          {CHAT_PLATFORM_LABELS[channel.platform]}
-                        </span>
-                        {channel.howToJoin && (
-                          <span className="text-muted-foreground"> — {channel.howToJoin}</span>
+            <FactList
+              stacked
+              correctHref={correctHref}
+              facts={[
+                {
+                  label: "Website",
+                  meta: meta.website,
+                  value: org.website && <ExternalLink href={org.website} />,
+                },
+                {
+                  label: "General email",
+                  meta: meta.email,
+                  value: org.email && (
+                    <a
+                      href={`mailto:${org.email}`}
+                      className="wrap-anywhere underline-offset-4 hover:underline"
+                    >
+                      {org.email}
+                    </a>
+                  ),
+                },
+                {
+                  label: "Role addresses",
+                  meta: meta.roleEmails,
+                  value: org.roleEmails.length > 0 && <RoleEmails entries={org.roleEmails} />,
+                },
+                {
+                  label: "Social media",
+                  meta: meta.socials,
+                  value: org.socials.length > 0 && <Socials socials={org.socials} />,
+                },
+                {
+                  label: "Mailing list",
+                  meta: meta.mailingList,
+                  value: org.mailingList &&
+                    (org.mailingList.signupUrl || org.mailingList.platform) && (
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        {org.mailingList.signupUrl && (
+                          <ExternalLink href={org.mailingList.signupUrl}>Sign up</ExternalLink>
                         )}
-                      </li>
-                    ))}
-                  </ul>
-                </Fact>
-              )}
-            </dl>
+                        {org.mailingList.platform && (
+                          <span className="text-muted-foreground">
+                            {MAILING_LIST_PLATFORM_LABELS[org.mailingList.platform]}
+                          </span>
+                        )}
+                      </span>
+                    ),
+                },
+                // Shown only when there is one: most societies have none, and
+                // an address or a form is enough.
+                ...(org.contactFormUrl
+                  ? [
+                      {
+                        label: "Contact form",
+                        meta: meta.contactFormUrl,
+                        value: <ExternalLink href={org.contactFormUrl} />,
+                      },
+                    ]
+                  : []),
+                ...(org.chatChannels.length > 0
+                  ? [
+                      {
+                        label: "Group chats",
+                        meta: meta.chatChannels,
+                        value: (
+                          <ul className="flex flex-col gap-1">
+                            {org.chatChannels.map((channel) => (
+                              <li key={channel.platform}>
+                                <span className="font-medium">
+                                  {CHAT_PLATFORM_LABELS[channel.platform]}
+                                </span>
+                                {channel.howToJoin && (
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    — {channel.howToJoin}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </Section>
 
           <Section id="registers" title="Registers">
@@ -647,15 +838,17 @@ export function OrgProfile({
             <p className="text-sm text-muted-foreground">
               Claim the listing to confirm details, correct anything wrong, or ask us to remove it.
               Requests are read by a person.
+              {missing.length > 0 &&
+                ` ${missing.length} ${missing.length === 1 ? "detail is" : "details are"} not published anywhere we read yet.`}
             </p>
             <div className="flex flex-col gap-2">
               <Button asChild>
                 <Link href={requestHref(org, "claim")}>Claim this listing</Link>
               </Button>
               <Button variant="outline" asChild>
-                <Link href={requestHref(org, "correct")}>
+                <Link href={correctHref}>
                   <PencilLineIcon data-icon="inline-start" />
-                  Correct something
+                  {missing.length > 0 ? "Correct or complete it" : "Correct something"}
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
@@ -663,22 +856,6 @@ export function OrgProfile({
               </Button>
             </div>
           </div>
-
-          {missing.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium">Not published yet</h2>
-              <p className="text-sm text-muted-foreground">
-                {missing.map((field) => ORGANISATION_FIELD_LABELS[field]).join(", ")}.
-              </p>
-              <Link
-                href={requestHref(org, "correct")}
-                className="inline-flex items-center gap-1 text-sm underline-offset-4 hover:underline"
-              >
-                Help complete this listing
-                <ArrowRightIcon aria-hidden className="size-3.5" />
-              </Link>
-            </div>
-          )}
 
           <p className="text-xs text-muted-foreground">
             Listing updated <span className="font-mono">{formatInstantDate(org.updatedAt)}</span>,

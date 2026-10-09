@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og"
-import { SITE_TAGLINE } from "@/lib/site"
+import { SHARE_IMAGE_ALT, SITE_TAGLINE } from "@/lib/site"
 
 /**
  * The share image for every page: the camsocs wordmark and tagline on the
@@ -7,7 +7,7 @@ import { SITE_TAGLINE } from "@/lib/site"
  * unofficial (AGENTS.md). Colours approximate the `.dark` tokens of
  * app/globals.css in hex, because an image has no CSS variables.
  */
-export const alt = "camsocs — a sourced directory of Cambridge societies and sports clubs"
+export const alt = SHARE_IMAGE_ALT
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 

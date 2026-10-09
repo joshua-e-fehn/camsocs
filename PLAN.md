@@ -117,8 +117,8 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | done |
 | T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | done (form, inbox; accepted corrections → `owner_submitted` claims; removals / objections → the suppression list, enforced by the pipeline and every ingestion route) |
 | T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`; retention automated for R3–R8, R10; list mail cleaned before the LLM); J6 and the remaining DPIA R-4 todos open |
-| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | `pixi run harvest` + `var/reports/coverage-<date>.md` done; deploy todo |
-| T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | todo |
+| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | `pixi run harvest` + `var/reports/coverage-<date>.md` done; ready to deploy: `docs/deploy.md` (steps, env for Vercel and Convex prod), `pipeline --env prod`; the deploy itself and the prod harvest todo |
+| T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | browser checks done (R5: `webapp/e2e/`, `bun run e2e`, screenshots at 1440×900 and 390×844, light and dark; fixes from them); adversarial review and data-quality sample todo |
 
 ### Joshua's tasks (front-loaded)
 

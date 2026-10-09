@@ -1,55 +1,15 @@
 import { fetchQuery } from "convex/nextjs"
-import {
-  ArrowRightIcon,
-  BriefcaseIcon,
-  CalendarDaysIcon,
-  DicesIcon,
-  DramaIcon,
-  FlaskConicalIcon,
-  GlobeIcon,
-  GraduationCapIcon,
-  HandHeartIcon,
-  HeartHandshakeIcon,
-  LinkIcon,
-  type LucideIcon,
-  MountainIcon,
-  MusicIcon,
-  NewspaperIcon,
-  PaletteIcon,
-  RocketIcon,
-  ScaleIcon,
-  SearchIcon,
-  TrophyIcon,
-  UsersIcon,
-} from "lucide-react"
+import { ArrowRightIcon, CalendarDaysIcon, LinkIcon, SearchIcon, UsersIcon } from "lucide-react"
 import Link from "next/link"
+import { CATEGORY_ICONS } from "@/components/molecules/category-icon"
 import { EventItem } from "@/components/molecules/event-item"
 import { Reveal } from "@/components/molecules/reveal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { api } from "@/convex/_generated/api"
 import { addDays, londonIsoDate, londonMidnight } from "@/lib/calendar"
-import { DISCLAIMER } from "@/lib/site"
-import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/vocab"
-
-const CATEGORY_ICONS: Record<Category, LucideIcon> = {
-  academic: GraduationCapIcon,
-  science_tech: FlaskConicalIcon,
-  careers_professional: BriefcaseIcon,
-  entrepreneurship: RocketIcon,
-  arts_creative: PaletteIcon,
-  music: MusicIcon,
-  theatre_film_dance: DramaIcon,
-  media_publishing: NewspaperIcon,
-  cultural_international: GlobeIcon,
-  faith: HandHeartIcon,
-  politics_debate: ScaleIcon,
-  causes_volunteering: HeartHandshakeIcon,
-  identity_wellbeing: UsersIcon,
-  sport: TrophyIcon,
-  outdoors: MountainIcon,
-  hobbies_games: DicesIcon,
-}
+import { groupRuns, runSummary, splitOngoing } from "@/lib/event-runs"
+import { CATEGORIES, CATEGORY_LABELS } from "@/lib/vocab"
 
 const THIS_WEEK_SHOWN = 6
 
@@ -81,7 +41,14 @@ export default async function HomePage() {
       to: londonMidnight(addDays(today, 7)),
     }),
   ])
-  const thisWeek = events.filter((event) => !event.cancelled).slice(0, THIS_WEEK_SHOWN)
+  // What starts this week first; a long run that began weeks ago (a film
+  // listed for months) only fills spare places.
+  const { ongoing, starting } = splitOngoing(
+    events.filter((event) => !event.cancelled),
+    londonMidnight(today),
+  )
+  // A show's nights this week are one entry (lib/event-runs.ts).
+  const thisWeek = groupRuns([...starting, ...ongoing]).slice(0, THIS_WEEK_SHOWN)
 
   return (
     <>
@@ -201,9 +168,14 @@ export default async function HomePage() {
           </div>
           {thisWeek.length > 0 ? (
             <ul className="grid gap-3 md:grid-cols-2">
-              {thisWeek.map((event) => (
-                <li key={event.key} className="min-w-0">
-                  <EventItem event={event} href={`/events?event=${event.key}`} className="h-full" />
+              {thisWeek.map((run) => (
+                <li key={run.key} className="min-w-0">
+                  <EventItem
+                    event={run.events[0]}
+                    href={`/events?event=${run.key}`}
+                    runLabel={run.events.length > 1 ? runSummary(run) : undefined}
+                    className="h-full"
+                  />
                 </li>
               ))}
             </ul>
@@ -236,8 +208,9 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+          {/* The full non-affiliation statement is in the footer of every page. */}
           <p className="text-sm text-muted-foreground">
-            {DISCLAIMER}{" "}
+            Unofficial and independent.{" "}
             <Link href="/about" className="underline underline-offset-4 hover:text-foreground">
               How we collect data
             </Link>

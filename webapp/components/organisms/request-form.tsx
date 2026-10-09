@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { CircleCheckIcon, PlusIcon, TrashIcon } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { OrgPicker } from "@/components/molecules/org-picker"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -84,6 +84,10 @@ export function RequestForm({
     null,
   )
   const [honeypot, setHoneypot] = useState("")
+  // Sending is a script (a Convex mutation); before hydration a click would
+  // submit the bare HTML form instead — a GET that drops everything typed.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
 
   const update = (patch: Partial<RequestDraft>) => setDraft((current) => ({ ...current, ...patch }))
   const setCorrection = (index: number, patch: Partial<RequestDraft["corrections"][number]>) =>
@@ -190,7 +194,11 @@ export function RequestForm({
                 {LISTING_REQUEST_KINDS.map((kind) => (
                   <FieldLabel key={kind} htmlFor={`kind-${kind}`}>
                     <Field orientation="horizontal">
-                      <RadioGroupItem value={kind} id={`kind-${kind}`} />
+                      <RadioGroupItem
+                        value={kind}
+                        id={`kind-${kind}`}
+                        aria-label={KIND_DETAILS[kind].title}
+                      />
                       <FieldContent>
                         <FieldTitle>{KIND_DETAILS[kind].title}</FieldTitle>
                         <FieldDescription>{KIND_DETAILS[kind].description}</FieldDescription>
@@ -388,7 +396,12 @@ export function RequestForm({
                 </Link>
                 .
               </p>
-              <Button type="submit" size="lg" disabled={pending} className="sm:min-w-36">
+              <Button
+                type="submit"
+                size="lg"
+                disabled={pending || !hydrated}
+                className="sm:min-w-36"
+              >
                 {pending ? (
                   <>
                     <Spinner data-icon="inline-start" />

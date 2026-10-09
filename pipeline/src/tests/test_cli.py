@@ -88,3 +88,29 @@ def test_health_rejected_key(make_settings, net: respx.MockRouter, status: int) 
     assert result.exit_code == 1
     assert "PIPELINE_API_KEY" in result.output
     assert SECRET not in result.output
+
+
+def test_status_names_the_environment(make_settings) -> None:
+    result = invoke(make_settings(), "status")
+    assert result.exit_code == 0, result.output
+    assert "Environment:" in result.output and "dev (pipeline/.env)" in result.output
+
+
+def test_purge_dev_refuses_another_environment(make_settings, tmp_path) -> None:
+    from camsocs_pipeline.config import EnvChoice
+
+    settings = make_settings(convex_http_url=SITE, pipeline_api_key=SECRET)
+    result = CliRunner().invoke(
+        cli,
+        ["purge-dev", "--yes"],
+        obj={"settings": settings, "env": EnvChoice("prod", tmp_path / ".env.prod")},
+    )
+    assert result.exit_code == 1
+    assert "dev environment only" in result.output
+
+
+def test_an_unknown_env_file_fails_before_anything_runs(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CAMSOCS_ENV_FILE", str(tmp_path / ".env.nowhere"))
+    result = CliRunner().invoke(cli, ["status"], obj={})
+    assert result.exit_code == 1
+    assert "does not exist" in result.output

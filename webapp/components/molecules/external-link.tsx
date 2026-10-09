@@ -27,7 +27,7 @@ export function ExternalLink({
       target="_blank"
       rel="noopener noreferrer nofollow"
       className={cn(
-        "inline-flex items-center gap-0.5 break-all underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring",
+        "inline-flex items-center gap-0.5 wrap-anywhere underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring",
         className,
       )}
     >

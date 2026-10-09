@@ -20,7 +20,16 @@ pixi run pipeline -- worklist            # rank societies for mailing-list sign-
 pixi run pipeline -- coverage [--before DIR]  # field coverage of staged organisations, offline
 pixi run harvest                         # the full harvest + coverage report (below)
 pixi run prune-cache                     # retention R7: var/cache + old staging, 90 days
+pixi run pipeline -- --env prod status   # any command against production (below)
 ```
+
+**Which deployment.** `pipeline/.env` is the dev deployment. `--env <name>` (before the
+command) reads `pipeline/.env.<name>` on top of it, or `CAMSOCS_ENV_FILE=<path>` (relative to the
+repo root) names that file; the flag wins. The environment file must exist and must state
+`CONVEX_HTTP_URL` / `CONVEX_URL` and `PIPELINE_API_KEY` itself — inherited from `pipeline/.env` or
+exported in the shell, the run stops before any request. A non-dev environment keeps its own run
+state (`.camsocs-state.<name>.json`); the cache and staging are shared. `purge-dev` refuses any
+environment but dev. `status` prints the environment. Setup: `docs/deploy.md` §4.
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
 work — a cron that sees success because most of it worked is how a broken source stays broken.
@@ -186,11 +195,12 @@ Contracts shared with the webapp, each guarded by a test:
 
 ## Configuration
 
-Read from `pipeline/.env` (gitignored) or the environment:
+Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <name>`) or the environment:
 
 | Variable | Purpose |
 |---|---|
 | `CONVEX_HTTP_URL` | `https://<deployment>.convex.site` — where `/api/pipeline/*` lives (or set `CONVEX_URL` and it is derived) |
+| `CAMSOCS_ENV_FILE` | A second env file read on top of `pipeline/.env` (as `--env <name>` reads `pipeline/.env.<name>`); environment only, never in an env file |
 | `PIPELINE_API_KEY` | Bearer key; must equal `PIPELINE_API_KEY` on the Convex deployment |
 | `LLM_BASE_URL`, `LLM_API_KEY` | OpenAI-compatible endpoint |
 | `LLM_MODEL_BULK`, `LLM_MODEL_STRONG` | Model ids; any id starting with `claude` is refused |

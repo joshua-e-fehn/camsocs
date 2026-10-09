@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { formatDate } from "@/lib/calendar"
+import { pageMetadata } from "@/lib/page-metadata"
 import {
   CONTACT_EMAIL,
   CONTROLLER_NAME,
@@ -10,12 +11,12 @@ import {
   SITE_NAME,
 } from "@/lib/site"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Privacy notice",
   description:
     "How camsocs uses personal data under UK GDPR: who is responsible, what is collected and from where, why, for how long, and your rights, including the right to object.",
-  alternates: { canonical: "/privacy" },
-}
+  path: "/privacy",
+})
 
 /**
  * The UK GDPR privacy notice (Arts 13 and 14) for the public site, the data

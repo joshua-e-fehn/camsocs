@@ -446,6 +446,41 @@ export function venuePublic(venue: Doc<"venues">): Infer<typeof venuePublicValid
 export const orgRefValidator = v.object({ key: v.string(), slug: v.string(), name: v.string() })
 export type OrgRef = Infer<typeof orgRefValidator>
 
+const eventOrganiserValidator = v.object({
+  key: v.string(),
+  slug: v.string(),
+  name: v.string(),
+  role: literalUnion(EVENT_ORGANISER_ROLES),
+})
+
+/**
+ * An event in a list (`events.list`, the upcoming events of `orgs.getBySlug`):
+ * what a calendar cell, a list row or a run of performances shows. The
+ * description, speakers, price, image and per-field provenance stay in
+ * `events.get` (the details sheet): a month of events with them was ~450 KB,
+ * without them it is a tenth of that.
+ */
+export const eventListItemValidator = v.object({
+  key: v.string(),
+  title: v.string(),
+  startsAt: v.number(),
+  endsAt: v.optional(v.number()),
+  allDay: v.boolean(),
+  termWeekLabel: v.optional(v.string()),
+  venueKey: v.optional(v.string()),
+  venueText: v.optional(v.string()),
+  /** Organisations that exist in the directory, with their role. */
+  organisers: v.array(eventOrganiserValidator),
+  visibility: literalUnion(EVENT_VISIBILITIES),
+  eventType: literalUnion(EVENT_TYPES),
+  cancelled: v.boolean(),
+  status: literalUnion(EVENT_STATUSES),
+  source: literalUnion(EVENT_SOURCES),
+  /** The event's page (a show's nights share it); absent for mailing-list events. */
+  sourceUrl: v.optional(v.string()),
+})
+export type EventListItem = Infer<typeof eventListItemValidator>
+
 export const eventPublicValidator = v.object({
   key: v.string(),
   title: v.string(),
@@ -457,14 +492,7 @@ export const eventPublicValidator = v.object({
   venueKey: v.optional(v.string()),
   venueText: v.optional(v.string()),
   /** Organisations that exist in the directory, with their role. */
-  organisers: v.array(
-    v.object({
-      key: v.string(),
-      slug: v.string(),
-      name: v.string(),
-      role: literalUnion(EVENT_ORGANISER_ROLES),
-    }),
-  ),
+  organisers: v.array(eventOrganiserValidator),
   speakers: v.array(speakerValidator),
   price: v.optional(priceValidator),
   bookingUrl: v.optional(v.string()),
@@ -499,22 +527,60 @@ export function orgRefCache(ctx: QueryCtx) {
   }
 }
 
-export async function eventPublic(
-  ctx: QueryCtx,
+/** An event's organisers, co-hosts and sponsors that are listed (hidden ones dropped). */
+async function eventOrganisers(
   event: Doc<"events">,
   lookup: ReturnType<typeof orgRefCache>,
-): Promise<EventPublic> {
+): Promise<EventPublic["organisers"]> {
   const roles = [
     ...event.organiserKeys.map((key) => ({ key, role: "organiser" as const })),
     ...event.coHostKeys.map((key) => ({ key, role: "co_host" as const })),
     ...event.sponsorKeys.map((key) => ({ key, role: "sponsor" as const })),
   ]
-  const organisers = []
+  const organisers: EventPublic["organisers"] = []
   for (const { key, role } of roles) {
     const card = await lookup(key)
     if (card) organisers.push({ key: card.key, slug: card.slug, name: card.name, role })
   }
-  const internalSource = event.source === "mailing_list"
+  return organisers
+}
+
+/** The page a visitor may follow: none for mail (a private inbox), never a non-http value. */
+function eventSourceUrl(event: Doc<"events">): string | undefined {
+  return event.source === "mailing_list" || !isHttpUrl(event.sourceUrl)
+    ? undefined
+    : event.sourceUrl
+}
+
+export async function eventListItem(
+  event: Doc<"events">,
+  lookup: ReturnType<typeof orgRefCache>,
+): Promise<EventListItem> {
+  return {
+    key: event.key,
+    title: event.title,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    allDay: event.allDay,
+    termWeekLabel: event.termWeekLabel,
+    venueKey: event.venueKey,
+    venueText: event.venueText,
+    organisers: await eventOrganisers(event, lookup),
+    visibility: event.visibility,
+    eventType: event.eventType,
+    cancelled: event.cancelled,
+    status: event.status,
+    source: event.source,
+    sourceUrl: eventSourceUrl(event),
+  }
+}
+
+export async function eventPublic(
+  ctx: QueryCtx,
+  event: Doc<"events">,
+  lookup: ReturnType<typeof orgRefCache>,
+): Promise<EventPublic> {
+  const organisers = await eventOrganisers(event, lookup)
   return {
     key: event.key,
     title: event.title,
@@ -536,7 +602,7 @@ export async function eventPublic(
     cancelled: event.cancelled,
     status: event.status,
     source: event.source,
-    sourceUrl: internalSource || !isHttpUrl(event.sourceUrl) ? undefined : event.sourceUrl,
+    sourceUrl: eventSourceUrl(event),
     lastSeenAt: event.lastSeenAt,
     confidence: event.confidence,
     meta: publicMeta(event.meta),

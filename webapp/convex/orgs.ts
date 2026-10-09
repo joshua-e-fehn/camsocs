@@ -8,9 +8,9 @@ import { withdrawnCheck } from "./lib/entityStore"
 import { isHttpUrl } from "./lib/fields"
 import { facetCounts, matches, orgFiltersValidator, selections } from "./lib/orgFilters"
 import {
-  type EventPublic,
-  eventPublic,
-  eventPublicValidator,
+  type EventListItem,
+  eventListItem,
+  eventListItemValidator,
   orgCardPublic,
   orgCardPublicValidator,
   orgPublic,
@@ -150,7 +150,7 @@ export const getBySlug = query({
       org: orgPublicValidator,
       teams: v.array(teamPublicValidator),
       sessions: v.array(sessionPublicValidator),
-      events: v.array(eventPublicValidator),
+      events: v.array(eventListItemValidator),
       relationships: v.array(relationshipPublicValidator),
     }),
   ),
@@ -192,7 +192,7 @@ export const getBySlug = query({
     const links = [...running.filter((link) => link.startsAt < from), ...upcoming]
     const lookup = orgRefCache(ctx)
     const withdrawn = withdrawnCheck(ctx, Date.now())
-    const events: EventPublic[] = []
+    const events: EventListItem[] = []
     const seen = new Set<string>()
     for (const link of links) {
       if (events.length >= UPCOMING_EVENTS) break
@@ -203,7 +203,7 @@ export const getBySlug = query({
         .withIndex("by_key", (i) => i.eq("key", link.eventKey))
         .unique()
       if (event && tiers.includes(event.visibility as never) && !(await withdrawn(event))) {
-        events.push(await eventPublic(ctx, event, lookup))
+        events.push(await eventListItem(event, lookup))
       }
     }
 

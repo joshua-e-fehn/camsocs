@@ -56,7 +56,10 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl tracking-tight">Sign in</CardTitle>
+          <CardTitle>
+            {/* The page's one heading: /sign-in has no other. */}
+            <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+          </CardTitle>
           <CardDescription>
             {method === "cam"
               ? "Cambridge members see Cambridge-only events"

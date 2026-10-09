@@ -210,6 +210,12 @@ describe("events.list / events.get", () => {
     expect(camEvents.map((e) => e.title)).toEqual(["Open simul", "Cam-only blitz"])
     expect(camEvents[1].sourceUrl).toBeUndefined()
 
+    // Lists carry no description or provenance; the details come from events.get.
+    expect(Object.keys(anonymous[0])).not.toContain("meta")
+    expect(Object.keys(anonymous[0])).not.toContain("description")
+    const details = await t.query(api.events.get, { key: anonymous[0].key })
+    expect(details?.meta.title?.status).toBe("found")
+
     expect(await t.query(api.events.get, { key: keys.cam })).toBeNull()
     expect(await t.query(api.events.get, { key: keys.members })).toBeNull()
     expect((await cam.query(api.events.get, { key: keys.cam }))?.title).toBe("Cam-only blitz")

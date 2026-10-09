@@ -6,15 +6,16 @@ import { ProseSection } from "@/components/molecules/prose-section"
 import { StatusChip } from "@/components/molecules/source-line"
 import { api } from "@/convex/_generated/api"
 import { formatInstantDate, londonTime } from "@/lib/calendar"
+import { pageMetadata } from "@/lib/page-metadata"
 import { BOT_USER_AGENT, CONTACT_EMAIL, CONTROLLER_NAME, DISCLAIMER } from "@/lib/site"
 import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-line"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "About",
   description:
     "What camsocs is, who runs it, and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, every fact sourced.",
-  alternates: { canonical: "/about" },
-}
+  path: "/about",
+})
 
 const SOURCES = [
   ["Cambridge SU society directory", "society names, categories, descriptions, contact links"],
@@ -108,7 +109,7 @@ export default async function AboutPage() {
               provider, reads free text from societies&apos; own pages to pull out facts such as how
               to join. A fact counts as <em>found</em> only when the model quotes the source word
               for word and the quote is checked; otherwise it is labelled <em>inferred</em>. Content
-              from talks.cam is never given to an AI model.
+              from talks.cam and tbc.xyz is never given to an AI model.
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown
