@@ -94,6 +94,13 @@ STAGES: list[Stage] = [
     # SU What's On (§12).
     Stage("su_whatson", fetches=True, description="SU What's On → student-group events"),
     #
+    # Society websites' events pages: structured data, then the LLM (§14).
+    Stage(
+        "website_events",
+        fetches=True,
+        description="society websites' events pages → events (structured data, then LLM)",
+    ),
+    #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
     # Forwarded mailing-list mail (§16).
     Stage("inbox"),
