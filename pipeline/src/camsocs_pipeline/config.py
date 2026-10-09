@@ -1,5 +1,19 @@
 """Runtime configuration, read from `pipeline/.env` and the environment.
 
+**Which deployment.** `pipeline/.env` targets the dev deployment. A run for
+another environment reads its own file: `camsocs --env prod …` reads
+`pipeline/.env.prod`, or `CAMSOCS_ENV_FILE=<path>` names a file directly (a
+relative path is relative to the repo root; `--env` wins when both are given;
+`choose_env`). Such a file must exist — a
+missing one is an error, never a silent fall-back to the shell — and the
+deployment variables (`CONVEX_URL`, `CONVEX_HTTP_URL`, `PIPELINE_API_KEY`) must
+then come from it alone: exported in the shell they would override the file
+(process environment beats dotenv), the `CONVEX_DEPLOY_KEY` lesson
+(AGENTS.md). A non-dev environment also keeps its own run state
+(`.camsocs-state.<name>.json`) unless `CAMSOCS_STATE_PATH` says otherwise; the
+web cache and the staging area are shared, so one harvest can be loaded into
+both deployments.
+
 Every setting the pipeline needs to reach the outside world lives here, so a
 misconfigured host fails once with a readable message rather than at the first
 HTTP call with a `None` in the URL. Pattern from Bundestracker config.py.
@@ -15,9 +29,15 @@ instead, which raises `ConfigError` with what to set.
 
 from __future__ import annotations
 
+import os
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+# python-dotenv is pydantic-settings' own dotenv reader (a required dependency).
+from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +46,17 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PIPELINE_DIR = REPO_ROOT / "pipeline"
 
 #: Read wherever the command runs from (pixi runs it in `pipeline/`, cron in $HOME).
+#: The dev deployment's file; other environments use `pipeline/.env.<name>`.
 ENV_FILE = PIPELINE_DIR / ".env"
+
+#: The environment `pipeline/.env` belongs to.
+DEFAULT_ENV = "dev"
+#: Names a settings file directly, instead of `--env <name>`.
+ENV_FILE_VARIABLE = "CAMSOCS_ENV_FILE"
+#: Settings that pick the deployment a run writes to. For any env file other
+#: than `pipeline/.env` they must not be exported in the shell.
+TARGET_VARIABLES = ("CONVEX_URL", "CONVEX_HTTP_URL", "PIPELINE_API_KEY")
+_ENV_NAME = re.compile(r"[a-z][a-z0-9-]{0,31}")
 
 #: Raw response cache. Under the repo, gitignored (`var/`), never committed.
 DEFAULT_CACHE_DIR = REPO_ROOT / "var" / "cache"
@@ -240,8 +270,102 @@ class LLMSettings(BaseModel):
     concurrency: int = DEFAULT_LLM_CONCURRENCY
 
 
+@dataclass(frozen=True)
+class EnvChoice:
+    """The environment a run targets and the settings file it reads."""
+
+    #: `dev`, the `<name>` of `--env <name>` / `.env.<name>`, or `custom`.
+    name: str
+    path: Path
+
+    @property
+    def is_default(self) -> bool:
+        return self.path == ENV_FILE
+
+    def describe(self) -> str:
+        try:
+            shown = self.path.relative_to(REPO_ROOT)
+        except ValueError:
+            shown = self.path
+        return f"{self.name} ({shown})"
+
+
+def env_file_for(name: str) -> Path:
+    """`dev` → `pipeline/.env`; any other name → `pipeline/.env.<name>`."""
+    if not _ENV_NAME.fullmatch(name):
+        raise ConfigError(
+            f"--env {name!r} is not an environment name (lowercase letters, digits, hyphens)."
+        )
+    return ENV_FILE if name == DEFAULT_ENV else PIPELINE_DIR / f".env.{name}"
+
+
+def choose_env(env: str | None, environ: Mapping[str, str] | None = None) -> EnvChoice:
+    """`--env <name>` if given, else `CAMSOCS_ENV_FILE`, else `pipeline/.env` (dev)."""
+    environ = os.environ if environ is None else environ
+    if env is not None:
+        return EnvChoice(env, env_file_for(env))
+    raw = environ.get(ENV_FILE_VARIABLE, "").strip()
+    if not raw:
+        return EnvChoice(DEFAULT_ENV, ENV_FILE)
+    # Relative to the repo root, not the working directory: pixi runs the CLI
+    # in pipeline/, cron in $HOME.
+    path = Path(raw).expanduser()
+    path = (path if path.is_absolute() else REPO_ROOT / path).resolve()
+    if path == ENV_FILE.resolve():
+        return EnvChoice(DEFAULT_ENV, ENV_FILE)
+    name = path.name.removeprefix(".env.") if path.name.startswith(".env.") else "custom"
+    return EnvChoice(name if _ENV_NAME.fullmatch(name) else "custom", path)
+
+
+def load_settings(choice: EnvChoice, environ: Mapping[str, str] | None = None) -> Settings:
+    """The settings of one environment, with the guards in the module docstring."""
+    environ = os.environ if environ is None else environ
+    if choice.is_default:
+        return Settings(_env_file=choice.path)
+
+    if not choice.path.is_file():
+        raise ConfigError(
+            f"{choice.path} does not exist. Create it with that deployment's "
+            "CONVEX_HTTP_URL and PIPELINE_API_KEY (docs/deploy.md)."
+        )
+    shadowing = [name for name in TARGET_VARIABLES if environ.get(name)]
+    if shadowing:
+        raise ConfigError(
+            f"{', '.join(shadowing)} {'is' if len(shadowing) == 1 else 'are'} set in the "
+            f"shell and would override {choice.path.name}. Unset "
+            f"{'it' if len(shadowing) == 1 else 'them'}: the deployment a run writes to "
+            "comes from its env file only."
+        )
+    files = (ENV_FILE, choice.path) if ENV_FILE.is_file() else (choice.path,)
+    settings = Settings(_env_file=files)
+
+    own = dotenv_values(choice.path)
+    resolved = {
+        "CONVEX_URL": settings.convex_url,
+        "CONVEX_HTTP_URL": settings.convex_http_url,
+        "PIPELINE_API_KEY": settings.pipeline_api_key.get_secret_value(),
+    }
+    for name in TARGET_VARIABLES:
+        stated = (own.get(name) or "").strip()
+        if name != "PIPELINE_API_KEY":
+            stated = stated.rstrip("/")
+        if resolved[name] != stated:
+            raise ConfigError(
+                f"{name} would come from {ENV_FILE.name}, not {choice.path.name}. Set it in "
+                f"{choice.path.name} (empty to leave it unset): the deployment a run writes "
+                "to comes from its env file only."
+            )
+
+    if choice.name != DEFAULT_ENV and "state_path" not in settings.model_fields_set:
+        settings = settings.model_copy(
+            update={"state_path": REPO_ROOT / f".camsocs-state.{choice.name}.json"}
+        )
+    return settings
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """The process-wide settings singleton. Tests build `Settings(_env_file=None, …)`
-    directly, or call `get_settings.cache_clear()`."""
-    return Settings()
+    """The process-wide settings singleton for the default choice (`--env`
+    absent): `CAMSOCS_ENV_FILE`, else `pipeline/.env`. Tests build
+    `Settings(_env_file=None, …)` directly, or call `get_settings.cache_clear()`."""
+    return load_settings(choose_env(None))

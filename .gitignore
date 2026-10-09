@@ -20,12 +20,15 @@ __pycache__/
 # secrets — never committed (webapp/.env.example is the documented template)
 .env*.local
 pipeline/.env
+# per-environment pipeline settings (`camsocs --env prod` → pipeline/.env.prod)
+pipeline/.env.*
 .env
 
 # pipeline runtime artefacts (per host, not data about societies)
 var/
 .logs/
 .camsocs-state.json
+.camsocs-state.*.json
 .daily-sync.lock
 
 # os

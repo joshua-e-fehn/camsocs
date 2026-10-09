@@ -1,5 +1,7 @@
 """Command-line entry point (`camsocs`, `pixi run pipeline -- …`).
 
+    camsocs [--env NAME] <command>       NAME selects pipeline/.env.<NAME> (default dev:
+                                         pipeline/.env, or CAMSOCS_ENV_FILE); docs/deploy.md
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
     camsocs sync [--stages a,b] [--dry-run] [--limit N]
@@ -23,7 +25,16 @@ import sys
 import click
 
 from camsocs_pipeline import __version__
-from camsocs_pipeline.config import ConfigError, Settings, get_settings
+from camsocs_pipeline.config import (
+    DEFAULT_ENV,
+    ENV_FILE,
+    ConfigError,
+    EnvChoice,
+    Settings,
+    choose_env,
+    get_settings,
+    load_settings,
+)
 from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
 from camsocs_pipeline.pipeline.state import load_state
@@ -55,16 +66,39 @@ def _configure_logging(verbose: bool) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, prog_name="camsocs")
 @click.option("-v", "--verbose", is_flag=True, help="Debug-level logging.")
+@click.option(
+    "--env",
+    "env_name",
+    metavar="NAME",
+    help=(
+        "Target environment: read pipeline/.env.NAME (dev = pipeline/.env). "
+        "Default: CAMSOCS_ENV_FILE if set, else pipeline/.env."
+    ),
+)
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool) -> None:
+def cli(ctx: click.Context, verbose: bool, env_name: str | None) -> None:
     """camsocs — Cambridge societies harvesting pipeline."""
     _configure_logging(verbose)
     ctx.ensure_object(dict)
-    ctx.obj.setdefault("settings", get_settings())
+    if "settings" in ctx.obj:
+        # Injected (tests): the environment is whatever the caller says.
+        ctx.obj.setdefault("env", EnvChoice(DEFAULT_ENV, ENV_FILE))
+        return
+    try:
+        choice = choose_env(env_name)
+        settings = get_settings() if env_name is None else load_settings(choice)
+    except ConfigError as error:
+        raise click.ClickException(str(error)) from error
+    ctx.obj["env"] = choice
+    ctx.obj["settings"] = settings
 
 
 def _settings(ctx: click.Context) -> Settings:
     return ctx.obj["settings"]
+
+
+def _env(ctx: click.Context) -> EnvChoice:
+    return ctx.obj["env"]
 
 
 @cli.command()
@@ -77,6 +111,7 @@ def status(ctx: click.Context) -> None:
         return "set" if value.get_secret_value() else "(unset)"
 
     rows = [
+        ("Environment", _env(ctx).describe()),
         ("Convex HTTP", _convex_http_url(settings)),
         ("Pipeline key", secret(settings.pipeline_api_key)),
         ("LLM base URL", settings.llm_base_url or "(unset)"),
@@ -209,6 +244,11 @@ def purge_dev(ctx: click.Context, yes: bool) -> None:
     the run log, inbox, listing requests and broker-owned rows are kept."""
     if not yes:
         raise click.ClickException("Refusing without --yes.")
+    if _env(ctx).name != DEFAULT_ENV:
+        # The deployment refuses too; this stops it before any request.
+        raise click.ClickException(
+            f"Refusing: purge-dev runs against the dev environment only, not {_env(ctx).name}."
+        )
     try:
         with _loader(_settings(ctx)) as loader:
             deleted = loader.purge_dev()
