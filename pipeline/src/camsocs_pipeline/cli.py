@@ -3,9 +3,11 @@
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
     camsocs sync [--stages a,b] [--dry-run] [--limit N]
+    camsocs harvest [--dry-run] [--limit N]   every stage in order, re-derive, coverage report
     camsocs derive                       re-derive statuses, term weeks, stale flags now
     camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
     camsocs worklist [--no-sympa]        rank societies for mailing-list sign-up (CSV)
+    camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
 
 Commands are thin: parsing and reporting only. Exit codes matter to the cron
 that runs `sync`: any failed stage exits non-zero even though the others
@@ -24,6 +26,8 @@ import click
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.config import ConfigError, Settings, get_settings
+from camsocs_pipeline.coverage_report import report_path
+from camsocs_pipeline.events.common import london_today
 from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
 from camsocs_pipeline.pipeline.load import (
     ConvexError,
@@ -33,6 +37,7 @@ from camsocs_pipeline.pipeline.load import (
 )
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, run_sync
+from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
 from camsocs_pipeline.worklist import (
@@ -183,6 +188,72 @@ def sync(ctx: click.Context, stages: list[str] | None, dry_run: bool, limit: int
             "One or more stages failed — see the report above. Every write is an upsert, "
             "so the next run repairs what this one missed."
         )
+
+
+@cli.command()
+@click.option("--dry-run", is_flag=True, help="No credentials needed; nothing is written.")
+@click.option("--limit", type=click.IntRange(min=1), help="Process at most N items per stage.")
+@click.pass_context
+def harvest(ctx: click.Context, dry_run: bool, limit: int | None) -> None:
+    """The full harvest: every stage in registry order (seed → harvest →
+    resolve → enrich → events → inbox / Instagram / termcards → load →
+    report), then a re-derivation, and the coverage report
+    var/reports/coverage-<date>.md. What `pixi run harvest` runs."""
+    settings = _settings(ctx)
+    try:
+        report = run_sync(settings=settings, stages=None, dry_run=dry_run, limit=limit)
+    except (ConfigError, ConvexError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(report.summary())
+    if not dry_run:
+        # Statuses and term weeks were derived on ingest; this catches what
+        # the clock alone changes, and refreshes the overview's coverage.
+        try:
+            with _loader(settings) as loader:
+                loader.derive()
+            click.echo("derive: scheduled")
+        except ConvexError as error:
+            click.echo(f"warning: derive not scheduled ({error})", err=True)
+        path = report_path(settings.reports_dir, london_today())
+        if any(s.name == "report" and s.ok for s in report.stages) and path.exists():
+            click.echo(f"coverage report: {path}")
+    if not report.ok:
+        raise click.ClickException(
+            "One or more stages failed — see the report above. Every write is an upsert, "
+            "so the next run repairs what this one missed."
+        )
+
+
+@cli.command("prune-cache")
+@click.option(
+    "--older-than",
+    default="90d",
+    show_default=True,
+    metavar="AGE",
+    help="Delete what is older than this: 90d, 12w or 36h.",
+)
+@click.option("--dry-run", is_flag=True, help="Count what would go; delete nothing.")
+@click.option(
+    "--staging/--no-staging",
+    default=True,
+    show_default=True,
+    help="Also delete superseded staging files (the latest of each part always stays).",
+)
+@click.pass_context
+def prune_cache_command(ctx: click.Context, older_than: str, dry_run: bool, staging: bool) -> None:
+    """Delete raw pages, images and LLM replies in var/cache (and superseded
+    staged observations) older than --older-than — the retention schedule's
+    R7 (docs/compliance/retention.md)."""
+    settings = _settings(ctx)
+    try:
+        age = parse_age(older_than)
+    except ValueError as error:
+        raise click.BadParameter(str(error), param_hint="--older-than") from error
+    result = prune_cache(settings.cache_dir, age, dry_run=dry_run)
+    click.echo(f"cache {settings.cache_dir}: {result.summary(dry_run)}")
+    if staging:
+        staged = prune_staging(settings.staging_dir, age, dry_run=dry_run)
+        click.echo(f"staging {settings.staging_dir}: {staged.summary(dry_run)}")
 
 
 def _loader(settings: Settings) -> ConvexLoader:
