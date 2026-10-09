@@ -53,6 +53,7 @@ from tenacity import (
 )
 
 from camsocs_pipeline.config import LLMSettings
+from camsocs_pipeline.sources.policy import NEVER_OVERRIDE_HOSTS
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +76,10 @@ class NoLLMHost(ValueError):
 
 #: Hosts whose content never reaches a language model, whatever the stage:
 #: their robots.txt blocks AI agents by name (source-research "Global rules",
-#: §6). A stage checks each page's own host with `PoliteClient.
-#: ai_input_allowed` as well; this list holds even when that check is missed.
-NO_LLM_HOSTS = ("talks.cam.ac.uk", "tbc.xyz")
+#: §6), and no fetch purpose overrides that (`sources.policy`, D3). A stage
+#: checks each page's own host with `PoliteClient.ai_input_allowed` as well;
+#: this list holds even when that check is missed.
+NO_LLM_HOSTS = NEVER_OVERRIDE_HOSTS
 
 
 def assert_llm_source_allowed(url: str) -> None:

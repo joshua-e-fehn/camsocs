@@ -62,10 +62,19 @@ class Fetched:
 
 
 def fetch_info(result: FetchResult) -> FetchInfo:
+    """The page's `sources` row. A page read only because the society purpose
+    overrode robots.txt (`sources/policy.py`) is ``disallowed`` with the
+    override in its access note."""
     if result.outcome == "disallowed_by_robots":
         return FetchInfo(robots_verdict="disallowed", access_note=result.detail)
-    note = None if result.outcome in ("fetched", "unchanged") else (result.detail or result.outcome)
-    return FetchInfo(http_status=result.status, access_note=note)
+    notes = [result.override] if result.override else []
+    if result.outcome not in ("fetched", "unchanged"):
+        notes.append(result.detail or result.outcome)
+    return FetchInfo(
+        http_status=result.status,
+        robots_verdict="disallowed" if result.override else "allowed",
+        access_note="; ".join(notes) or None,
+    )
 
 
 def when(result: FetchResult) -> datetime:

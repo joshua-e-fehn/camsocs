@@ -14,9 +14,13 @@ person's name.
 - Luma: ``https://api.lu.ma/ics/get?entity=calendar&id=<calendar id>``;
   api.lu.ma's robots.txt disallows only ``/insights/``;
 - Google: ``https://calendar.google.com/calendar/ical/<id>/public/basic.ics``.
-  **calendar.google.com's robots.txt is ``Allow: /$`` + ``Disallow: /``**, so
-  the polite client refuses these feeds and the stage reports them as
-  disallowed; nothing is fetched until that changes.
+  **calendar.google.com's robots.txt is ``Allow: /$`` + ``Disallow: /``.**
+  Under Joshua's decision D3 (PLAN.md, 2026-10-08; `sources/policy.py`) a
+  public ICS feed a society links is still read: every feed here is fetched
+  with the society purpose, which overrides the disallow for Google's
+  ``/calendar/ical/<id>/public/…`` feeds only. The event's `sources` row is
+  then ``disallowed`` with ``robots_override:society`` in its access note.
+  Other feed hosts keep their robots.txt.
 
 **Parsing** is `events.ics` (time zones, the bogus-zone heuristic, recurrence,
 UID de-duplication); events re-read from a bogus zone have their times claimed
@@ -58,6 +62,7 @@ from camsocs_pipeline.media import probe_image
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import PoliteClient
+from camsocs_pipeline.sources.policy import SOCIETY
 
 EVIDENCE = "primary"
 COVERS = frozenset({"description", "endsAt", "venueText"})
@@ -193,7 +198,9 @@ def run(
     images: dict[str, str | None] = {}
     with polite_client(ctx.settings) as client:
         for feed in feeds:
-            result = client.fetch(feed.url, accept="text/calendar,*/*;q=0.5")
+            # A feed a society links (D3): the society purpose overrides a
+            # robots disallow for Google Calendar public ICS feeds only.
+            result = client.fetch(feed.url, accept="text/calendar,*/*;q=0.5", purpose=SOCIETY)
             if not result.ok or result.content is None:
                 ctx.report.notes.append(f"{feed.kind} feed: {describe_failure(result)}")
                 continue

@@ -44,6 +44,18 @@ Properties enforced here rather than left to each caller's discipline:
    form POST (Playwaze fixtures): the same robots check, host slot, retries
    and cache as `fetch` (cached per URL + body), but no redirects are
    followed — a redirect from a data endpoint is a sign-in wall, not content.
+9. **The fetch policy** (`sources/policy.py`, Joshua's decision D3). Every
+   fetch carries a `FetchPurpose`. With the default ``general`` purpose,
+   robots.txt and AI opt-outs hold exactly as above. A ``society`` purpose
+   may override a robots.txt *disallow*, and an AI opt-out in
+   `ai_input_allowed`, for the D3 URL classes only: society websites,
+   Linktree, Google Calendar ICS feeds, SU ``/asset/`` files, and college
+   society lists. It never does so on talks.cam or tbc.xyz, and never when
+   robots.txt could not be reached. Some hosts are never fetched at all
+   (`policy.never_fetched`). An override changes nothing else here: pacing,
+   Crawl-delay, the host slot, no cookies, login walls and 401/403 all
+   still apply. A result fetched only thanks to an override carries
+   `override` (``robots_override:society``), and so does its cache entry.
 """
 
 from __future__ import annotations
@@ -68,6 +80,16 @@ from typing import Literal, Self
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+
+from camsocs_pipeline.sources.policy import (
+    GENERAL,
+    ROBOTS_OVERRIDE_NOTE,
+    FetchPurpose,
+    ai_optout_override,
+    never_fetched,
+    never_overridden,
+    robots_override,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +149,9 @@ class FetchResult:
     content_sha256: str | None = None
     from_cache: bool = False
     detail: str | None = None
+    #: Set when robots.txt disallowed the URL and the fetch went ahead under
+    #: the D3 society override (`policy.ROBOTS_OVERRIDE_NOTE`).
+    override: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -184,6 +209,9 @@ class _RobotsPolicy:
     delay: float
     #: ``Content-Signal`` preferences (``ai-input`` → ``no`` …), any group.
     content_signals: dict[str, str] | None = None
+    #: robots.txt could not be read at all (network error, 5xx, 429): the
+    #: host is down rather than closed, so no override applies.
+    unreachable: bool = False
 
 
 #: Crawlers of AI companies that robots.txt files block by name. A host that
@@ -289,32 +317,46 @@ class PoliteClient:
         fresh_for: timedelta | None = None,
         accept: str = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
         headers: Mapping[str, str] | None = None,
+        purpose: FetchPurpose = GENERAL,
     ) -> FetchResult:
         """Fetch `url` under every rule in the module docstring.
 
         `fresh_for`: if the cache holds a successful copy younger than this,
         return it without touching the network (a per-entity TTL for expensive
         pages). `headers`: extra request headers (an API key a source asks
-        for); they never replace the User-Agent.
+        for); they never replace the User-Agent. `purpose`: the fetch policy
+        scope (`sources/policy.py`); only a ``society`` purpose may override
+        a robots.txt disallow, and only for the D3 URL classes.
         """
         _require_http(url)
-        cached = self._read_cache(url)
+        refused = never_fetched(url)
+        if refused is not None:
+            return self._result(url, url, "disallowed_by_robots", None, detail=refused)
+        cached = self._usable_cache(url, purpose)
         if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
             return _from_cache(url, *cached, detail="fresh in cache")
 
         current = url
+        override: str | None = None
         for _hop in range(MAX_REDIRECTS + 1):
+            refused = never_fetched(current)
+            if refused is not None:
+                return self._result(url, current, "disallowed_by_robots", None, detail=refused)
             policy = self._robots_policy(current)
             if not self._robots_allows(policy, current):
-                reason = policy.blanket_disallow or "disallowed by robots.txt"
-                return self._result(url, current, "disallowed_by_robots", None, detail=reason)
+                if policy.unreachable or not robots_override(current, purpose):
+                    reason = policy.blanket_disallow or "disallowed by robots.txt"
+                    return self._result(url, current, "disallowed_by_robots", None, detail=reason)
+                override = ROBOTS_OVERRIDE_NOTE
 
             conditional = cached if current == url else None
             response, error = self._request(
                 current, policy.delay, accept, conditional, extra_headers=headers
             )
             if response is None:
-                result = self._result(url, current, "unreachable", None, detail=error)
+                result = self._result(
+                    url, current, "unreachable", None, detail=error, override=override
+                )
                 self._record_negative(url, result)
                 return result
 
@@ -338,27 +380,36 @@ class PoliteClient:
                         "access_restricted",
                         response.status_code,
                         detail=f"redirects to a login at {login}",
+                        override=override,
                     )
                     self._record_negative(url, result)
                     return result
                 continue
 
-            return self._classify(url, current, response, cached)
+            return self._classify(url, current, response, cached, override=override)
 
         return self._result(url, current, "http_error", None, detail="too many redirects")
 
-    def allows(self, url: str) -> bool:
-        """Whether robots.txt lets us fetch `url`. Loads the host's robots.txt
-        on first use (paced like any request); never requests `url` itself —
-        for deciding what to record about a resource we must not fetch."""
+    def allows(self, url: str, purpose: FetchPurpose = GENERAL) -> bool:
+        """Whether we may fetch `url` for `purpose`: robots.txt lets us, or a
+        society purpose overrides its disallow (`sources/policy.py`). Loads the
+        host's robots.txt on first use (paced like any request); never
+        requests `url` itself — for deciding what to record about a resource
+        before fetching it."""
         _require_http(url)
-        return self._robots_allows(self._robots_policy(url), url)
+        if never_fetched(url) is not None:
+            return False
+        policy = self._robots_policy(url)
+        if self._robots_allows(policy, url):
+            return True
+        return not policy.unreachable and robots_override(url, purpose)
 
-    def cached(self, url: str) -> FetchResult | None:
+    def cached(self, url: str, purpose: FetchPurpose = GENERAL) -> FetchResult | None:
         """The last successful copy of `url` in the cache, without touching the
-        network (a dry run replays from here), or None."""
+        network (a dry run replays from here), or None. A copy fetched under a
+        society override is served only to a purpose that may override too."""
         _require_http(url)
-        cached = self._read_cache(url)
+        cached = self._usable_cache(url, purpose)
         return None if cached is None else _from_cache(url, *cached, detail="from cache")
 
     def robots_verdict(self, url: str) -> Literal["allowed", "disallowed", "crawl_delay"]:
@@ -369,12 +420,20 @@ class PoliteClient:
             return "disallowed"
         return "crawl_delay" if policy.delay > 0 else "allowed"
 
-    def ai_input_allowed(self, url: str) -> bool:
+    def ai_input_allowed(self, url: str, purpose: FetchPurpose = GENERAL) -> bool:
         """Whether this host lets `url`'s content reach a language model: its
         robots.txt names no AI crawler (`AI_AGENTS`) as disallowed from the
         URL and sets no ``Content-Signal: ai-input=no``. Fetches robots.txt if
-        this run has not yet; an unreadable robots.txt answers False."""
+        this run has not yet; an unreadable robots.txt answers False.
+
+        A society `purpose` overrides the opt-out for the D3 URL classes
+        (`policy.ai_optout_override`); talks.cam and tbc.xyz are never
+        overridden and always answer False."""
         _require_http(url)
+        if never_overridden(url):
+            return False
+        if ai_optout_override(url, purpose):
+            return True
         policy = self._robots_policy(url)
         if policy.blanket_disallow is not None:
             return False
@@ -441,12 +500,12 @@ class PoliteClient:
             logger.warning(
                 "robots.txt unreachable for %s (%s) — treating as disallow", origin, error
             )
-            return _RobotsPolicy(None, f"robots.txt unreachable: {error}", 0.0)
+            return _RobotsPolicy(None, f"robots.txt unreachable: {error}", 0.0, unreachable=True)
         status = response.status_code
         if status in RESTRICTED_STATUSES:
             return _RobotsPolicy(None, f"robots.txt answered {status}", 0.0)
         if status >= 500 or status == 429:
-            return _RobotsPolicy(None, f"robots.txt answered {status}", 0.0)
+            return _RobotsPolicy(None, f"robots.txt answered {status}", 0.0, unreachable=True)
         if status >= 400:
             # No robots.txt: everything is allowed (RFC 9309 §2.3.1.3).
             return _RobotsPolicy(None, None, 0.0)
@@ -554,11 +613,13 @@ class PoliteClient:
         final_url: str,
         response: httpx.Response,
         cached: tuple[dict, bytes | None] | None,
+        *,
+        override: str | None = None,
     ) -> FetchResult:
         status = response.status_code
         if status == 304 and cached is not None and cached[1] is not None:
             meta, body = cached
-            return self._result(
+            result = self._result(
                 url,
                 final_url,
                 "unchanged",
@@ -567,21 +628,35 @@ class PoliteClient:
                 content_type=meta.get("content_type"),
                 content_sha256=meta.get("content_sha256"),
                 from_cache=True,
+                override=override,
             )
+            if override != meta.get("override"):
+                self._write_cache(
+                    url,
+                    result,
+                    body,
+                    etag=meta.get("etag"),
+                    last_modified=meta.get("last_modified"),
+                )
+            return result
         if status in NOT_FOUND_STATUSES:
-            result = self._result(url, final_url, "not_found", status)
+            result = self._result(url, final_url, "not_found", status, override=override)
             self._record_negative(url, result)
             return result
         if status in RESTRICTED_STATUSES:
-            result = self._result(url, final_url, "access_restricted", status)
+            result = self._result(url, final_url, "access_restricted", status, override=override)
             self._record_negative(url, result)
             return result
         if not 200 <= status < 300:
-            return self._result(url, final_url, "http_error", status, detail=f"HTTP {status}")
+            return self._result(
+                url, final_url, "http_error", status, detail=f"HTTP {status}", override=override
+            )
 
         body = response.content
         if len(body) > MAX_BYTES:
-            return self._result(url, final_url, "http_error", status, detail="response too large")
+            return self._result(
+                url, final_url, "http_error", status, detail="response too large", override=override
+            )
         digest = hashlib.sha256(body).hexdigest()
         previous = cached[0].get("content_sha256") if cached is not None else None
         outcome: FetchOutcome = "unchanged" if previous == digest else "fetched"
@@ -593,6 +668,7 @@ class PoliteClient:
             content=body,
             content_type=response.headers.get("content-type"),
             content_sha256=digest,
+            override=override,
         )
         self._write_cache(
             url,
@@ -626,6 +702,15 @@ class PoliteClient:
         key = hashlib.sha256(url.encode("utf-8")).hexdigest()
         folder = self.cache_dir / host
         return folder / f"{key}.body", folder / f"{key}.json"
+
+    def _usable_cache(self, url: str, purpose: FetchPurpose) -> tuple[dict, bytes | None] | None:
+        """The cached copy of `url`, unless it was fetched under a society
+        override that `purpose` may not use: the cache never launders a
+        robots.txt override into a general fetch."""
+        cached = self._read_cache(url)
+        if cached is not None and cached[0].get("override") and not robots_override(url, purpose):
+            return None
+        return cached
 
     def _read_cache(self, url: str) -> tuple[dict, bytes | None] | None:
         body_path, meta_path = self.cache_paths(url)
@@ -674,6 +759,8 @@ class PoliteClient:
             "etag": etag,
             "last_modified": last_modified,
         }
+        if result.override:
+            meta["override"] = result.override
         _atomic_write(meta_path, (json.dumps(meta, indent=2) + "\n").encode("utf-8"))
 
     def _record_negative(self, url: str, result: FetchResult) -> None:
@@ -690,6 +777,8 @@ class PoliteClient:
             "fetched_at": result.fetched_at,
             "detail": result.detail,
         }
+        if result.override:
+            record["override"] = result.override
         _atomic_write(negative_path, (json.dumps(record, indent=2) + "\n").encode("utf-8"))
 
 
@@ -709,6 +798,7 @@ def _from_cache(url: str, meta: dict, body: bytes | None, *, detail: str) -> Fet
         content_sha256=meta.get("content_sha256"),
         from_cache=True,
         detail=detail,
+        override=meta.get("override"),
     )
 
 

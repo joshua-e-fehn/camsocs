@@ -111,12 +111,41 @@ def test_robots_blocked_files_and_missing_cards_are_skipped(tmp_path, net) -> No
     assert isinstance(missing, Skipped) and missing.reason.startswith("not_found")
 
 
+def test_su_termcards_behind_the_login_are_restricted_and_assets_overridden(tmp_path, net) -> None:
+    # D3: SU-hosted cards are fetched with the society purpose. A /file/ link
+    # redirects to the SU login, which is never followed (access_restricted);
+    # an /asset/ file is read although robots.txt disallows /asset/.
+    su = "https://www.cambridgesu.co.uk"
+    net.get(f"{su}/robots.txt").mock(
+        return_value=httpx.Response(
+            200, text="User-agent: *\nDisallow: /asset/\nDisallow: /login/\n"
+        )
+    )
+    net.get(f"{su}/file/7501/Termcard/").mock(
+        return_value=httpx.Response(
+            302, headers={"location": "/login/?redirect=%2ffile%2f7501%2fTermcard%2f"}
+        )
+    )
+    login = net.get(url__startswith=f"{su}/login/")
+    net.get(f"{su}/asset/Organisation/7501/termcard.pdf").mock(
+        return_value=httpx.Response(200, content=PDF, headers={"content-type": "application/pdf"})
+    )
+    with client(tmp_path) as polite:
+        walled = fetch_termcard(polite, f"{su}/file/7501/Termcard/")
+        asset = fetch_termcard(polite, f"{su}/asset/Organisation/7501/termcard.pdf")
+    assert isinstance(walled, Skipped) and walled.reason.startswith("access_restricted")
+    assert login.call_count == 0
+    assert isinstance(asset, TermcardFile)
+    assert asset.fetch.override == "robots_override:society"
+    # A general fetch of the same asset is still refused, even from the cache.
+    with client(tmp_path) as polite:
+        general = polite.fetch(f"{su}/asset/Organisation/7501/termcard.pdf")
+    assert general.outcome == "disallowed_by_robots"
+
+
 @pytest.mark.parametrize(
     ("url", "reason"),
     [
-        # §21: SU termcards are never fetched — /file/ is robots-allowed but
-        # redirects to the login page.
-        ("https://www.cambridgesu.co.uk/file/7501/Termcard/", "SU-hosted"),
         ("https://talks.cam.ac.uk/show/index/201664", "keeps AI out"),
         ("https://www.instagram.com/p/abc123/", "social network"),
         ("https://www.facebook.com/cuorrery/photos/1", "social network"),

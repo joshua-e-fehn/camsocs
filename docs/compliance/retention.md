@@ -7,7 +7,7 @@ What is kept, for how long, what ends it, and whether the deletion is automated 
 | ID | Data | Kept for | Ends with | How it is removed | Automated? |
 |---|---|---|---|---|---|
 | R1 | Organisation listings (`organisations`, `orgCards`, teams, sessions) | While the organisation is active | No activity and no current register for 2 academic years → marked defunct, so `archived` (left out of the directory's default view), then deleted 1 year later. A removal request ends it at once (R8) | Status is derived daily (`convex/derive.ts`: `dormant` after 180 days without activity or a current registration; `archived` once defunct) | `dormant`: yes. Archiving and deletion: **manual** |
-| R2 | Provenance (`fieldClaims`, `sources`) | As long as the entity it describes | Entity deleted | Deleted with the entity (`ingest/purge:removeEntity`) | **manual** (run per entity) |
+| R2 | Provenance (`fieldClaims`, `sources`). `fieldClaims.valueRaw` holds the unredacted original of public free text (D1), names included | As long as the entity it describes | Entity deleted | Deleted with the entity (`ingest/purge:removeEntity`) | **manual** (run per entity) |
 | R3 | Events (`events`, `eventOrganisers`), stored event images | 1 year after the event (longer than the 180-day activity window that `lastActiveAt` needs) | Age | Purge job | **manual** |
 | R4 | Mailing-list messages (`inboundEmails`, their stored HTML and attachments) | 90 days from receipt | Age; extraction finished | Delete row and its `_storage` files | **manual** |
 | R5 | Named committee members (`people`) | Until `staleAfter` (the next 30 June) + 30 days, unless the person consented to longer | Handover date | `stale` flag set daily (`convex/derive.ts`); row deleted 30 days later | Flag: yes. Deletion: **manual** |
@@ -29,3 +29,4 @@ What is kept, for how long, what ends it, and whether the deletion is automated 
 - A scheduled Convex job for R3, R4, R5 deletion, R8 and R10 (the daily cron in `convex/crons.ts` is the natural home).
 - The suppression list (R8) and a pipeline check against it before any organisation is re-created or a person is re-added. The request form and `/request` already promise that a removed listing stays removed.
 - A `var/cache/` pruning step in the pipeline (R7).
+- Clearing `valueRaw` on superseded free-text claims after each 30 June handover, so unredacted names (D1) do not outlive the year (DPIA-lite R-12).

@@ -18,6 +18,7 @@ camsocs is a verified, current database of Cambridge student societies and sport
 
 - **Python pipeline** (`pipeline/`, package `camsocs_pipeline`, run through pixi): harvests public sources and extracts structured claims with an LLM, then pushes them into Convex over authenticated HTTP. Stages are discover → fetch → parse → extract → resolve → transform → load.
   - Fetching uses a polite client (`sources/base.py`). It checks robots.txt for each host, keeps one request in flight per host and honours Crawl-delay. Raw pages are cached in `var/cache/` with a SHA-256.
+  - Every fetch carries a purpose, `general` or `society` (`sources/policy.py`, decision D3). Only a `society` fetch of a D3 URL class (a society's website, its Linktree, a Google Calendar ICS feed it links, an SU `/asset/` file from its profile, a college / JCR / MCR society list) may override a robots.txt disallow or an AI opt-out. Such a fetch is recorded `robots_override:society` / `ai_optout_override:society` on its `sources` row.
   - LLM calls go through cliproxy, an OpenAI-compatible endpoint backed by Joshua's ChatGPT Codex Pro login. The model is `gpt-6-luna` for bulk work and `gpt-6.1-sol` for vision and hard cases.
 - **Convex** (`webapp/convex/`) is the database and backend. Tables written by the pipeline are changed only through internal mutations behind `/api/pipeline/*` (Bearer `PIPELINE_API_KEY`). Resolved field values and the derived fields are computed on the server.
 - **Next.js 16 + Tailwind v4 + shadcn (radix-nova, mauve)** (`webapp/`) renders the public site and the private `/dashboard` broker area. Data comes only from Convex hooks; there is no REST layer.
@@ -40,7 +41,8 @@ camsocs is a verified, current database of Cambridge student societies and sport
   - `cam_only` events need a verified `@cam.ac.uk` session.
   - `members_only` events are never shown.
 - **LLM guard:** `extract/llm.py` refuses any model id containing `claude` or `anthropic` (any provider prefix or separator), and any id that is not plain printable ASCII. Never route Claude subscription credentials through cliproxy; Anthropic's terms prohibit it.
-- **talks.cam content is parsed deterministically and is never passed to the LLM.** Its robots.txt blocks AI agents; see source-research §6.
+- **talks.cam content is parsed deterministically and is never passed to the LLM.** Its robots.txt blocks AI agents; see source-research §6. No fetch purpose overrides that, nor tbc.xyz's block.
+- **Public free text is redacted on its way to Convex** (decision D1). `ConvexLoader.post_observations` runs `extract/redact.py`: names of private individuals in descriptions, how-to-join and other notes, and event descriptions become roles. The original goes only into `fieldClaims.valueRaw`. Staging keeps the source's own words.
 - `webapp/convex/_generated/` is committed, and `check:codegen` guards it.
 - Convex test files need two dots in their names (`*.test.ts`, `*.testing.ts`) so they are never deployed. Register any new module in `convex/lib/harness.testing.ts`.
 - `MAX_BATCH = 500` must stay equal in `webapp/convex/lib/ingest.ts` and `pipeline/.../load.py`.
@@ -52,8 +54,9 @@ camsocs is a verified, current database of Cambridge student societies and sport
 - A failed fetch is never recorded as found. A 404 is recorded as `not_found`.
 - An LLM claim without a verifiable verbatim quote is recorded as `inferred`, never `found`.
 - No scraping of Instagram, Facebook or LinkedIn. Store links only. The only access to Meta data is the official Business Discovery API.
-- Do not decode obfuscated emails. Do not fetch Raven-gated, members-only or 403 pages. Respect every robots.txt block.
-- Personal CRSids and named people never appear in public fields. Named people live only in `broker` tables, with a `staleAfter` date.
+- Do not decode obfuscated emails. Do not fetch Raven-gated, members-only or 403 pages.
+- Respect robots.txt on every non-society page. Society pages and feeds of the D3 classes may be read where robots.txt or an AI opt-out disallows, but only through `sources/policy.py`, and the override is recorded. Never override talks.cam or tbc.xyz. Never fetch the University Events API (webservices.admin.cam.ac.uk).
+- Personal CRSids and named people never appear in public fields. Names of private individuals in public free text are replaced by roles (D1); the original lives only in `fieldClaims.valueRaw`. Speakers an organiser publishes for a public talk stay named. Named people live only in `broker` tables, with a `staleAfter` date; first-name-only committee members are kept there too (D2).
 - No scraped caches, raw personal data or tokens in Git.
 
 ## Operational commands

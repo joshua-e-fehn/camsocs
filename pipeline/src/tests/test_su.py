@@ -135,10 +135,17 @@ def test_logos_are_never_hotlinked(entries) -> None:
     blocked = fields(directory_observation(entries["15759"], directory, logo_allowed=False))
     assert blocked["logo"].status == "missing"
     assert blocked["logo"].missing_reason == "access_restricted"
-    # Not checked (a dry run) or fetchable without an upload path: say nothing.
-    for allowed in (None, True):
-        observed = fields(directory_observation(entries["15759"], directory, logo_allowed=allowed))
-        assert "logo" not in observed
+    # Not checked (a dry run): say nothing.
+    unchecked = fields(directory_observation(entries["15759"], directory, logo_allowed=None))
+    assert "logo" not in unchecked
+    # Fetchable (D3 lets a society's /asset/ logo be copied): staged as a
+    # source for the load stage to store our own copy of, never a hotlink.
+    allowed = directory_observation(
+        entries["15759"], directory, logo_allowed=True, logo_note="robots_override:society"
+    )
+    assert fields(allowed)["logo"].value == {"sourceUrl": entries["15759"].logo_url}
+    assert allowed.fetch is not None
+    assert allowed.fetch.access_note == "logo: robots_override:society"
     assert "asset/" not in directory_observation(
         entries["15759"], directory, logo_allowed=False
     ).model_dump_json(exclude={"fields": {2: {"value_raw"}}, "identity": True})

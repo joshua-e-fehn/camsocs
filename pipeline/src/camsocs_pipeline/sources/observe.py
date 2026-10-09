@@ -54,14 +54,19 @@ def missing_reason(result: FetchResult) -> str:
 
 
 def fetch_info(client: PoliteClient, result: FetchResult) -> FetchInfo:
-    """How the page was fetched, for its `sources` row."""
+    """How the page was fetched, for its `sources` row. A page read only
+    because a society purpose overrode robots.txt (`sources/policy.py`) keeps
+    the honest ``disallowed`` verdict and says so in the access note."""
     if result.outcome == "disallowed_by_robots":
         verdict = "disallowed"
     else:
         verdict = client.robots_verdict(result.final_url or result.url)
-    note = None
+    notes: list[str] = []
+    if result.override:
+        notes.append(result.override)
     if not result.ok:
-        note = f"{result.outcome}" + (f": {result.detail}" if result.detail else "")
+        notes.append(f"{result.outcome}" + (f": {result.detail}" if result.detail else ""))
+    note = "; ".join(notes) or None
     return FetchInfo(
         http_status=result.status,
         robots_verdict=verdict,

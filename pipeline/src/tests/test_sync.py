@@ -266,9 +266,9 @@ def test_load_posts_resolved_organisations_before_their_enrichment(
     posted: list[list[str]] = []
     original = load.ConvexLoader.post_observations
 
-    def spy(self, records, *, run_key=None, media=None):
+    def spy(self, records, **kwargs):
         posted.append([record.source_type for record in records])
-        return original(self, records, run_key=run_key, media=media)
+        return original(self, records, **kwargs)
 
     monkeypatch.setattr(load.ConvexLoader, "post_observations", spy)
     report = run_sync(settings=settings, dry_run=True, stages=["load"], limit=1)

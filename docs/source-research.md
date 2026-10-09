@@ -7,12 +7,25 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 ## Global rules
 
 - **User-Agent:** `camsocs-bot/0.1 (+https://camsocs.vercel.app/about)`. It contains no personal email.
-- **robots.txt:** checked per host, with our User-Agent, before the first fetch of each run. `Crawl-delay` is honoured.
+- **robots.txt:** checked per host, with our User-Agent, before the first fetch of each run. `Crawl-delay` is honoured. It is honoured on every page except society pages and feeds (below).
+- **Fetch policy (decision D3, 2026-10-08; `pipeline/.../sources/policy.py`).** Every fetch carries a purpose.
+  - A `general` fetch honours robots.txt and every AI opt-out.
+  - A `society` fetch may override a robots.txt **disallow**, and an AI opt-out for LLM use (an AI crawler blocked by name, `Content-Signal: ai-input=no`, a `noai` page). It may do so only for these URL classes:
+    - a society's, club's, JCR's or MCR's own website (declared by the caller);
+    - a society's Linktree page;
+    - a Google Calendar public ICS feed (`/calendar/ical/<id>/public/…`) a society links;
+    - a Cambridge SU `/asset/` file linked from a society's profile (logos, termcards);
+    - a college / JCR / MCR society-list page (declared by the caller).
+  - **Never overridden:** talks.cam and tbc.xyz (their AI-agent blocks always hold), a robots.txt that cannot be reached at all (the host is down: `unreachable`), and hosts that are never a society's page: the University's central, Sport and Proctors' sites, `*.admin.cam.ac.uk`, search engines, X / TikTok / YouTube / Threads, link shorteners.
+  - **Never fetched,** whatever robots.txt says: webservices.admin.cam.ac.uk (§10), Instagram, Facebook, LinkedIn.
+  - **What an override changes:** nothing but the robots / AI verdict. The User-Agent, Crawl-delay, the minimum interval, one request per host, no cookies, login walls and 401/403 all hold.
+  - **Provenance:** the `sources` row keeps the honest `robotsVerdict: disallowed` and says `accessNote: robots_override:society`. Text that reached the LLM only because of an override is marked `ai_optout_override:society`. The cache never serves an overridden copy to a general fetch.
 - **Requests:** one at a time per host, at least 1 s apart.
 - **Never decoded:** obfuscated emails (Cloudflare email protection, script-hidden addresses).
 - **Never fetched:** Raven-gated, members-only or 403 pages.
 - **Instagram, Facebook, LinkedIn:** store the link only. They are fetched only through the official Meta Business Discovery API (§17).
-- **talks.cam and tbc.xyz:** their robots.txt blocks AI agents by name. talks.cam's content is therefore parsed deterministically and **never passed to the LLM**. tbc.xyz is not used.
+- **talks.cam and tbc.xyz:** their robots.txt blocks AI agents by name. talks.cam's content is therefore parsed deterministically and **never passed to the LLM**, and no fetch purpose overrides either host. tbc.xyz is not used.
+- **Names in public text (decision D1):** personal names of private individuals in public free text are replaced by roles before publishing (`pipeline/.../extract/redact.py`, prompt `redact_names_v1`). The original stays internal (`fieldClaims.valueRaw`). Published speakers stay named. talks.cam text is redacted by the deterministic rule only.
 - **Raw caches** go under `var/cache/` and are never committed.
 
 ## §1 Cambridge SU "Find a Society"
@@ -38,7 +51,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **robots.txt** (fetched 2026-10-07 with our User-Agent; no `Crawl-delay`)
 - The `User-agent: *` group disallows `/photos/ /advertclick/ /login/ /pagestylesheet/ /stylesheet/ /skins/ /resourcehandler/ /edit/ /search/ /asset/ /account/ /Shibboleth.sso /sso/`.
 - `/organisation/`, `/opportunities/` and `/file/` are allowed.
-- **Every logo lives under `/asset/Organisation/<id>/…`.** Logos are therefore never downloaded, and never hotlinked: `logo` is recorded as `missing` / `access_restricted`.
+- **Every logo lives under `/asset/Organisation/<id>/…`.** Until 2026-10-08 logos were never downloaded (`logo` `missing` / `access_restricted`). Under D3 an SU `/asset/` file linked from a society's listing may be fetched with the society purpose: the logo is staged as `{sourceUrl}`, the load stage stores our own copy (never a hotlink), and the directory observation's access note says `logo: robots_override:society`.
 
 **Terms and decision**
 - Societies consented to publication by the SU. No reuse licence was found.
@@ -75,11 +88,11 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - Descriptions contain:
   - personal CRSid addresses (withheld, replaced by a marker);
   - chat invite links (withheld);
-  - sometimes officers' first names, which no rule can detect.
+  - sometimes officers' first names, which no rule can detect: the D1 redaction (LLM pass) replaces them with roles before publishing.
 - A few profiles embed the SU's own event list (`.soc-event-list`, dates without a year). Those events belong to the SU What's On harvester (§12), not here.
 - Some description links are wrapped in Outlook SafeLinks. They are unwrapped from their own query string, never followed.
 - A test entry ("Test Soc") is listed like any society.
-- Resources (where termcards live) are served under `/asset/` and `/resourcehandler/`, both disallowed for every crawler, and the resource page itself errors for anonymous requests (checked 2026-10-07). Record a resource termcard's URL, but never fetch the file (§21).
+- Resources (where termcards live) are served under `/asset/` and `/resourcehandler/`, both disallowed for every crawler, and the resource page itself errors for anonymous requests (checked 2026-10-07). Profiles link them as `/file/<id>/<name>/`, which redirects to the login page (seen 2026-10-08). Under D3 these cards are fetched with the society purpose; the login redirect is never followed, so they are recorded `access_restricted` (§21).
 
 ## §2 Proctors' register
 
@@ -272,7 +285,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **Platforms:** about 15 different site templates. See LB §2.1.
 
 **Blocked or members-only:**
-- The Caius JCR site blocks all crawlers in robots.txt.
+- The Caius JCR site blocks all crawlers in robots.txt. Under D3 it is read anyway, as a JCR's own website (`robots_override:society`).
 - The Homerton list and the Lucy Cavendish list are members-only.
 - Peterhouse returned 403.
 - The Wolfson live site resets the connection. The archive copy is dated 2025-08-13.
@@ -289,15 +302,15 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - On a college's own site, only links and addresses that carry the body's mark ("instagram.com/girtonmcr", "gsb.president@…") are the body's, never the college's footer.
 - **Not found:** no page naming them was found for the Emmanuel MCR, the Caius MCR or the Queens' MCR.
 - **Traps seen**
-  - jcr.cai.cam.ac.uk: robots.txt disallows all → `website` missing / `access_restricted`.
-  - www.ecsu.org.uk: robots.txt answers HTTP 500, treated as disallow → `unreachable`.
+  - jcr.cai.cam.ac.uk: robots.txt disallows all. Until 2026-10-08 → `website` missing / `access_restricted`; under D3 the home page is fetched with the society purpose (`SOCIETY_WEBSITE`) and recorded `robots_override:society`.
+  - www.ecsu.org.uk: robots.txt answers HTTP 500, treated as disallow → `unreachable`. An unreachable robots.txt is never overridden.
   - wcsa.wolfson.cam.ac.uk: resets the connection → `unreachable`. The college's own WCSA page (https://www.wolfson.cam.ac.uk/student-association-wcsa) is used instead of the archive copy.
   - The Selwyn MCR site the college links (http://www-mcr.sel.cam.ac.uk/) answers **410** → `not_found`.
   - kcgs.org.uk, linked by KCSU as "King's Graduate Society", now serves an unrelated site about King's College, so no website is claimed.
   - Cloudflare email protection on Churchill's JCR/MCR page and on Queens' JCR → `email` and `roleEmails` missing / `access_restricted`, never decoded.
 - **Named officers:** none are read. The bodies' committee pages are left for a later broker-only extraction.
 
-**Harvester:** stage `colleges`, `sources/colleges.py`.
+**Harvester:** stage `colleges`, `sources/colleges.py`. A body's own site (and an evidence page on that same host) is fetched with the society purpose; a college page that names the body keeps the general purpose.
 
 ## §9 Playwaze (college leagues and BUCS)
 
@@ -321,7 +334,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Use:** context for internal partners. It is not specific to societies.
 
-**robots.txt (re-verified 2026-10-07): `User-agent: *` / `Disallow: /` on `webservices.admin.cam.ac.uk`.** Every endpoint (`events.json`, `.rss`, `.ics`, `show.xml`, uploaded images) is on that host, including the feeds the public What's On page (https://www.admin.cam.ac.uk/whatson/) links for subscription. The stage `uni_events` (`events/uni_events.py`) therefore fetches nothing while the block stands and says so in its run notes. Its parser reads the iCalendar export (a standard format; the JSON schema was not checked, since that would breach robots.txt) and keeps only events naming exactly one known student group.
+**robots.txt (re-verified 2026-10-07): `User-agent: *` / `Disallow: /` on `webservices.admin.cam.ac.uk`.** Every endpoint (`events.json`, `.rss`, `.ics`, `show.xml`, uploaded images) is on that host, including the feeds the public What's On page (https://www.admin.cam.ac.uk/whatson/) links for subscription. The stage `uni_events` (`events/uni_events.py`) therefore fetches nothing and says so in its run notes. It is not a society's page, so D3 does not apply: the fetch policy lists the host as never fetched, whatever its robots.txt says. Its parser reads the iCalendar export (a standard format; the JSON schema was not checked, since that would breach robots.txt) and keeps only events naming exactly one known student group.
 
 ## §11 Calendar feeds that societies publish
 
@@ -336,7 +349,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Events harvester (T6, re-verified 2026-10-07)** — `events/calendar_feeds.py` + `events/ics.py`, stage `calendar_feeds`.
 - `api.lu.ma` robots.txt: `User-agent: *` / `Disallow: /insights/` — the ICS endpoint is allowed. Luma ICS: UTC times, `STATUS:TENTATIVE` on every event (ignored), `ORGANIZER;CN=` often a person (never used), a generated description ("Get up-to-date information at: <event page> / Address: … / Hosted by <names>") from which only the page is kept. Seed: Cambridge AI Safety Hub `cal-4TNl4yi3sVEcAO5` (from https://luma.com/es51jfvb).
-- **`calendar.google.com` robots.txt: `User-agent: *` / `Allow: /$` / `Disallow: /`** — Google Calendar ICS feeds (`/calendar/ical/<id>/public/basic.ics`) are disallowed for crawlers, so they are listed but not fetched (e.g. CUPS links one from camphysoc.co.uk).
+- **`calendar.google.com` robots.txt: `User-agent: *` / `Allow: /$` / `Disallow: /`.** Google Calendar ICS feeds (`/calendar/ical/<id>/public/basic.ics`) are disallowed for crawlers; until 2026-10-08 they were listed but not fetched (24 in the first full harvest). Under D3 a public ICS feed a society links is fetched with the society purpose (only that path pattern; other Google Calendar pages keep the disallow), and its events' `sources` rows say `robots_override:society`.
 - Time zones (`events/ics.py` docstring): floating → London; a zone whose offset differs from London's at that moment (event `TZID`, or `X-WR-TIMEZONE` for UTC times) is re-read as London wall-clock time when the location is empty, online or in Cambridge; such times are `inferred`. Recurrences are expanded in wall-clock time inside the window; events are de-duplicated by UID.
 
 ## §12 SU What's On
@@ -348,7 +361,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **Coverage is low:** only about 6 of 61 events came from student groups.
 
 **Events harvester (T6, re-verified 2026-10-07)** — `events/su_whatson.py`, stage `su_whatson`.
-- robots.txt for `*` disallows `/photos/ /advertclick/ /login/ /pagestylesheet/ /stylesheet/ /skins/ /resourcehandler/ /edit/ /search/ /asset/ /account/ /Shibboleth.sso /sso/`. Event images are under `/asset/`, so they are not fetched.
+- robots.txt for `*` disallows `/photos/ /advertclick/ /login/ /pagestylesheet/ /stylesheet/ /skins/ /resourcehandler/ /edit/ /search/ /asset/ /account/ /Shibboleth.sso /sso/`. Event images are under `/asset/`, so they are not fetched (D3 covers only `/asset/` files linked from a society's own profile, not the SU's event listing).
 - `/whatson/` listed 60 entries: Sabbatical Officers 34, Cambridge SU 19, Clubs and Societies 1, University of Cambridge 1, student groups 5 (Sikh Society, Jugglers' Association, The Interfaith Society, Indonesia Association, Hong Kong Postgraduate Scholars Association). Each `div.event_item` has `data-msl-organisation-id`; the listing date ("8th October") has no year or time.
 - Event pages (`/events/<org id>/<event id>/`, `/ents/event/<id>/`) give the title (`h1`), "Friday 09 October 2026", "6pm - 8:45pm", location and organisation (`.event-details` with Font Awesome icons) and the description (`.e-details-txt`). SU-run events (SU, sabbatical officers, the clubs office, the University) are left out; so are entries linking elsewhere (elections page, external sites).
 
@@ -358,7 +371,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **robots.txt (re-verified 2026-10-08, T5):** `User-agent: *` → `Disallow: /`. Only named search crawlers (Applebot, baiduspider, …, each with `Content-Signal: ai-train=no, search=yes`) may fetch profiles. Our User-Agent falls under `*`, so **Linktree profile pages are never fetched**. Besides, the edge answers the pipeline's HTTP client (httpx) with 403 even for robots.txt, which the polite client also treats as "disallow everything"; we do not work around either.
 
-**Use:** a Linktree URL another source states is kept as a `socials` entry (`platform: linktree`). The enrichment stage (`sources/websites/linktree.py`, deterministic, never the LLM) would read its links if the robots.txt ever allowed us; until then each run records the page as `robots_verdict: disallowed`.
+**Use:** a Linktree URL another source states is kept as a `socials` entry (`platform: linktree`). Under D3 the enrichment stage (`sources/websites/linktree.py`, deterministic, never the LLM) fetches a society's Linktree page with the society purpose although robots.txt disallows `*`; the page's `sources` row keeps `robots_verdict: disallowed` with `robots_override:society`. A 403 from Linktree's edge is recorded `access_restricted` and never worked around.
 
 ## §14 Society websites
 
@@ -370,11 +383,11 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 - **Which site:** the website a register states (SU profile first, then Proctors, Sport, …), never a social network, the SU or Sport directory, Camdram, talks.cam, a form, a ticket shop or a chat invite; a short link that lands on one of those is dropped. A site claimed by two organisations is read as neither's. A "website" that is a page of a bigger site (a club's page on its parent club's or the RAF's site) is read for its own content only: its header, navigation and footer belong to the host site.
 - **Pages:** the home page plus at most one page per kind (about, join, committee, contact, events, sponsors), inside the site and under the starting path. Never: files, login / account / members-only paths, a redirect into a login service (Raven `raven.cam.ac.uk`, SRCF's WLS `nevar.srcf.net`, Microsoft or Google sign-in) — recorded `access_restricted`. Cached pages younger than 3 days are not fetched again; one retry for a site that is down.
-- **robots:** robots.txt per host as for every source. A page with `<meta name="robots" content="noindex">` is not read; `nofollow` stops the discovery of further pages.
-- **No LLM when a site keeps AI out:** if the host's robots.txt disallows any AI crawler by name (GPTBot, ChatGPT-User, ClaudeBot, CCBot, Google-Extended, PerplexityBot, …) or says `Content-Signal: ai-input=no`, or the page says `noai`, its text never reaches the LLM — the talks.cam rule (§6) applied to every site. Checked **per page**: a sub-page whose URL an AI crawler is disallowed from, or that says `noai`, is left out of the prompt even when the home page may go in. Such sites are read deterministically (links, emails, feeds) only.
+- **robots:** robots.txt per host as for every source, with the D3 society override: a society's own site is read even where robots.txt disallows it (`robots_override:society`). A page with `<meta name="robots" content="noindex">` is still not read; `nofollow` stops the discovery of further pages (robots meta is not robots.txt, and D3 does not cover it).
+- **AI opt-outs (D3):** if the host's robots.txt disallows an AI crawler by name (GPTBot, ChatGPT-User, ClaudeBot, CCBot, Google-Extended, PerplexityBot, …) or says `Content-Signal: ai-input=no`, or the page says `noai`, the page used to stay out of the prompt (the talks.cam rule applied to every site). Since 2026-10-08 a society's own pages go to the LLM anyway; each such page's `sources` row says `ai_optout_override:society`. talks.cam and tbc.xyz never reach the model. Checked **per page**.
 - **Free text the model writes is `inferred`.** A description, summary or "one neutral sentence" is `found` only when its words are themselves on the page; a verbatim quote supports the gist, not a paraphrase. Each reading restates every LLM field on every page read (a value, `not_found`, or `not_published` where a value was withheld for naming someone or carrying an address), so a page's older reading never lingers. A membership period is claimed only where the text states it.
 - **Dead and hidden.** A stated website whose home page answers 404/410, a login wall or nothing gets a primary `website` negative claim from that URL (`not_found` / `access_restricted` / `unreachable`), which sets the register's link aside until the site answers again (data-model §1). Addresses a site hides (Cloudflare email protection) make `email` / `roleEmails` `access_restricted`, not `not_found`; with the contact page unreadable no address claim is made.
-- **Never stored:** personal addresses (CRSids, `jane.smith@…`, anything that names someone), obfuscated addresses (Cloudflare email protection, "name [at] domain"), LinkedIn `/in/` profiles, chat invite links. Committee members' names go to the private broker `people` table only, and a public text that names one is dropped.
+- **Never stored:** personal addresses (CRSids, `jane.smith@…`, anything that names someone), obfuscated addresses (Cloudflare email protection, "name [at] domain"), LinkedIn `/in/` profiles, chat invite links. Committee members' names go to the private broker `people` table only. A public text that names one is staged as written and redacted to roles at load (D1); the names the model listed go privately on the page record (`broker.private_names`, never posted) so the redaction always removes them. A title or venue that names one is still dropped.
 - **Parked domains:** a site whose page does not mention the organisation, or says the domain is for sale, yields only its health.
 
 **Trial 2026-10-08** (the first 15 resolved organisations with a stated website, from the SU + Proctors harvest): 9 sites answered (WordPress 3, Wix 2, Squarespace 1, GitHub Pages 1, unknown 2) and 27 pages were read; 3 domains no longer resolve, 1 page is a 404, 1 site redirects to SRCF's Raven-style login (`nevar.srcf.net`), 1 stated website is a short link to a Discord invite, 1 Linktree is disallowed. 1 site's robots.txt blocks AI crawlers (read without the LLM); on 1 the LLM found the pages are not the society's. 8 LLM calls (average 16 s, 8 in parallel): 76 values, 62 quotes exact and 5 normalised; of the 9 unverified, 7 are tags (never quoted, always `inferred`).
@@ -495,9 +508,9 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Inputs:** `termcardUrl` values claimed by other harvesters (SU profiles, society websites).
 
-**Cambridge SU resources** (`/resources/<id>/<name>/`, e.g. https://www.cambridgesu.co.uk/resources/8721/CUHCS-Michaelmas-Term-Card/): checked **2026-10-07**, the resource page answered "Sorry, there was a problem" to an anonymous request, and MSL serves resource files under `/asset/` and `/resourcehandler/`, which the SU's robots.txt disallows for every crawler (`User-agent: *`). **SU-hosted termcards are therefore never fetched**; the stage records them as skipped.
+**Cambridge SU resources** (`/resources/<id>/<name>/`, e.g. https://www.cambridgesu.co.uk/resources/8721/CUHCS-Michaelmas-Term-Card/): checked **2026-10-07**, the resource page answered "Sorry, there was a problem" to an anonymous request, and MSL serves resource files under `/asset/` and `/resourcehandler/`, which the SU's robots.txt disallows for every crawler (`User-agent: *`). Until 2026-10-08 SU-hosted termcards were never fetched (27 skipped in the first full harvest). **Under D3 they are fetched with the society purpose:** profile `/file/<id>/<name>/` links redirect to the SU login, which is never followed (`access_restricted`); a file under `/asset/` is read under the override.
 
-**Fetch:** through the polite client (§ Global rules), at most weekly per card. A page is followed to the first file it links or embeds whose name, label or alt text says termcard / programme / poster, one level deep, robots-checked. Never fetched, recorded as skipped before any request: SU-hosted cards (any `cambridgesu.co.uk` URL — `/file/<id>/Termcard/` is robots-allowed but redirects to the login page, seen 2026-10-08), talks.cam (§6), and Instagram, Facebook, LinkedIn and the other networks. A card reaches the model only when every host it came through lets AI read it (§14: no AI crawler disallowed by name, no `ai-input=no`, no `noai` on the page that embeds it); otherwise it is skipped ("host keeps AI out").
+**Fetch:** through the polite client (§ Global rules) with the society purpose (`society_website` when the card is on the society's own domain), at most weekly per card. A page is followed to the first file it links or embeds whose name, label or alt text says termcard / programme / poster, one level deep, robots-checked. Never fetched, recorded as skipped before any request: talks.cam and tbc.xyz (§6), and Instagram, Facebook, LinkedIn and the other networks. A card reaches the model when every host it came through lets AI read it (§14), or the D3 override lifts the opt-out (the events' access note then says `ai_optout_override:society`); otherwise it is skipped ("host keeps AI out").
 
 **Read:** strong-model vision (`image_events_v1`). PDFs are rendered page by page (at most four pages, pypdfium2) and their **text layer** goes along: quotes are checked against it, so PDF values can be `found`. An image-only card has no text to check against, so its values stay `inferred`. Replies are cached by the file's content hash.
 

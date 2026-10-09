@@ -62,11 +62,13 @@ work — a cron that sees success because most of it worked is how a broken sour
   Decide a quarantined case in `pipeline/resolve-decisions.json` (`same` groups / `distinct`
   pairs of the refs the report prints) and the next run applies it.
 - **enrich** (T5, `stages/enrich.py`, `sources/websites/`, prompt `extract/prompts/org_v1.md`)
-  reads each resolved organisation's website (and Linktree, which robots.txt currently disallows):
+  reads each resolved organisation's website and Linktree with the society fetch purpose (D3:
+  robots.txt and AI opt-outs may be overridden there, and the override is recorded):
   home page plus one page per kind, deterministic socials / role emails / feeds / mailing lists /
   join links / health, then the bulk LLM with every value's quote checked against the page it is
-  attributed to. Committee names go to the private broker tables only; named sponsors become
-  counterpart organisations. It writes keyed observations to `var/staging/society_website/` and
+  attributed to. Committee names go to the private broker tables only (and privately onto the
+  page record, so the load step's redaction removes them from public text); named sponsors
+  become counterpart organisations. It writes keyed observations to `var/staging/society_website/` and
   `var/staging/linktree/`. LLM answers are cached under `var/cache/llm/`.
 - **Events stages** (T6, `camsocs_pipeline/events/`, one module per source: Camdram, talks.cam,
   CUCBC, Playwaze, University events, society ICS/Luma/Google feeds, SU What's On) run after
@@ -81,6 +83,11 @@ work — a cron that sees success because most of it worked is how a broken sour
   `_resolved` first, since it creates the organisations later stages add fields to — through
   `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
+  On the way, public free text is redacted (decision D1, `extract/redact.py`, prompt
+  `redact_names_v1`): names of private individuals become roles, the original travels as the
+  claim's internal `valueRaw`, and a text that cannot be made safe is posted `not_published`.
+  The bulk model's replies are cached by the input's sha256; a dry run uses the cache and the
+  deterministic rule only.
   Images staged as `{sourceUrl}` are uploaded first (our own copy, never a hotlink;
   `media.py`). `--limit N` loads the first N keyed records. Claims travel in batches that
   keep each entity's claims together (the server creates an entity only from a request that
@@ -118,10 +125,21 @@ Read from `pipeline/.env` (gitignored) or the environment:
 | `META_IG_USER_ID`, `META_ACCESS_TOKEN` | Instagram Business Discovery (both unset: the `instagram` stage skips itself); setup in `docs/setup/inbox-instagram.md` |
 | `META_GRAPH_VERSION` | Graph API version (default `v25.0`) |
 
-## Politeness rules (enforced in `sources/base.py`)
+## Politeness rules (enforced in `sources/base.py` and `sources/policy.py`)
 
 - robots.txt is checked per host with our User-Agent; `Crawl-delay`/`Request-rate` raise the
   per-host interval; an unreachable robots.txt (5xx, network) or 401/403 means "disallow".
+- **Fetch purpose (decision D3).** `fetch(…, purpose=…)` is `GENERAL` by default: robots.txt
+  and AI opt-outs hold. A `SOCIETY` purpose (`SOCIETY_WEBSITE` / `COLLEGE_SOCIETY_LIST` when
+  the caller knows the page is a society's own site or a society list) may override a robots
+  *disallow* and, in `ai_input_allowed`, an AI opt-out, for the D3 URL classes only: society
+  websites, Linktree, Google Calendar public ICS feeds, SU `/asset/` files, college society
+  lists. Never for talks.cam or tbc.xyz, a general host (the University's central sites,
+  search engines, other networks), or a robots.txt that could not be reached.
+  webservices.admin.cam.ac.uk, Instagram, Facebook and LinkedIn are never fetched. An
+  overridden fetch carries `FetchResult.override` = `robots_override:society` (also in its
+  cache entry and its `sources` row's `accessNote`); the cache never serves it to a general
+  fetch.
 - One request in flight per host, at least `CAMSOCS_MIN_HOST_INTERVAL` apart; different hosts
   may run concurrently.
 - 429/503/transport errors back off 20 s → 300 s with jitter and honour `Retry-After`.
@@ -144,7 +162,8 @@ These run after `resolve` and know organisations from the keyed observations in 
 - Every value becomes an `llm_field`, its quote checked against the exact text sent.
   Contact details are redacted before any LLM call.
 - `extract/dedupe.py` drops events another staged source already has.
-- `extract/memo.py` caches validated replies under `var/cache/llm/`.
+- `extract/memo.py` caches validated replies under `var/cache/llm/` (the D1 redaction's too,
+  under `redact_names_v1/`).
 
 The three stages:
 
@@ -152,6 +171,6 @@ The three stages:
 |---|---|---|---|
 | `inbox` | pending forwarded list mail (§16) | `cam_only` / `members_only` | posts its events itself, then marks each mail; also stages them under `mailing_list_email/` |
 | `instagram` | Graph API Business Discovery (§17) | `public` / `members_only` | gated on `META_*`; at most 100 handles a run, rate-limit aware; stores post images as our own copy |
-| `termcards` | `termcardUrl` values (§21) | `public` / `members_only` | strong-model vision; PDF text layer checks quotes; SU `/asset/` files are robots-blocked |
+| `termcards` | `termcardUrl` values (§21) | `public` / `members_only` | strong-model vision; PDF text layer checks quotes; society fetch purpose (SU `/file/` links hit the login wall and are recorded restricted; `/asset/` files are read under the D3 override) |
 
 In a dry run, `instagram` and `termcards` only report what they would read.

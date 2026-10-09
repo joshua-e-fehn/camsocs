@@ -13,12 +13,18 @@ by its fingerprint and writes nothing (reported as `unchanged`).
 Images staged as a bare ``{"sourceUrl"}`` get our own stored copy on the way
 (`camsocs_pipeline.media`): the bytes come from the fetch cache the harvest
 stage filled, and an image that cannot be had is not posted.
+
+Public free text is made safe to publish on the way too (decision D1,
+`extract.redact`): names of private individuals become their roles, with the
+bulk model (replies cached by the input's sha256) and deterministic checks.
+A dry run uses cached replies and the deterministic rule only.
 """
 
 from __future__ import annotations
 
 from itertools import islice
 
+from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.staging.store import RESOLVED, Record
@@ -53,8 +59,13 @@ def run(ctx: StageContext) -> None:
         records = list(islice(records, ctx.limit))
 
     media = CachedImages(ctx.settings)
+    redactor, redaction_note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
+    if redaction_note:
+        ctx.report.notes.append(redaction_note)
     try:
-        report = ctx.loader.post_observations(records, run_key=ctx.run.run_key, media=media)
+        report = ctx.loader.post_observations(
+            records, run_key=ctx.run.run_key, media=media, redactor=redactor
+        )
     finally:
         media.close()
     report.skipped += awaiting
@@ -74,6 +85,8 @@ def run(ctx: StageContext) -> None:
         )
         for collision in report.collisions[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  {collision}")
+    if report.redaction.texts:
+        ctx.report.notes.append(str(report.redaction))
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
             f"images: {report.files_stored} stored, {report.files_dropped} not available"

@@ -119,9 +119,9 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | suCategory | string? | Raw SU category; mapped into `categories` |
 | department | string? | |
 | logo | `{ storageId?: Id<"_storage">, sourceUrl?: string, credit?: string }`? | Always stored as our own copy. Never hotlinked. |
-| shortDescription | string? | ≤ 200 characters |
-| description | string? | Long description in markdown |
-| howToJoin | string? | |
+| shortDescription | string? | ≤ 200 characters. Public free text: names of private individuals are replaced by roles before it is claimed (D1, §3 `valueRaw`) |
+| description | string? | Long description in markdown. Redacted like `shortDescription` (D1) |
+| howToJoin | string? | Redacted (D1), as are `timeCommitment`, `accessibilityNote`, the labels and notes of `membership`, `trials.note`, a session's `note` and an event's `description` |
 | joinUrl | string? | |
 | membership | `{ tiers: { label, pricePence?, period?: "life"\|"year"\|"term"\|"one_off"\|"free", note? }[], bursaryNote?, collegeReimbursable?: boolean }`? | `period` only when the source states it, never assumed |
 | beginnerFriendly | boolean? | |
@@ -196,7 +196,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`, §6) |
 | venueKey / venueText | string? | |
 | organiserKeys, coHostKeys, sponsorKeys | string[] | Organisation keys, set only by `eventOrganisers` (not claimable). Sponsors and co-hosts also create `relationships` edges. |
-| speakers | `{ name, affiliation? }[]` | Only as published |
+| speakers | `{ name, affiliation? }[]` | Only as published. Public speakers are never redacted, here or in the event's `description` (D1) |
 | price | `{ free: boolean, minPence?, maxPence?, text? }`? | |
 | bookingUrl | string? | |
 | signupRequired | boolean? | |
@@ -280,14 +280,14 @@ These are never returned by public queries.
   | entityType | `organisation \| event \| team \| session \| venue` |
   | entityKey, field | string |
   | value | any |
-  | valueRaw | string? |
+  | valueRaw | string? — the value as the source wrote it, when it differs from `value`. For a public free-text field (D1) it holds the **unredacted original**, with any names; it is internal and never returned by a public query |
   | sourceKey, sourceUrl | string (`sourceKey` = `src-<sha1(sourceUrl)>`) |
   | sourceType | vocab `SOURCE_TYPES` |
   | retrievedAt | number |
   | lastSeenAt | number (bumped, at most daily, when the same observation is posted again) |
   | contentSha256 | string? |
   | method | |
-  | extractor | rule id or model id |
+  | extractor | rule id or model id. A public free-text claim carries the redaction step: `+redacted:v1` (checked by the LLM pass, or no names found), `+redacted:v1:rule` (the deterministic fallback), `+redacted:v1:withheld` (posted as `missing` / `not_published`) |
   | promptVersion | string? |
   | evidenceQuote | string? |
   | quoteCheck | `exact \| normalised \| absent`? |
@@ -300,6 +300,8 @@ These are never returned by public queries.
 
   Indexes: `by_entity_field` (entityType, entityKey, field, reviewStatus), `by_entity_review` (entityType, entityKey, reviewStatus), `by_run`, `by_fingerprint`.
 
+  **Redaction (decision D1).** Before claims are posted, `pipeline/.../extract/redact.py` (called by `ConvexLoader.post_observations`) replaces personal names of private individuals in public free text with their role or a neutral phrase. The claim's `status` is unchanged (found / inferred); `value` is the redacted text and `valueRaw` the original. A text the step cannot make safe is posted as `missing` / `not_published` (with the original in `valueRaw`). Superseded claims keep their `valueRaw`, so unredacted originals stay in this internal log for as long as the entity (retention R2).
+
   `status`, `confidence` and `fingerprint` are computed by the server; the API refuses a posted `confidence`. The fingerprint is sha256 over entity, field, canonical JSON of the value (or `!status:missingReason` for a negative claim), `sourceUrl` and `method` — not `contentSha256`, which is stored but changes on every fetch of a page with per-request tokens (the SU's `__VIEWSTATE`): re-posting the same reading of the same page is a no-op. Resolution reads only live (`accepted` / `proposed`) claims (index `by_entity_review`).
 - **sources**: one row per fetched URL.
 
@@ -309,11 +311,11 @@ These are never returned by public queries.
   | sourceType | vocab `SOURCE_TYPES` |
   | orgKey | string? |
   | httpStatus | number? |
-  | accessNote | string? |
+  | accessNote | string? — why a fetch failed, and the D3 fetch-policy overrides: `robots_override:society` (robots.txt disallowed the URL; read as a society page), `ai_optout_override:society` (its text reached the LLM despite an AI opt-out) |
   | contentSha256 | string? |
   | lastFetchedAt | number |
   | yielded | string[] |
-  | robotsVerdict | `allowed \| disallowed \| crawl_delay` |
+  | robotsVerdict | `allowed \| disallowed \| crawl_delay` — what robots.txt says for us, honestly, even when a D3 override let the fetch go ahead |
   | robotsCheckedAt | number |
 
   `SOURCE_TYPES` = su_directory, su_profile, proctors_register, sport_az, sport_club_page, sport_guide_pdf, camdram, talks_list, society_website, linktree, college_list, cucbc, playwaze, uni_events_api, ics_feed, luma, su_whatson, mailing_list_email, instagram_api, termcard, wayback, manual. URLs of `mailing_list_email` and `manual` sources are internal.
@@ -382,7 +384,7 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | key, name, orgKey, role | string |
   | academicYear | e.g. "2026-27" |
   | startDate | string? |
-  | staleAfter | ISO date (next handover; default the next 30 June) |
+  | staleAfter | ISO date (next handover; default the next 30 June). First-name-only committee members are kept too (D2) |
   | stale | boolean (derived daily: `staleAfter` has passed) |
   | sourceUrl | string |
   | seenAt | number |

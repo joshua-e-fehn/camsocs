@@ -448,6 +448,20 @@ END:VCALENDAR\r
 """
 
 
+GOOGLE_ICS = b"""BEGIN:VCALENDAR\r
+VERSION:2.0\r
+PRODID:-//Google Inc//Google Calendar 70.9054//EN\r
+X-WR-TIMEZONE:Europe/London\r
+BEGIN:VEVENT\r
+DTSTART:20261020T180000Z\r
+DTEND:20261020T200000Z\r
+UID:g-1@google.com\r
+SUMMARY:Committee-free social\r
+END:VEVENT\r
+END:VCALENDAR\r
+"""
+
+
 class TestCalendarFeeds:
     def test_feed_urls(self) -> None:
         assert calendar_feeds.feed_url("luma", "cal-X1") == (
@@ -492,6 +506,9 @@ class TestCalendarFeeds:
         allow(net, "https://api.lu.ma", "User-agent: *\nDisallow: /insights/\n")
         allow(net, "https://calendar.google.com", "User-agent: *\nAllow: /$\nDisallow: /\n")
         net.get(url__startswith="https://api.lu.ma/ics/get").respond(200, content=LUMA_ICS)
+        google = net.get(
+            "https://calendar.google.com/calendar/ical/abc%40group.calendar.google.com/public/basic.ics"
+        ).respond(200, content=GOOGLE_ICS)
 
         calendar_feeds.run(ctx, window=WINDOW, now=NOW)
 
@@ -503,7 +520,38 @@ class TestCalendarFeeds:
         assert "description" not in values  # boilerplate only
         assert "A Person" not in json.dumps(event.model_dump(mode="json"))
         assert [o.identity.name for o in event.unresolved_organisers] == ["Test Society"]
-        assert any("google" in n and "disallowed_by_robots" in n for n in ctx.report.notes)
+        # D3: calendar.google.com disallows crawlers, but a public ICS feed a
+        # society links is read under the society override, which the event's
+        # `sources` row records next to the honest "disallowed" verdict.
+        assert google.call_count == 1
+        (from_google,) = staged(ctx, "ics_feed.events")
+        assert fields(from_google)["title"] == "Committee-free social"
+        assert from_google.fetch.robots_verdict == "disallowed"
+        assert from_google.fetch.access_note == "robots_override:society"
+        assert [o.identity.known_key for o in from_google.organisers] == ["org-other-society"]
+
+    def test_other_pages_on_google_calendar_keep_their_robots_txt(
+        self, ctx: StageContext, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(calendar_feeds, "FEED_SEEDS", ())
+        org = Observation(
+            source_type="society_website",
+            source_key="k",
+            source_url="https://soc.example/",
+            retrieved_at=NOW,
+            entity_type="organisation",
+            identity=IdentityHints(name="Other Society"),
+            entity_key="org-other-society",
+            internal={"ics_urls": ["https://calendar.google.com/calendar/embed?src=abc"]},
+        )
+        ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", [org])
+        allow(net, "https://calendar.google.com", "User-agent: *\nAllow: /$\nDisallow: /\n")
+        embed = net.get(url__startswith="https://calendar.google.com/calendar/embed")
+
+        calendar_feeds.run(ctx, window=WINDOW, now=NOW)
+
+        assert embed.call_count == 0
+        assert any("disallowed_by_robots" in n for n in ctx.report.notes)
 
 
 # --- SU What's On (§12) ---------------------------------------------------------------------

@@ -73,6 +73,15 @@ export default function PrivacyPage() {
           name an individual student (a personal Cambridge CRSid address) are never shown in public
           listings.
         </p>
+        <h3>Names in descriptions (replaced before publishing)</h3>
+        <p>
+          Descriptions copied from public pages sometimes name committee members, performers or
+          other students. Before a description is published, such names are replaced by the
+          person&apos;s role or a neutral phrase, for example &ldquo;contact our President&rdquo;.
+          The original wording is kept privately, with the record of where each fact came from, for
+          as long as the listing exists. Speakers announced for public talks are shown by name, as
+          the organiser published them.
+        </p>
         <h3>Committee members (private, never published)</h3>
         <p>
           Where a society names its committee on its own public pages, the operator may keep the
@@ -148,7 +157,8 @@ export default function PrivacyPage() {
           <li>Google (sign-in for the operator only);</li>
           <li>
             OpenAI, through a relay server the operator rents, which provides the AI model that
-            extracts facts from public pages and mailing-list messages.
+            extracts facts from public pages and mailing-list messages and replaces names in
+            descriptions with roles.
           </li>
         </ul>
         <p>

@@ -16,6 +16,11 @@ The work is split so harvest stages never call Convex:
    reads back from the cache (`POST /api/pipeline/files`, de-duplicated by
    content on the server). A value whose bytes cannot be had is not posted, so
    an earlier stored copy is never replaced by a reference to nothing.
+
+Organisation logos are fetched with the society purpose (`sources/policy.py`,
+D3): an SU ``/asset/`` logo linked from a society's listing may be copied
+although the SU's robots.txt disallows ``/asset/``. Event images keep the
+general purpose.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from datetime import timedelta
 
 from camsocs_pipeline.config import ConfigError, Settings
 from camsocs_pipeline.sources.base import PoliteClient
+from camsocs_pipeline.sources.policy import GENERAL, FetchPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +66,11 @@ def usable_image(data: bytes | None) -> str | None:
     return sniff_raster(data)
 
 
-def probe_image(client: PoliteClient, url: str) -> bool:
+def probe_image(client: PoliteClient, url: str, purpose: FetchPurpose = GENERAL) -> bool:
     """Harvest-time check (step 1): fetch `url` politely and keep it only if
     it is a storable raster image. True means the cache now holds it."""
     try:
-        result = client.fetch(url, fresh_for=IMAGE_CACHE_TTL, accept=IMAGE_ACCEPT)
+        result = client.fetch(url, fresh_for=IMAGE_CACHE_TTL, accept=IMAGE_ACCEPT, purpose=purpose)
     except ValueError:
         return False
     return result.ok and usable_image(result.content) is not None
@@ -80,12 +86,14 @@ class CachedImages:
         self._client = client
         self._unavailable: str | None = None
 
-    def __call__(self, url: str) -> tuple[bytes, str] | None:
+    def __call__(self, url: str, purpose: FetchPurpose = GENERAL) -> tuple[bytes, str] | None:
         client = self._ensure_client()
         if client is None:
             return None
         try:
-            result = client.fetch(url, fresh_for=IMAGE_CACHE_TTL, accept=IMAGE_ACCEPT)
+            result = client.fetch(
+                url, fresh_for=IMAGE_CACHE_TTL, accept=IMAGE_ACCEPT, purpose=purpose
+            )
         except ValueError:
             return None
         content_type = usable_image(result.content) if result.ok else None

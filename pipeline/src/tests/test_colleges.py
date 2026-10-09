@@ -189,3 +189,38 @@ class TestHarvestBody:
         observations, _ = harvest_body(client, JCR)
         website = next(f for f in observations[-1].fields if f.field == "website")
         assert website.evidence == "secondary"
+
+
+def test_a_jcr_site_is_read_under_the_society_override_but_a_college_page_is_not(
+    tmp_path, net
+) -> None:
+    # D3: the Caius JCR case. The body's own site disallows every crawler and
+    # is read anyway (recorded); the college's page keeps its robots.txt.
+    from camsocs_pipeline.sources.base import HostGates, PoliteClient
+
+    net.get("https://jcr.th.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
+    net.get(JCR.home).respond(
+        200,
+        text=page("<p>Welcome to the Trinity Hall JCR</p>", "Trinity Hall JCR"),
+        headers={"content-type": "text/html"},
+    )
+    net.get("https://www.trinhall.cam.ac.uk/robots.txt").respond(
+        200, text="User-agent: *\nDisallow: /jcr\n"
+    )
+    evidence = net.get(JCR.evidence)
+    client = PoliteClient(
+        user_agent="camsocs-test/0.1 (+https://example.org/camsocs)",
+        cache_dir=tmp_path / "cache",
+        gates=HostGates(),
+        min_interval=0.0,
+        sleep=lambda _s: None,
+    )
+
+    observations, _notes = harvest_body(client, JCR, COLLEGE_HOST)
+
+    assert evidence.call_count == 0
+    (home,) = observations
+    website = next(f for f in home.fields if f.field == "website")
+    assert website.value == "https://jcr.th.example/"
+    assert home.fetch.robots_verdict == "disallowed"
+    assert home.fetch.access_note == "robots_override:society"

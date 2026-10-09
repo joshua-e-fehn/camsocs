@@ -41,6 +41,7 @@ from camsocs_pipeline.sources.observe import (
     parse_html,
     retrieved_at,
 )
+from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
 
 CLUBS_URL = "https://www.cucbc.org/clubs"
 DETAILS_FRESH_FOR = timedelta(days=7)
@@ -314,8 +315,9 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
 
 
 def confirms_college(client: PoliteClient, college: str, url: str) -> bool:
-    """Whether `url` still says the club belongs to `college`."""
-    page = client.fetch(url, fresh_for=DETAILS_FRESH_FOR)
+    """Whether `url` (the club's own website) still says the club belongs to
+    `college`. A society website: fetched with the D3 society purpose."""
+    page = client.fetch(url, fresh_for=DETAILS_FRESH_FOR, purpose=SOCIETY_WEBSITE)
     if not page.ok:
         return False
     stem = college.replace(" College", "").replace("’", "'").lower()

@@ -7,7 +7,10 @@ Writes two staging files per run: ``var/staging/su_directory/<run>--su_directory
 calls Convex and never mints keys; `resolve` does, then `load` posts.
 
 Fetching goes through `PoliteClient` (robots.txt, one request at a time,
-≥ 1 s apart, cached under ``var/cache``). A profile fetched within
+≥ 1 s apart, cached under ``var/cache``) with the society purpose
+(`sources/policy.py`, D3): logos under the SU's robots-disallowed
+``/asset/`` may be fetched, which the directory observation's access note
+records as ``robots_override:society``. A profile fetched within
 `PROFILE_FRESH_FOR` is read from the cache, so a re-run the same day costs
 one request. A dry run touches no network: it replays whatever the cache
 holds and stages nothing.
@@ -28,6 +31,7 @@ from camsocs_pipeline.models.observation import Observation
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.links import classify_email
+from camsocs_pipeline.sources.policy import ROBOTS_OVERRIDE_NOTE, SOCIETY
 from camsocs_pipeline.sources.su import (
     DIRECTORY_URL,
     DirectoryEntry,
@@ -51,7 +55,7 @@ def run(ctx: StageContext) -> None:
 
 
 def harvest(ctx: StageContext, client: PoliteClient) -> None:
-    fetch: Fetch = _cache_only(client) if ctx.dry_run else client.fetch
+    fetch: Fetch = _cache_only(client) if ctx.dry_run else _society_fetch(client)
 
     directory = fetch(DIRECTORY_URL)
     if directory is None:
@@ -68,10 +72,12 @@ def harvest(ctx: StageContext, client: PoliteClient) -> None:
     if ctx.limit is not None:
         entries = entries[: ctx.limit]
 
-    directory_records = [
-        directory_observation(entry, directory, logo_allowed=_logo_allowed(ctx, client, entry))
-        for entry in entries
-    ]
+    directory_records = []
+    for entry in entries:
+        allowed, note = _logo_access(ctx, client, entry)
+        directory_records.append(
+            directory_observation(entry, directory, logo_allowed=allowed, logo_note=note)
+        )
     profile_records: list[Observation] = []
     profiles: list[Profile] = []
     unreadable: list[str] = []
@@ -115,17 +121,35 @@ def harvest(ctx: StageContext, client: PoliteClient) -> None:
 
 def _cache_only(client: PoliteClient) -> Fetch:
     def fetch(url: str, **_: object) -> FetchResult | None:
-        return client.cached(url)
+        return client.cached(url, purpose=SOCIETY)
 
     return fetch
 
 
-def _logo_allowed(ctx: StageContext, client: PoliteClient, entry: DirectoryEntry) -> bool | None:
-    """Whether robots.txt lets us copy the logo (§1: ``/asset/`` is
-    disallowed). Not checked in a dry run, which touches no network."""
+def _society_fetch(client: PoliteClient) -> Fetch:
+    """The SU's pages about its societies, fetched with the society purpose
+    (`sources/policy.py`; profiles are allowed by robots.txt anyway)."""
+
+    def fetch(url: str, *, fresh_for: timedelta | None = None) -> FetchResult:
+        return client.fetch(url, fresh_for=fresh_for, purpose=SOCIETY)
+
+    return fetch
+
+
+def _logo_access(
+    ctx: StageContext, client: PoliteClient, entry: DirectoryEntry
+) -> tuple[bool | None, str | None]:
+    """Whether we may copy the logo, and the override that allows it. §1:
+    ``/asset/`` is robots-disallowed; D3 lets an SU asset linked from a
+    society's listing be fetched with the society purpose, recorded as
+    ``robots_override:society``. Not checked in a dry run, which touches no
+    network."""
     if ctx.dry_run or entry.logo_url is None:
-        return None
-    return client.allows(entry.logo_url)
+        return None, None
+    if not client.allows(entry.logo_url, SOCIETY):
+        return False, None
+    disallowed = client.robots_verdict(entry.logo_url) == "disallowed"
+    return True, ROBOTS_OVERRIDE_NOTE if disallowed else None
 
 
 def coverage_notes(

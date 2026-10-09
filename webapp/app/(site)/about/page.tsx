@@ -12,7 +12,7 @@ import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-
 export const metadata: Metadata = {
   title: "About",
   description:
-    "What camsocs is, who runs it, and how it collects data: public sources only, robots.txt respected, no Instagram scraping, every fact sourced.",
+    "What camsocs is, who runs it, and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, every fact sourced.",
   alternates: { canonical: "/about" },
 }
 
@@ -85,8 +85,13 @@ export default async function AboutPage() {
               .
             </li>
             <li>
-              <strong>robots.txt is respected</strong>, including crawl delays and blocks aimed at
-              AI agents. The harvester makes one request at a time per site.
+              <strong>robots.txt, with one exception.</strong> The harvester follows robots.txt on
+              every site except the pages societies publish about themselves: their own websites and
+              Linktree pages, the public Google calendars they link, files on their SU listing, and
+              college, JCR and MCR society lists. Those are read, also by the AI model, even where
+              robots.txt or an AI opt-out asks otherwise, because they exist to tell students about
+              the society. Crawl delays always apply, and the harvester makes one request at a time
+              per site.
             </li>
             <li>
               <strong>Nothing behind a login.</strong> Pages that need a Raven or members&apos;
@@ -113,7 +118,9 @@ export default async function AboutPage() {
             <li>
               <strong>Societies, not people.</strong> Public listings show organisations and the
               role addresses they publish (president@…, secretary@…). Personal student addresses are
-              not shown.
+              not shown. Where a description names a committee member, performer or other student,
+              the name is replaced by their role (&ldquo;contact our President&rdquo;) before it is
+              published. Speakers announced for public talks keep their names.
             </li>
           </ul>
           <h3>Sources</h3>

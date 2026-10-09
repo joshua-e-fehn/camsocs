@@ -1,6 +1,6 @@
 # DPIA-lite (screening and risk register)
 
-Controller: Joshua Fehn. Prepared 2026-10-07; review each July, and before: a new source, a new recipient, publishing anything about named people, or moving the pipeline to the VPS (PLAN.md J8).
+Controller: Joshua Fehn. Prepared 2026-10-07; updated 2026-10-09 for decisions D1 (names in public text redacted to roles) and D3 (society pages read where robots.txt disallows). Review each July, and before: a new source, a new recipient, publishing anything about named people, or moving the pipeline to the VPS (PLAN.md J8).
 
 ## 1. Screening: is a DPIA required?
 
@@ -20,11 +20,11 @@ The ICO lists "invisible processing" (data aggregation, re-use of public data) a
 ## 2. Data flows
 
 ```
-public pages / feeds ──(polite fetcher, robots.txt)──▶ var/cache (pipeline host, 90 d)
+public pages / feeds ──(polite fetcher, robots.txt; D3 society override)──▶ var/cache (pipeline host, 90 d)
         │                                                  │
         │                                     free text ───┴──▶ cliproxy relay ──▶ OpenAI (LLM)
         ▼                                                                │
-  parser claims ──────────────▶ /api/pipeline/* ──▶ Convex ◀── quote-checked LLM claims
+  parser claims ──(D1 redaction: names → roles, original → valueRaw)──▶ /api/pipeline/* ──▶ Convex ◀── quote-checked LLM claims
                                                     │
 Joshua's @cam.ac.uk list mail ──▶ Resend inbound ──▶│ inboundEmails (internal, 90 d) ──▶ LLM (events only)
                                                     │
@@ -39,7 +39,7 @@ Likelihood (L) and severity (S): low / medium / high. "Residual" is after the me
 
 | # | Risk | L | S | Measures (in place unless marked **todo**) | Residual |
 |---|---|---|---|---|---|
-| R-1 | A personal CRSid address or a named officer appears on the public site | M | M | Public projection removes `personal_crsid` emails and personal role emails (`convex/lib/projections.ts`, tested in `convex/public.test.ts`); `people` is broker-only; pipeline never writes names into public fields (AGENTS.md data honesty rules) | Low |
+| R-1 | A personal CRSid address or a named officer appears on the public site | M | M | Public projection removes `personal_crsid` emails and personal role emails (`convex/lib/projections.ts`, tested in `convex/public.test.ts`); `people` is broker-only; pipeline never writes names into public fields (AGENTS.md data honesty rules). **D1 redaction:** names of private individuals in descriptions and notes are replaced by roles before any claim is posted (`extract/redact.py`: LLM pass with deterministic checks; a rule fallback that withholds a text it cannot make safe; known committee names always removed) | Low |
 | R-2 | Inaccurate data presented as fact (stale contacts, wrong officers) | H | L | Per-fact status / source / date; LLM values without a verified quote shown as `inferred`; conflicts shown with both readings; annual refresh; correction form | Low |
 | R-3 | Societies do not know they are listed (invisible processing) | H | M | Art 14 notice to every listed role address by ~13 Nov 2026 (J7) with claim / correct / remove links and the right to object; public privacy notice; About page | Low once J7 is done |
 | R-4 | LLM provider processes personal data in list mail and pages (US transfer; consumer-plan terms, possible use for training) | M | M | Only page text and list-mail text needed for extraction are sent; talks.cam never sent; **todo:** turn off model-training on the ChatGPT account used by cliproxy; strip signatures, quoted replies and addresses from list mail before extraction; record the transfer basis (record-of-processing, transfers) | Medium until the todos are done |
@@ -48,8 +48,9 @@ Likelihood (L) and severity (S): low / medium / high. "Residual" is after the me
 | R-7 | Officers of faith / political / identity societies revealed (Art 9) | L | H | No names in public fields; no inference about people; broker rows private and time-boxed | Low |
 | R-8 | A removed listing is re-created by the next harvest | M | M | **todo:** suppression list checked by the pipeline before creating organisations (`retention.md` open items); the site already promises this | Medium until built |
 | R-9 | Unauthorised access to broker data | L | H | `requireBrokerUser` on every broker function, `BROKER_EMAILS` allowlist, verified email only; secrets out of Git; Convex and Vercel access protected by Joshua's accounts (2FA **todo:** confirm on all four providers) | Low |
-| R-10 | Scraping beyond what sites allow (terms, robots, Computer Misuse Act for gated pages) | L | M | robots.txt and Crawl-delay honoured; no Raven / members-only / 403 pages; no Meta / LinkedIn scraping; honest User-Agent (source-research, global rules) | Low |
+| R-10 | Scraping beyond what sites allow (terms, robots, Computer Misuse Act for gated pages) | M | M | **Decision D3 (2026-10-08):** society websites, Linktree pages, Google Calendar ICS feeds societies link, SU `/asset/` files linked from a profile and college / JCR / MCR society lists are read even where robots.txt or an AI opt-out disallows; the operator's reasoning is that societies publish these pages to be found. Limits: one policy (`sources/policy.py`) with the URL classes fixed and tested; never talks.cam or tbc.xyz; never non-society pages (their robots.txt holds); the University Events API never fetched; each override recorded on the `sources` row. Unchanged: Crawl-delay and the minimum interval, one request per host, honest User-Agent, no Raven / members-only / 403 pages, no decoding of obfuscated emails, no Meta / LinkedIn scraping. A site owner who objects can use the request form; **todo:** a per-host opt-out list the policy checks | Low–medium |
 | R-11 | Over-retention | M | L | `retention.md` schedule; **todo:** automate deletions | Low–medium |
+| R-12 | Unredacted originals (with names) kept in the internal claim log | M | L | `fieldClaims.valueRaw` is internal: no query returns it, public or broker; kept with the entity (`retention.md` R2). **todo:** clear `valueRaw` of superseded free-text claims after each 30 June handover | Low |
 
 ## 4. Sign-off
 

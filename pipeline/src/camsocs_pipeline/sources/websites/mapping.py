@@ -4,7 +4,12 @@ Every value is attributed to the page whose text contains its evidence quote
 (exact first, then normalised); a value without a verbatim quote goes to the
 home page as ``inferred`` (`claims.llm_field`). Things that would create
 rows — sessions, people, partners — are kept only with a verified quote.
-Public text never names a committee member and never carries an address.
+Public text never carries an address. A description, how-to-join, note or
+membership text that names a committee member is kept as the page wrote it:
+the load step replaces the name with the role before anything is published
+(decision D1, `extract.redact`). The names the model listed as committee go
+on the home page's ``broker["private_names"]`` (never posted) so that step
+always removes them. Titles and venues that name someone are still dropped.
 
 Free text the model *wrote* (a summary, a "neutral sentence") is ``inferred``
 even when its quote is verbatim: the quote supports the gist, not the words.
@@ -167,10 +172,11 @@ class ExtractionMapper:
 
     def put_text(self, name: str, item: Any, limit: int) -> None:
         """A free-text field: withheld (never stored, recorded as such) when
-        it names a committee member or carries an address."""
+        it carries an address. Committee members' names are redacted at load
+        (D1)."""
         if item is None or name in self.found:
             return
-        value = self.public_text(item.value, limit)
+        value = self.public_text(item.value, limit, names_ok=True)
         if value is None:
             if item.value and item.value.strip():
                 self.withheld.setdefault(name, self.locate(item.evidence_quote)[0])
@@ -194,13 +200,17 @@ class ExtractionMapper:
         self.buckets.add(url, obs)
         self.found.add(name)
 
-    def public_text(self, text: str | None, limit: int) -> str | None:
-        """Text for a public field: trimmed to `limit`, and refused if it names
-        a committee member or carries an email address."""
+    def public_text(self, text: str | None, limit: int, *, names_ok: bool = False) -> str | None:
+        """Text for a public field: trimmed to `limit`, and refused if it
+        carries an email address. ``names_ok``: a field the load step redacts
+        (D1, `extract.redact`), so a committee member's name may stay for now;
+        otherwise (a title, a venue) text naming one is refused."""
         if not text or not text.strip():
             return None
         value = " ".join(text.split()) if limit <= 500 else text.strip()
-        if "@" in value or any(_names(name, value) for name in self.people):
+        if "@" in value:
+            return None
+        if not names_ok and any(_names(name, value) for name in self.people):
             return None
         if len(value) > limit:
             cut = value[: limit - 1].rsplit(" ", 1)[0]
@@ -211,6 +221,10 @@ class ExtractionMapper:
 
     def map(self, x: OrgExtraction) -> None:
         self.people = {person.name.strip() for person in x.committee if person.name.strip()}
+        if self.people:
+            # Private (never posted): what the D1 redaction must remove.
+            home = self.buckets.by_url[self.home]
+            home.broker["private_names"] = sorted(self.people)
         self.committee(x)
         for name, item, limit in (
             ("shortDescription", x.short_description, 200),
@@ -230,7 +244,9 @@ class ExtractionMapper:
         if x.membership is not None:
             self.put(
                 "membership",
-                _membership_value(x.membership, self.public_text),
+                _membership_value(
+                    x.membership, lambda text, limit: self.public_text(text, limit, names_ok=True)
+                ),
                 x.membership.evidence_quote,
             )
         if x.trials is not None:
@@ -244,7 +260,7 @@ class ExtractionMapper:
             ][:10]
             if dates:
                 trials["dates"] = dates
-            if note := self.public_text(x.trials.note, 300):
+            if note := self.public_text(x.trials.note, 300, names_ok=True):
                 trials["note"] = note
             self.put("trials", trials, x.trials.evidence_quote)
         self.put_items("categories", [(c.value, c.evidence_quote) for c in x.categories])
@@ -363,7 +379,7 @@ class ExtractionMapper:
             }
             values["venueText"] = self.public_text(session.venue, 300)
             values["termScope"] = session.term_scope
-            values["note"] = self.public_text(session.note, 500)
+            values["note"] = self.public_text(session.note, 500, names_ok=True)
             page = self.buckets.by_url[url]
             fields = [
                 llm_field(
