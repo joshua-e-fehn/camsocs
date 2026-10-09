@@ -17,6 +17,7 @@ pixi run pipeline -- sync --stages term_dates,load --limit 20
 pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
+pixi run pipeline -- coverage [--before DIR]  # field coverage of staged organisations, offline
 ```
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
@@ -26,7 +27,7 @@ work — a cron that sees success because most of it worked is how a broken sour
 
 `camsocs_pipeline/stages/__init__.py` holds the one ordered registry `sync` runs:
 
-    seed → harvest → resolve → enrich → events → inbox → load → report
+    seed → harvest → resolve → enrich → classify → events → inbox → load → report
 
 - **Adding a stage** is one line: write `stages/<name>.py` with `run(ctx)` and uncomment
   (or add) `Stage("<name>")` in its phase. The module is imported when the stage runs, so
@@ -44,14 +45,19 @@ work — a cron that sees success because most of it worked is how a broken sour
 - **Seed harvesters** (T3): `su_directory` (§1), `proctors_register` (§2), `sport_clubs`
   (§3), `sport_guide_pdf` (§4), `camdram_societies` (§5), `cucbc_clubs` (§7), `colleges`
   (§8), in `sources/`.
-- Shared helpers for harvesters: `sources/links.py` (what a link or address is: socials,
-  chat platforms, mailing lists, email kinds, withholding CRSids and chat invites from free
-  text), `sources/contact_links.py` (role vs general addresses, obfuscated addresses detected
-  and never decoded) and `sources/markdown.py` (HTML → the markdown stored in free-text
-  fields).
-- A stage after resolve that meets a new organisation (enrichment's sponsors, an event's
-  organiser) keys it through `resolve.Resolver.reference_key` against the crosswalk —
-  never with `keys.org_key` directly.
+- Shared helpers for harvesters: `sources/links.py`, the one module that says what a link or
+  address is — one social-link classifier (`social_link`; never a person's LinkedIn, a post
+  or a video), one `classify_email` (role / general / personal / unknown), one CRSid rule
+  (`is_crsid_address`: cam.ac.uk and subdomains, SRCF, cantab), the server's email kinds
+  (`email_type`), chat platforms, mailing lists, obfuscated addresses detected and never
+  decoded, CRSids and chat invites withheld from free text — and `sources/markdown.py`
+  (HTML → the markdown stored in free-text fields).
+- A stage after resolve finds a known organisation with `resolve.lookup.OrgLookup`
+  (`reference_key`, plus the inbox's list / address / domain / name lookups, feeds, venues,
+  Instagram targets and termcards): keyed staging plus the crosswalk (local cache merged
+  with Convex's, never in a dry run), unique answers only. Enrichment's sponsors, which may
+  create counterparts, go through `resolve.Resolver.reference_key`. Neither ever calls
+  `keys.org_key` directly.
 - **resolve** (T4, `stages/resolve.py`, `camsocs_pipeline/resolve/`) decides which observations
   are one organisation and keys everything: the persisted crosswalk first (`var/state/crosswalk.json`
   merged with Convex's `POST /api/pipeline/crosswalk`), then SU id, the other source ids, Instagram
@@ -60,7 +66,12 @@ work — a cron that sees success because most of it worked is how a broken sour
   refuses holds the weaker side back. It writes `var/staging/_resolved/` and the quarantine
   `var/reports/quarantine.json` (held records, dropped references, matches to review).
   Decide a quarantined case in `pipeline/resolve-decisions.json` (`same` groups / `distinct`
-  pairs of the refs the report prints) and the next run applies it.
+  pairs of the refs the report prints, each `{"refs": [...], "why": "the evidence"}`) and
+  the next run applies it; a `same` group that joins keys loaded apart keeps the first and
+  reports the others for `ingest/purge:removeEntity`. `claims` there (`{ref, field, value,
+  why, decided}`) are posted as `manual` claims on the ref's organisation (the SU's Test Soc
+  is `defunct`). A page observed for several groups (a college's "JCR and MCR" page) is no
+  group's identifier.
 - **enrich** (T5, `stages/enrich.py`, `sources/websites/`, prompt `extract/prompts/org_v1.md`)
   reads each resolved organisation's website (and Linktree, which robots.txt currently disallows):
   home page plus one page per kind, deterministic socials / role emails / feeds / mailing lists /
@@ -68,10 +79,19 @@ work — a cron that sees success because most of it worked is how a broken sour
   attributed to. Committee names go to the private broker tables only; named sponsors become
   counterpart organisations. It writes keyed observations to `var/staging/society_website/` and
   `var/staging/linktree/`. LLM answers are cached under `var/cache/llm/`.
+- **classify** (R2, `stages/classify.py`, `camsocs_pipeline/classify/`, prompt
+  `extract/prompts/classify_v1.md`) fills what no source states for every listed
+  organisation — `orgType` / `level` / `collegeKeys` of a registered society, `categories`,
+  `activityTypes`, `audiences`, `languages`, `tags`: deterministic rules first (`inferred`),
+  then the bulk model, eight organisations a call, with every value's quote checked against
+  the organisation's own texts. Its keyed observations sit beside their source
+  (`var/staging/<source_type>/<run>--classify.jsonl`); a value it no longer claims is
+  restated `not_found`. Model answers are cached per organisation under
+  `var/cache/llm/classify_v1/`.
 - **Events stages** (T6, `camsocs_pipeline/events/`, one module per source: Camdram, talks.cam,
   CUCBC, Playwaze, University events, society ICS/Luma/Google feeds, SU What's On) run after
-  resolve. They resolve organiser hints against the keyed organisations in staging
-  (`events/organisers.py`; never minting an org key), keep unmatched ones in
+  resolve. They resolve organiser hints with `resolve.lookup.OrgLookup` (never minting an org
+  key), keep unmatched ones in
   `unresolved_organisers` instead of holding the event back, and write keyed
   `EventObservation`s to `var/staging/<source_type>.events/` — a directory of their own,
   because Camdram and CUCBC also feed harvest stages. Stages that read the network say
@@ -136,7 +156,7 @@ Read from `pipeline/.env` (gitignored) or the environment:
 ## LLM stages: inbox, instagram, termcards
 
 These run after `resolve` and know organisations from the keyed observations in staging
-(`known_orgs.KnownOrgs`). They share `extract/events.py`:
+and the crosswalk (`resolve.lookup.OrgLookup`). They share `extract/events.py`:
 
 - The model reports what a text says, with verbatim quotes, using the prompts in
   `extract/prompts/`: `email_events_v1`, `caption_events_v1` and `image_events_v1`.

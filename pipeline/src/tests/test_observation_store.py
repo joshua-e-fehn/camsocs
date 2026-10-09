@@ -157,6 +157,16 @@ class TestParts:
         store.write("camdram", "20261007T120000Z-aaaaaa", [observation("Staged")], part="a")
         assert len(store.read_latest("camdram")) == 2
 
+    def test_a_stage_reads_everything_but_its_own_part_or_only_its_own(self, tmp_path) -> None:
+        store = StagingStore(tmp_path)
+        store.write("su_directory", "20261007T120000Z-aaaaaa", [observation("Harvest")], part="a")
+        store.write("su_directory", "20261007T120000Z-aaaaaa", [observation("Mine")], part="mine")
+        others = store.read_latest("su_directory", exclude_parts=("mine",))
+        assert [record.identity.name for record in others] == ["Harvest"]
+        own = store.read_latest_part("su_directory", "mine")
+        assert [record.identity.name for record in own] == ["Mine"]
+        assert store.read_latest_part("su_directory", "absent") == []
+
     def test_parts_are_stage_names(self, tmp_path) -> None:
         with pytest.raises(ValueError, match="stage name"):
             StagingStore(tmp_path).path("camdram", "20261007T120000Z-aaaaaa", part="../x")

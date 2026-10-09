@@ -61,14 +61,27 @@ class _Model(BaseModel):
 
 
 def _in_vocab(items: Any, values: tuple[str, ...]) -> list[Any]:
+    """The items whose ``value`` is in the vocabulary; a bare string is an
+    item without a quote. Anything else is dropped, item by item."""
     if not isinstance(items, list):
         return []
-    return [item for item in items if isinstance(item, dict) and item.get("value") in values]
+    out = []
+    for item in items:
+        if isinstance(item, str):
+            item = {"value": item}
+        if isinstance(item, dict) and item.get("value") in values:
+            out.append(item)
+    return out
 
 
 class Quoted(_Model):
     value: str
     evidence_quote: str = ""
+
+    @field_validator("evidence_quote", mode="before")
+    @classmethod
+    def _quote(cls, value: Any) -> Any:
+        return "" if value is None else value
 
 
 class Classification(_Model):
@@ -76,6 +89,12 @@ class Classification(_Model):
 
     id: str
     categories: list[Quoted] = Field(default_factory=list)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _id(cls, value: Any) -> Any:
+        return str(value) if isinstance(value, int) else value
+
     activity_types: list[Quoted] = Field(default_factory=list)
     audiences: list[Quoted] = Field(default_factory=list)
     languages: list[Quoted] = Field(default_factory=list)
