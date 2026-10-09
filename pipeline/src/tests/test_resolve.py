@@ -22,7 +22,7 @@ from camsocs_pipeline.models.wire import CrosswalkRow
 from camsocs_pipeline.resolve import Crosswalk, Decisions, resolve_records
 from camsocs_pipeline.resolve.crosswalk import CrosswalkEntry
 from camsocs_pipeline.resolve.names import name_parts, site_identity, split_parenthetical
-from camsocs_pipeline.resolve.resolver import Resolution, ref_of
+from camsocs_pipeline.resolve.resolver import Resolution, Resolver, ref_of
 
 AT = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
 
@@ -455,6 +455,56 @@ def test_references_are_keyed_counterparts_created_unknowns_dropped() -> None:
     assert [o.identity.known_key for o in event_out.organisers] == [jcr_key]
     dropped = {item.names[0] for item in resolution.report.dropped_references}
     assert dropped == {"Nobody We Know Society", "Someone Else Entirely"}
+
+
+def test_a_counterpart_an_earlier_run_created_is_restated_each_run() -> None:
+    """The crosswalk outlives the deployment's rows (a dev purge, a new
+    production deployment): a counterpart staged only on the run that first
+    met it would be missing from the next full load (2026-10-09: 120 sponsor
+    counterparts lost after a purge). Each run that references it restates it."""
+
+    def page(run: str) -> Observation:
+        return org(
+            "society_website",
+            f"robots/{run}",
+            "Example Robotics Society",
+            relationships=[
+                RelObs(
+                    type="sponsors",
+                    direction="incoming",
+                    to_identity=IdentityHints(name="Jane Street", org_type="company"),
+                    evidence_url="https://society-website.example/robots",
+                )
+            ],
+        )
+
+    crosswalk = Crosswalk()
+    first = resolve_records([page("1")], crosswalk=crosswalk, run_key="20261008T000000Z-aaaaaa")
+    assert any(r.entity_key == "org-jane-street" for r in first.records)
+
+    second = Resolver(crosswalk, run_key="20261009T000000Z-bbbbbb")
+    resolution = second.run([page("2")])
+    (jane,) = [r for r in resolution.records if r.entity_key == "org-jane-street"]
+    assert {obs.field: obs.value for obs in jane.fields} == {
+        "name": "Jane Street",
+        "isCounterpart": True,
+        "orgType": "company",
+        "level": "external",
+    }
+    assert jane.source_url == "https://society-website.example/robots/2"
+    assert second.counts["counterparts_restated"] == 1
+    assert second.counts["counterparts_created"] == 0
+    # Once per run, however many pages name it.
+    assert second.reference_key(IdentityHints(name="Jane Street"), page("3")) == "org-jane-street"
+    assert second.take_counterparts() == []
+
+    # A counterpart a record of this run stages itself is not restated from a reference.
+    own = org("su_directory", "9999", "Jane Street", org_type="company")
+    third = resolve_records(
+        [own, page("4")], crosswalk=crosswalk, run_key="20261010T000000Z-cccccc"
+    )
+    janes = [r for r in third.records if r.entity_key == "org-jane-street"]
+    assert [ref_of(r) for r in janes] == ["su_directory:9999"]
 
 
 def test_an_organisations_parent_is_keyed_or_dropped() -> None:

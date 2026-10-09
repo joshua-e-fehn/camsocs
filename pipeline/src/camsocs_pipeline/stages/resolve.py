@@ -95,7 +95,8 @@ def run(ctx: StageContext) -> None:
         f"{len(records)} staged records from {', '.join(directories)} → {written} keyed "
         f"({counts.get('organisations', 0)} organisation observations, "
         f"{counts.get('keys_kept', 0)} keys kept, {counts.get('keys_minted', 0)} minted, "
-        f"{counts.get('counterparts_created', 0)} counterparts)"
+        f"{counts.get('counterparts_created', 0)} counterparts, "
+        f"{counts.get('counterparts_restated', 0)} restated)"
     )
     ctx.report.notes.append(
         f"quarantine: {counts.get('held', 0)} held, "

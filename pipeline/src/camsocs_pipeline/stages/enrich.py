@@ -9,7 +9,9 @@ key pages, deterministic links / emails / feeds / JSON-LD, LLM extraction with
 verbatim-evidence checks). Named sponsors and partners are keyed against the
 crosswalk (`resolve.Resolver.reference_key`): a known organisation keeps its
 key, a company / NGO / college / department becomes a counterpart
-organisation, an unknown student group is dropped.
+organisation, an unknown student group is dropped. A counterpart an earlier
+run created is restated from the page that names it (its name, type and
+`isCounterpart`), so a load into an empty deployment recreates it.
 
 Writes keyed observations, like any harvester's but already keyed:
 
@@ -97,7 +99,8 @@ def run(ctx: StageContext) -> None:
     stats = Stats()
     for result in results:
         stats.add(result.stats)
-    _report(ctx, stats, written, len(counterparts), dropped)
+    restated = resolver.counts.get("counterparts_restated", 0)
+    _report(ctx, stats, written, len(counterparts) - restated, restated, dropped)
     shown = [note for result in results for note in result.notes]
     ctx.report.notes.extend(f"  {note}" for note in shown[:MAX_NOTES])
     if len(shown) > MAX_NOTES:
@@ -176,7 +179,9 @@ def _as_llm_counterpart(record: Observation, mention: PartnerMention) -> Observa
     return record
 
 
-def _report(ctx: StageContext, stats: Stats, written: int, counterparts: int, dropped: int) -> None:
+def _report(
+    ctx: StageContext, stats: Stats, written: int, counterparts: int, restated: int, dropped: int
+) -> None:
     # The staged observations are the stage's output (`load` posts them).
     ctx.report.inserted += written
     ctx.report.skipped += stats.disallowed + stats.unreachable + stats.not_about
@@ -191,7 +196,7 @@ def _report(ctx: StageContext, stats: Stats, written: int, counterparts: int, dr
         f"claims: {stats.fields_found} found, {stats.fields_inferred} inferred ({ratio} found), "
         f"{stats.fields_missing} not found; {stats.sessions} sessions, {stats.people} people "
         f"(private), {stats.partners} sponsors/partners ({counterparts} new counterparts, "
-        f"{dropped} unmatched)"
+        f"{restated} known ones restated, {dropped} unmatched)"
     )
     average = stats.llm_seconds / stats.llm_calls if stats.llm_calls else 0.0
     ctx.report.notes.append(

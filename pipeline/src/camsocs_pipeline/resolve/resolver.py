@@ -943,7 +943,12 @@ class Resolver:
         """The key of the organisation `hints` refer to, looked up in the
         crosswalk (complete after `run`). A counterpart (`COUNTERPART_TYPES`,
         or a college) that is not known yet is created from `referrer`'s
-        page (`take_counterparts`). None when unknown or ambiguous."""
+        page (`take_counterparts`). A counterpart the crosswalk knows only
+        from an earlier run — no record of this run stages it — is restated
+        from `referrer`'s page the same way: the crosswalk outlives the
+        deployment's rows (a dev purge, a fresh production deployment), so a
+        counterpart staged only on the run that first met it would vanish
+        from the next full load. None when unknown or ambiguous."""
         if hints.known_key:
             return hints.known_key
         identity = identity_of(hints)
@@ -954,10 +959,24 @@ class Resolver:
             return self._create_counterpart(hints, identity, referrer, key)
         found = self.crosswalk.match(identity)
         if found.key is not None:
-            return found.key
+            if self._staged_elsewhere(found.key):
+                return found.key
+            return self._create_counterpart(hints, identity, referrer, found.key, restated=True)
         if not found.candidates and hints.org_type in COUNTERPART_TYPES:
             return self._create_counterpart(hints, identity, referrer, None)
         return None
+
+    def _staged_elsewhere(self, key: str) -> bool:
+        """Whether something other than a reference keeps `key` in the
+        deployment: it is not a counterpart, or a record of this run (the
+        colleges stage, a harvester, this run's resolve) stages it."""
+        entry = self.crosswalk.entries.get(key)
+        return (
+            entry is None
+            or not entry.is_counterpart
+            or key in self._taken
+            or (self.run_key is not None and entry.last_seen_run == self.run_key)
+        )
 
     def take_counterparts(self) -> list[Observation]:
         """Counterpart observations created since the last call."""
@@ -970,9 +989,12 @@ class Resolver:
         identity: Identity,
         referrer: Record | None,
         key: str | None,
+        *,
+        restated: bool = False,
     ) -> str | None:
         if referrer is None:
-            return None
+            # Nothing to restate it from: the known key still answers.
+            return key if restated else None
         org_type = hints.org_type or ("college" if identity.college else None)
         name = COLLEGES_BY_ID[identity.college].name if identity.college else hints.name
         if key is None:
@@ -1019,7 +1041,7 @@ class Resolver:
                 last_seen_run=self.run_key,
             )
         )
-        self.counts["counterparts_created"] += 1
+        self.counts["counterparts_restated" if restated else "counterparts_created"] += 1
         return key
 
     def _drop(self, referrer: Record, hints: IdentityHints, what: str) -> None:
