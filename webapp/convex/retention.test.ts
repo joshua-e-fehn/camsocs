@@ -177,7 +177,7 @@ describe("retention", () => {
     expect(after.old).toBeNull()
   })
 
-  test("R5: people go 30 days past their handover; broker rows are archived first", async () => {
+  test("R5: people go 30 days past their handover; broker rows are archived in the grace", async () => {
     const t = newTest()
     const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10)
     await t.run(async (ctx) => {
@@ -185,7 +185,7 @@ describe("retention", () => {
         key: string,
         staleAfter: string,
         method: "llm" | "manual",
-        extra: { archived?: boolean; consent?: boolean; updatedAt?: number } = {},
+        extra: { consent?: boolean; stale?: boolean } = {},
       ) => ({
         key,
         name: key,
@@ -193,42 +193,41 @@ describe("retention", () => {
         role: "President",
         academicYear: "2025-26",
         staleAfter,
-        stale: true,
+        stale: extra.stale ?? true,
         sourceUrl: "https://a.org",
         seenAt: 0,
         publicLinks: [],
         consentBasis: extra.consent ? ("consent" as const) : ("public_source" as const),
         method,
-        archived: extra.archived ?? false,
+        archived: false,
         createdAt: 0,
-        updatedAt: extra.updatedAt ?? NOW,
+        updatedAt: NOW,
       })
       await ctx.db.insert("people", person("per-harvested", iso(daysAgo(60)), "llm"))
-      await ctx.db.insert("people", person("per-recent", iso(daysAgo(10)), "llm"))
+      await ctx.db.insert("people", person("per-harvested-grace", iso(daysAgo(10)), "llm"))
       await ctx.db.insert("people", person("per-broker", iso(daysAgo(60)), "manual"))
+      await ctx.db.insert("people", person("per-broker-grace", iso(daysAgo(10)), "manual"))
       await ctx.db.insert(
         "people",
-        person("per-broker-old", iso(daysAgo(600)), "manual", {
-          archived: true,
-          updatedAt: daysAgo(400),
-        }),
+        person("per-current", iso(daysAgo(-200)), "manual", { stale: false }),
       )
       await ctx.db.insert(
         "people",
         person("per-consent", iso(daysAgo(60)), "llm", { consent: true }),
       )
-      await ctx.db.insert("people", {
-        ...person("per-unflagged", iso(daysAgo(60)), "llm"),
-        stale: false,
-      })
+      await ctx.db.insert(
+        "people",
+        person("per-unflagged", iso(daysAgo(60)), "llm", { stale: false }),
+      )
     })
     await runDaily(t)
     const rows = await t.run(async (ctx) =>
       (await ctx.db.query("people").take(20)).map((p) => [p.key, p.archived]),
     )
     expect(Object.fromEntries(rows)).toEqual({
-      "per-recent": false,
-      "per-broker": true,
+      "per-harvested-grace": false,
+      "per-broker-grace": true,
+      "per-current": false,
       "per-consent": false,
     })
   })

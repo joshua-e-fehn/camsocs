@@ -114,9 +114,9 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T9 | C Webapp | Public site: browse, filter, organisation page, events calendar, about, privacy | done |
 | T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | done (sign-in link off until Resend is configured, J3) |
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | done |
-| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | form and admin inbox (`/dashboard/requests`) done; accepted corrections → `owner_submitted` claims and the removal suppression list todo |
-| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`); J6 and the DPIA todos open |
-| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | todo |
+| T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | done (form, inbox; accepted corrections → `owner_submitted` claims; removals / objections → the suppression list, enforced by the pipeline and every ingestion route) |
+| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`; retention automated for R3–R8, R10; list mail cleaned before the LLM); J6 and the remaining DPIA R-4 todos open |
+| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | `pixi run harvest` + `var/reports/coverage-<date>.md` done; deploy todo |
 | T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | todo |
 
 ### Joshua's tasks (front-loaded)
@@ -167,3 +167,7 @@ See `AGENTS.md` and `docs/research/2026-10-07-repo-conventions.md` §2. The layo
 | 2026-10-07 | Inbound list mail: Resend receiving subdomain → Svix-verified webhook `/api/inbound/email` (content fetched from Resend's Receiving API); a provider-agnostic JSON route behind a shared secret as the fallback. Outlook rule *redirects* (keeps `List-Id`). |
 | 2026-10-07 | Dates like "Wednesday of Week 3" are resolved in code from the verified term dates; the LLM only reports what the text says. LLM-extracted events from images without a text layer stay `inferred`. |
 | 2026-10-07 | SU resource termcards are not fetched: their files sit under robots-disallowed `/asset/` and `/resourcehandler/` (source-research §1, §21). |
+| 2026-10-08 | D2: the private broker `people` table keeps first-name-only committee members too (private; `staleAfter` = the next handover, 30 June). |
+| 2026-10-09 | Accepted removals / objections are a permanent **suppression list** (listing, field, contact address as sha256 only, broker person), enforced on acceptance, filtered by the pipeline before every load, refused by every ingestion route and stripped from the public projection; lifting is explicit and a lifted listing stays hidden until shown again. Accepted corrections are `owner_submitted` claims sourced to the request (`request:<key>`, internal), all-or-nothing. |
+| 2026-10-09 | Retention runs as a daily Convex cron (R3 events, R4 mail bodies at 30 days / rows at 90, R5 people deleted 30 days past handover with broker rows archived in the grace, R6, R8 with rejected requests at 90 days, R10) plus `pixi run prune-cache` for the host cache (R7); R1 archiving and R9 accounts stay manual. |
+| 2026-10-09 | Coverage is computed server-side (a paginated fold into `coverageSnapshots`), never in the browser; the quarantine count reaches the overview as the resolve stage's run metrics. `pixi run harvest` is the one full-run command and writes `var/reports/coverage-<date>.md`. |

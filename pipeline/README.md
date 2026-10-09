@@ -17,10 +17,42 @@ pixi run pipeline -- sync --stages term_dates,load --limit 20
 pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
+pixi run harvest                         # the full harvest + coverage report (below)
+pixi run prune-cache                     # retention R7: var/cache + old staging, 90 days
 ```
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
 work — a cron that sees success because most of it worked is how a broken source stays broken.
+
+### The full harvest: `pixi run harvest`
+
+One command for a full run (`camsocs harvest`; `pixi run harvest -- --dry-run` reads but writes
+nothing, `-- --limit N` for a trial):
+
+1. every stage in registry order — `term_dates` → the seed harvesters → `resolve` → `enrich`
+   → the events stages → `inbox` / `instagram` / `termcards` → `load` → `report` — inside one
+   run-log row (`runs/start` … `runs/finish`, which also refreshes the broker overview's
+   coverage);
+2. `derive`: the background re-derivation (statuses, term weeks, stale flags);
+3. the **coverage report**, `var/reports/coverage-<YYYY-MM-DD>.md` (London date), written by
+   the `report` stage from the deployment itself (`POST /api/pipeline/coverage` and
+   `coverage/events`, the same fold the broker overview shows): listed organisations,
+   hidden, counterparts; by level, status and type; every organisation field with how many
+   listed organisations hold it and the share; upcoming events per source and visibility;
+   the 15 tracked fields most often missing; the quarantine; the run's stages.
+
+The previous full run was logged by hand (`.logs/full-sync-20261008.log`); to keep one, run
+`pixi run harvest 2>&1 | tee .logs/harvest-$(date +%Y%m%d).log`. The daily cron
+(`scripts/daily-sync.sh`) runs `sync` over the same registry, so it writes the day's coverage
+report too.
+
+### Retention on the pipeline host: `pixi run prune-cache`
+
+`camsocs prune-cache [--older-than 90d] [--dry-run] [--no-staging]` deletes what
+docs/compliance/retention.md R7 allows to keep for 90 days: cached pages (a page's body,
+meta and last-failure note go together, once all are older), LLM replies under
+`var/cache/llm/`, and superseded staging files (never the latest file of each part, which
+`load` still reads). Add it to the host's cron next to the daily sync.
 
 ## Stages, staging and loading
 
@@ -85,6 +117,30 @@ work — a cron that sees success because most of it worked is how a broken sour
   `media.py`). `--limit N` loads the first N keyed records. Claims travel in batches that
   keep each entity's claims together (the server creates an entity only from a request that
   carries its required fields); a batch too heavy for one mutation is posted again in halves.
+  - **The suppression list first.** Before anything is posted, the plan is filtered by what
+    accepted removals and objections took off the site (`suppressions.py`, read once per
+    loader from `POST /api/pipeline/suppressions`): nothing about a suppressed listing (claims,
+    feed ids, edges, inferences, owned source rows, organiser links; an event it alone
+    organised), no value for a suppressed field, no suppressed address (dropped from `email`,
+    `roleEmails` and mailing lists, cut out of free text as `[address removed]`; addresses are
+    known only as sha256 hashes), no suppressed broker person. A truncated list stops the
+    load; an undeployed route filters nothing and the notes say so. Convex refuses whatever
+    slips through. The `inbox` stage's posts go through the same filter.
+  - **Idempotent.** Each organisation's feed identifiers travel as one merged `orgInternal`
+    patch (lists merged, the later scalar wins — the state the server's sequence of patches
+    used to end in), so a second identical load reports 0 updated; claims are no-ops by
+    fingerprint.
+  - **Images are uploaded once per deployment.** `var/state/stored-files.json` remembers
+    sha256 → storageId per deployment URL (`StoredFileCache`); bytes the deployment already
+    stores are not sent again (the notes count them). An id the deployment no longer has
+    (the claim is refused with "storageId does not name a stored file") makes the loader
+    forget the ids it reused that run; `purge-dev` forgets the dev deployment's.
+- **Stage counters.** A stage that stages observations reports them as *new* (`inserted`):
+  harvest stages, `resolve` (its keyed copies), `enrich`, the events stages, `termcards` and
+  `instagram` (records carried forward from an earlier run count as *unchanged*). `load`
+  reports what reached Convex. `resolve` also reports its quarantine as `metrics`
+  (`quarantineHeld`, `quarantineDropped`, `quarantineReview`), stored with the run and shown
+  on the broker overview.
 - **resolve holds** a new organisation no observation names (a guide row whose A–Z club is
   not staged) and keys an organisation's `parent` like any reference, or drops it.
 
@@ -142,7 +198,12 @@ These run after `resolve` and know organisations from the keyed observations in 
   `extract/prompts/`: `email_events_v1`, `caption_events_v1` and `image_events_v1`.
 - `extract/when.py` resolves "Wednesday of Week 3" and similar from the verified term dates.
 - Every value becomes an `llm_field`, its quote checked against the exact text sent.
-  Contact details are redacted before any LLM call.
+  Contact details are redacted before any LLM call. List mail is cleaned first
+  (`extract/mail_text.py`, deterministic): quoted replies ("On … wrote:", `>` lines, Outlook
+  reply headers), forwarded-message headers (the forwarded body stays), signatures (`-- `,
+  "Sent from my iPhone", sign-off blocks — keeping a line that names an organisation) and
+  list footers (unsubscribe, preferences, copyright) are cut out, then addresses and phone
+  numbers redacted. The mail's extraction note counts what was cut, never what it said.
 - `extract/dedupe.py` drops events another staged source already has.
 - `extract/memo.py` caches validated replies under `var/cache/llm/`.
 

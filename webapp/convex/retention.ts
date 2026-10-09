@@ -20,9 +20,11 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  *  - R4 `stripMailBodies`: the body (text, stored HTML, attachments) of a
  *    processed mailing-list mail 30 days after receipt; `purgeMail` the whole
  *    row 90 days after receipt, processed or not.
- *  - R5 `expirePeople`: 30 days after `staleAfter` (the handover), people from
- *    public sources are deleted and the broker's own rows archived; an
- *    archived broker row is deleted a year later. Rows held on consent stay.
+ *  - R5 `expirePeople`: once `staleAfter` (the handover) has passed, the
+ *    broker's own rows are archived (out of the active lists) for a 30-day
+ *    grace in which the broker may extend `staleAfter`; 30 days after it,
+ *    every person row is deleted — from public sources or the broker's own.
+ *    Rows held on consent stay.
  *  - R6 `purgeInteractions`: interactions three years old whose organisation
  *    has had none since, and introductions three years old.
  *  - R8 `purgeRequests`: rejected listing requests 90 days after they were
@@ -44,8 +46,6 @@ export const RETENTION = {
   mailDays: 90,
   /** R5: a person is kept this long past `staleAfter`. */
   peopleGraceDays: 30,
-  /** R5: an archived broker-made person row is kept this long. */
-  archivedPeopleDays: 365,
   /** R6: interactions / introductions. */
   interactionDays: 3 * 365,
   /** R8: a rejected request. */
@@ -240,24 +240,22 @@ export const expirePeople = internalMutation({
   returns: walkResult,
   handler: async (ctx, args): Promise<WalkResult> => {
     const now = args.now ?? Date.now()
+    const today = londonIsoDate(now)
     const cutoffDate = londonIsoDate(daysAgo(now, RETENTION.peopleGraceDays))
     // Both flag values: the daily flag may not have caught up with the date.
     const stale = args.stale ?? true
     const page = await ctx.db
       .query("people")
-      .withIndex("by_stale_staleAfter", (q) => q.eq("stale", stale).lt("staleAfter", cutoffDate))
+      .withIndex("by_stale_staleAfter", (q) => q.eq("stale", stale).lt("staleAfter", today))
       .paginate({ numItems: PAGE.people, cursor: args.cursor ?? null })
     let deleted = 0
     for (const person of page.page) {
       if (person.consentBasis === "consent") continue
-      if (person.method !== "manual") {
+      if (person.staleAfter < cutoffDate) {
         await ctx.db.delete("people", person._id)
         deleted++
-      } else if (!person.archived) {
+      } else if (person.method === "manual" && !person.archived) {
         await ctx.db.patch("people", person._id, { archived: true, updatedAt: now })
-      } else if (person.updatedAt < daysAgo(now, RETENTION.archivedPeopleDays)) {
-        await ctx.db.delete("people", person._id)
-        deleted++
       }
     }
     const next = page.isDone

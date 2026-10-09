@@ -33,7 +33,7 @@ export const CONTACT_EMAIL = ""
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-10-07"
+export const PRIVACY_NOTICE_UPDATED = "2026-10-09"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"

@@ -167,12 +167,17 @@ export default function PrivacyPage() {
             Private committee notes: until the end of the academic year in which they were collected
             (30 June), then deleted within 30 days unless the person has agreed to more.
           </li>
-          <li>Mailing-list messages: 90 days, then deleted.</li>
+          <li>
+            Mailing-list messages: their text and attachments are deleted 30 days after we have read
+            them for events, and the rest of the message after 90 days.
+          </li>
           <li>Events: deleted a year after they took place.</li>
           <li>Notes of our own contacts with a society: three years after the last contact.</li>
           <li>
-            Requests and complaints: two years after they are closed. If you ask us to remove a
-            listing, we keep a minimal record so it is not added back.
+            Requests and complaints: two years after they are closed (a request we turned down: 90
+            days). If you ask us to remove a listing, a detail or an address, we keep a minimal
+            record — the listing&apos;s key, the field, or only a one-way hash of the address — so
+            it is not added back.
           </li>
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
