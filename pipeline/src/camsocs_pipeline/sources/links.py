@@ -624,6 +624,12 @@ def email_domain(email: str) -> str:
     return email.strip().lower().rpartition("@")[2]
 
 
+#: The alumni forwarding services also give name-shaped addresses
+#: (``jane.smith@cantab.net``): such an address names its person.
+_CANTAB_DOMAINS = frozenset({"cantab.ac.uk", "cantab.net"})
+_NAME_SHAPED = re.compile(r"^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$")
+
+
 def email_type(email: str) -> EmailType:
     """What kind of address `email` is — `classifyEmail` in
     webapp/convex/lib/derived.ts, rule for rule."""
@@ -632,6 +638,8 @@ def email_type(email: str) -> EmailType:
     local = address[:at]
     domain = address[at + 1 :]
     if is_crsid_address(local, domain):
+        return "personal_crsid"
+    if domain in _CANTAB_DOMAINS and _NAME_SHAPED.match(local):
         return "personal_crsid"
     if re.search(r"(^|\.)cusu\.", domain) or domain == "cusu.org":
         return "legacy_cusu"
@@ -721,7 +729,6 @@ ROLE_WORDS: dict[str, str] = {
     "juniortreasurer": "treasurer",
     "treas": "treasurer",
     "finance": "treasurer",
-    "bursar": "treasurer",
     "sponsorship": "sponsorship",
     "sponsorships": "sponsorship",
     "sponsor": "sponsorship",
@@ -829,7 +836,20 @@ OTHER_ROLE_WORDS = frozenset(
     }
 )
 #: Long words that mark a post even inside a longer local part ("caribbeanofficer").
-_OTHER_ROLE_PARTS = ("officer", "coordinator", "director", "manager", "outreach", "liaison")
+_OTHER_ROLE_PARTS = (
+    "officer",
+    "coordinator",
+    "director",
+    "manager",
+    "outreach",
+    "liaison",
+    # A boat club's boatman is a post of the club (``caiusboatman@``,
+    # ``lowerboatsmen@``), not its general address.
+    "boatman",
+    "boatmen",
+    "boatsman",
+    "boatsmen",
+)
 #: Local parts meaning "the organisation itself".
 GENERIC_LOCALS = frozenset(
     {
@@ -1026,6 +1046,11 @@ def _owns_domain(domain: str, site_host: str | None) -> bool:
         return True
     if any(domain == shared or domain.endswith("." + shared) for shared in _SHARED_MAIL_HOSTS):
         return True
+    if site_host.endswith(".cam.ac.uk"):
+        # A JCR's site under its college's domain (jcr.cai.cam.ac.uk) does not
+        # own the college's addresses (conference.office@cai.cam.ac.uk).
+        site = site_host.removeprefix("www.")
+        return domain == site or domain.endswith("." + site)
     if registrable(domain) == registrable(site_host):
         return True
     # The same name on another domain: cambridgenightline.org on the
@@ -1050,6 +1075,40 @@ def is_generic(
         return True
     generic = local in GENERIC_LOCALS or any(t in GENERIC_LOCALS for t in _local_tokens(local))
     return generic and _owns_domain(domain, site_host)
+
+
+#: Words a mailbox's name is made of that are no one's name.
+_MAILBOX_WORDS = frozenset(
+    """
+    docs doc list lists owner owners logistics word words building office team news mail
+    mailing booking bookings tickets ticket membership members member sec soc socs hub
+    group web site page live official general enquiry enquiries query queries help desk
+    """.split()  # noqa: SIM905 (a word list reads better as text)
+)
+
+
+def names_a_person(local: str, own_tokens: set[str] | frozenset[str] = frozenset()) -> bool:
+    """A local part shaped like a person's name (``jane.smith``,
+    ``jane_smith``): exactly two plain words, neither a role, a generic or
+    mailbox word, a place, a "CU…" acronym or a word of the organisation's
+    own name (``cambridge.lacrosse``, ``logistics.cumas`` are not)."""
+    parts = _local_tokens(local.lower())
+    if len(parts) != 2 or not _NAME_SHAPED.match(local.lower()):
+        return False
+    common = (
+        GENERIC_LOCALS
+        | _STOP_TOKENS
+        | _PLACE_WORDS
+        | OTHER_ROLE_WORDS
+        | _MAILBOX_WORDS
+        | set(ROLE_WORDS)
+    )
+    for part in parts:
+        if part in common or part in own_tokens or len(part) < 2 or part.startswith("cu"):
+            return False
+        if any(token in part for token in own_tokens if len(token) >= 4):
+            return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -1095,9 +1154,13 @@ def classify_email(
         return EmailReading(address, "personal", reason="personal CRSid")
     if has_bad_tld(address):
         return EmailReading(address, "unknown", reason="a typo in the domain")
+    if is_obfuscated_address(address):
+        return EmailReading(address, "unknown", reason="obfuscated against spam, not decoded")
     role = role_of(address) or (label_role(label) if label else None)
     if role is not None:
         return EmailReading(address, "role", role)
+    if email_type(address) == "personal_crsid":
+        return EmailReading(address, "personal", reason="a person's alumni address")
     tokens = _local_tokens(local)
     if (
         len(tokens) > 1
@@ -1107,7 +1170,13 @@ def classify_email(
         and not all(t in own_tokens or t in _PLACE_WORDS for t in tokens[1:])
     ):
         return EmailReading(address, "role", "other")
-    if is_generic(address, own_tokens, site_host) or labelled:
+    if is_generic(address, own_tokens, site_host):
+        return EmailReading(address, "general")
+    if names_a_person(local, own_tokens):
+        # Even where a page presents it as the contact: "farouk.hadeed@…"
+        # is a person's address, never a society's (AGENTS.md).
+        return EmailReading(address, "unknown", reason="looks like a person's name")
+    if labelled:
         return EmailReading(address, "general")
     # Named after the site it is published on: cucss@cucss.uk,
     # cucaadmin@gmail.com on cuca.org.uk.
@@ -1165,6 +1234,25 @@ _CLOUDFLARE = re.compile(r"/cdn-cgi/l/email-protection|__cf_email__|data-cfemail
 _AT_OBFUSCATION = re.compile(r"[\w.+-]+\s*[\[\(\{]\s*at\s*[\]\)\}]\s*[\w-]+(?:\.[\w-]+)+", re.I)
 
 
+#: Words a page puts into an address so that it does not work as written
+#: ("round.xyz@…" — "remove '.xyz' to get the correct address"; "x.nospam@…").
+_ANTISPAM_TOKENS = frozenset(
+    {"xyz", "nospam", "no-spam", "antispam", "removethis", "remove-this", "dontspam", "spamfree"}
+)
+
+
+def is_obfuscated_address(address: str) -> bool:
+    """An address deliberately broken against harvesters (`_ANTISPAM_TOKENS`
+    in its local part or as a label of its domain): never stored, never
+    repaired (AGENTS.md: obfuscated addresses are not decoded)."""
+    local, _, domain = address.strip().lower().rpartition("@")
+    # Not the top-level domain itself: ``society.xyz`` is a real domain.
+    parts = set(re.split(r"[._+]+", local)) | set(domain.split(".")[:-1])
+    if parts & _ANTISPAM_TOKENS:
+        return True
+    return any(token in local for token in ("nospam", "removethis", "antispam"))
+
+
 def has_obfuscated_emails(html: str) -> bool:
     """The page hides addresses from automated readers (Cloudflare email
     protection, ``name[at]domain``). Reported, never decoded."""
@@ -1203,6 +1291,7 @@ __all__ = [
     "is_crsid_address",
     "is_email",
     "is_generic",
+    "is_obfuscated_address",
     "is_personal_crsid",
     "is_personal_profile",
     "is_social_host",
@@ -1211,6 +1300,7 @@ __all__ = [
     "link_text_names",
     "mailing_list_link",
     "name_tokens",
+    "names_a_person",
     "normalise_email",
     "read_contacts",
     "registrable",

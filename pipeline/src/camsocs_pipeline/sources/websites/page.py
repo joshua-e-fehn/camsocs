@@ -31,6 +31,8 @@ from urllib.parse import unquote, urljoin, urlsplit
 import extruct
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
+from camsocs_pipeline.sources.links import is_obfuscated_address
+
 logger = logging.getLogger(__name__)
 
 #: Text below this many characters in <main> means the theme put the content elsewhere.
@@ -192,6 +194,12 @@ def parse_page(url: str, html: str) -> Page:
         text = _clean_text(tree.body.text(separator="", strip=False))
     page.text = text[:MAX_PAGE_TEXT]
     main_emails += [match.group(1) for match in _EMAIL.finditer(page.text)]
+    # An address broken against harvesters ("round.xyz@…") is obfuscated:
+    # counted, never stored or repaired.
+    broken = {e.lower() for e in emails if is_obfuscated_address(e)}
+    page.obfuscated_emails += len(broken)
+    emails = [e for e in emails if not is_obfuscated_address(e)]
+    main_emails = [e for e in main_emails if not is_obfuscated_address(e)]
     page.emails = list(dict.fromkeys(email.lower().rstrip(".") for email in emails))
     page.main_emails = list(dict.fromkeys(email.lower().rstrip(".") for email in main_emails))
     return page

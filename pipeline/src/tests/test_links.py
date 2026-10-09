@@ -266,8 +266,28 @@ class TestEmails:
         assert classify_email("gsb.president@clarehall.cam.ac.uk", own).role == "president"
 
     def test_a_labelled_contact_counts_and_typos_do_not(self) -> None:
-        assert classify_email("pythons.example@gmail.com", labelled=True).kind == "general"
+        assert classify_email("pythonsexample@gmail.com", labelled=True).kind == "general"
         assert classify_email("official.club@gmail.comm", labelled=True).kind == "unknown"
+
+    def test_a_persons_name_is_never_a_contact_even_where_a_page_says_so(self) -> None:
+        # The shape of an SU profile's contact seen on 2026-10-08 (made up).
+        for address in ("jane.example@gmail.com", "jane_example@soc.example"):
+            reading = classify_email(address, name_tokens("Quokka Society"), labelled=True)
+            assert reading.kind == "unknown" and reading.reason == "looks like a person's name"
+        alumni = classify_email("jane.example@cantab.net", labelled=True)
+        assert alumni.kind == "personal" and email_type("jane.example@cantab.net") == (
+            "personal_crsid"
+        )
+        # Mailboxes named after the society or a post are not people.
+        own = name_tokens("Cambridge University Malaysian Society", "CUMaS")
+        for address in (
+            "logistics.cumas@gmail.com",
+            "cambridge.lacrosse@gmail.com",
+            "csep.docs@gmail.com",
+            "chess.club@gmail.com",
+            "quokka.president@gmail.com",
+        ):
+            assert classify_email(address, own, labelled=True).kept, address
 
     def test_read_contacts_keeps_the_first_general_and_dedupes_roles(self) -> None:
         contacts = read_contacts(
@@ -442,3 +462,25 @@ def test_facebook_people_pages_only_of_organisations() -> None:
     page = "https://www.facebook.com/people/Cambridge-University-Immunology-Society/61554/"
     assert social_link(page) == {"platform": "facebook_page", "url": page}
     assert social_link("https://www.facebook.com/people/Jane-Smith/1000123/") is None
+
+
+def test_addresses_broken_against_spam_are_never_stored_or_repaired() -> None:
+    from camsocs_pipeline.sources.links import is_obfuscated_address
+    from camsocs_pipeline.sources.websites.page import parse_page
+
+    for address in (
+        "round.xyz@cambridgesu.co.uk",
+        "round.nospam@cambridgesu.co.uk",
+        "soc-round-managers.nospam@lists.cam.ac.uk",
+        "ann@example.xyz.org",
+    ):
+        assert is_obfuscated_address(address), address
+        assert classify_email(address, labelled=True).kind == "unknown"
+    assert not is_obfuscated_address("president@roundsoc.org")
+    assert not is_obfuscated_address("hello@roundsoc.xyz")
+    page = parse_page(
+        "https://round.example/",
+        "<p>Write to round.xyz@cambridgesu.co.uk (remove '.xyz'); "
+        "or <a href='mailto:secretary@round.example'>us</a>.</p>",
+    )
+    assert page.emails == ["secretary@round.example"] and page.obfuscated_emails == 1

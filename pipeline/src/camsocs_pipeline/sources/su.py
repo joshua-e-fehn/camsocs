@@ -68,6 +68,7 @@ from camsocs_pipeline.sources.links import (
     is_email,
     is_social_host,
     mailing_list_link,
+    name_tokens,
     social_link,
     unwrap_redirect,
     withhold_private,
@@ -580,11 +581,17 @@ def profile_observation(entry: DirectoryEntry, profile: Profile, page: FetchResu
     if profile.name:
         fields.append(found("name", profile.name, "name"))
 
-    kind = email_type(profile.email) if profile.email else None
-    if profile.email and kind != "personal_crsid":
+    # The profile's contact slot is the society's (labelled), but a CRSid or
+    # a name-shaped address ("jane.smith@cantab.net") names a person: never
+    # stored as its email, shown as the projection would.
+    reading = (
+        classify_email(profile.email, name_tokens(entry.name, profile.name), labelled=True)
+        if profile.email
+        else None
+    )
+    if profile.email and reading is not None and reading.kept:
         fields.append(found("email", profile.email, "email"))
     elif profile.email:
-        # A CRSid names a person: never stored, shown as the projection would.
         fields.append(absent("email", "not_published", "email.personal_withheld"))
     elif profile.email_unreadable:
         fields.append(absent("email", "not_found", "email.unreadable"))
@@ -635,7 +642,12 @@ def profile_observation(entry: DirectoryEntry, profile: Profile, page: FetchResu
     )
     website_domain = host_of(profile.website) if profile.website else None
     own_domain = (
-        email_domain(profile.email) if profile.email and kind == "role_own_domain" else None
+        email_domain(profile.email)
+        if profile.email
+        and reading is not None
+        and reading.kept
+        and email_type(profile.email) == "role_own_domain"
+        else None
     )
     sympa = sympa_list_name(profile.mailing_list)
     return Observation(

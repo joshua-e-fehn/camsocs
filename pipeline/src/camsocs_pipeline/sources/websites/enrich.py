@@ -84,6 +84,7 @@ from camsocs_pipeline.sources.policy import (
     SOCIETY,
     SOCIETY_WEBSITE,
     FetchPurpose,
+    is_cam_main_site,
 )
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.links import (
@@ -602,6 +603,8 @@ class Enricher:
 
         # Emails: role addresses per page, one general address per site.
         site_host = host_of(fetched[0].url)
+        college_site = is_cam_main_site(fetched[0].url)
+        marks = body_marks(target)
         general: list[tuple[int, str, str]] = []
         roles_by_page: dict[str, list[dict[str, str]]] = defaultdict(list)
         seen_roles: set[tuple[str, str]] = set()
@@ -613,10 +616,17 @@ class Enricher:
                 reading = classify_email(email, target.words, site_host=site_host)
                 address = reading.address.lower()
                 if reading.kind == "role" and reading.role:
+                    if marks and not _carries_mark(address, marks, target, site_host):
+                        continue  # the college's officers, or the other body's
                     if (reading.role, address) not in seen_roles:
                         seen_roles.add((reading.role, address))
                         roles_by_page[item.url].append({"role": reading.role, "email": address})
-                elif reading.kind == "general":
+                elif reading.kind == "general" and item.kind in GENERAL_EMAIL_PAGES:
+                    # Never from a committee or staff directory, and on a
+                    # college's own site only an address with the body's name
+                    # (its footer's enquiries@ is the college's).
+                    if college_site and not _named_for(address, target):
+                        continue
                     domain = address.split("@", 1)[1]
                     rank = 0 if domain.endswith(site_host) or site_host.endswith(domain) else 1
                     general.append((rank, address, item.url))
@@ -920,6 +930,48 @@ def _pick_social(
     if ranked[0][1] > ranked[1][1]:
         return socials[ranked[0][0]]
     return None
+
+
+#: Pages a site's general address is read from: its home and contact pages,
+#: never a committee or staff directory.
+GENERAL_EMAIL_PAGES = frozenset({"home", "contact"})
+
+_MCR_NAME = re.compile(r"\bmcr\b|graduate|\bgsb\b|middle combination|\bgradsoc\b", re.I)
+_JCR_NAME = re.compile(r"\bjcr\b|junior combination|students'? union|student union|\bjcsu\b", re.I)
+
+
+def body_marks(target: Target) -> frozenset[str]:
+    """The prefixes a college body's own addresses carry (§8: "only addresses
+    with the body's mark count"): ``mcr``/``gsb`` for an MCR, ``jcr`` for a
+    JCR; none for any other organisation."""
+    if target.org_type == "mcr" or _MCR_NAME.search(target.name):
+        return frozenset({"mcr", "gsb", "gradsoc"})
+    if target.org_type == "jcr" or _JCR_NAME.search(target.name):
+        return frozenset({"jcr", "jcsu"})
+    return frozenset()
+
+
+def _carries_mark(address: str, marks: frozenset[str], target: Target, site_host: str) -> bool:
+    """Whether a role address on a college's domain is the body's: on its
+    own site's host, or with its mark or name in the local part. Addresses
+    off cam.ac.uk (the body's own domain, webmail) are not judged here."""
+    local, _, domain = address.partition("@")
+    if not domain.endswith(".cam.ac.uk") or domain == "lists.cam.ac.uk":
+        return True
+    site = site_host.removeprefix("www.")
+    if not is_cam_main_site(f"https://{site_host}/") and (
+        domain == site or domain.endswith("." + site)
+    ):
+        return True
+    compact = re.sub(r"[^a-z0-9]", "", local.lower())
+    return any(mark in compact for mark in marks) or _named_for(address, target)
+
+
+def _named_for(address: str, target: Target) -> bool:
+    """Whether an address's local part carries the organisation's own name
+    words or acronym."""
+    compact = re.sub(r"[^a-z0-9]", "", address.partition("@")[0].lower())
+    return any(token in compact for token in _name_words(target) | target.words if len(token) >= 4)
 
 
 def _named_after(account: str, target: Target) -> bool:

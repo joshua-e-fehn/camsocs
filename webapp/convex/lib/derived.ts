@@ -193,6 +193,11 @@ const CRSID_LOCAL = /^[a-z]{2,5}[0-9]{1,5}$/
  * services. A CRSid there names a person just as on cam.ac.uk. */
 const CRSID_MAIL_DOMAINS = new Set(["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"])
 
+/** The alumni forwarding services, which also give members a name-shaped
+ * address (`jane.smith@cantab.net`): such an address names its person. */
+const CANTAB_DOMAINS = new Set(["cantab.ac.uk", "cantab.net"])
+const NAME_SHAPED_LOCAL = /^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$/
+
 /**
  * What kind of address an email is (`EMAIL_TYPES`). Derived on the server from
  * the resolved address — never claimed — because the public projection
@@ -211,6 +216,7 @@ export function classifyEmail(email: string): EmailType {
   if ((camDomain || CRSID_MAIL_DOMAINS.has(domain)) && CRSID_LOCAL.test(local)) {
     return "personal_crsid"
   }
+  if (CANTAB_DOMAINS.has(domain) && NAME_SHAPED_LOCAL.test(local)) return "personal_crsid"
   if (/(^|\.)cusu\./.test(domain) || domain === "cusu.org") return "legacy_cusu"
   if (domain === "cambridgesu.co.uk" || domain.endsWith(".cambridgesu.co.uk")) return "cambridgesu"
   if (domain === "lists.cam.ac.uk") return "lists_cam"

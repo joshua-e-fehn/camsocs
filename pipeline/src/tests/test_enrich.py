@@ -678,3 +678,30 @@ def test_on_another_hosts_page_only_accounts_named_after_the_society_count(
     socials = by_field(result).get("socials")
     assert socials is not None
     assert [s["handle"] for s in socials.value] == ["cumuaythai"]
+
+
+def test_a_college_bodys_contacts_are_only_its_own() -> None:
+    from camsocs_pipeline.sources.links import classify_email, name_tokens
+    from camsocs_pipeline.sources.websites.enrich import _carries_mark, body_marks
+
+    jcr = Target(key="org-quokka-college-jcr", name="Quokka College JCR", org_type="jcr")
+    mcr = Target(key="org-quokka-college-mcr", name="Quokka College MCR")
+    assert body_marks(jcr) == {"jcr", "jcsu"} and "mcr" in body_marks(mcr)
+    assert body_marks(Target(key="org-x", name="Chess Club")) == frozenset()
+    site = "jcr.quokka.cam.ac.uk"
+    # The JCR's posts on the college's domain are its own; the MCR's and the
+    # college's officers listed on the same directory page are not.
+    assert _carries_mark("jcrpresident@quokka.cam.ac.uk", body_marks(jcr), jcr, site)
+    assert not _carries_mark("mcr-president@quokka.cam.ac.uk", body_marks(jcr), jcr, site)
+    assert not _carries_mark("senior.bursar@quokka.cam.ac.uk", body_marks(jcr), jcr, site)
+    assert _carries_mark("president@jcr.quokka.cam.ac.uk", body_marks(jcr), jcr, site)
+    assert _carries_mark("jcrquokka@gmail.com", body_marks(jcr), jcr, site)
+    # A bursar is the college's, never a society's treasurer; a boatman is a
+    # boat club's post, not its general address.
+    assert classify_email("bursar@quokka.cam.ac.uk").role is None
+    assert classify_email("boatman@quokkabc.example", name_tokens("Quokka Boat Club")).role == (
+        "other"
+    )
+    # On a JCR's sub-site the college's office is not the JCR's address.
+    office = classify_email("conference.office@quokka.cam.ac.uk", site_host=site)
+    assert office.kind != "general"
