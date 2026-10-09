@@ -38,6 +38,7 @@ import {
   REVIEW_STATUSES,
   ROBOTS_VERDICTS,
   SOURCE_TYPES,
+  SUPPRESSION_SCOPES,
   TERM_SCOPES,
   TERMS,
 } from "../lib/vocab"
@@ -83,7 +84,8 @@ import { literalUnion } from "./lib/validators"
  *  5. **Privacy boundary.** Public queries return only the public projection
  *     (convex/lib/projections.ts). The internal tables (`fieldClaims`,
  *     `sources`, `orgInternal`, `harvestRuns`, `inboundEmails`,
- *     `listingRequests`, `storedFiles`) and the broker tables (`people`,
+ *     `listingRequests`, `storedFiles`, `suppressions`,
+ *     `coverageSnapshots`) and the broker tables (`people`,
  *     `orgBrokerProfiles`, `interactions`, `introductions`) are never
  *     returned by a public query; broker functions call `requireBrokerUser`.
  *     `cam_only` events need a verified @cam.ac.uk session; `members_only`
@@ -139,6 +141,10 @@ export const harvestStageResult = v.object({
   skipped: v.number(),
   error: v.union(v.null(), v.string()),
   notes: v.array(v.string()),
+  /** Named counts a stage reports beyond the four above, e.g. the resolve
+   * stage's quarantine (`quarantineHeld`, `quarantineDropped`,
+   * `quarantineReview`), read by the broker overview. Omitted when none. */
+  metrics: v.optional(v.record(v.string(), v.number())),
 })
 export type HarvestStageResult = Infer<typeof harvestStageResult>
 
@@ -512,8 +518,21 @@ export const inboundEmailFields = {
   extraction: literalUnion(INBOUND_EXTRACTION_STATUSES),
   extractedEventKeys: v.array(v.string()),
   extractionNote: v.optional(v.string()),
+  /** When the retention job removed the body (`text`, the stored HTML and the
+   * attachments) of this processed mail (retention.md R4); the row itself
+   * goes later. */
+  bodyDeletedAt: v.optional(v.number()),
   ...stamps,
 }
+
+/** What accepting a listing request did (broker.listingRequests). */
+export const listingRequestOutcomeValidator = v.object({
+  /** Fields written as `owner_submitted` claims (an accepted correction). */
+  appliedFields: v.optional(v.array(v.string())),
+  /** Suppressions created (an accepted removal or objection). */
+  suppressionKeys: v.optional(v.array(v.string())),
+  acceptedAt: v.number(),
+})
 
 export const listingRequestFields = {
   key: v.string(),
@@ -527,6 +546,34 @@ export const listingRequestFields = {
   status: literalUnion(LISTING_REQUEST_STATUSES),
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
+  outcome: v.optional(listingRequestOutcomeValidator),
+}
+
+/**
+ * One suppression: something an accepted removal or objection took off the
+ * site, which no later harvest may bring back (retention.md R8; kept
+ * indefinitely). The pipeline reads the list (`POST /api/pipeline/suppressions`)
+ * and filters before it loads; the ingestion mutations refuse what slips
+ * through. Holds no personal data: a contact address is stored only as the
+ * sha256 of its normalised form, a person only by their minted key.
+ */
+export const suppressionFields = {
+  /** `sup-<sha1(scope:orgKey:field:valueHash:personKey)>`. */
+  key: v.string(),
+  scope: literalUnion(SUPPRESSION_SCOPES),
+  /** The listing (scope organisation / field; the listing a contact or person
+   * was found on). */
+  orgKey: v.optional(v.string()),
+  /** Scope field: an organisation field name (`ORGANISATION_FIELDS`). */
+  field: v.optional(v.string()),
+  /** Scope contact: sha256 of the trimmed, lower-cased address. */
+  valueHash: v.optional(v.string()),
+  /** Scope person: the broker `people` key (`per-<sha1>`). */
+  personKey: v.optional(v.string()),
+  /** The request that asked for it, when one did. */
+  requestKey: v.optional(v.string()),
+  requestKind: v.optional(literalUnion(LISTING_REQUEST_KINDS)),
+  createdAt: v.number(),
 }
 
 /** Files the pipeline uploaded (logos, event images), de-duplicated by content. */
@@ -618,6 +665,50 @@ export const introductionFields = {
   ...stamps,
 }
 
+/**
+ * The directory coverage the broker overview shows, folded server-side over
+ * every organisation a page at a time (convex/coverage.ts; lib/broker/coverage.ts
+ * defines the counts). One row per `scope`; recomputed after each pipeline run
+ * and daily.
+ */
+const counts = v.record(v.string(), v.number())
+export const coverageCountsValidator = v.object({
+  total: v.number(),
+  hidden: v.number(),
+  counterparts: v.number(),
+  byLevel: counts,
+  byStatus: counts,
+  byLevelStatus: v.record(v.string(), counts),
+  byOrgType: counts,
+  headline: v.object({
+    email: v.number(),
+    website: v.number(),
+    instagram: v.number(),
+    description: v.number(),
+  }),
+  held: counts,
+  missing: counts,
+})
+export const coverageStatsValidator = v.object({
+  ...coverageCountsValidator.fields,
+  share: v.object({
+    email: v.number(),
+    website: v.number(),
+    instagram: v.number(),
+    description: v.number(),
+  }),
+  missingTop: v.array(v.object({ field: v.string(), count: v.number() })),
+})
+
+export const coverageSnapshotFields = {
+  scope: v.literal("directory"),
+  stats: coverageStatsValidator,
+  /** Organisation rows read (listed + counterparts). */
+  rows: v.number(),
+  startedAt: v.number(),
+  computedAt: v.number(),
+}
+
 /** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
  * log: the address is stored only as a sha256, and rows are pruned after a day. */
 export const signInLinkSendFields = {
@@ -635,6 +726,8 @@ export default defineSchema({
     .index("by_level_status", ["level", "status"])
     .index("by_orgType", ["orgType"])
     .index("by_isCounterpart", ["isCounterpart"])
+    // Retention (convex/retention.ts): is a stored file still someone's logo?
+    .index("by_logoStorageId", ["logo.storageId"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["level", "status", "orgType"],
@@ -654,7 +747,9 @@ export default defineSchema({
     .index("by_startsAt", ["startsAt"])
     .index("by_visibility_startsAt", ["visibility", "startsAt"])
     .index("by_visibility_spanEndsAt", ["visibility", "spanEndsAt"])
-    .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"]),
+    .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"])
+    // Retention (convex/retention.ts): is a stored file still an event's image?
+    .index("by_imageStorageId", ["image.storageId"]),
   eventOrganisers: defineTable({
     eventKey: v.string(),
     orgKey: v.string(),
@@ -691,7 +786,14 @@ export default defineSchema({
   harvestRuns: defineTable(harvestRunFields)
     .index("by_runKey", ["runKey"])
     .index("by_startedAt", ["startedAt"]),
-  storedFiles: defineTable(storedFileFields).index("by_sha256", ["sha256"]),
+  storedFiles: defineTable(storedFileFields)
+    .index("by_sha256", ["sha256"])
+    .index("by_storageId", ["storageId"]),
+  suppressions: defineTable(suppressionFields)
+    .index("by_key", ["key"])
+    .index("by_orgKey", ["orgKey"])
+    .index("by_scope", ["scope"]),
+  coverageSnapshots: defineTable(coverageSnapshotFields).index("by_scope", ["scope"]),
 
   // internal, written by the inbound webhook and the public form
   inboundEmails: defineTable(inboundEmailFields)
@@ -718,8 +820,10 @@ export default defineSchema({
   interactions: defineTable(interactionFields)
     .index("by_key", ["key"])
     .index("by_orgKey_date", ["orgKey", "date"])
-    .index("by_followUpOn", ["followUpOn"]),
+    .index("by_followUpOn", ["followUpOn"])
+    .index("by_date", ["date"]),
   introductions: defineTable(introductionFields)
     .index("by_key", ["key"])
-    .index("by_status_date", ["status", "date"]),
+    .index("by_status_date", ["status", "date"])
+    .index("by_date", ["date"]),
 })

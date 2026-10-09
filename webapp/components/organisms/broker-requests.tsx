@@ -1,9 +1,21 @@
 "use client"
 
-import { BanIcon, EyeIcon, EyeOffIcon, InboxIcon } from "lucide-react"
+import {
+  BanIcon,
+  CheckIcon,
+  EyeIcon,
+  EyeOffIcon,
+  InboxIcon,
+  ShieldXIcon,
+  UndoIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
+import {
+  AcceptCorrectionsDialog,
+  AcceptRemovalDialog,
+} from "@/components/organisms/broker-request-dialogs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,13 +38,21 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   type BrokerListingRequest,
+  type BrokerSuppression,
   runWithToast,
   useBrokerListingRequests,
   useBrokerOrgMutations,
+  useBrokerSuppressions,
+  useListingRequestMutations,
   useSetListingRequestStatus,
 } from "@/hooks/convex/broker"
 import { formatDateTime, humanize } from "@/lib/broker/format"
-import { LISTING_REQUEST_STATUSES } from "@/lib/vocab"
+import {
+  LISTING_REQUEST_STATUSES,
+  ORGANISATION_FIELD_LABELS,
+  type OrganisationField,
+  SUPPRESSION_SCOPE_LABELS,
+} from "@/lib/vocab"
 
 type Filter = BrokerListingRequest["status"] | "all"
 
@@ -46,8 +66,11 @@ const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
 
 /**
  * The inbox of requests from the public claim / correct / remove / object /
- * add form. A remove or object request is acted on here: hide the listing
- * from the public site, suppress it from outreach, then mark the request done.
+ * add form, and where they are accepted: a claim or correction's values
+ * become owner-confirmed claims (`AcceptCorrectionsDialog`); a removal or
+ * objection becomes a suppression of the listing, some fields, an address or
+ * named people (`AcceptRemovalDialog`), listed on the card with a way to lift
+ * one made in error.
  */
 export function BrokerRequests() {
   const [filter, setFilter] = useState<Filter>("open")
@@ -100,8 +123,11 @@ export function BrokerRequests() {
 function RequestCard({ request }: { request: BrokerListingRequest }) {
   const setStatus = useSetListingRequestStatus()
   const { setHidden, updateProfile } = useBrokerOrgMutations()
+  const [dialog, setDialog] = useState<"corrections" | "removal" | null>(null)
   const removal = request.kind === "remove" || request.kind === "object"
+  const correction = request.kind === "claim" || request.kind === "correct"
   const fields = Object.entries(request.fields ?? {})
+  const applied = request.outcome?.appliedFields ?? []
 
   return (
     <Card>
@@ -168,24 +194,46 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
             ))}
           </dl>
         )}
+        {applied.length > 0 && (
+          <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+            <CheckIcon className="size-4" />
+            Owner-confirmed:{" "}
+            {applied
+              .map((field) => ORGANISATION_FIELD_LABELS[field as OrganisationField] ?? field)
+              .join(", ")}
+          </p>
+        )}
+        {request.org && correction && (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setDialog("corrections")}>
+              <CheckIcon />
+              Accept corrections…
+            </Button>
+          </div>
+        )}
+        {request.org && removal && <SuppressionList orgKey={request.org.key} />}
         {request.org && removal && (
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant={request.org.hidden ? "outline" : "destructive"}
-              onClick={() =>
-                request.org &&
-                runWithToast(
-                  setHidden({ orgKey: request.org.key, hidden: !request.org.hidden }),
-                  request.org.hidden
-                    ? "Listing shown again"
-                    : "Listing hidden from the public site",
-                )
-              }
-            >
-              {request.org.hidden ? <EyeIcon /> : <EyeOffIcon />}
-              {request.org.hidden ? "Show listing again" : "Hide listing"}
+            <Button size="sm" variant="destructive" onClick={() => setDialog("removal")}>
+              <ShieldXIcon />
+              Accept {request.kind === "remove" ? "removal" : "objection"}…
             </Button>
+            {request.org.hidden && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  request.org &&
+                  runWithToast(
+                    setHidden({ orgKey: request.org.key, hidden: false }),
+                    "Listing shown again",
+                  )
+                }
+              >
+                <EyeIcon />
+                Show listing again
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -203,6 +251,53 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
           </div>
         )}
       </CardContent>
+      {dialog === "corrections" && (
+        <AcceptCorrectionsDialog request={request} open onClose={() => setDialog(null)} />
+      )}
+      {dialog === "removal" && (
+        <AcceptRemovalDialog request={request} open onClose={() => setDialog(null)} />
+      )}
     </Card>
+  )
+}
+
+function describeSuppression(entry: BrokerSuppression): string {
+  if (entry.scope === "field" && entry.field) {
+    return ORGANISATION_FIELD_LABELS[entry.field as OrganisationField] ?? entry.field
+  }
+  if (entry.scope === "person") return entry.personName ?? "A named person"
+  if (entry.scope === "contact") return "A contact address (stored as a hash)"
+  return SUPPRESSION_SCOPE_LABELS[entry.scope]
+}
+
+/** What removals and objections took off this listing, each liftable. */
+function SuppressionList({ orgKey }: { orgKey: string }) {
+  const suppressions = useBrokerSuppressions(orgKey)
+  const { liftSuppression } = useListingRequestMutations()
+  if (!suppressions?.length) return null
+  return (
+    <ul className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-3 text-sm">
+      {suppressions.map((entry) => (
+        <li key={entry.key} className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <EyeOffIcon className="size-4 text-muted-foreground" />
+            <span>
+              Suppressed: {describeSuppression(entry)}{" "}
+              <span className="font-mono text-xs text-muted-foreground">
+                {formatDateTime(entry.createdAt)}
+              </span>
+            </span>
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => runWithToast(liftSuppression({ key: entry.key }), "Suppression lifted")}
+          >
+            <UndoIcon />
+            Lift
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }

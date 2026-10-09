@@ -409,6 +409,13 @@ LISTING_REQUEST_STATUSES: tuple[str, ...] = (
     "done",
 )
 
+SUPPRESSION_SCOPES: tuple[str, ...] = (
+    "organisation",
+    "field",
+    "contact",
+    "person",
+)
+
 CONSENT_BASES: tuple[str, ...] = (
     "public_source",
     "consent",

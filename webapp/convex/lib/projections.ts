@@ -41,6 +41,7 @@ import {
   trialsValidator,
 } from "./fields"
 import type { FieldMeta } from "./resolve"
+import { contactHash, redactAddresses } from "./suppressions"
 import { literalUnion } from "./validators"
 
 /**
@@ -311,6 +312,57 @@ export async function orgPublic(ctx: QueryCtx, org: Doc<"organisations">): Promi
     meta,
     updatedAt: org.updatedAt,
   }
+}
+
+/**
+ * The public listing without what the suppression list removed from it: the
+ * suppressed `fields` (a dotted field clears that part of its object) and any
+ * address in `contacts` (sha256 hashes). Accepting a suppression already
+ * clears the stored row; this is the backstop for anything that slipped
+ * past, so a removed value never reaches a visitor.
+ */
+export function withoutSuppressed(
+  org: OrgPublic,
+  fields: ReadonlySet<string>,
+  contacts: ReadonlySet<string>,
+): OrgPublic {
+  if (fields.size === 0 && contacts.size === 0) return org
+  const out = { ...org, meta: { ...org.meta } } as Record<string, unknown> & OrgPublic
+  const notPublished = { status: "missing" as const, missingReason: "not_published" as const }
+  for (const field of fields) {
+    const [head, tail] = field.split(".")
+    const current = out[head]
+    if (tail !== undefined) {
+      if (current && typeof current === "object" && !Array.isArray(current)) {
+        const part = { ...(current as Record<string, unknown>) }
+        if (Array.isArray(part[tail])) part[tail] = []
+        else delete part[tail]
+        out[head] = part
+      }
+    } else {
+      out[head] = Array.isArray(current) ? [] : undefined
+    }
+    out.meta[field] = notPublished
+  }
+  if (contacts.size > 0) {
+    if (out.email !== undefined && contacts.has(contactHash(out.email))) {
+      out.email = undefined
+      out.emailType = undefined
+      out.meta.email = notPublished
+    }
+    out.roleEmails = out.roleEmails.filter((entry) => !contacts.has(contactHash(entry.email)))
+    for (const key of [
+      "description",
+      "shortDescription",
+      "howToJoin",
+      "timeCommitment",
+      "accessibilityNote",
+    ] as const) {
+      const value = out[key]
+      if (typeof value === "string") out[key] = redactAddresses(value, contacts)
+    }
+  }
+  return out
 }
 
 // --- teams, sessions, venues --------------------------------------------------------------------

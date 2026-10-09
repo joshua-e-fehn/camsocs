@@ -13,6 +13,7 @@ import { eventOrganiserCopy, loadTerms } from "../lib/entityStore"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, emptyBatchResult, recordBatch } from "../lib/ingest"
 import { upsertRelationship } from "../lib/relationships"
+import { loadSuppressionIndex } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 import { relationshipEvidenceValidator } from "../schema"
 import { refreshOrganisations } from "./claims"
@@ -25,6 +26,11 @@ import { refreshOrganisations } from "./claims"
  * event: the `eventOrganisers` join rows, the event's `organiserKeys` /
  * `coHostKeys` / `sponsorKeys`, and the edges they imply (each co-host
  * `co_hosted` with each organiser; each sponsor `sponsors` each organiser).
+ *
+ * A listing removed on request (convex/lib/suppressions.ts) is no edge's end
+ * and no event's organiser: such edges are skipped (`suppressed`) and such
+ * organisers left out of the set — the pipeline filters them first; this is
+ * the backstop.
  */
 
 export const relationshipInputValidator = v.object({
@@ -38,7 +44,13 @@ export const relationshipInputValidator = v.object({
   visibility: v.optional(literalUnion(RELATIONSHIP_VISIBILITIES)),
 })
 
-const batchResult = v.object({ inserted: v.number(), updated: v.number(), unchanged: v.number() })
+const batchResult = v.object({
+  inserted: v.number(),
+  updated: v.number(),
+  unchanged: v.number(),
+  /** Edges skipped because an end was removed on request. */
+  suppressed: v.number(),
+})
 
 export const upsert = internalMutation({
   args: { relationships: v.array(relationshipInputValidator) },
@@ -46,13 +58,21 @@ export const upsert = internalMutation({
   handler: async (ctx, args) => {
     assertBatchSize(args.relationships.length, "relationships")
     const now = Date.now()
-    const result = emptyBatchResult()
+    const result = { ...emptyBatchResult(), suppressed: 0 }
+    const suppressions = await loadSuppressionIndex(ctx)
     for (const relationship of args.relationships) {
       if (!isOrgKey(relationship.fromKey) || !isOrgKey(relationship.toKey)) {
         throw new Error(`Relationship ends must be organisation keys`)
       }
       if (!isHttpUrl(relationship.evidence.sourceUrl)) {
         throw new Error(`Evidence sourceUrl must be http(s): ${relationship.evidence.sourceUrl}`)
+      }
+      if (
+        suppressions.organisations.has(relationship.fromKey) ||
+        suppressions.organisations.has(relationship.toKey)
+      ) {
+        result.suppressed++
+        continue
       }
       recordBatch(result, await upsertRelationship(ctx, relationship, now))
     }
@@ -82,11 +102,16 @@ export const setEventOrganisers = internalMutation({
     const now = Date.now()
     const result = { ...emptyBatchResult(), missingEvents: [] as string[] }
     const touchedOrgs = new Set<string>()
+    const suppressions = await loadSuppressionIndex(ctx)
 
-    for (const set of args.events) {
-      if (set.organisers.length > 50) throw new Error(`${set.eventKey}: at most 50 organisers`)
-      for (const { orgKey } of set.organisers) {
+    for (const sent of args.events) {
+      if (sent.organisers.length > 50) throw new Error(`${sent.eventKey}: at most 50 organisers`)
+      for (const { orgKey } of sent.organisers) {
         if (!isOrgKey(orgKey)) throw new Error(`Not an organisation key: ${orgKey}`)
+      }
+      const set = {
+        ...sent,
+        organisers: sent.organisers.filter((o) => !suppressions.organisations.has(o.orgKey)),
       }
       const event = await ctx.db
         .query("events")

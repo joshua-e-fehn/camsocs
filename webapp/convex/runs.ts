@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import type { HarvestRunStatus } from "../lib/vocab"
+import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
 import { internalMutation, internalQuery, type MutationCtx, query } from "./_generated/server"
 import { assertBatchSize, sameFields, withoutSystemFields } from "./lib/ingest"
@@ -121,6 +122,9 @@ export const finish = internalMutation({
 
     const now = Date.now()
     await ctx.db.patch(run._id, { ...fields, finishedAt: now, updatedAt: now })
+    // A run that wrote data changed the directory: refresh the broker's
+    // coverage (convex/coverage.ts) rather than wait for the daily walk.
+    if (status !== "failed") await ctx.scheduler.runAfter(0, internal.coverage.recompute, {})
     return { runKey: args.runKey, status, unchanged: false }
   },
 })

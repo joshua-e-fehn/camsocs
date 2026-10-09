@@ -213,6 +213,12 @@ readRoute("crosswalk", internal.ingest.orgInternal.crosswalk)
 ingestionRoute("inbound/mark", internal.ingest.inbound.mark)
 // The mailing-list sign-up worklist (`camsocs worklist`).
 readRoute("worklist", internal.ingest.orgInternal.worklistPage)
+// What accepted removals and objections took off the site: the load stage
+// filters by it before posting (convex/lib/suppressions.ts).
+readRoute("suppressions", internal.ingest.suppressions.list)
+// The coverage report (`camsocs harvest`): directory and events, a page a call.
+readRoute("coverage", internal.coverage.page)
+readRoute("coverage/events", internal.coverage.eventsPage)
 // Maintenance: re-derive everything now; reset the dev deployment.
 ingestionRoute("derive", internal.derive.daily)
 ingestionRoute("purge", internal.ingest.purge.purge)
