@@ -82,7 +82,11 @@ work — a cron that sees success because most of it worked is how a broken sour
   `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
   Images staged as `{sourceUrl}` are uploaded first (our own copy, never a hotlink;
-  `media.py`). `--limit N` loads the first N keyed records. Claims travel in batches that
+  `media.py`); bytes the deployment already stores are not sent again
+  (`pipeline/stored_files.py`, `var/state/stored-files.json`). Event readings that another
+  source already lists (same organiser, London date and visibility, similar title, starts
+  ≤ 30 min apart) are posted as claims on that source's event, not as events of their own
+  (`events/duplicates.py`, data-model §2 "One event, several sources"). `--limit N` loads the first N keyed records. Claims travel in batches that
   keep each entity's claims together (the server creates an entity only from a request that
   carries its required fields); a batch too heavy for one mutation is posted again in halves.
 - **resolve holds** a new organisation no observation names (a guide row whose A–Z club is
@@ -133,18 +137,22 @@ Read from `pipeline/.env` (gitignored) or the environment:
   hash comparison report unchanged pages as `unchanged`.
 - 404/410 are negative evidence (`not_found`), never "verified".
 
-## LLM stages: inbox, instagram, termcards
+## LLM stages: inbox, instagram, termcards, website_events
 
 These run after `resolve` and know organisations from the keyed observations in staging
-(`known_orgs.KnownOrgs`). They share `extract/events.py`:
+(`known_orgs.KnownOrgs`, or the enrichment stage's `society_website` records). They share
+`extract/events.py`:
 
 - The model reports what a text says, with verbatim quotes, using the prompts in
-  `extract/prompts/`: `email_events_v1`, `caption_events_v1` and `image_events_v1`.
+  `extract/prompts/`: `email_events_v1`, `caption_events_v1`, `image_events_v1` and
+  `website_events_v1`.
 - `extract/when.py` resolves "Wednesday of Week 3" and similar from the verified term dates.
 - Every value becomes an `llm_field`, its quote checked against the exact text sent.
   Contact details are redacted before any LLM call.
 - `extract/dedupe.py` drops events another staged source already has.
-- `extract/memo.py` caches validated replies under `var/cache/llm/`.
+- `extract/memo.py` caches validated replies under `var/cache/llm/`. Termcards and website
+  pages give the model the Thursday that starts the week as the reference date
+  (`extract.when.week_anchor`), so an unchanged card or page is asked about once a week.
 
 The three stages:
 
@@ -152,6 +160,7 @@ The three stages:
 |---|---|---|---|
 | `inbox` | pending forwarded list mail (§16) | `cam_only` / `members_only` | posts its events itself, then marks each mail; also stages them under `mailing_list_email/` |
 | `instagram` | Graph API Business Discovery (§17) | `public` / `members_only` | gated on `META_*`; at most 100 handles a run, rate-limit aware; stores post images as our own copy |
-| `termcards` | `termcardUrl` values (§21) | `public` / `members_only` | strong-model vision; PDF text layer checks quotes; SU `/asset/` files are robots-blocked |
+| `termcards` | `termcardUrl` values (§21) | `public` / `members_only` | strong-model vision, four PDF pages a call (≤ 12); PDF text layer checks quotes; old cards skipped; an HTML card page is read as text (`website_events_v1`); SU `/file/` links hit the login wall |
+| `website_events` | society websites' events / calendar / term card pages (§14) | `public` / `members_only` | structured data (JSON-LD `Event`) by parser, else the bulk model (`website_events_v1`): a dated quote per event, yearless dates checked by weekday, ≤ 9 months ahead |
 
 In a dry run, `instagram` and `termcards` only report what they would read.
