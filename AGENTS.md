@@ -40,6 +40,7 @@ camsocs is a verified, current database of Cambridge student societies and sport
   - Public queries return the public projection only.
   - `cam_only` events need a verified `@cam.ac.uk` session.
   - `members_only` events are never shown.
+  - Accepted removals and objections are **suppressions** (listing, field, contact address as a sha256, broker person): the load filters them out before posting (`pipeline/.../suppressions.py`), every ingestion route refuses them and the public projection strips them (`convex/lib/suppressions.ts`, data-model §3). Never work around one.
 - **LLM guard:** `extract/llm.py` refuses any model id containing `claude` or `anthropic` (any provider prefix or separator), and any id that is not plain printable ASCII. Never route Claude subscription credentials through cliproxy; Anthropic's terms prohibit it.
 - **talks.cam content is parsed deterministically and is never passed to the LLM.** Its robots.txt blocks AI agents; see source-research §6. No fetch purpose overrides that, nor tbc.xyz's block.
 - **Public free text is redacted on its way to Convex** (decision D1). `ConvexLoader.post_observations` runs `extract/redact.py`: names of private individuals in descriptions, how-to-join and other notes, and event descriptions become roles. The original goes only into `fieldClaims.valueRaw`. Staging keeps the source's own words.
@@ -65,6 +66,8 @@ camsocs is a verified, current database of Cambridge student societies and sport
 pixi install
 pixi run dev | build | lint | format | typecheck | test | check-codegen
 pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
+caffeinate -i pixi run harvest           # full run: every stage, derive, var/reports/coverage-<date>.md (keep a laptop awake)
+pixi run prune-cache                     # retention R7: var/cache + superseded staging older than 90 days
 pixi run pipeline -- --env prod status   # pipeline/.env.prod on top of pipeline/.env (docs/deploy.md §4)
 cd webapp && bun run e2e                 # Playwright smoke + screenshots → var/screenshots/<date>/ (read-only guard)
 cd webapp && unset CONVEX_DEPLOY_KEY && bunx convex dev --once   # push to dev and regenerate convex/_generated (commit it)

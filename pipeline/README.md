@@ -51,8 +51,12 @@ nothing, `-- --limit N` for a trial):
    listed organisations hold it and the share; upcoming events per source and visibility;
    the 15 tracked fields most often missing; the quarantine; the run's stages.
 
-The previous full run was logged by hand (`.logs/full-sync-20261008.log`); to keep one, run
-`pixi run harvest 2>&1 | tee .logs/harvest-$(date +%Y%m%d).log`. The daily cron
+To keep a log, run `pixi run harvest 2>&1 | tee .logs/harvest-$(date +%Y%m%d).log`. **On a
+laptop, keep it awake** (`caffeinate -i pixi run harvest …` on macOS): a full run takes about
+two hours, and a sleeping machine stalls it. In the 2026-10-09 harvest the SU stage took 96
+minutes instead of about 11 — its requests were 1.1 s apart (median), but two requests hung for
+26 and 58 minutes while the machine slept (a 24 s back-off took 12.5 minutes of wall time), and
+the load stage later stalled the same way. Pacing was not at fault. The daily cron
 (`scripts/daily-sync.sh`) runs `sync` over the same registry, so it writes the day's coverage
 report too.
 
@@ -120,7 +124,9 @@ meta and last-failure note go together, once all are older), LLM replies under
   join links / health, then the bulk LLM with every value's quote checked against the page it is
   attributed to. Committee names go to the private broker tables only (and privately onto the
   page record, so the load step's redaction removes them from public text); named sponsors
-  become counterpart organisations. It writes keyed observations to `var/staging/society_website/` and
+  become counterpart organisations, restated from the page that names them on every run (the
+  crosswalk outlives the deployment's rows, so a counterpart staged only by the run that first
+  met it would be missing after a dev purge or in a new production deployment). It writes keyed observations to `var/staging/society_website/` and
   `var/staging/linktree/`. LLM answers are cached under `var/cache/llm/`.
 - **classify** (R2, `stages/classify.py`, `camsocs_pipeline/classify/`, prompt
   `extract/prompts/classify_v1.md`) fills what no source states for every listed
