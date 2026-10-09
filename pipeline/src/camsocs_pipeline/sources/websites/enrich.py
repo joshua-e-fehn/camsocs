@@ -7,7 +7,11 @@ website and/or a Linktree:
 1. **Fetch politely** (`sources/base.py`: robots.txt, one request in flight
    per host, Crawl-delay, the raw cache; pages younger than `FRESH_FOR` are
    read from the cache). Hosts are processed concurrently; sites on one
-   shared host (``*.srcf.net``, ``*.cam.ac.uk``) one after another.
+   shared host (``*.srcf.net``, ``*.cam.ac.uk``) one after another. The
+   fetches carry the society purpose (`sources/policy.py`, D3): a society's
+   own site and its Linktree are read even where robots.txt disallows them,
+   with ``robots_override:society`` on the page's `sources` row; pacing,
+   Crawl-delay, login walls and 401/403 still hold.
 2. Read the home page, then at most one page per kind — about, join,
    committee, contact, events, sponsors (`discover.py`) — inside the site.
    ``noindex`` pages yield no content; ``nofollow`` stops the discovery; a
@@ -24,9 +28,11 @@ website and/or a Linktree:
    quote is checked against the page text (`extract.evidence`) and the value
    is attributed to the page that holds it; without a verbatim quote it is
    ``inferred``. Sessions, people and partners — which create rows — are kept
-   only with a verified quote. Skipped when the host's robots.txt blocks AI
-   crawlers or says ``Content-Signal: ai-input=no``, or the page says
-   ``noai``: such sites are read deterministically only.
+   only with a verified quote. An AI opt-out (the host's robots.txt blocks
+   AI crawlers or says ``Content-Signal: ai-input=no``, or the page says
+   ``noai``) is overridden for a society's own pages (D3), and the page's
+   `sources` row says ``ai_optout_override:society``. talks.cam and tbc.xyz
+   never reach the model.
 5. Committee members (name + role, from committee / contact / about pages, or
    a home page that lists the committee) → private broker ``people``; named
    sponsors / partners → ``sponsors`` / ``partner_of`` relationships to
@@ -67,6 +73,13 @@ from camsocs_pipeline.resolve.families import COUNTERPART_TYPES
 from camsocs_pipeline.resolve.names import site_identity, tokens
 from camsocs_pipeline.resolve.resolver import priority_of
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
+from camsocs_pipeline.sources.policy import (
+    AI_OVERRIDE_NOTE,
+    SOCIETY,
+    SOCIETY_WEBSITE,
+    FetchPurpose,
+    ai_optout_override,
+)
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.links import (
     NOT_SOCIETY_HANDLES,
@@ -238,8 +251,12 @@ def _is_html(result: FetchResult) -> bool:
     )
 
 
-def _fetch(client: PoliteClient, kind: str, url: str) -> Fetched:
-    result = client.fetch(url, fresh_for=FRESH_FOR)
+def _fetch(
+    client: PoliteClient, kind: str, url: str, purpose: FetchPurpose = SOCIETY_WEBSITE
+) -> Fetched:
+    """One page of a society's own site (or its Linktree), fetched with the
+    society purpose: D3 lets robots.txt be overridden for it."""
+    result = client.fetch(url, fresh_for=FRESH_FOR, purpose=purpose)
     fetched = Fetched(kind, result)
     if _is_html(result):
         fetched.page = parse_page(fetched.url, result.text)
@@ -371,8 +388,16 @@ class Enricher:
             return
         # §14: a page reaches the model only if its host lets AI read it (no
         # AI crawler disallowed from that URL, no `ai-input=no`) and the page
-        # itself does not say `noai`. Checked per page, not just for home.
-        ai_pages = [f for f in fetched if self._ai_allowed(f)]
+        # itself does not say `noai` — or the D3 society override lifts that
+        # opt-out, which its `sources` row then records. Checked per page.
+        ai_pages = []
+        for item in fetched:
+            reading = self._ai_reading(item)
+            if reading == "refused":
+                continue
+            if reading == "override":
+                _note_access(buckets.by_url[item.url], AI_OVERRIDE_NOTE)
+            ai_pages.append(item)
         if not ai_pages or ai_pages[0] is not home:
             result.stats.llm_skipped_robots += 1
             result.notes.append(
@@ -386,15 +411,22 @@ class Enricher:
             )
         self._llm(target, ai_pages, buckets, found, result)
 
-    def _ai_allowed(self, page: Fetched) -> bool:
-        """Whether this page's text may reach the model (§14)."""
-        if page.page is None or {"noai", "noimageai"} & page.page.robots:
-            return False
+    def _ai_reading(self, page: Fetched) -> str:
+        """Whether this page's text may reach the model (§14): ``allowed``
+        (no AI opt-out), ``override`` (an opt-out the D3 society override
+        lifts) or ``refused`` (talks.cam, tbc.xyz, or a page not read)."""
+        if page.page is None:
+            return "refused"
         try:
             assert_llm_source_allowed(page.url)
         except NoLLMHost:
-            return False
-        return self.client.ai_input_allowed(page.url)
+            return "refused"
+        opted_out = bool({"noai", "noimageai"} & page.page.robots) or not (
+            self.client.ai_input_allowed(page.url)
+        )
+        if not opted_out:
+            return "allowed"
+        return "override" if ai_optout_override(page.url, SOCIETY_WEBSITE) else "refused"
 
     @staticmethod
     def _stated_url_record(target: Target, home: Fetched, buckets: SiteRecords) -> str:
@@ -649,7 +681,7 @@ class Enricher:
     def _linktree(self, target: Target, result: TargetResult) -> None:
         assert target.linktree is not None
         buckets = SiteRecords(target, "linktree")
-        fetched = _fetch(self.client, "linktree", target.linktree)
+        fetched = _fetch(self.client, "linktree", target.linktree, SOCIETY)
         record = buckets.page(fetched)
         result.linktree = buckets.records
         if fetched.result.outcome == "disallowed_by_robots":
@@ -658,6 +690,10 @@ class Enricher:
             return
         if fetched.page is None or not fetched.result.ok:
             result.stats.unreachable += 1
+            status = fetched.result.status or ""
+            result.notes.append(
+                f"{target.key}: {target.linktree} → {fetched.result.outcome} {status}".rstrip()
+            )
             return
         links = linktree_links(fetched.result.text)
         socials = {}
@@ -739,6 +775,16 @@ def _dead_reason(result: FetchResult) -> str | None:
     if result.outcome == "http_error" and (result.status or 0) >= 500:
         return "unreachable"
     return None
+
+
+def _note_access(record: Observation, note: str) -> None:
+    """Adds `note` to the access note of the page's `sources` row."""
+    if record.fetch is None:
+        return
+    current = record.fetch.access_note
+    if current and note in current.split("; "):
+        return
+    record.fetch.access_note = f"{current}; {note}" if current else note
 
 
 def _canonical(url: str) -> str:

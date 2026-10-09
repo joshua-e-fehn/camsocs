@@ -230,22 +230,30 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     assert llm.call_count == 1
 
 
-def test_sites_that_keep_ai_crawlers_out_are_read_without_the_llm(
+def test_an_ai_crawler_block_on_a_society_site_is_overridden_and_recorded(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
+    # D3: a society's own pages reach the model even where robots.txt keeps
+    # AI crawlers out; the page's `sources` row says so.
     mock_cuats(net, robots="User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n")
     llm = net.post(f"{LLM_BASE}/chat/completions").mock(return_value=completion(CUATS_REPLY))
     result = Enricher(polite(tmp_path), llm_client()).enrich(cuats_target())
-    assert llm.call_count == 0
-    assert result.stats.llm_skipped_robots == 1
+    assert llm.call_count == 1
+    assert result.stats.llm_skipped_robots == 0
+    home = result.website[0]
+    assert home.fetch.robots_verdict == "allowed"  # our crawler itself is allowed
+    assert "ai_optout_override:society" in (home.fetch.access_note or "")
     assert by_field(result)["roleEmails"].value  # the deterministic part still ran
 
 
-def test_content_signal_ai_input_no_is_honoured(tmp_path: Path, net: respx.MockRouter) -> None:
+def test_content_signal_ai_input_no_is_overridden_for_a_society_site(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
     mock_cuats(net, robots="User-agent: *\nContent-Signal: search=yes, ai-input=no\nAllow: /\n")
     llm = net.post(f"{LLM_BASE}/chat/completions").mock(return_value=completion(CUATS_REPLY))
-    Enricher(polite(tmp_path), llm_client()).enrich(cuats_target())
-    assert llm.call_count == 0
+    result = Enricher(polite(tmp_path), llm_client()).enrich(cuats_target())
+    assert llm.call_count == 1
+    assert "ai_optout_override:society" in (result.website[0].fetch.access_note or "")
 
 
 def test_a_dead_or_parked_site_yields_only_its_health(
@@ -327,7 +335,7 @@ def test_addresses_the_site_hides_are_access_restricted_not_absent(
     assert fields["socials"].missing_reason == "not_found"
 
 
-def test_a_sub_page_that_keeps_ai_out_never_reaches_the_model(
+def test_sub_pages_that_keep_ai_out_reach_the_model_under_the_society_override(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
     site = "https://subpage.example"
@@ -359,10 +367,18 @@ def test_a_sub_page_that_keeps_ai_out_never_reaches_the_model(
     )
     assert llm.call_count == 1
     sent = llm.calls[0].request.content.decode()
+    # D3: an AI-crawler block on a path and a `noai` page of a society's own
+    # site are both lifted; each such page records the override.
     assert "every Tuesday evening" in sent
-    assert "SECRET COMMITTEE TEXT" not in sent
-    assert "NOAI ABOUT TEXT" not in sent
-    assert any("keep AI out" in note for note in result.notes)
+    assert "SECRET COMMITTEE TEXT" in sent
+    assert "NOAI ABOUT TEXT" in sent
+    notes = {record.source_url: record.fetch.access_note for record in result.website}
+    assert notes[f"{site}/"] is None
+    overridden = [url for url, note in notes.items() if note == "ai_optout_override:society"]
+    assert sorted(overridden) == sorted(
+        url for url in notes if url.rstrip("/").endswith(("/committee", "/about"))
+    )
+    assert len(overridden) == 2
 
 
 def test_a_site_the_llm_disowns_keeps_only_its_health(
@@ -380,16 +396,40 @@ def test_a_site_the_llm_disowns_keeps_only_its_health(
     }
 
 
-def test_robots_disallow_is_recorded_not_crawled(tmp_path: Path, net: respx.MockRouter) -> None:
-    net.get("https://private.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
-    page = net.get("https://private.example/").respond(200, text="secret")
+def test_a_society_site_robots_disallow_is_overridden_and_recorded(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    # D3: a society's own website is read although robots.txt disallows it;
+    # the verdict stays the honest "disallowed" and the override is recorded.
+    net.get("https://private.example/robots.txt").respond(
+        200, text="User-agent: *\nCrawl-delay: 2\nDisallow: /\n"
+    )
+    page = net.get("https://private.example/").mock(
+        return_value=html("<html><body><main><h1>Private Society</h1></main></body></html>")
+    )
     result = Enricher(polite(tmp_path), None).enrich(
         Target(key="org-private", name="Private Society", website="https://private.example/")
+    )
+    assert page.call_count == 1
+    record = result.website[0]
+    assert record.fetch.robots_verdict == "disallowed"
+    assert record.fetch.access_note == "robots_override:society"
+    assert record.internal["website_health"]["last_status"] == 200
+
+
+def test_an_unreachable_robots_txt_is_never_overridden(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    # robots.txt answering 5xx means the host is down, not closed: no override.
+    net.get("https://down.example/robots.txt").respond(500)
+    page = net.get("https://down.example/").respond(200, text="x")
+    result = Enricher(polite(tmp_path), None).enrich(
+        Target(key="org-down", name="Down Society", website="https://down.example/")
     )
     assert page.call_count == 0
     (record,) = result.website
     assert record.fetch.robots_verdict == "disallowed"
-    assert "website_health" not in record.internal
+    assert record.fields[0].missing_reason == "unreachable"
 
 
 def test_a_linktree_is_read_deterministically(tmp_path: Path, net: respx.MockRouter) -> None:

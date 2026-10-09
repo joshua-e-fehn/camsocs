@@ -1,25 +1,27 @@
 """Termcards: a society's term programme as a PDF or image (source-research §21).
 
 `fetch_termcard` fetches a `termcardUrl` through the polite client (robots.txt,
-per-host pacing, cache). The URL may be the file itself, or a page that shows
-it — then the first linked or embedded PDF/image that looks like a termcard is
-followed, one level deep and robots-checked like any other fetch.
+per-host pacing, cache) with a society purpose (`sources/policy.py`, D3: the
+society published the card). The URL may be the file itself, or a page that
+shows it — then the first linked or embedded PDF/image that looks like a
+termcard is followed, one level deep and robots-checked like any other fetch.
 
-Hosts never fetched for a termcard (`never_fetched`), recorded as skipped
-with the reason before any request:
-- **Cambridge SU** (source-research §1, §21): resource pages answered "Sorry,
-  there was a problem" to an anonymous request on 2026-10-07, MSL serves the
-  files under robots-disallowed `/asset/` and `/resourcehandler/`, and a
-  `/file/<id>/Termcard/` link (allowed by robots.txt) redirects to the login
-  page — so SU-hosted termcards are never fetched at all;
-- **talks.cam** (§6): its content never reaches the LLM;
-- **Instagram, Facebook, LinkedIn** and the other networks: links only.
+- **Cambridge SU** (source-research §1, §21): profile resources are
+  ``/file/<id>/<name>/`` links. They are fetched now (D3), but on 2026-10-08
+  they redirected to the SU login page, which is never followed: such a card
+  is recorded ``access_restricted``. A file under the robots-disallowed
+  ``/asset/`` is read under the society override (``robots_override:society``).
+- Hosts never fetched for a termcard (`never_fetched`), recorded as skipped
+  with the reason before any request: **talks.cam** and tbc.xyz (§6: their
+  content never reaches the LLM), and **Instagram, Facebook, LinkedIn** and
+  the other networks (links only).
 
-A card that is fetched still reaches the vision model only when every host it
-came from lets AI read it (§14, "the talks.cam rule applied to every site"):
-`PoliteClient.ai_input_allowed` for the page's and the file's final URLs (no
-AI crawler disallowed by name, no `Content-Signal: ai-input=no`), and no
-`noai` robots meta on a page that embeds it.
+A fetched card reaches the vision model only when every host it came from
+lets AI read it (§14): `PoliteClient.ai_input_allowed` for the page's and the
+file's final URLs (no AI crawler disallowed by name, no
+``Content-Signal: ai-input=no``), and no ``noai`` robots meta on a page that
+embeds it — or the D3 society override lifts that opt-out
+(`TermcardFile.ai_override`), which never happens for talks.cam or tbc.xyz.
 
 `term_hint` reads the term a card is for from its URL or file name
 ("CUHCS-Michaelmas-Term-Card", "termcard-LT27.pdf").
@@ -38,6 +40,7 @@ from camsocs_pipeline.extract.images import vision_image
 from camsocs_pipeline.extract.llm import NO_LLM_HOSTS
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.links import host_of
+from camsocs_pipeline.sources.policy import SOCIETY, FetchPurpose, ai_optout_override
 from camsocs_pipeline.sources.websites.page import robots_directives
 
 #: A termcard changes at most once a term; re-download weekly at most.
@@ -51,7 +54,6 @@ _CODES = {"mt": "michaelmas", "lt": "lent", "et": "easter"}
 
 #: Hosts a termcard is never fetched from, with the reason the stage records.
 NEVER_FETCHED: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("cambridgesu.co.uk",), "SU-hosted: never fetched (source-research §21)"),
     (NO_LLM_HOSTS, "host keeps AI out (source-research §6)"),
     (
         (
@@ -80,6 +82,9 @@ class TermcardFile:
     data: bytes
     content_sha256: str
     fetch: FetchResult
+    #: The card reaches the model only because the D3 society override lifted
+    #: an AI opt-out on a host it came through (`policy.AI_OVERRIDE_NOTE`).
+    ai_override: bool = False
 
 
 @dataclass(frozen=True)
@@ -137,53 +142,88 @@ def never_fetched(url: str) -> str | None:
     return None
 
 
-def _ai_refusal(client: PoliteClient, *urls: str) -> str | None:
-    """Why content fetched through `urls` must not reach the model, or None."""
+@dataclass(frozen=True)
+class _AiCheck:
+    #: Why the content must not reach the model, or None.
+    refusal: str | None = None
+    #: An opt-out was lifted by the D3 society override.
+    override: bool = False
+
+
+def _ai_check(
+    client: PoliteClient, purpose: FetchPurpose, *urls: str, page_noai: bool = False
+) -> _AiCheck:
+    """Whether content fetched through `urls` may reach the model. An AI
+    opt-out (robots.txt, or `page_noai` on the page) is lifted where the D3
+    society override applies; talks.cam and tbc.xyz never are."""
+    override = False
     for url in urls:
         reason = never_fetched(url)
         if reason is not None:
-            return reason
-        if not client.ai_input_allowed(url):
-            return HOST_KEEPS_AI_OUT
-    return None
+            return _AiCheck(reason)
+        if client.ai_input_allowed(url) and not page_noai:
+            continue
+        if ai_optout_override(url, purpose):
+            override = True
+            continue
+        return _AiCheck(HOST_KEEPS_AI_OUT)
+    return _AiCheck(None, override)
 
 
-def fetch_termcard(client: PoliteClient, url: str) -> TermcardFile | Skipped:
+def fetch_termcard(
+    client: PoliteClient, url: str, purpose: FetchPurpose = SOCIETY
+) -> TermcardFile | Skipped:
     """The termcard file at `url` (or the first one the page at `url` links),
     fetched only from a host it may come from and returned only when every
-    host it passed through lets AI read it — else `Skipped` with the reason."""
+    host it passed through lets AI read it, or the D3 society override lifts
+    the opt-out — else `Skipped` with the reason. `purpose`: the society
+    purpose, declaring ``society_website`` when the card is on the society's
+    own domain."""
     reason = never_fetched(url)
     if reason is not None:
         return Skipped(url, reason)
-    result = client.fetch(url, fresh_for=FRESH_FOR, accept=ACCEPT)
+    result = client.fetch(url, fresh_for=FRESH_FOR, accept=ACCEPT, purpose=purpose)
     if not result.ok or result.content is None:
         return Skipped(url, result.outcome + (f" ({result.detail})" if result.detail else ""))
     kind = _kind(result.content)
     if kind is not None:
-        refusal = _ai_refusal(client, url, result.final_url)
-        if refusal is not None:
-            return Skipped(url, refusal)
-        return TermcardFile(url, kind, result.content, result.content_sha256 or "", result)
+        check = _ai_check(client, purpose, url, result.final_url)
+        if check.refusal is not None:
+            return Skipped(url, check.refusal)
+        return TermcardFile(
+            url, kind, result.content, result.content_sha256 or "", result, check.override
+        )
     if "html" not in (result.content_type or "").lower():
         return Skipped(url, "not a PDF or image")
-    page_refusal = _ai_refusal(client, url, result.final_url)
-    if page_refusal is None and robots_directives(result.text) & _NOAI:
-        page_refusal = HOST_KEEPS_AI_OUT
-    if page_refusal is not None:
-        return Skipped(url, page_refusal)
+    page = _ai_check(
+        client,
+        purpose,
+        url,
+        result.final_url,
+        page_noai=bool(robots_directives(result.text) & _NOAI),
+    )
+    if page.refusal is not None:
+        return Skipped(url, page.refusal)
     for link in _file_links(result.text, result.final_url)[:2]:
         if never_fetched(link) is not None:
             continue
-        linked = client.fetch(link, fresh_for=FRESH_FOR, accept=ACCEPT)
+        linked = client.fetch(link, fresh_for=FRESH_FOR, accept=ACCEPT, purpose=purpose)
         if not linked.ok or linked.content is None:
             continue
         linked_kind = _kind(linked.content)
         if linked_kind is None:
             continue
-        refusal = _ai_refusal(client, link, linked.final_url)
-        if refusal is not None:
-            return Skipped(url, refusal)
-        return TermcardFile(link, linked_kind, linked.content, linked.content_sha256 or "", linked)
+        check = _ai_check(client, purpose, link, linked.final_url)
+        if check.refusal is not None:
+            return Skipped(url, check.refusal)
+        return TermcardFile(
+            link,
+            linked_kind,
+            linked.content,
+            linked.content_sha256 or "",
+            linked,
+            page.override or check.override,
+        )
     return Skipped(url, "a page without a readable termcard file")
 
 

@@ -25,8 +25,15 @@ Two sources:
      for this body ("JCR Instagram"); a page dedicated to the body yields the
      links and contacts in its main content (never the college's own footer).
 
+   The body's own site is fetched with the society purpose
+   (`sources/policy.py`, D3: a JCR's or MCR's website), so a robots.txt
+   disallow there is overridden and recorded ``robots_override:society``. A
+   college page that names the body is read with the general purpose, and
+   its robots.txt holds.
+
    Traps (§8) are handled by the rules rather than by special cases: the Caius
-   JCR site disallows every crawler (robots.txt) → ``access_restricted``;
+   JCR site disallows every crawler in robots.txt and is now read under the
+   D3 override;
    Wolfson's WCSA site resets the connection → ``unreachable`` (the college's
    own WCSA page is used instead of an archive copy); Queens' and Churchill
    hide addresses behind Cloudflare email protection → never decoded, ``email``
@@ -73,6 +80,7 @@ from camsocs_pipeline.sources.observe import (
     retrieved_at,
     visible_text,
 )
+from camsocs_pipeline.sources.policy import GENERAL, SOCIETY_WEBSITE, FetchPurpose
 
 COLLEGE_AZ_URL = "https://www.cam.ac.uk/colleges-and-departments/college-a-z"
 
@@ -717,6 +725,14 @@ def _name_fields(body: Body, named: str | None, extractor: str, evidence: str) -
     return fields
 
 
+def _evidence_purpose(body: Body) -> FetchPurpose:
+    """The body's own site is a society website (D3); a college's page that
+    names it is a general page, whose robots.txt always holds."""
+    if body.home and body.evidence and host_of(body.home) == host_of(body.evidence):
+        return SOCIETY_WEBSITE
+    return GENERAL
+
+
 def harvest_body(
     client: PoliteClient, body: Body, college_host: str | None = None
 ) -> tuple[list[Observation], list[str]]:
@@ -727,7 +743,7 @@ def harvest_body(
     label = f"{body.college} / {body.name}"
 
     if body.evidence:
-        result = client.fetch(body.evidence)
+        result = client.fetch(body.evidence, purpose=_evidence_purpose(body))
         if result.ok:
             scope = "main" if body.dedicated else "labelled"
             reading = read_body_page(
@@ -748,7 +764,7 @@ def harvest_body(
             notes.append(f"{label}: evidence page {result.outcome}")
 
     if body.home:
-        result = client.fetch(body.home)
+        result = client.fetch(body.home, purpose=SOCIETY_WEBSITE)
         if result.ok:
             reading = read_body_page(
                 result.text, result.final_url, body, scope="all", college_host=college_host

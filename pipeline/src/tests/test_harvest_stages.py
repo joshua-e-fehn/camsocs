@@ -78,9 +78,13 @@ def test_the_su_stage_stages_directory_and_profile_observations(settings, net) -
     staged = ctx.staging.read_latest("su_profile")
     assert [record.source_key for record in directory] == [e.su_id for e in entries]
     assert [record.source_key for record in staged] == [e.su_id for e in entries]
-    # robots.txt disallows /asset/: the logo is recorded as restricted, never fetched.
+    # robots.txt disallows /asset/, but D3 lets a society's own logo there be
+    # copied: it is staged for the load stage to store (never hotlinked, and
+    # not fetched here), and the override is on the access note.
     logo = next(f for f in directory[0].fields if f.field == "logo")
-    assert logo.missing_reason == "access_restricted"
+    assert logo.value == {"sourceUrl": entries[0].logo_url}
+    assert "/asset/" in entries[0].logo_url
+    assert directory[0].fetch.access_note == "logo: robots_override:society"
     assert not any("/asset/" in str(call.request.url) for call in net.calls)
     # The 404 profile is a sources row without claims — one in eleven is tolerated.
     gone = next(record for record in staged if record.source_key == "20910")

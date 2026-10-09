@@ -2,12 +2,15 @@
 
 1. **Inputs**: every `termcardUrl` an organisation has in staging
    (`KnownOrgs.termcards`; the SU, website and enrichment harvesters claim it).
-2. **Fetch** politely (`sources.termcards.fetch_termcard`): the file, or the
-   first termcard file a page links or embeds. SU-hosted cards (§21),
-   talks.cam and social networks are never fetched; robots-blocked, 401/403
-   and 404 cards, and cards from a host that keeps AI out (§14: an AI crawler
-   disallowed by name, `Content-Signal: ai-input=no`, a `noai` page), are
-   skipped with the reason — never "found", never sent to the model.
+2. **Fetch** politely (`sources.termcards.fetch_termcard`) with the society
+   purpose (`sources/policy.py`, D3; ``society_website`` when the card is on
+   the society's own domain): the file, or the first termcard file a page
+   links or embeds. talks.cam, tbc.xyz and social networks are never
+   fetched. Login-walled cards (the SU's ``/file/`` links redirect to its
+   login page), 401/403 and 404 cards, robots-blocked cards no override
+   covers, and cards from a host that keeps AI out where no override lifts
+   it (§14), are skipped with the reason — never "found", never sent to the
+   model. A card read under an override says so in its events' access note.
 3. **Read** with the strong model's vision (`image_events_v1`): PDFs are
    rendered page by page (`extract.images.render_pdf`, at most four pages) and
    their text layer goes along; images are sent as they are (shrunk). Quotes
@@ -44,10 +47,16 @@ from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
-from camsocs_pipeline.known_orgs import KnownOrgs
+from camsocs_pipeline.known_orgs import KnownOrgs, domain_of
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import PoliteClient
+from camsocs_pipeline.sources.policy import (
+    AI_OVERRIDE_NOTE,
+    SOCIETY,
+    SOCIETY_WEBSITE,
+    FetchPurpose,
+)
 from camsocs_pipeline.sources.termcards import Skipped, TermcardFile, fetch_termcard, term_hint
 
 logger = logging.getLogger(__name__)
@@ -89,7 +98,7 @@ def run(ctx: StageContext) -> None:
     ) as client:
         for org_key, url in cards[:budget]:
             reached.add(org_key)
-            fetched = fetch_termcard(client, url)
+            fetched = fetch_termcard(client, url, _purpose(known, org_key, url))
             if isinstance(fetched, Skipped):
                 reason = fetched.reason.split(" (", 1)[0]
                 skipped[reason] = skipped.get(reason, 0) + 1
@@ -131,6 +140,29 @@ def run(ctx: StageContext) -> None:
     )
     for reason, count in sorted(skipped.items()):
         ctx.report.notes.append(f"  skipped {count}: {reason}")
+
+
+def _purpose(known: KnownOrgs, org_key: str, url: str) -> FetchPurpose:
+    """The society purpose for a card: on the society's own domain it is its
+    website (D3 ``society_website``); elsewhere only the URL classes the
+    policy recognises by shape (an SU ``/asset/`` file) may be overridden."""
+    org = known.get(org_key)
+    domain = domain_of(url)
+    if org is not None and domain is not None and domain in org.domains:
+        return SOCIETY_WEBSITE
+    return SOCIETY
+
+
+def _fetch_info(card: TermcardFile) -> FetchInfo:
+    """The card's `sources` row, with any D3 override on its access note."""
+    notes = [note for note in (card.fetch.override,) if note]
+    if card.ai_override:
+        notes.append(AI_OVERRIDE_NOTE)
+    return FetchInfo(
+        http_status=card.fetch.status,
+        robots_verdict="disallowed" if card.fetch.override else "allowed",
+        access_note="; ".join(notes) or None,
+    )
 
 
 def _organiser(record: EventObservation) -> str | None:
@@ -206,7 +238,7 @@ def card_events(
         organiser_key=org_key,
         organiser_name=org_name,
         content_sha256=card.content_sha256 or None,
-        fetch=FetchInfo(http_status=card.fetch.status),
+        fetch=_fetch_info(card),
     )
     events, dropped = build_events(extracted, context)
     if dropped:

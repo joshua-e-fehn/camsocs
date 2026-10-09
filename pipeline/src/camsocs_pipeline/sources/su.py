@@ -17,9 +17,12 @@ descriptions included).
 Rules that are easy to get wrong, and where they are enforced:
 
 - **robots.txt** disallows ``/asset/`` for every agent, and every logo lives
-  there (checked 2026-10-07). Logos are therefore never downloaded: the logo
-  is recorded as ``missing`` / ``access_restricted`` (`logo_field`), and
-  nothing is hotlinked.
+  there (checked 2026-10-07). Under Joshua's decision D3 (PLAN.md,
+  2026-10-08; `sources/policy.py`) an SU ``/asset/`` file linked from a
+  society's profile may still be fetched with the society purpose, so the
+  logo is staged as ``{"sourceUrl"}`` and the load stage stores our own copy
+  (`media.py`); it is never hotlinked. Where no override applies the logo is
+  ``missing`` / ``access_restricted`` (`logo_field`).
 - **The Join widget is login-gated** on every profile ("Please log in to join
   this organisation."): ``joinUrl`` is ``missing`` / ``access_restricted``.
   The login page is never fetched.
@@ -466,8 +469,8 @@ def _fetched_at(page: FetchResult) -> datetime:
     return datetime.fromisoformat(page.fetched_at)
 
 
-def _fetch_info(page: FetchResult) -> FetchInfo:
-    return FetchInfo(http_status=page.status, robots_verdict="allowed")
+def _fetch_info(page: FetchResult, *, note: str | None = None) -> FetchInfo:
+    return FetchInfo(http_status=page.status, robots_verdict="allowed", access_note=note)
 
 
 def _identity(entry: DirectoryEntry, name: str | None = None, **hints: Any) -> IdentityHints:
@@ -488,24 +491,35 @@ def _internal(entry: DirectoryEntry, **values: Any) -> dict[str, Any]:
 
 
 def logo_field(entry: DirectoryEntry, *, robots_allows: bool | None) -> FieldObs | None:
-    """The logo as far as we may record it. Never a hotlink: without our own
-    stored copy there is no value. ``robots_allows`` None = not checked (a dry
-    run), and then nothing is said."""
+    """The logo as far as we may record it. ``robots_allows``: whether we may
+    fetch the file (robots.txt, or the D3 society override for SU
+    ``/asset/`` files); None = not checked (a dry run), and then nothing is
+    said. A fetchable logo is staged as ``{"sourceUrl"}``: the load stage
+    stores our own copy, or posts nothing when the bytes cannot be had —
+    never a hotlink."""
     extractor = "su_directory.logo"
     if entry.logo_url is None:
         return missing_field("logo", "not_published", extractor=extractor, evidence=EVIDENCE)
     if robots_allows is False:
         return missing_field("logo", "access_restricted", extractor=extractor, evidence=EVIDENCE)
-    # Fetchable, but storing our own copy needs the staged-file upload path,
-    # which this source has never needed (its logos sit under robots-disallowed
-    # /asset/). Saying nothing beats a hotlink.
-    return None
+    if robots_allows is None:
+        return None
+    return parser_field(
+        "logo", {"sourceUrl": entry.logo_url}, extractor=extractor, evidence=EVIDENCE
+    )
 
 
 def directory_observation(
-    entry: DirectoryEntry, page: FetchResult, *, logo_allowed: bool | None
+    entry: DirectoryEntry,
+    page: FetchResult,
+    *,
+    logo_allowed: bool | None,
+    logo_note: str | None = None,
 ) -> Observation:
-    """What the directory says about one society (source type ``su_directory``)."""
+    """What the directory says about one society (source type ``su_directory``).
+    ``logo_note``: how the logo may be fetched, when that needed the D3
+    society override (``robots_override:society``); it goes on the access
+    note of the observation's `sources` row."""
     retrieved_at = _fetched_at(page)
     fields: list[FieldObs] = [
         parser_field("name", entry.name, extractor="su_directory.name", evidence=EVIDENCE),
@@ -559,7 +573,7 @@ def directory_observation(
         source_url=DIRECTORY_URL,
         retrieved_at=retrieved_at,
         content_sha256=page.content_sha256,
-        fetch=_fetch_info(page),
+        fetch=_fetch_info(page, note=f"logo: {logo_note}" if logo_note else None),
         identity=_identity(entry),
         fields=fields,
         internal=_internal(entry),

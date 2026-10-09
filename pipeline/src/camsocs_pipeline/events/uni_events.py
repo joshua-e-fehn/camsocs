@@ -4,10 +4,12 @@ stage `uni_events`).
 **robots.txt blocks it.** Re-verified 2026-10-07: every endpoint of the
 University's events service (``events.json``, ``.rss``, ``.ics``, the image
 store) is on ``webservices.admin.cam.ac.uk``, whose robots.txt is
-``User-agent: *`` / ``Disallow: /``. The stage therefore asks the polite
-client, which checks robots.txt first and fetches nothing while that stands;
-the run notes say so. The parser is kept so the stage works the day the block
-is lifted.
+``User-agent: *`` / ``Disallow: /``. It is not a society's page, so Joshua's
+decision D3 (PLAN.md, 2026-10-08) keeps it out entirely: the fetch policy
+(`sources/policy.py`) lists the host as never fetched, whatever the purpose.
+The polite client refuses before any request (not even robots.txt is read)
+and the run notes say so. The parser is kept in case the policy and the
+block both change.
 
 **Format.** The stage reads the programme's iCalendar export
 (``events.ics?resultSetSize=…``, linked from the public What's On page as the
