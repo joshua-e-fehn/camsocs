@@ -28,7 +28,8 @@ type, with a quote; the rule's ``society`` stands when it has none.
 source categorises): sport (a sport in the name), faith (a religion or
 chaplaincy), cultural_international (a country, nationality, region or
 language community), music (an ensemble), theatre_film_dance (drama,
-film, dance), media_publishing (a publication or station). The Sports
+film, dance), media_publishing (a publication or station); a JCR or MCR is
+identity_wellbeing (a college's community and welfare body). The Sports
 Service's clubs, CUCBC's and Camdram's already carry theirs.
 
 **Audiences** (`audience_rules`): graduate / postgraduate societies,
@@ -482,10 +483,26 @@ def _name_record(profile: OrgProfile) -> Observation | None:
     return profile.record(*REGISTER_SOURCES, "sport_az", "camdram", "cucbc", "su_profile")
 
 
+#: A college's student body (JCR / MCR): community, representation and welfare.
+BODY_CATEGORIES = ("identity_wellbeing",)
+
+
 def category_rules(profile: OrgProfile) -> list[RuleClaim]:
-    """Categories a name states, for an organisation no source categorises."""
+    """Categories a name states, for an organisation no source categorises;
+    a JCR or MCR is a community and welfare body (`BODY_CATEGORIES`)."""
     if profile.has("categories"):
         return []
+    for body_record, obs in profile.values.get("orgType", []):
+        if obs.value in ("jcr", "mcr"):
+            return [
+                RuleClaim(
+                    "categories",
+                    list(BODY_CATEGORIES),
+                    body_record,
+                    "classify.student_body_category",
+                    f"a college's {str(obs.value).upper()}",
+                )
+            ]
     record = _name_record(profile)
     if record is None:
         return []
@@ -606,6 +623,7 @@ def rule_claims(profile: OrgProfile, *, college_keys: set[str]) -> list[RuleClai
 
 
 __all__ = [
+    "BODY_CATEGORIES",
     "CATEGORY_RULES",
     "MAX_CATEGORIES",
     "RuleClaim",

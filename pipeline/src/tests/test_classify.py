@@ -346,3 +346,17 @@ def test_coverage_counts_listed_organisations_and_found_values() -> None:
     table = format_coverage(after, before)
     assert table[0].split() == ["before", "now"]
     assert any(line.startswith("orgType") for line in table)
+
+
+def test_a_college_student_body_is_a_community_and_welfare_body() -> None:
+    jcr = record(
+        "society_website", "org-girton-college-jcr", "Girton College JCR",
+        parser_field("orgType", "jcr", extractor="colleges.body_type", evidence="primary"),
+        url="https://jcr.example/",
+    )  # fmt: skip
+    (profile,) = profiles_from([jcr]).values()
+    (claim,) = category_rules(profile)
+    assert (claim.value, claim.record.source_url) == (
+        ["identity_wellbeing"],
+        "https://jcr.example/",
+    )
