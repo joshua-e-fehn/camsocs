@@ -146,12 +146,20 @@ def fetched_at(result: FetchResult) -> datetime:
 
 def fetch_info(result: FetchResult, *, crawl_delay: bool = False) -> FetchInfo:
     """The `sources` row facts of a fetch. ``crawl_delay``: the host's
-    robots.txt sets a Crawl-delay we honoured (talks.cam, CUCBC)."""
+    robots.txt sets a Crawl-delay we honoured (talks.cam, CUCBC). A feed read
+    only because a society purpose overrode robots.txt (`sources/policy.py`)
+    is recorded ``disallowed`` with the override in the access note."""
+    notes: list[str] = []
+    if result.override:
+        notes.append(result.override)
+    if result.outcome not in ("fetched", "unchanged") and result.detail:
+        notes.append(result.detail)
+    verdict = "crawl_delay" if crawl_delay else "allowed"
     return FetchInfo(
         http_status=result.status,
-        robots_verdict="crawl_delay" if crawl_delay else "allowed",
+        robots_verdict="disallowed" if result.override else verdict,
         robots_checked_at=fetched_at(result),
-        access_note=result.detail if result.outcome not in ("fetched", "unchanged") else None,
+        access_note="; ".join(notes) or None,
     )
 
 
