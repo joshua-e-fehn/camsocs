@@ -74,6 +74,7 @@ def run(ctx: StageContext) -> None:
         )
         for collision in report.collisions[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  {collision}")
+    ctx.report.notes.extend(report.merged)
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
             f"images: {report.files_stored} stored, {report.files_dropped} not available"

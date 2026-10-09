@@ -352,21 +352,39 @@ def claims_for_observation(obs: Observation) -> list[ClaimInput]:
     return claims
 
 
-def claims_for_event(obs: EventObservation) -> list[ClaimInput]:
+def claims_for_event(
+    obs: EventObservation, *, duplicate_of: tuple[str, str] | None = None
+) -> list[ClaimInput]:
     """Claims for an event, including the identity claims every event row
-    needs (`source`, `externalId`, `visibility`, `sourceUrl`) and its venue."""
-    key = event_key(obs.event_source, obs.external_id)
+    needs (`source`, `externalId`, `visibility`, `sourceUrl`) and its venue.
+
+    ``duplicate_of``: (source, externalId) of the event another source
+    already lists (`events.duplicates`). The reading's claims then go to that
+    event, with their own provenance, and without the identity claims
+    (`source`, `externalId`, `sourceUrl`): the event keeps its own listing.
+    `visibility` is still claimed — the strictest reading wins."""
+    key = event_key(*(duplicate_of or (obs.event_source, obs.external_id)))
     evidence = _evidence_of(obs.fields)
     extra: list[FieldObs] = [
-        parser_field("source", obs.event_source, extractor="event.identity", evidence=evidence),
-        parser_field("externalId", obs.external_id, extractor="event.identity", evidence=evidence),
         parser_field("visibility", obs.visibility, extractor="event.identity", evidence=evidence),
     ]
-    present = {f.field for f in obs.fields}
-    if "sourceUrl" not in present:
-        extra.append(
-            parser_field("sourceUrl", obs.source_url, extractor="event.identity", evidence=evidence)
-        )
+    fields = list(obs.fields)
+    if duplicate_of is None:
+        extra[:0] = [
+            parser_field("source", obs.event_source, extractor="event.identity", evidence=evidence),
+            parser_field(
+                "externalId", obs.external_id, extractor="event.identity", evidence=evidence
+            ),
+        ]
+        if "sourceUrl" not in {f.field for f in fields}:
+            extra.append(
+                parser_field(
+                    "sourceUrl", obs.source_url, extractor="event.identity", evidence=evidence
+                )
+            )
+    else:
+        fields = [f for f in fields if f.field != "sourceUrl"]
+    present = {f.field for f in fields}
     if obs.venue is not None and not present & {"venueKey", "venueText"}:
         if obs.venue.known_key is not None:
             extra.append(
@@ -380,7 +398,7 @@ def claims_for_event(obs: EventObservation) -> list[ClaimInput]:
                     "venueText", obs.venue.name, extractor="event.venue", evidence=evidence
                 )
             )
-    return _claims([*obs.fields, *extra], obs, "event", key)
+    return _claims([*fields, *extra], obs, "event", key)
 
 
 def _evidence_of(fields: Iterable[FieldObs]) -> str:
