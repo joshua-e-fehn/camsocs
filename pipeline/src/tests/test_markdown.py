@@ -65,3 +65,20 @@ def test_plain_text_of_a_node() -> None:
     node = LexborHTMLParser("<p> Chess&nbsp;Society\n (CU) </p>").css_first("p")
     assert html_to_text(node) == "Chess Society (CU)"
     assert html_to_text(None) == ""
+
+
+def test_a_link_to_a_persons_profile_keeps_only_its_text() -> None:
+    from camsocs_pipeline.sources.links import is_personal_profile
+
+    html = (
+        '<p>Contact our president <a href="https://www.linkedin.com/in/ann-example/">Ann'
+        ' Example</a> or <a href="https://uk.linkedin.com/in/bo-ex">https://uk.linkedin.com/in/bo-ex</a>'
+        ' or follow <a href="https://www.linkedin.com/company/quokka-soc/">our page</a>.</p>'
+    )
+    assert html_to_markdown(html) == (
+        "Contact our president Ann Example or or follow "
+        "[our page](https://www.linkedin.com/company/quokka-soc/)."
+    )
+    assert is_personal_profile("linkedin.com/in/ann-example")
+    assert is_personal_profile("https://www.linkedin.com/pub/ann-example/1/2/3")
+    assert not is_personal_profile("https://www.linkedin.com/company/quokka-soc/")

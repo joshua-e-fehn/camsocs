@@ -20,7 +20,9 @@ Honesty rules enforced here, not left to prompts:
   says so — when in doubt, show less;
 - classifications (`eventType`, `signupRequired`) carry no quote and are
   `inferred`;
-- nothing about people except published speakers (name, affiliation).
+- nothing about people except published speakers (name, affiliation), and
+  those only for a talk or a workshop, with every name and the list's quote
+  on the text (`SPEAKER_EVENT_TYPES`).
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from camsocs_pipeline.claims import epoch_ms, llm_field, parser_field
+from camsocs_pipeline.claims import epoch_ms, llm_field, missing_field, parser_field
 from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote, normalise_text
 from camsocs_pipeline.extract.llm import LLMClient, Tier, vision_message
 from camsocs_pipeline.extract.memo import LLMMemo, memo_key
@@ -54,6 +56,12 @@ from camsocs_pipeline.models.observation import (
     OrganiserObs,
 )
 from camsocs_pipeline.models.vocab import EVENT_TYPES
+
+#: Event types whose speakers an organiser publishes as such (a talk, a
+#: workshop's leader). A performance's cast or a social's hosts are not
+#: speakers: their names are redacted like any other (D1). `extract.redact`
+#: checks the same again at load.
+SPEAKER_EVENT_TYPES = frozenset({"talk", "workshop"})
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -318,13 +326,30 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
         if s.name and s.name.strip()
     ]
     if speakers:
-        # One quote for the list: it supports the list only if every name is
-        # in the text too.
+        # Speakers are published only for a talk or a workshop, as the text
+        # names them: every name and the list's quote on the text (never read
+        # off an image). A performance's cast, a social's hosts or a list the
+        # text does not support stay out — their names are redacted from the
+        # description like any other (D1) — and an earlier reading of the
+        # list is retracted.
         named = all(
             check_quote(speaker["name"], context.source_text) is not EvidenceMatch.ABSENT
             for speaker in speakers
         )
-        fields.append(llm("speakers", speakers, event.speakers_quote if named else None))
+        quoted = check_quote(event.speakers_quote, context.source_text) is not EvidenceMatch.ABSENT
+        listed_type = event_type if event_type in EVENT_TYPES else "other"
+        if named and quoted and listed_type in SPEAKER_EVENT_TYPES:
+            fields.append(llm("speakers", speakers, event.speakers_quote))
+        else:
+            fields.append(
+                missing_field(
+                    "speakers",
+                    "not_published",
+                    extractor=context.model,
+                    evidence=context.evidence,
+                    method="llm",
+                )
+            )
     if context.image:
         fields.append(
             parser_field(
@@ -443,6 +468,7 @@ def quote_supported(quote: str | None, source_text: str) -> bool:
 
 __all__ = [
     "PROMPTS_DIR",
+    "SPEAKER_EVENT_TYPES",
     "EventContext",
     "Extraction",
     "LlmEvent",

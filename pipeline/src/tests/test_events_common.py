@@ -408,3 +408,37 @@ def test_personal_crsid_addresses_never_reach_a_public_field() -> None:
         evidence="primary",
     )
     assert "ab123" not in observation.model_dump_json()
+
+
+def test_a_room_booking_is_no_event_and_a_bookers_contacts_never_reach_a_field() -> None:
+    from camsocs_pipeline.events.common import withhold_personal_contacts
+
+    # The shape of the Newnham MCR calendar's entries (2026-10-09), names made up.
+    booking = draft(
+        title="MCR room booking (Ann Example)",
+        description="Booked by\na member\nann.example15@gmail.com\nEvent name Picnic\nCRSiD\nae123",
+    )
+    result = check_draft(booking, WINDOW, now=NOW)
+    assert not result.keep and result.reason == "a room booking, not an event"
+    for title in ("Room booking: Ann Example", "Lounge hire (Bo Example)", "Reserved for B. Ex"):
+        assert not check_draft(draft(title=title), WINDOW, now=NOW).keep, title
+    for title in ("Fully booked: Formal Hall", "Bookings open for the ball", "Booking Office tour"):
+        assert check_draft(draft(title=title), WINDOW, now=NOW).keep, title
+    # Any other feed text keeps the organisation's own addresses only.
+    text = (
+        "Questions: soc-quokka@lists.cam.ac.uk, president@quokka.example or "
+        "ann.example15@gmail.com (CRSid: ae123). Ask Bo (bo42) at the door."
+    )
+    assert withhold_personal_contacts(text, {"quokka"}) == (
+        "Questions: soc-quokka@lists.cam.ac.uk, president@quokka.example or "
+        "[personal email withheld] (CRSid [withheld]). Ask Bo at the door."
+    )
+    observation = build_event_observation(
+        draft(title="Picnic", description=text),
+        source_type="ics_feed",
+        source_url="https://calendar.google.com/calendar/ical/x/public/basic.ics",
+        retrieved_at=AT,
+        evidence="primary",
+    )
+    dumped = observation.model_dump_json()
+    assert "ann.example15" not in dumped and "ae123" not in dumped and "bo42" not in dumped

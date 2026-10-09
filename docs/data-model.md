@@ -196,7 +196,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`, §6) |
 | venueKey / venueText | string? | |
 | organiserKeys, coHostKeys, sponsorKeys | string[] | Organisation keys, set only by `eventOrganisers` (not claimable). Sponsors and co-hosts also create `relationships` edges. |
-| speakers | `{ name, affiliation? }[]` | Only as published. Public speakers are never redacted, here or in the event's `description` (D1) |
+| speakers | `{ name, affiliation? }[]` | Only as published, and only for a `talk` or `workshop` (a performance's cast is not its speakers); never a known committee member. Public speakers are never redacted, here or in the event's `description` (D1) |
 | price | `{ free: boolean, minPence?, maxPence?, text? }`? | |
 | bookingUrl | string? | |
 | signupRequired | boolean? | |
@@ -291,7 +291,7 @@ These are never returned by public queries.
   | lastSeenAt | number (bumped, at most daily, when the same observation is posted again) |
   | contentSha256 | string? |
   | method | |
-  | extractor | rule id or model id. A public free-text claim carries the redaction step: `+redacted:v1` (checked by the LLM pass, or no names found), `+redacted:v1:rule` (the deterministic fallback), `+redacted:v1:withheld` (posted as `missing` / `not_published`) |
+  | extractor | rule id or model id. A public free-text claim carries the redaction step: `+redacted:v2` (checked by the LLM pass, or no names found), `+redacted:v2:rule` (the deterministic fallback), `+redacted:v2:withheld` (posted as `missing` / `not_published`). Claims posted before 2026-10-10 say `v1` |
   | promptVersion | string? |
   | evidenceQuote | string? |
   | quoteCheck | `exact \| normalised \| absent`? |
@@ -304,7 +304,7 @@ These are never returned by public queries.
 
   Indexes: `by_entity_field` (entityType, entityKey, field, reviewStatus), `by_entity_review` (entityType, entityKey, reviewStatus), `by_run`, `by_fingerprint`.
 
-  **Redaction (decision D1).** Before claims are posted, `pipeline/.../extract/redact.py` (called by `ConvexLoader.post_observations`) replaces personal names of private individuals in public free text with their role or a neutral phrase. The claim's `status` is unchanged (found / inferred); `value` is the redacted text and `valueRaw` the original. A text the step cannot make safe is posted as `missing` / `not_published` (with the original in `valueRaw`). Superseded claims keep their `valueRaw`, so unredacted originals stay in this internal log for as long as the entity (retention R2).
+  **Redaction (decision D1).** Before claims are posted, `pipeline/.../extract/redact.py` (called by `ConvexLoader.post_observations`) replaces personal names of private individuals in public free text with their role or a neutral phrase (`someone` when the text gives no role: never a role the text does not state). Public free text is every description and note, an event's and a session's `title` and `venueText`, an event's `price.text`, `sport.kitCostNote`, `trials.dates` and `chatChannels[].howToJoin`. The claim's `status` is unchanged (found / inferred); `value` is the redacted text and `valueRaw` the original. A text the step cannot make safe is posted as `missing` / `not_published` (with the original in `valueRaw`); a **title** that cannot be made safe keeps its whole event (or session) from being posted. Links to a person's profile (LinkedIn `/in/`) and links whose URL spells a redacted name are cut to their label. An event's `speakers` are published only for a `talk` or `workshop`, with the list's quote on the source, and never name an organisation's known committee member; otherwise the reading is posted `missing` / `not_published`. Superseded claims keep their `valueRaw`, so unredacted originals stay in this internal log for as long as the entity (retention R2).
 
   `status`, `confidence` and `fingerprint` are computed by the server; the API refuses a posted `confidence`. The fingerprint is sha256 over entity, field, canonical JSON of the value (or `!status:missingReason` for a negative claim), `sourceUrl` and `method` — not `contentSha256`, which is stored but changes on every fetch of a page with per-request tokens (the SU's `__VIEWSTATE`): re-posting the same reading of the same page is a no-op. Resolution reads only live (`accepted` / `proposed`) claims (index `by_entity_review`).
 - **sources**: one row per fetched URL.

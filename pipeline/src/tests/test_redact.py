@@ -183,7 +183,9 @@ def test_the_rule_keeps_speakers_and_removes_known_committee_members() -> None:
         "Chaired by our President."
     )
     known = rule_redact(request("Pay Jane at the first session.", private=("Jane",)))
-    assert known.text == "Pay a member of the committee at the first session."
+    # The neutral phrase claims nothing about the person (not "a member of
+    # the committee"), and a sentence's first word is not part of the name.
+    assert known.text == "Pay someone at the first session."
 
 
 # --- the redactor ------------------------------------------------------------------------------
@@ -196,7 +198,7 @@ def test_the_model_pass_is_cached_by_the_input(tmp_path: Path) -> None:
     memo = LLMMemo(tmp_path / "llm")
     first = Redactor(llm, memo).redact(request(SU_DESCRIPTION))  # type: ignore[arg-type]
     assert first.method == "llm" and first.text == SU_REDACTED
-    assert llm.calls[0]["version"] == "redact_names_v1"
+    assert llm.calls[0]["version"] == "redact_names_v2"
     assert SU_DESCRIPTION in llm.calls[0]["text"]
     # Another run: the reply comes from the cache, even without a model.
     again = Redactor(None, memo)
@@ -209,7 +211,7 @@ def test_a_deviating_reply_falls_back_to_the_rule_with_its_verified_names() -> N
     redactor = Redactor(llm)  # type: ignore[arg-type]
     result = redactor.redact(request("Socials are run by Ben every Friday."))
     assert result.method == "rule"
-    assert result.text == "Socials are run by a member of the committee every Friday."
+    assert result.text == "Socials are run by someone every Friday."
     assert redactor.stats.rejected_replies == 1
 
 
@@ -231,8 +233,16 @@ def test_talks_cam_text_never_reaches_the_model() -> None:
 
 def test_the_prompt_is_versioned_and_states_the_rules() -> None:
     prompt = PROMPT_PATH.read_text(encoding="utf-8")
-    assert PROMPT_PATH.name == "redact_names_v1.md"
-    for rule in ("Keep these names", "Committee members", '"redactions"', "public figures"):
+    assert PROMPT_PATH.name == "redact_names_v2.md"
+    for rule in (
+        "Keep these names",
+        "Committee members",
+        '"redactions"',
+        "public figures",
+        "namesake",
+        "never leave a gap",
+        "Never call someone a committee member",
+    ):
         assert rule.lower() in prompt.lower()
 
 
@@ -431,3 +441,240 @@ def test_post_observations_never_posts_a_name_it_knows(net: respx.MockRouter) ->
     assert all("Priya" not in json.dumps(c.get("value")) for c in claims)
     people = [p for body in bodies["brokerInferences"] for p in body.get("people", [])]
     assert [p["name"] for p in people] == ["Priya"]
+
+
+# --- review findings 2026-10-10 (D1 scope, the fallback, links, speakers) -------------------------
+
+#: The shape of an SU description seen on 2026-10-08 (names made up): the
+#: president's full name and a member's, each linked to a LinkedIn profile.
+LINKED = (
+    "**Some committee positions are open.****For details, please contact our president "
+    "[Sebastiano Quokka Marinos](https://www.linkedin.com/in/sebastiano-quokka-marinos/) "
+    "(Robinson College) or [Jan-Pieter Wombat](https://www.linkedin.com/in/jpwombat/) "
+    "(Darwin College).**"
+)
+
+
+def test_a_title_followed_by_a_surname_is_risky() -> None:
+    from camsocs_pipeline.extract.redact import _risky
+
+    assert _risky("contact our President Habersack Martos today", set(), ())
+    # A title or a team after "the" / "our" stays fine.
+    assert not _risky("Contact the Lower Boats Captains today.", set(), ())
+
+
+def test_profile_links_never_survive_and_partial_names_take_the_whole_name() -> None:
+    from camsocs_pipeline.extract.redact import strip_profile_links
+
+    stripped = strip_profile_links(LINKED)
+    assert "linkedin" not in stripped and "Sebastiano Quokka Marinos (Robinson College)" in stripped
+    # The model's reply failed its checks (it deleted the links); the rule
+    # applies its verified names longest first, so the first name alone
+    # cannot leave the surname behind.
+    llm = FakeLLM(
+        lambda _t, _tier: reply(
+            "For details, contact our president.",
+            ("Sebastiano", "our President"),
+            ("Sebastiano Quokka Marinos", "our president"),
+            ("Jan-Pieter Wombat", "the committee"),
+        )
+    )
+    result = Redactor(llm).redact(RedactRequest(text=LINKED))  # type: ignore[arg-type]
+    assert result.method == "rule"
+    assert result.text == (
+        "**Some committee positions are open.****For details, please contact our president "
+        "(Robinson College) or the committee (Darwin College).**"
+    )
+    for part in ("Quokka", "Marinos", "Wombat", "linkedin", "jpwombat"):
+        assert part not in (result.text or "")
+
+
+def test_a_link_that_spells_a_redacted_name_keeps_only_its_label() -> None:
+    text = "The logo was made for us by [Ana Example](https://www.anaexample.com/) last year."
+    llm = FakeLLM(
+        lambda _t, _tier: reply(
+            "The logo was made for us by [someone](https://www.anaexample.com/) last year.",
+            ("Ana Example", "someone"),
+        )
+    )
+    result = Redactor(llm).redact(RedactRequest(text=text))  # type: ignore[arg-type]
+    assert result.text == "The logo was made for us by someone last year."
+    # A booking link that spells a first name: the link goes, the text stays.
+    booking = "Book a chat with [Jian](https://cal.com/jian-example) about joining."
+    llm = FakeLLM(
+        lambda _t, _tier: reply(
+            "Book a chat with [our President](https://cal.com/jian-example) about joining.",
+            ("Jian", "our President"),
+        )
+    )
+    done = Redactor(llm).redact(RedactRequest(text=booking))  # type: ignore[arg-type]
+    assert done.text == "Book a chat with our President about joining."
+
+
+def test_the_gate_reads_capitals_lower_case_and_other_scripts() -> None:
+    from camsocs_pipeline.extract.redact import needs_model
+
+    texts = [
+        "PRESIDENT: ANNA SMITH\nTREASURER: JOHN DOE",
+        "president - anna smith",
+        "ANNA SMITH (President) and JOHN DOE (Treasurer) welcome you",
+        "会长：王小明，欢迎联系！",  # noqa: RUF001 (a Chinese society's own punctuation)
+    ]
+    for text in texts:
+        assert needs_model(text), text
+        # The model failed: never published as it stands.
+        assert rule_redact(RedactRequest(text=text), strict=True).text is None, text
+    # A college word is safe in its college's name only.
+    assert candidate_names("We meet at Robinson College and Jesus College.") == set()
+    assert candidate_names("Talks by Robinson and Hall.") == {"Robinson", "Hall"}
+
+
+def test_credits_make_a_name_risky_for_the_rule() -> None:
+    result = rule_redact(request("Directed by Lucy Hall, produced by Sidney Grace."))
+    assert result.method == "withheld" and result.text is None
+
+
+def test_a_reply_that_leaves_an_empty_slot_is_rejected() -> None:
+    text = "Our coach in Michaelmas, Sam Example, is an excellent physio."
+    assert (
+        accept_reply(
+            request(text),
+            RedactReply.model_validate(
+                reply("Our coach in Michaelmas, , is an excellent physio.", ("Sam Example", ""))
+            ),
+        )
+        is None
+    )
+
+
+def event_claim(field: str, value: Any, *, key: str = "evt-1", **kw: Any) -> ClaimInput:
+    method = kw.pop("method", "parser")
+    if method == "llm":
+        obs = llm_field(
+            field,
+            value,
+            quote=kw.pop("quote", None),
+            source_text=kw.pop("source_text", ""),
+            source_type="society_website",
+            model="bulk-model-1",
+            prompt_version="website_events_v1",
+            evidence="primary",
+        )
+    else:
+        obs = parser_field(field, value, extractor=f"ics.{field}", evidence="primary")
+    return claim(
+        obs,
+        entity_type="event",
+        key=key,
+        url=kw.get("url", "https://calendar.google.com/calendar/ical/x/public/basic.ics"),
+        source_type=kw.get("source_type", "ics_feed"),
+    )
+
+
+def test_an_event_title_is_redacted_and_an_unsafe_one_drops_the_event() -> None:
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        if "Ann Example" in text:
+            return reply("Room booking (someone)", ("Ann Example", "someone"))
+        return reply("Something else entirely")  # fails its checks
+
+    llm = FakeLLM(respond)
+    claims = [
+        event_claim("title", "Room booking (Ann Example)", key="evt-a"),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-a"),
+        event_claim("title", "Supper with Bo Quokkason", key="evt-b"),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-b"),
+    ]
+    posted, stats = redact_claims(claims, Redactor(llm))  # type: ignore[arg-type]
+    titles = {c.entity_key: c.value for c in posted if c.field == "title"}
+    assert titles == {"evt-a": "Room booking (someone)"}
+    # The unsafe title takes all of its event's claims with it.
+    assert {c.entity_key for c in posted} == {"evt-a"}
+    assert stats.dropped == ["evt-b"]
+
+
+def test_venues_prices_and_chat_notes_are_redacted_too() -> None:
+    from camsocs_pipeline.extract.redact import PUBLIC_TEXT_FIELDS
+
+    for target in [
+        ("event", "title"),
+        ("event", "venueText"),
+        ("event", "price"),
+        ("session", "title"),
+        ("session", "venueText"),
+        ("organisation", "sport.kitCostNote"),
+        ("organisation", "chatChannels"),
+    ]:
+        assert target in PUBLIC_TEXT_FIELDS
+    price = event_claim(
+        "price", {"free": False, "text": "£5, organised by Bo Quokkason"}, key="evt-p"
+    )
+    (posted,), _ = redact_claims([price], Redactor())
+    # No model: the rule withholds the note, the rest of the price stays.
+    assert posted.value == {"free": False}
+
+
+def test_speakers_only_for_talks_and_never_a_known_committee_member() -> None:
+    source = "MagSoc: an evening concert under the baton of Fred Example and Sam Example."
+    performance = [
+        event_claim("eventType", "performance", key="evt-m", method="llm"),
+        event_claim(
+            "speakers",
+            [{"name": "Fred Example"}, {"name": "Sam Example"}],
+            key="evt-m",
+            method="llm",
+            quote="Fred Example and Sam Example",
+            source_text=source,
+        ),
+        event_claim("description", source, key="evt-m", method="llm", quote=source),
+    ]
+    talk_text = "A talk by Professor Jane Doe, hosted by Fred Example."
+    talk = [
+        event_claim("eventType", "talk", key="evt-t", method="llm"),
+        event_claim(
+            "speakers",
+            [{"name": "Professor Jane Doe"}, {"name": "Fred Example"}],
+            key="evt-t",
+            method="llm",
+            quote="Professor Jane Doe, hosted by Fred Example",
+            source_text=talk_text,
+        ),
+    ]
+    posted, stats = redact_claims(
+        [*performance, *talk], Redactor(), private={"org-jazz": ("Fred Example",)}
+    )
+    by = {(c.entity_key, c.field): c for c in posted}
+    # A concert's conductors are not speakers: the list is retracted …
+    retracted = by[("evt-m", "speakers")]
+    assert retracted.value is None and retracted.missing_reason == "not_published"
+    # … and a talk's list loses the known committee member (of any society).
+    assert by[("evt-t", "speakers")].value == [{"name": "Professor Jane Doe"}]
+    assert stats.speakers_withheld == 1
+
+
+def test_an_organisations_committee_is_applied_to_its_events() -> None:
+    from camsocs_pipeline.models.observation import EventObservation, OrganiserObs
+
+    org = Observation(
+        source_type="society_website",
+        source_key="https://quokka.example.org/committee",
+        source_url="https://quokka.example.org/committee",
+        retrieved_at=AT,
+        entity_type="organisation",
+        identity=IdentityHints(name="Quokka Society"),
+        entity_key=ORG,
+        broker={"people": [{"name": "Anna Smith", "role": "President", "method": "llm"}]},
+    )
+    event = EventObservation(
+        source_type="ics_feed",
+        source_key="uid-1",
+        source_url="https://calendar.google.com/calendar/ical/q/public/basic.ics",
+        retrieved_at=AT,
+        event_source="google_calendar",
+        external_id="uid-1",
+        visibility="public",
+        organisers=[OrganiserObs(identity=IdentityHints(name="Quokka Society", known_key=ORG))],
+    )
+    from camsocs_pipeline.keys import event_key
+
+    names = private_names([org, event])
+    assert names[event_key("google_calendar", "uid-1")] == ("Anna Smith",)

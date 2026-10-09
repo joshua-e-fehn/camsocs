@@ -113,8 +113,35 @@ def test_no_stated_time_is_an_inferred_all_day_event_and_tbc_needs_its_own_words
     assert fields["startsAt"].value_raw == "28 October"
     assert fields["allDay"].value is True and fields["allDay"].status == "inferred"
     assert fields["status"].evidence_quote == "Venue TBC" and fields["status"].status is None
-    # One speaker the text never names: the list is not verified.
-    assert fields["speakers"].status == "inferred"
+    # One speaker the text never names, and a quiz is no talk: the list is
+    # not published, and an earlier reading of it is retracted.
+    assert fields["speakers"].value is None
+    assert fields["speakers"].missing_reason == "not_published"
+
+
+def test_speakers_are_published_for_a_talk_whose_text_names_them() -> None:
+    text = "Talk on 28 October at 19:00. Speaker: Dr Ada Example (Department of Zoology)."
+    base = {
+        "title": "Quokka talk",
+        "date": "2026-10-28",
+        "start_time": "19:00",
+        "when_quote": "28 October at 19:00",
+        "speakers": [{"name": "Dr Ada Example", "affiliation": "Department of Zoology"}],
+        "speakers_quote": "Speaker: Dr Ada Example",
+    }
+    talk = fields_of(build_event(LlmEvent(**base, event_type="talk"), context(source_text=text)))
+    assert talk["speakers"].value == [
+        {"name": "Dr Ada Example", "affiliation": "Department of Zoology"}
+    ]
+    assert talk["speakers"].status is None
+    # The same names on a concert are performers, not speakers (D1).
+    concert = fields_of(
+        build_event(LlmEvent(**base, event_type="performance"), context(source_text=text))
+    )
+    assert concert["speakers"].missing_reason == "not_published"
+    # Read off an image (no text to check the names against): not published.
+    image = fields_of(build_event(LlmEvent(**base, event_type="talk"), context(source_text="")))
+    assert image["speakers"].missing_reason == "not_published"
 
 
 def test_external_ids_are_scoped_and_stable() -> None:

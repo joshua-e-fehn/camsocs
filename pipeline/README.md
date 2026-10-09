@@ -151,7 +151,8 @@ meta and last-failure note go together, once all are older), LLM replies under
   `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
   event organisers → broker inferences. Convex resolves values and computes confidence.
   On the way, public free text is redacted (decision D1, `extract/redact.py`, prompt
-  `redact_names_v1`): names of private individuals become roles, the original travels as the
+  `redact_names_v2`; titles, venues and price notes included, a title that cannot be made
+  safe keeps its event out): names of private individuals become roles, the original travels as the
   claim's internal `valueRaw`, and a text that cannot be made safe is posted `not_published`.
   The bulk model's replies are cached by the input's sha256; a dry run uses the cache and the
   deterministic rule only.
@@ -265,7 +266,7 @@ and the crosswalk (`resolve.lookup.OrgLookup`). They share `extract/events.py`:
   numbers redacted. The mail's extraction note counts what was cut, never what it said.
 - `extract/dedupe.py` drops events another staged source already has.
 - `extract/memo.py` caches validated replies under `var/cache/llm/` (the D1 redaction's too,
-  under `redact_names_v1/`). Termcards and website pages give the model the Thursday that
+  under `redact_names_v2/`). Termcards and website pages give the model the Thursday that
   starts the week as the reference date (`extract.when.week_anchor`), so an unchanged card or
   page is asked about once a week.
 

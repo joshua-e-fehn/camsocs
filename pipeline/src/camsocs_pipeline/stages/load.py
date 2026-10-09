@@ -104,6 +104,10 @@ def run(ctx: StageContext) -> None:
             ctx.report.notes.append(f"  {collision}")
     if report.redaction.texts:
         ctx.report.notes.append(str(report.redaction))
+        # Keys only: an entity already on the deployment keeps its last title
+        # until it is withdrawn or removed (`ingest/purge:removeEntity`).
+        for key in report.redaction.dropped[:MAX_REJECTION_NOTES]:
+            ctx.report.notes.append(f"  title unsafe, not posted: {key}")
     ctx.report.notes.extend(report.merged)
     if ctx.loader.suppressions_note:
         ctx.report.notes.append(ctx.loader.suppressions_note)

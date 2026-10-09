@@ -196,7 +196,7 @@ def test_membership_texts_are_redacted_on_the_way_out() -> None:
     posted = posted_values(records)["membership"]
     assert [tier["label"] for tier in posted.value["tiers"]] == [
         "Membership",
-        "Pay a member of the committee",
+        "Pay someone",
     ]
     assert posted.value["bursaryNote"] == "Contact the committee for help."
     assert "Jane Doe" not in json.dumps(posted.value)

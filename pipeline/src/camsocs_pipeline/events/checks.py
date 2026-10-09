@@ -15,6 +15,10 @@ them for free.
 - **"Link in bio"** (or a Linktree link) in the title or description sets
   `EventDraft.link_in_bio`; the builder then records `bookingUrl` as missing
   with reason ``not_published`` unless the source gave a real one.
+- **A room booking is not an event** (`is_booking`): a calendar entry that
+  books a room ("MCR room booking (<booker>)", "Booked by …", the booker's
+  CRSid) names a private person and announces nothing; it is left out. The
+  Newnham MCR's public Google Calendar was one (2026-10-09).
 """
 
 from __future__ import annotations
@@ -36,6 +40,25 @@ _LINK_IN_BIO = re.compile(
     r"\blink\s+(?:is\s+)?in\s+(?:our\s+|the\s+|my\s+)?bio\b|\blinktr\.ee\b|\blinktree\b",
     re.IGNORECASE,
 )
+
+
+_BOOKING_TITLE = re.compile(
+    r"\b(?:room|space|hall|lounge|bar|common room|venue)[ -]+(?:booking|hire|reservation)\b"
+    r"|\bbooking[ \t]*[:(]|\breserved[ \t]+(?:for|by)\b"
+    r"|\bprivate[ \t]+(?:booking|hire|function)\b",
+    re.IGNORECASE,
+)
+_BOOKING_TEXT = re.compile(
+    r"\bbooked[ \t]+by\b|\bcrsid\b[\s:–-]*[a-z]{2,5}[0-9]{1,5}\b", re.IGNORECASE
+)
+
+
+def is_booking(title: str | None, description: str | None = None) -> bool:
+    """A calendar entry that books a room rather than announcing an event."""
+    return bool(
+        (title and _BOOKING_TITLE.search(title))
+        or (description and _BOOKING_TEXT.search(description))
+    )
 
 
 @dataclass(frozen=True)
@@ -71,8 +94,10 @@ def check_draft(
         return CheckResult(False, "outside the window")
     if not draft.title.strip():
         return CheckResult(False, "no title")
+    if is_booking(draft.title, draft.description):
+        return CheckResult(False, "a room booking, not an event")
     draft.link_in_bio = mentions_link_in_bio(draft.title, draft.description)
     return CheckResult(True)
 
 
-__all__ = ["CheckResult", "check_draft", "mentions_link_in_bio"]
+__all__ = ["CheckResult", "check_draft", "is_booking", "mentions_link_in_bio"]

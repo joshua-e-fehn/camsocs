@@ -225,9 +225,9 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     for claim in posted:
         assert "Sam Sample" not in json.dumps(claim.value)
     (description,) = [c for c in posted if c.field == "description"]
-    assert description.value.startswith("Led by a member of the committee")
+    assert description.value.startswith("Led by someone")
     assert description.value_raw.startswith("Led by Sam Sample")
-    assert description.extractor.endswith("+redacted:v1:rule")
+    assert description.extractor.endswith("+redacted:v2:rule")
     assert all(
         "private_names" not in json.dumps(row.to_wire())
         for row in plan_observations(result.website).people

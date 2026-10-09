@@ -392,6 +392,20 @@ def social_link(url: str) -> dict[str, str] | None:
     return None
 
 
+def is_personal_profile(url: str) -> bool:
+    """A link to one person's profile — a LinkedIn ``/in/`` or ``/pub/``
+    page — which is never stored (source-research §14), not even inside a
+    description's markdown."""
+    try:
+        absolute = with_scheme(url)
+        if _platform_family(absolute) != "linkedin":
+            return False
+        segments = _path_segments(absolute)
+    except ValueError:
+        return False
+    return bool(segments) and segments[0].lower() in ("in", "pub")
+
+
 def social_key(item: dict[str, str] | str) -> str:
     """What two socials items (or URLs) are compared on: the URL lower-cased,
     without scheme, ``www.`` and trailing slash."""
@@ -1190,6 +1204,7 @@ __all__ = [
     "is_email",
     "is_generic",
     "is_personal_crsid",
+    "is_personal_profile",
     "is_social_host",
     "label_role",
     "link_text_disagrees",

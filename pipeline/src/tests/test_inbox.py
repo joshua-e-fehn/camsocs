@@ -351,7 +351,12 @@ def mock_convex(net: respx.MockRouter, pending: list[PendingMail]) -> dict[str, 
 def llm_completion(request: httpx.Request) -> httpx.Response:
     body = json.loads(request.content)
     user = body["messages"][-1]["content"]
-    reply = replies(user if isinstance(user, str) else user[0]["text"], "bulk")
+    text = user if isinstance(user, str) else user[0]["text"]
+    if "--- TEXT ---\n" in text:
+        # The D1 redaction at load: these fictional texts name no one.
+        reply: dict = {"text": text.split("--- TEXT ---\n", 1)[1], "redactions": []}
+    else:
+        reply = replies(text, "bulk")
     return httpx.Response(
         200,
         json={
@@ -398,8 +403,14 @@ def test_the_stage_posts_events_then_marks_every_mail(make_settings, net) -> Non
     report = run_sync(settings=settings, stages=["inbox"])
     assert report.ok, report.summary()
     # The weekly mail only: the list's welcome is all footer once cleaned
-    # (nothing left to read), and the stranger is never read.
-    assert llm_route.call_count == 1
+    # (nothing left to read), and the stranger is never read. (The other
+    # calls are the D1 redaction of the events' titles and texts at load.)
+    extraction_calls = [
+        call
+        for call in llm_route.calls
+        if "--- TEXT ---" not in json.dumps(json.loads(call.request.content)["messages"])
+    ]
+    assert len(extraction_calls) == 1
 
     claims = json.loads(routes["claims"].calls[0].request.content)["claims"]
     assert {c["sourceUrl"] for c in claims} >= {f"inbound:{WEEKLY.message_id}"}

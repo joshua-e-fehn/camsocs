@@ -5,8 +5,9 @@ Deliberately small: paragraphs, line breaks, headings, lists, bold/italic and
 links — what society profile editors produce. Images, scripts, styles and
 forms are dropped (an image in a description would be a hotlink). Links keep
 only http(s) targets (`links.absolute_url`, after unwrapping Outlook
-SafeLinks); ``mailto:`` links become their visible text. Personal CRSid
-addresses and chat invite links are withheld from the result
+SafeLinks); ``mailto:`` links become their visible text, and so does a link
+to a person's profile (LinkedIn ``/in/``, never stored, source-research §14).
+Personal CRSid addresses and chat invite links are withheld from the result
 (`links.withhold_personal_emails`, `links.withhold_chat_invites`).
 """
 
@@ -19,6 +20,7 @@ from selectolax.lexbor import LexborHTMLParser, LexborNode
 from camsocs_pipeline.sources.links import (
     absolute_url,
     chat_platform,
+    is_personal_profile,
     unwrap_redirect,
     withhold_chat_invites,
     withhold_private,
@@ -157,6 +159,11 @@ class _Writer:
         if url is not None and chat_platform(url) is not None:
             # An invite link is never stored; its label still says the channel exists.
             self.text(withhold_chat_invites(label))
+            return
+        if url is not None and is_personal_profile(url):
+            # A person's profile is never stored; the label is redacted (D1).
+            if label.rstrip("/") != url.rstrip("/"):
+                self.text(label)
             return
         if url is None or label == url or label.rstrip("/") == url.rstrip("/"):
             self.text(label if url is None else url)

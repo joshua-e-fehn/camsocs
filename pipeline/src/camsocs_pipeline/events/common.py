@@ -25,10 +25,17 @@ re-read timezone) are claimed as ``inferred``.
 nobody can match yet goes to ``unresolved_organisers`` instead of holding the
 event back (`models.observation.EventObservation`).
 
-**Personal addresses.** A CRSid-shaped address on cam.ac.uk (the server's
-`personal_crsid` rule) names a person and never reaches a public field, so it
-is replaced by ``[personal email withheld]`` in titles, descriptions and venue
-text; role addresses (``president@soc.org``, ``soc-x@lists.cam.ac.uk``) stay.
+**Personal addresses.** Free text a feed or page states (titles,
+descriptions, venue text) keeps only the organisation's own addresses — role
+addresses (``president@soc.org``, ``soc-x@lists.cam.ac.uk``) and general ones
+carrying its name (`links.classify_email`). Anything else — a CRSid, a
+booker's webmail, ``jane.smith@…`` — names a person and becomes
+``[personal email withheld]``; a CRSid written out ("CRSid ab123",
+"Anna (ab123)") is withheld too (`withhold_personal_contacts`).
+
+**Room bookings.** A calendar entry that books a room ("MCR room booking
+(…)", "Booked by …", a booker's CRSid) is not an event: it is left out
+(`events.checks.is_booking`), names and all.
 
 **Content hashes.** Event observations carry no ``content_sha256``: a feed or
 diary changes for unrelated reasons (a DTSTAMP of "now", a shifted window), and
@@ -61,7 +68,12 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.links import is_crsid_address
+from camsocs_pipeline.sources.links import (
+    CRSID_PATTERN,
+    classify_email,
+    is_crsid_address,
+    name_tokens,
+)
 from camsocs_pipeline.staging.store import Record, events_directory
 
 LONDON = ZoneInfo("Europe/London")
@@ -215,6 +227,28 @@ def redact_personal_emails(text: str | None) -> str | None:
     return _EMAIL.sub(
         lambda m: WITHHELD if is_personal_crsid(m.group(1), m.group(2)) else m.group(0), text
     )
+
+
+#: A CRSid written out: after the word ("CRSid: ab123", "CRSiD\nab123") or
+#: in brackets after a name ("Anna (ab123)").
+_CRSID_LABELLED = re.compile(rf"(?i)\b(crsid)\b[\s:–-]*(?:\({CRSID_PATTERN}\)|{CRSID_PATTERN}\b)")
+_CRSID_BRACKETED = re.compile(rf"[ \t]*\({CRSID_PATTERN}\)")
+
+
+def withhold_personal_contacts(text: str | None, own_tokens: set[str] | None = None) -> str | None:
+    """`text` with every address that is not the organisation's own (a role
+    address, or a general one carrying `own_tokens`; `links.classify_email`)
+    and every written-out CRSid withheld (module docstring)."""
+    if not text:
+        return text
+
+    def address(match: re.Match[str]) -> str:
+        reading = classify_email(match.group(0), own_tokens or set())
+        return match.group(0) if reading.kept else WITHHELD
+
+    text = _EMAIL.sub(address, text)
+    text = _CRSID_LABELLED.sub(lambda m: f"{m.group(1)} [withheld]", text)
+    return _CRSID_BRACKETED.sub("", text)
 
 
 def single_line(text: str | None, *, max_length: int) -> str | None:
@@ -426,13 +460,18 @@ def build_event_observation(
             )
         )
 
-    put("title", single_line(redact_personal_emails(draft.title), max_length=TITLE_MAX))
+    own = name_tokens(*(o.identity.name for o in draft.organisers))
+
+    def scrub(text: str | None) -> str | None:
+        return withhold_personal_contacts(text, own)
+
+    put("title", single_line(scrub(draft.title), max_length=TITLE_MAX))
     put("startsAt", epoch_ms(draft.starts_at))
     put("endsAt", epoch_ms(draft.ends_at) if draft.ends_at is not None else None)
     put("allDay", draft.all_day)
     put(
         "description",
-        clean_text(redact_personal_emails(draft.description), max_length=DESCRIPTION_MAX),
+        clean_text(scrub(draft.description), max_length=DESCRIPTION_MAX),
     )
     if draft.page_url:
         put("sourceUrl", draft.page_url)
@@ -454,7 +493,7 @@ def build_event_observation(
 
     venue = draft.venue
     if venue is not None:
-        name = single_line(redact_personal_emails(venue.name), max_length=VENUE_TEXT_MAX)
+        name = single_line(scrub(venue.name), max_length=VENUE_TEXT_MAX)
         if name is None:
             venue = None
         else:
@@ -575,5 +614,6 @@ __all__ = [
     "polite_client",
     "redact_personal_emails",
     "single_line",
+    "withhold_personal_contacts",
     "write_staging",
 ]

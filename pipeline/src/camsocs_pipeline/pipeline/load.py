@@ -40,8 +40,9 @@ deployment already stores is not uploaded again.
 (`extract.redact.redact_claims`, decision D1): personal names of private
 individuals are replaced by their roles, the original text travels as the
 claim's internal `valueRaw`, and a text that cannot be made safe is posted as
-``not_published``. No claim reaches Convex without that step: without a
-redactor the deterministic rule is used.
+``not_published`` — or, for an event's or session's title, the entity is not
+posted at all. No claim reaches Convex without that step: without a redactor
+the deterministic rule is used.
 """
 
 from __future__ import annotations
@@ -623,8 +624,14 @@ class ConvexLoader:
         )
         report.suppressed = apply_suppressions(plan, self.suppressions())
         plan.claims, report.redaction = redact_claims(
-            plan.claims, redactor or Redactor(), private=private_names(records)
+            plan.claims,
+            redactor or Redactor(),
+            private=private_names(records, plan.duplicates.primary_of),
         )
+        if report.redaction.dropped:
+            # A title that cannot be made safe: the event is not posted at all.
+            unsafe = set(report.redaction.dropped)
+            plan.event_organisers = [s for s in plan.event_organisers if s.event_key not in unsafe]
         report.sources = self.upsert_sources(plan.sources)
         reused_before = self.file_cache.reused if self.file_cache else 0
         if media is not None and not self.dry_run:
