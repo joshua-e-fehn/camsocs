@@ -58,6 +58,13 @@ import httpx
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.claims import claims_for_event, claims_for_observation, epoch_ms
+from camsocs_pipeline.events.duplicates import (
+    Duplicates,
+    as_duplicate,
+    find_duplicates,
+    primaries_first,
+)
+from camsocs_pipeline.events.duplicates import identity as event_identity
 from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
 from camsocs_pipeline.models.observation import EventObservation, Observation
@@ -87,6 +94,7 @@ from camsocs_pipeline.models.wire import (
     WorklistOrg,
     WorklistPage,
 )
+from camsocs_pipeline.pipeline.stored_files import StoredFiles
 from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, FetchPurpose
 
 logger = logging.getLogger(__name__)
@@ -105,8 +113,10 @@ USER_AGENT = f"camsocs-pipeline/{__version__} (convex ingestion)"
 #: Claim fields whose value references a stored file (`{storageId?, sourceUrl?}`).
 STORED_FILE_FIELDS = frozenset({("event", "image"), ("organisation", "logo")})
 #: Stored files an organisation publishes about itself: fetched with the
-#: society purpose (`sources/policy.py`, D3: an SU `/asset/` logo).
-SOCIETY_FILE_FIELDS = frozenset({("organisation", "logo")})
+#: society purpose (`sources/policy.py`, D3: an SU `/asset/` logo, or a student
+#: group's event poster on its SU event page). The purpose lifts robots.txt
+#: only for the URL classes D3 lists; any other image keeps its robots.txt.
+SOCIETY_FILE_FIELDS = frozenset({("organisation", "logo"), ("event", "image")})
 
 #: Bytes and content type of an image URL fetched for a purpose, or None
 #: (`media.CachedImages`).
@@ -228,6 +238,8 @@ class ConvexLoader:
         self.dry_run = dry_run
         self.max_retries = max_retries
         self._api_key = api_key
+        #: Remembered uploads (`pipeline.stored_files`); set by the load stage.
+        self.stored_files: StoredFiles | None = None
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout, headers={"User-Agent": USER_AGENT})
 
@@ -412,13 +424,22 @@ class ConvexLoader:
 
     def upload_file(self, data: bytes, content_type: str) -> FileResult:
         """Stores our own copy of an image or PDF (≤ 2 MB) and returns its
-        storage id; identical bytes are stored once."""
+        storage id; identical bytes are stored once. Bytes this deployment
+        is known to store already (`stored_files`) are not sent again."""
         sha256 = hashlib.sha256(data).hexdigest()
         body = FileUpload(data=base64.b64encode(data).decode("ascii"), content_type=content_type)
         if self.dry_run:
             json.dumps(body.to_wire())
             return FileResult(storage_id="dry-run", sha256=sha256)
-        return FileResult.model_validate(self.post("files", body.to_wire()))
+        if self.stored_files is not None:
+            known = self.stored_files.get(sha256)
+            if known is not None:
+                self.stored_files.reused += 1
+                return FileResult(storage_id=known, sha256=sha256)
+        result = FileResult.model_validate(self.post("files", body.to_wire()))
+        if self.stored_files is not None and result.sha256 == sha256:
+            self.stored_files.put(sha256, result.storage_id)
+        return result
 
     def inbound_pending(self, limit: int = 50) -> list[PendingMail]:
         """The oldest forwarded list mails awaiting extraction."""
@@ -520,7 +541,9 @@ class ConvexLoader:
         with the deterministic rule alone when none is given."""
         records = list(records)
         plan = plan_observations(records)
-        report = LoadReport(skipped=plan.skipped, collisions=plan.collisions)
+        report = LoadReport(
+            skipped=plan.skipped, collisions=plan.collisions, merged=plan.duplicates.notes()
+        )
         plan.claims, report.redaction = redact_claims(
             plan.claims, redactor or Redactor(), private=private_names(records)
         )
@@ -565,6 +588,8 @@ class LoadReport:
     skipped: int = 0
     #: Fields not posted because one source gave one entity two readings.
     collisions: list[str] = field(default_factory=list)
+    #: Event readings folded into another source's event (`events.duplicates`).
+    merged: list[str] = field(default_factory=list)
     #: Image claims given a stored copy, and those dropped for want of one.
     files_stored: int = 0
     files_dropped: int = 0
@@ -602,6 +627,8 @@ class LoadPlan:
     people: list[PersonInput] = field(default_factory=list)
     #: Fields left out because one source gave one entity two readings.
     collisions: list[str] = field(default_factory=list)
+    #: Event readings folded into another source's event (`events.duplicates`).
+    duplicates: Duplicates = field(default_factory=Duplicates)
 
 
 def attach_stored_files(
@@ -649,25 +676,37 @@ def _is_http(url: str) -> bool:
 
 
 def plan_observations(records: Iterable[Observation | EventObservation]) -> LoadPlan:
-    """Turns keyed observations into wire rows. See `ConvexLoader.post_observations`."""
+    """Turns keyed observations into wire rows. See `ConvexLoader.post_observations`.
+
+    Event readings another source already lists (`events.duplicates`: the
+    same organiser, London date and visibility, a similar title, starts at
+    most 30 minutes apart) become claims on that source's event, with their
+    own provenance, instead of events of their own; they are planned after
+    every other record, so the event and its organiser set exist first."""
     plan = LoadPlan()
+    items = list(records)
+    duplicates = find_duplicates(record for record in items if record.is_keyed)
+    plan.duplicates = duplicates
     sources: dict[str, SourceInput] = {}
     #: The organisations each fetched page was observed for. A page observed
     #: for several (a directory, a register, an A–Z) belongs to none of them.
     owners: dict[str, set[str]] = {}
-    for record in records:
+    for record in primaries_first(items, duplicates):
+        assert isinstance(record, Observation | EventObservation)
         if not record.is_keyed:
             plan.skipped += 1
             continue
         org_key: str | None = None
         if isinstance(record, EventObservation):
-            plan.claims.extend(claims_for_event(record))
+            primary = duplicates.primary_of.get(event_identity(record))
+            reading = as_duplicate(record, duplicates) if primary else record
+            plan.claims.extend(claims_for_event(reading, duplicate_of=primary))
             unresolved = bool(record.unresolved_organisers) or any(
                 not o.identity.known_key for o in record.organisers
             )
             plan.event_organisers.append(
                 EventOrganiserSet(
-                    event_key=event_key(record.event_source, record.external_id),
+                    event_key=event_key(*(primary or event_identity(record))),
                     organisers=[
                         EventOrganiser(org_key=o.identity.known_key, role=o.role)
                         for o in record.organisers
@@ -675,8 +714,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
                     ],
                     # Organisers the source names but this run could not
                     # resolve (a fresh machine, a --limit run, an ambiguous
-                    # name): add what is known, remove nothing.
-                    mode="merge" if unresolved else "replace",
+                    # name), or a second source's reading of an event: add
+                    # what is known, remove nothing.
+                    mode="merge" if unresolved or primary else "replace",
                 )
             )
         else:

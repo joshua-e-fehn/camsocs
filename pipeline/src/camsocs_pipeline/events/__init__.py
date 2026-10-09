@@ -29,7 +29,12 @@ Shared pieces:
 - `events.ics` — generic iCalendar parsing: timezone normalisation to
   Europe/London (with the documented bogus-zone heuristic), recurrence
   expansion inside the window, de-duplication by UID;
-- `events.seeds` — the few verified feeds that no harvested record lists yet.
+- `events.seeds` — the few verified feeds that no harvested record lists yet;
+- `events.duplicates` — one event, several sources: which staged readings the
+  load stage folds into another source's event (data-model §2).
+
+Society websites' events pages are read by the LLM, so that stage
+(`website_events`) lives in `sources.websites.events`, not here.
 
 Events stages run after resolve, so they write keyed observations to their own
 ``<source_type>.events`` staging directory (`staging.store.events_directory`)

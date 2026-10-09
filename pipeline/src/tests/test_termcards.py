@@ -266,28 +266,105 @@ def test_card_events_are_checked_against_the_text_layer() -> None:
     assert by_title["Planetarium trip"].event_source == "termcard"
 
 
-def test_a_card_that_does_not_say_its_term_keeps_only_dated_events() -> None:
-    reply = {**TERMCARD_REPLY, "term": None, "term_year": None}
-    reply["events"] = [
-        *TERMCARD_REPLY["events"],
-        {"title": "Open evening", "date": "2026-10-30", "start_time": "18:00"},
-    ]
+def _read(reply: dict, url: str = "https://orrery.example.org/programme.pdf") -> tuple:
     notes: list[str] = []
     events = card_events(
-        card("https://orrery.example.org/programme.pdf"),
+        card(url),
         org_key=ORRERY_KEY,
         org_name="CU Orrery Club",
-        listed_url="https://orrery.example.org/programme.pdf",
+        listed_url=url,
         now=datetime(2026, 10, 7, 12, tzinfo=UTC),
         llm=FakeLLM(lambda _text, _tier: reply),
         memo=None,
         calendar=TermCalendar.default(),
         notes=notes,
     )
-    assert [next(f.value for f in e.fields if f.field == "title") for e in events] == [
-        "Open evening"
-    ]
+    by_title = {next(f.value for f in e.fields if f.field == "title"): e for e in events}
+    return by_title, notes
+
+
+def test_a_card_that_does_not_say_its_term_keeps_only_dated_events() -> None:
+    reply = {**TERMCARD_REPLY, "term": None, "term_year": None}
+    by_title, notes = _read(reply)
+    assert by_title == {}
     assert any("term-less" in note for note in notes)
+
+
+def test_a_card_takes_its_term_from_its_own_dated_rows() -> None:
+    reply = {**TERMCARD_REPLY, "term": None, "term_year": None}
+    reply["events"] = [
+        *TERMCARD_REPLY["events"],
+        {"title": "Open evening", "date": "2026-10-30", "start_time": "18:00"},
+    ]
+    by_title, _notes = _read(reply)
+    # 30 October falls in Michaelmas 2026, so its week rows are read in it —
+    # as inferred dates: the card states the week, not the term.
+    assert sorted(by_title) == ["Open evening", "Orrery building", "Planetarium trip"]
+    trip = {f.field: f for f in by_title["Planetarium trip"].fields}
+    assert trip["startsAt"].value == PLANETARIUM
+    assert trip["startsAt"].status == "inferred" and trip["startsAt"].quote_check == "absent"
+    assert trip["startsAt"].value_raw == "Week 2 Wednesday 7pm"
+
+
+def test_a_long_pdf_is_read_four_pages_a_call() -> None:
+    from tests.fakes import make_pdf_pages
+
+    pages = [[f"CU Orrery Club - Michaelmas 2026 page {n}"] for n in range(1, 7)]
+    llm = FakeLLM(lambda _text, _tier: TERMCARD_REPLY)
+    long_card = card()
+    long_card = TermcardFile(long_card.url, "pdf", make_pdf_pages(pages), "b" * 64, long_card.fetch)
+    card_events(
+        long_card,
+        org_key=ORRERY_KEY,
+        org_name="CU Orrery Club",
+        listed_url=CARD_PAGE,
+        now=datetime(2026, 10, 7, 12, tzinfo=UTC),
+        llm=llm,
+        memo=None,
+        calendar=TermCalendar.default(),
+        notes=[],
+    )
+    assert [call["images"] for call in llm.calls] == [4, 2]
+    assert "page 5" in llm.calls[1]["text"] and "page 5" not in llm.calls[0]["text"]
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("https://soc.example/2024/01/21/lent-2024-term-card/", "names a past term"),
+        ("Easter 2026 Termcard.pdf", "names a past term"),
+        ("https://soc.example/wp-content/uploads/2021/04/termcard.png", "uploaded before"),
+        ("termcard-michaelmas-2026.jpg", None),
+        ("CURaC Lent 2027 Termcard.pdf", None),
+        ("https://soc.example/wp-content/uploads/2026/09/termcard.png", None),
+        ("https://soc.example/termcard", None),
+    ],
+)
+def test_old_cards_are_recognised(text: str, reason: str | None) -> None:
+    from datetime import date
+
+    from camsocs_pipeline.sources.termcards import stale_reason
+
+    found = stale_reason(text, date(2026, 10, 9))
+    assert (found is None) if reason is None else (found is not None and reason in found)
+
+
+def test_a_page_with_several_cards_follows_the_newest_named_first() -> None:
+    from camsocs_pipeline.sources.termcards import _file_links
+
+    page = (
+        '<a href="/files/Easter 2026 Termcard.pdf">Easter</a>'
+        '<a href="/files/CURaC Lent 2026 Termcard.pdf">Lent</a>'
+        '<a href="/files/Michaelmas-2026-termcard.pdf">This term</a>'
+        '<img data-src="https://static.wixstatic.com/media/ab_c~mv2.png/v1/fill/w_980/a.png" '
+        'alt="Our term card">'
+    )
+    assert _file_links(page, "https://soc.example/termcards") == [
+        "https://soc.example/files/Michaelmas-2026-termcard.pdf",
+        "https://soc.example/files/Easter 2026 Termcard.pdf",
+        "https://soc.example/files/CURaC Lent 2026 Termcard.pdf",
+        "https://static.wixstatic.com/media/ab_c~mv2.png/v1/fill/w_980/a.png",
+    ]
 
 
 def completion(request: httpx.Request) -> httpx.Response:
@@ -419,3 +496,60 @@ def test_the_registry_runs_inbox_instagram_termcards_before_load() -> None:
     names = [stage.name for stage in STAGES]
     assert names.index("inbox") < names.index("instagram") < names.index("termcards")
     assert names.index("termcards") < names.index("load")
+
+
+def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
+    from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+    from camsocs_pipeline.sources.termcards import NO_CARD_FILE
+    from camsocs_pipeline.stages.termcards import page_events
+
+    net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
+    html = (
+        "<html><head><title>Term card</title></head><body><main>"
+        "<h1>Michaelmas 2026 term card</h1>"
+        "<p>Wednesday 21 October, 7pm: Planetarium trip</p>"
+        "<p>Friday 6 November 2026, 8pm: Orrery building (members only)</p>"
+        "</main></body></html>"
+    )
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, text=html, headers={"content-type": "text/html"})
+    )
+    reply = {
+        "events": [
+            {
+                "title": "Planetarium trip",
+                "date": "2026-10-21",
+                "start_time": "19:00",
+                "when_quote": "Wednesday 21 October, 7pm",
+            },
+            {
+                "title": "Orrery building",
+                "date": "2026-11-06",
+                "start_time": "20:00",
+                "when_quote": "Friday 6 November 2026, 8pm",
+                "members_only": True,
+                "members_only_quote": "members only",
+            },
+        ]
+    }
+    llm = FakeLLM(lambda _text, _tier: reply)
+    with client(tmp_path) as polite:
+        skipped = fetch_termcard(polite, CARD_PAGE, SOCIETY_WEBSITE)
+        assert isinstance(skipped, Skipped) and skipped.reason == NO_CARD_FILE
+        events = page_events(
+            polite,
+            CARD_PAGE,
+            SOCIETY_WEBSITE,
+            org_key=ORRERY_KEY,
+            org_name="CU Orrery Club",
+            now=datetime(2026, 10, 9, 12, tzinfo=UTC),
+            llm=llm,
+            memo=None,
+            calendar=TermCalendar.default(),
+        )
+    assert events is not None
+    by_title = {next(f.value for f in e.fields if f.field == "title"): e for e in events}
+    assert sorted(by_title) == ["Orrery building", "Planetarium trip"]
+    assert {e.event_source for e in events} == {"termcard"}
+    assert by_title["Orrery building"].visibility == "members_only"
+    assert llm.calls[0]["tier"] == "bulk" and llm.calls[0]["version"] == "website_events_v1"

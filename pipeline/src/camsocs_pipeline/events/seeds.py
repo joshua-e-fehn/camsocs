@@ -55,11 +55,19 @@ FEED_SEEDS: tuple[FeedSeed, ...] = (
     FeedSeed(
         # The calendar of the society's Luma events (event page luma.com/es51jfvb
         # names it, `calendar_api_id`); the feed's PRODID names the society.
+        # Re-checked 2026-10-09: luma.com/caish shows the calendar "Cambridge AI
+        # Safety Hub" (slug caish) with this api_id, and the society's own site
+        # (www.cambridgeaisafety.org) links lu.ma/caish — so the website domain
+        # identifies the owner the resolver keyed from that site.
         kind="luma",
         value="cal-4TNl4yi3sVEcAO5",
-        owner=IdentityHints(name="Cambridge AI Safety Hub", aliases=["CAISH"]),
-        found_on="https://luma.com/es51jfvb",
-        checked="2026-10-07",
+        owner=IdentityHints(
+            name="Cambridge AI Safety Hub",
+            aliases=["CAISH"],
+            website_domain="cambridgeaisafety.org",
+        ),
+        found_on="https://luma.com/caish",
+        checked="2026-10-09",
     ),
 )
 

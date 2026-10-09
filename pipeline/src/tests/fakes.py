@@ -335,6 +335,44 @@ def make_pdf(lines: list[str]) -> bytes:
     return out
 
 
+def make_pdf_pages(pages: list[list[str]]) -> bytes:
+    """A PDF with one page per item of `pages`, each holding its lines."""
+
+    def escape(text: str) -> str:
+        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    count = len(pages)
+    objects = ["<< /Type /Catalog /Pages 2 0 R >>"]
+    kids = " ".join(f"{3 + 2 * i} 0 R" for i in range(count))
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {count} >>")
+    font = 3 + 2 * count
+    for lines in pages:
+        content = (
+            "BT /F1 14 Tf 50 750 Td 18 TL "
+            + " ".join(f"({escape(line)}) Tj T*" for line in lines)
+            + " ET"
+        )
+        number = len(objects) + 1
+        objects.append(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Contents {number + 1} 0 R /Resources << /Font << /F1 {font} 0 R >> >> >>"
+        )
+        objects.append(f"<< /Length {len(content)} >>\nstream\n{content}\nendstream")
+    objects.append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode("latin-1")
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+    ).encode()
+    return out
+
+
 TERMCARD_LINES = [
     "CU Orrery Club - Michaelmas 2026",
     "Week 2 Wednesday 7pm: Planetarium trip",

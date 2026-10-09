@@ -25,14 +25,23 @@ embeds it — or the D3 society override lifts that opt-out
 
 `term_hint` reads the term a card is for from its URL or file name
 ("CUHCS-Michaelmas-Term-Card", "termcard-LT27.pdf").
+
+**Old cards** (`stale_reason`): a card whose URL or link names a term of an
+earlier academic year ("lent-2024-term-card", "Easter 2026 Termcard.pdf" in
+2026-27), or that a WordPress-style upload path dates more than four months
+before the academic year began (``/uploads/2021/04/termcard.png``), is not
+read: it can only hold past events, and the vision model is the expensive
+one. A page linking several cards follows the newest-named first
+(`_file_links`). Image files are recognised by their name, by
+Wix's media paths (``…~mv2.png/v1/fill/…``) and by lazy-loaded ``data-src``.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import timedelta
-from urllib.parse import urljoin
+from datetime import date, timedelta
+from urllib.parse import unquote, urljoin
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -51,6 +60,10 @@ _TERM_WORDS = re.compile(r"term[\s_-]?card|termcard|programme|program|schedule|p
 _TERM_NAME = re.compile(r"(michaelmas|lent|easter)\D{0,12}(20\d\d)?", re.I)
 _TERM_CODE = re.compile(r"(?<![a-z])(mt|lt|et)[\s_-]?(\d\d)(?!\d)", re.I)
 _CODES = {"mt": "michaelmas", "lt": "lent", "et": "easter"}
+#: A WordPress-style upload path: ``/uploads/2026/09/…``.
+_UPLOAD_PATH = re.compile(r"/uploads/(20\d\d)/(0[1-9]|1[0-2])/")
+#: Wix media: ``static.wixstatic.com/media/…~mv2.png/v1/fill/…``.
+_WIX_MEDIA = re.compile(r"~mv2\.(?:png|jpe?g|webp|gif)(?:/|$)")
 
 #: Hosts a termcard is never fetched from, with the reason the stage records.
 NEVER_FETCHED: tuple[tuple[tuple[str, ...], str], ...] = (
@@ -72,6 +85,9 @@ NEVER_FETCHED: tuple[tuple[tuple[str, ...], str], ...] = (
 #: Robots meta directives that keep a page's content from a model.
 _NOAI = frozenset({"noai", "noimageai"})
 HOST_KEEPS_AI_OUT = "host keeps AI out"
+#: The termcard URL is a page that links or embeds no card file: the stage
+#: then reads the page's own text (`stages.termcards.page_events`).
+NO_CARD_FILE = "a page without a readable termcard file"
 
 
 @dataclass(frozen=True)
@@ -110,25 +126,74 @@ def _kind(data: bytes) -> str | None:
     return "image" if vision_image(data) is not None else None
 
 
+def academic_start_year(today: date) -> int:
+    """2026 for any day of 2026-27 (1 July turnover)."""
+    return today.year if today.month >= 7 else today.year - 1
+
+
+def stale_reason(text: str, today: date) -> str | None:
+    """Why a card that `text` (its URL, file name or link label) describes is
+    last year's or older, or None (module docstring)."""
+    current = academic_start_year(today)
+    name, year = term_hint(text)
+    if name is not None and year is not None:
+        academic = year if name == "michaelmas" else year - 1
+        if academic < current:
+            return "names a past term"
+    upload = _UPLOAD_PATH.search(text)
+    if upload:
+        uploaded = date(int(upload.group(1)), int(upload.group(2)), 1)
+        if uploaded < date(current, 3, 1):
+            return "uploaded before this academic year"
+    return None
+
+
+def _is_file(path: str) -> bool:
+    return path.endswith(_FILE_SUFFIXES) or bool(_WIX_MEDIA.search(path))
+
+
+_TERM_ORDER = {"michaelmas": 0, "lent": 1, "easter": 2}
+
+
+def _recency(text: str) -> tuple[int, int] | None:
+    """(academic year, term) a link names, for putting the newest first."""
+    name, year = term_hint(text)
+    if name is None or year is None:
+        return None
+    return (year if name == "michaelmas" else year - 1, _TERM_ORDER[name])
+
+
 def _file_links(html: str, base: str) -> list[str]:
     """Linked or embedded PDFs/images whose name, label or alt text says
-    termcard / programme / poster, in page order."""
+    termcard / programme / poster: those naming a term newest first (a page
+    listing this term's card beside last year's), then the others in page
+    order."""
     tree = LexborHTMLParser(html)
-    scored: list[tuple[int, str]] = []
-    for node in tree.css("a[href], img[src], embed[src], iframe[src], object[data]"):
+    named: list[tuple[tuple[int, int], int, str]] = []
+    unnamed: list[str] = []
+    selector = "a[href], img[src], img[data-src], embed[src], iframe[src], object[data]"
+    for position, node in enumerate(tree.css(selector)):
         attrs = node.attributes
-        target = attrs.get("href") or attrs.get("src") or attrs.get("data") or ""
+        target = (
+            attrs.get("href") or attrs.get("data-src") or attrs.get("src") or attrs.get("data")
+        ) or ""
         absolute = urljoin(base, target.strip())
         if not absolute.startswith(("http://", "https://")):
             continue
         path = absolute.split("?", 1)[0].split("#", 1)[0].lower()
-        if not path.endswith(_FILE_SUFFIXES):
+        if not _is_file(path):
             continue
         label = " ".join(filter(None, [attrs.get("alt"), attrs.get("title"), node.text(), path]))
-        scored.append((0 if _TERM_WORDS.search(label) else 1, absolute))
+        if not _TERM_WORDS.search(label):
+            continue
+        recency = _recency(unquote(label))
+        if recency is None:
+            unnamed.append(absolute)
+        else:
+            named.append(((-recency[0], -recency[1]), position, absolute))
     ordered: list[str] = []
-    for score, url in sorted(scored, key=lambda pair: pair[0]):
-        if score == 0 and url not in ordered:
+    for url in [url for _r, _p, url in sorted(named)] + unnamed:
+        if url not in ordered:
             ordered.append(url)
     return ordered
 
@@ -224,7 +289,16 @@ def fetch_termcard(
             linked,
             page.override or check.override,
         )
-    return Skipped(url, "a page without a readable termcard file")
+    return Skipped(url, NO_CARD_FILE)
 
 
-__all__ = ["Skipped", "TermcardFile", "fetch_termcard", "never_fetched", "term_hint"]
+__all__ = [
+    "NO_CARD_FILE",
+    "Skipped",
+    "TermcardFile",
+    "academic_start_year",
+    "fetch_termcard",
+    "never_fetched",
+    "stale_reason",
+    "term_hint",
+]

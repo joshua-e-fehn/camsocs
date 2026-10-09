@@ -12,12 +12,17 @@ by its fingerprint and writes nothing (reported as `unchanged`).
 
 Images staged as a bare ``{"sourceUrl"}`` get our own stored copy on the way
 (`camsocs_pipeline.media`): the bytes come from the fetch cache the harvest
-stage filled, and an image that cannot be had is not posted.
+stage filled, and an image that cannot be had is not posted. Bytes the
+deployment already stores are not uploaded again (`pipeline.stored_files`,
+``var/state/stored-files.json``: sha256 → storageId per deployment).
 
 Public free text is made safe to publish on the way too (decision D1,
 `extract.redact`): names of private individuals become their roles, with the
 bulk model (replies cached by the input's sha256) and deterministic checks.
 A dry run uses cached replies and the deterministic rule only.
+
+Event readings another source already lists are merged into that source's
+event (`events.duplicates`); the notes say how many, from which sources.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from itertools import islice
 from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.pipeline.stored_files import StoredFiles, stored_files_path
 from camsocs_pipeline.staging.store import RESOLVED, Record
 
 #: Rejection reasons shown in the stage notes; the rest are counted.
@@ -62,12 +68,17 @@ def run(ctx: StageContext) -> None:
     redactor, redaction_note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
     if redaction_note:
         ctx.report.notes.append(redaction_note)
+    stored = StoredFiles.load(stored_files_path(ctx.settings.staging_dir), ctx.loader.base_url)
+    ctx.loader.stored_files = None if ctx.loader.dry_run else stored
     try:
         report = ctx.loader.post_observations(
             records, run_key=ctx.run.run_key, media=media, redactor=redactor
         )
     finally:
         media.close()
+        if ctx.loader.stored_files is not None:
+            stored.save()
+            ctx.loader.stored_files = None
     report.skipped += awaiting
     claims = report.claims
     ctx.report.inserted += claims.inserted
@@ -87,9 +98,11 @@ def run(ctx: StageContext) -> None:
             ctx.report.notes.append(f"  {collision}")
     if report.redaction.texts:
         ctx.report.notes.append(str(report.redaction))
+    ctx.report.notes.extend(report.merged)
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
-            f"images: {report.files_stored} stored, {report.files_dropped} not available"
+            f"images: {report.files_stored} stored ({stored.reused} already on the server, "
+            f"not uploaded again), {report.files_dropped} not available"
             + (f" ({media.unavailable})" if media.unavailable else "")
         )
     entities = claims.entities
