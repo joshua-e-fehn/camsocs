@@ -14,8 +14,8 @@ import { literalUnion } from "../lib/validators"
  *    unless the body says `{"confirm": "PURGE-DEV"}` *and* the deployment's
  *    own `CONVEX_CLOUD_URL` names the dev deployment — a production URL can
  *    never match, whatever key or body reaches it. It deletes at most
- *    `PURGE_BUDGET` rows per call and reports `done: false` until nothing is
- *    left, so the caller loops.
+ *    `PURGE_BUDGET` rows, and reads about `PURGE_READ_BYTES`, per call and
+ *    reports `done: false` until nothing is left, so the caller loops.
  *  - `removeEntity` deletes one entity, its claims and what hangs off it. Not
  *    routed over HTTP: run it with `bunx convex run ingest/purge:removeEntity`.
  *
@@ -30,6 +30,18 @@ export const DEV_DEPLOYMENT = "hushed-rhinoceros-215"
 
 /** Rows deleted per call: under Convex's per-transaction write limit. */
 export const PURGE_BUDGET = 4_000
+
+/**
+ * Bytes read per call, estimated from each row's JSON: well under Convex's
+ * 16 MiB read limit per transaction. `fieldClaims` rows carry descriptions
+ * (`value` and `valueRaw`, up to 20,000 characters each), so a row count alone
+ * overran it once the claim log grew (2026-10-09).
+ */
+export const PURGE_READ_BYTES = 6_000_000
+
+function approxBytes(row: unknown): number {
+  return JSON.stringify(row).length
+}
 
 const PIPELINE_TABLES = [
   "fieldClaims",
@@ -59,24 +71,30 @@ export const purge = internalMutation({
       throw new Error(`Refusing to purge: this is not the dev deployment (${DEV_DEPLOYMENT})`)
     }
     let budget = PURGE_BUDGET
+    let bytes = 0
+    const full = () => budget <= 0 || bytes >= PURGE_READ_BYTES
     const deleted: Record<string, number> = {}
 
     for (const table of PIPELINE_TABLES) {
-      if (budget <= 0) break
-      const rows = await ctx.db.query(table).take(budget)
-      for (const row of rows) {
+      if (full()) break
+      let count = 0
+      // Row by row, so the call stops before the read limit, not at a count.
+      for await (const row of ctx.db.query(table)) {
         if (table === "storedFiles") {
           await ctx.storage.delete(
             (row as { storageId: Parameters<typeof ctx.storage.delete>[0] }).storageId,
           )
         }
         await ctx.db.delete(table, row._id as never)
+        count++
+        budget--
+        bytes += approxBytes(row)
+        if (full()) break
       }
-      if (rows.length > 0) deleted[table] = rows.length
-      budget -= rows.length
+      if (count > 0) deleted[table] = count
     }
 
-    let more = budget <= 0
+    let more = full()
     if (!more) more = await purgeBrokerInferences(ctx, budget, deleted)
     return { deleted, done: !more }
   },

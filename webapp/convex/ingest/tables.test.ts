@@ -3,7 +3,7 @@ import { eventKey, personKey, relationshipKey, sourceKey } from "../../lib/keys"
 import { internal } from "../_generated/api"
 import { newTest, type TestConvex, withEnv } from "../lib/harness.testing"
 import type { ClaimInput } from "./claims"
-import { isDevDeployment } from "./purge"
+import { isDevDeployment, PURGE_READ_BYTES } from "./purge"
 
 /**
  * The keyed side tables the pipeline writes besides claims: sources,
@@ -523,6 +523,30 @@ describe("purge", () => {
         interactions: (await ctx.db.query("interactions").collect()).length,
       }))
       expect(left).toEqual({ orgs: 0, runs: 1, interactions: 1 })
+    })
+  })
+
+  test("stops a call before the read limit when claims carry long texts", async () => {
+    await withEnv({ CONVEX_CLOUD_URL: "https://hushed-rhinoceros-215.convex.cloud" }, async () => {
+      const t = newTest()
+      await seedOrgs(t, "org-a")
+      // Long descriptions: a row count alone would read past Convex's 16 MiB.
+      const long = "x".repeat(700_000)
+      const copies = Math.ceil(PURGE_READ_BYTES / long.length) + 2
+      await t.run(async (ctx) => {
+        const claim = await ctx.db.query("fieldClaims").first()
+        if (!claim) throw new Error("seed has no claim")
+        const { _id, _creationTime, ...row } = claim
+        for (let i = 0; i < copies; i++)
+          await ctx.db.insert("fieldClaims", { ...row, valueRaw: long })
+      })
+      const first = await t.mutation(internal.ingest.purge.purge, { confirm: "PURGE-DEV" })
+      expect(first.done).toBe(false)
+      expect(first.deleted.fieldClaims).toBeLessThan(copies + 1)
+      const second = await t.mutation(internal.ingest.purge.purge, { confirm: "PURGE-DEV" })
+      expect(second.done).toBe(true)
+      const left = await t.run(async (ctx) => (await ctx.db.query("fieldClaims").collect()).length)
+      expect(left).toBe(0)
     })
   })
 
