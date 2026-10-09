@@ -16,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
@@ -55,16 +57,28 @@ class LLMMemo:
             return None
 
     def put(self, prompt_version: str, key: str, value: BaseModel, model: str) -> None:
-        path = self._path(prompt_version, key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(".json.tmp")
-        temporary.write_text(
-            json.dumps(
-                {"model": model, "value": value.model_dump(mode="json")}, ensure_ascii=False
-            ),
-            encoding="utf-8",
+        write_json_atomic(
+            self._path(prompt_version, key),
+            {"model": model, "value": value.model_dump(mode="json")},
         )
-        temporary.replace(path)
 
 
-__all__ = ["LLMMemo", "memo_key"]
+def write_json_atomic(path: Path, payload: object) -> None:
+    """Writes `payload` as JSON to `path` through a temporary file of its own,
+    then renames it into place. Two threads may store the same cache entry at
+    once (one text asked twice in parallel); a shared temporary name let one
+    rename the other's file away and fail the load (2026-10-09 harvest)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.stem[:16]}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+__all__ = ["LLMMemo", "memo_key", "write_json_atomic"]

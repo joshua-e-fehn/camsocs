@@ -31,6 +31,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from camsocs_pipeline.extract.llm import LLMClient
+from camsocs_pipeline.extract.memo import write_json_atomic
 from camsocs_pipeline.models.vocab import (
     ACTIVITY_TYPES,
     AUDIENCES,
@@ -359,11 +360,8 @@ def extract_org(client: LLMClient, prompt: str, *, cache_dir: Path | None = None
     )
     seconds = time.monotonic() - started
     if path is not None:
-        path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"model": call.model, "extraction": call.value.model_dump(mode="json")}
-        temporary = path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        temporary.replace(path)
+        write_json_atomic(path, payload)
     return OrgCall(call.value, call.model, PROMPT_VERSION, False, seconds)
 
 
