@@ -19,6 +19,7 @@ from camsocs_pipeline.sources.policy import ROBOTS_OVERRIDE_NOTE
 from tests.test_events_sources import (  # noqa: F401  (ctx is a fixture)
     LUMA_ICS,
     NOW,
+    PNG,
     WINDOW,
     allow,
     ctx,
@@ -154,6 +155,8 @@ PROFILE = (
     '<html><body><h1>Test Society</h1><div class="mslwidget soc-event-list">'
     '<div class="msl_eventlist"><div class="event_item item1" '
     'data-msl-organisation-id="9999"><dl><dt>'
+    '<a href="/events/9999/1234/"><span class="msl_event_image">'
+    '<img src="/asset/Event/9999/poster.png?thumbnail_width=250" alt="" /></span></a>'
     '<a href="/events/9999/1234/" class="msl_event_name">Freshers Meet</a></dt>'
     '<dd class="msl_event_time">9th October </dd>'
     '<dd class="msl_event_location">Granta Place</dd></dl></div>'
@@ -208,7 +211,9 @@ def test_a_profile_list_adds_its_events_and_falls_back_to_its_own_date(
     net.get(f"{base}/whatson/").respond(200, content=fixture("su_whatson.html"))
     net.get(f"{base}/events/9999/1234/").respond(200, content=fixture("su_event.html"))
     net.get(f"{base}/events/9999/1240/").respond(500)
-    net.get(f"{base}/asset/Event/9999/poster.png").respond(404)
+    poster = net.get(f"{base}/asset/Event/9999/poster.png?thumbnail_width=250").respond(
+        200, content=PNG, headers={"content-type": "image/png"}
+    )
 
     su_whatson.run(ctx, window=WINDOW, now=NOW)
 
@@ -223,7 +228,13 @@ def test_a_profile_list_adds_its_events_and_falls_back_to_its_own_date(
     assert {"startsAt", "allDay"} <= inferred
     assert fallback.source_url == profile_url
     assert values["sourceUrl"] == f"{base}/events/9999/1240/"
-    assert "image" not in fields(events["events/9999/1234"])  # its poster 404s
+    # The poster the society's profile links: /asset/ is robots-disallowed,
+    # but D3 covers SU files linked from a society profile (su_asset).
+    assert poster.call_count == 1
+    assert fields(events["events/9999/1234"])["image"] == {
+        "sourceUrl": f"{base}/asset/Event/9999/poster.png?thumbnail_width=250"
+    }
+    assert "image" not in values  # no page read, no poster linked
 
 
 @pytest.mark.parametrize(

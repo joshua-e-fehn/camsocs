@@ -37,11 +37,13 @@ Such an event is all day, and its date is claimed as ``inferred``.
 ``/ents/event/<id>/``): the title (``h1``), date ("Friday 09 October 2026"),
 time ("6pm - 8:45pm"), location and organisation lines (``.event-details``),
 and the description (``.e-details-txt``). No time → an all-day event.
-**Images** (the banner, ``/asset/Event/<org>/…``): robots.txt disallows
-``/asset/``, but a student group's event poster is its own content, so it is
-fetched with the society purpose (decision D3, 2026-10-08; the ``su_asset``
-class of `sources/policy.py`) and stored as our own copy. SU-run events are never
-read, so their images are never fetched.
+**Images** (``/asset/Event/<org>/…``): robots.txt disallows ``/asset/``.
+Decision D3 (2026-10-08) covers SU ``/asset/`` files *linked from a society's
+profile*, so the poster an event has on its society's own profile list is
+fetched with the society purpose (the ``su_asset`` class of
+`sources/policy.py`) and stored as our own copy; an event only What's On
+lists keeps no image (its event page's banner is not linked from a profile).
+SU-run events are never read, so their images are never fetched.
 
 The organiser is an identity hint with the SU organisation id
 (``data-msl-organisation-id``) and name, resolved against staging. The event is
@@ -144,6 +146,8 @@ class ListingItem:
     types: list[str] = field(default_factory=list)
     #: Where the item was listed: What's On, or a society profile's own list.
     listed_on: str = WHATSON_URL
+    #: The poster a society profile's list shows (``/asset/Event/…``).
+    image_url: str | None = None
 
     @property
     def event_page(self) -> str | None:
@@ -171,8 +175,6 @@ class EventPage:
     location: str | None
     organisation: str | None
     description: str | None
-    #: The banner image (``/asset/Event/…``), absolute; None without one.
-    image_url: str | None = None
 
 
 def _node_text(node: object) -> str | None:
@@ -234,12 +236,19 @@ def parse_profile_events(html: str, profile_url: str) -> list[ListingItem]:
                 location=_node_text(node.css_first(".msl_event_location")),
                 types=[t for t in (_node_text(a) for a in node.css(".msl_event_types a")) if t],
                 listed_on=profile_url,
+                image_url=_image_src(node, profile_url),
             )
         )
     return items
 
 
-def parse_event_page(html: str, base: str = BASE) -> EventPage:
+def _image_src(node: object, base: str) -> str | None:
+    image = node.css_first(".msl_event_image img")  # type: ignore[attr-defined]
+    src = (image.attributes.get("src") or "").strip() if image is not None else ""
+    return urljoin(base, src) if src else None
+
+
+def parse_event_page(html: str) -> EventPage:
     tree = LexborHTMLParser(html)
     root = tree.css_first("#msl_event") or tree.body
     details: dict[str, str] = {}
@@ -261,8 +270,6 @@ def parse_event_page(html: str, base: str = BASE) -> EventPage:
     description = None
     if description_node is not None:
         description = clean_text(description_node.html)
-    banner = root.css_first(".banner-image img") if root is not None else None
-    image = (banner.attributes.get("src") or "").strip() if banner is not None else ""
     return EventPage(
         title=_node_text(root.css_first("h1")) if root is not None else None,
         date_text=details.get("date"),
@@ -270,7 +277,6 @@ def parse_event_page(html: str, base: str = BASE) -> EventPage:
         location=details.get("location"),
         organisation=details.get("organisation"),
         description=description,
-        image_url=urljoin(base, image) if image else None,
     )
 
 
@@ -451,7 +457,7 @@ def profile_pages(ctx: StageContext, client: PoliteClient) -> list[FetchResult]:
 
 
 def _image(client: PoliteClient, url: str | None, cache: dict[str, str | None]) -> str | None:
-    """A student group's event poster, fetched as its own content (D3)."""
+    """A poster a society's profile links, fetched as its own content (D3)."""
     if not url or urlsplit(url).netloc not in ("www.cambridgesu.co.uk", "cambridgesu.co.uk"):
         return None
     if url not in cache:
@@ -475,11 +481,14 @@ def run(
         items = parse_listing(listing.text)
         profiles = profile_pages(ctx, client)
         listed: dict[str, FetchResult] = {}
+        posters: dict[str, str] = {}
         profile_items: list[ListingItem] = []
         for profile in profiles:
             for item in parse_profile_events(profile.text, profile.url):
                 profile_items.append(item)
                 listed.setdefault(item.url, profile)
+                if item.image_url and item.external_id:
+                    posters.setdefault(item.external_id, item.image_url)
         wanted: list[ListingItem] = []
         seen_ids: set[str] = set()
         for item in [*items, *profile_items]:
@@ -507,7 +516,8 @@ def run(
                 pending.append(Sourced(fallback, profile.url, profile))  # type: ignore[union-attr]
                 continue
             page = parse_event_page(result.text)
-            draft = event_draft(item, page, image_url=_image(client, page.image_url, images))
+            poster = posters.get(item.external_id or "")
+            draft = event_draft(item, page, image_url=_image(client, poster, images))
             if draft is None:
                 tally.drop("no readable date")
                 continue

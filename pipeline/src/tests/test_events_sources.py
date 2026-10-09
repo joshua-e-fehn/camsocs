@@ -633,9 +633,6 @@ class TestSuWhatsOn:
         net.get(f"{base}/whatson/").respond(200, content=fixture("su_whatson.html"))
         page = net.get(f"{base}/events/9999/1234/").respond(200, content=fixture("su_event.html"))
         officers = net.get(f"{base}/events/16989/2342/").respond(200)
-        poster = net.get(f"{base}/asset/Event/9999/poster.png").respond(
-            200, content=PNG, headers={"content-type": "image/png"}
-        )
 
         su_whatson.run(ctx, window=WINDOW, now=NOW)
 
@@ -648,10 +645,7 @@ class TestSuWhatsOn:
         missing = {f.field: f.missing_reason for f in event.fields if f.status == "missing"}
         assert missing.get("bookingUrl") == "not_published"  # "link in our bio"
         assert (page.call_count, officers.call_count) == (1, 0)
-        # The group's own poster: /asset/ is robots-disallowed, but it is the
-        # society's content (D3, su_asset) — fetched once, staged for our copy.
-        assert poster.call_count == 1
-        assert values["image"] == {"sourceUrl": f"{base}/asset/Event/9999/poster.png"}
+        assert not any("/asset/" in str(c.request.url) for c in net.calls)
 
 
 def test_staged_events_load_as_claims_and_organiser_sets(tmp_path: Path) -> None:
