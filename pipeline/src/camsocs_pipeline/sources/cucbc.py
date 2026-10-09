@@ -28,7 +28,7 @@ from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.colleges import college_in_name, college_relationships
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
     clean_url,
     has_obfuscated_emails,
     host_of,

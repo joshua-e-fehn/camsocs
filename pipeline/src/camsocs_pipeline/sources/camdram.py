@@ -27,7 +27,8 @@ from camsocs_pipeline.claims import parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.colleges import canonical_college, college_relationships
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
+    CRSID_PATTERN,
     Contacts,
     classify_email,
     find_emails,
@@ -54,7 +55,7 @@ _STOP_LINE = re.compile(
 #: CRSids — "Hugh Stubbins (hs503)").
 _STOP_ANYWHERE = re.compile(
     r"(committee|comittee|founders?\b|enquiries\s+to|please\s+contact|contact\s+us\s+at|"
-    r"crsid|\(\s*[a-z]{2,5}[0-9]{1,5}\s*\)|\b[a-z]{2,5}[0-9]{1,5}@)",
+    rf"crsid|\(\s*{CRSID_PATTERN}\s*\)|\b{CRSID_PATTERN}@)",
     re.IGNORECASE,
 )
 #: …or reads "Post: First Last" ("Artistic Director: Charlie McGuire").

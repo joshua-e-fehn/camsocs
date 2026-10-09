@@ -32,9 +32,9 @@ from selectolax.lexbor import LexborNode
 from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
     dedupe_socials,
-    instagram_handle,
+    instagram_handle_of,
     link_text_disagrees,
     link_text_names,
     social_link,
@@ -344,7 +344,7 @@ def club_observation(
                     field_name, reason, extractor=f"{extractor}.fetch", evidence="secondary"
                 )
             )
-    handle = instagram_handle(page.socials)
+    handle = instagram_handle_of(page.socials)
     internal: dict[str, object] = {"sport_slug": entry.slug}
     if handle:
         internal["instagram_handle"] = handle

@@ -16,15 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from camsocs_pipeline.sources.links import classify_email, name_tokens, social_link
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
-from camsocs_pipeline.sources.websites.links import (
-    classify_email,
-    feed_of,
-    is_join_link,
-    mailing_list_of,
-    org_words,
-    social_of,
-)
+from camsocs_pipeline.sources.websites.links import feed_of, is_join_link, mailing_list_of
 from camsocs_pipeline.sources.websites.linktree import linktree_links
 from camsocs_pipeline.sources.websites.page import detect_platform, parse_page
 
@@ -109,16 +103,20 @@ def test_obfuscated_emails_are_never_decoded() -> None:
         ("info@cuxyz.org", "general", None),
         ("cuxyz@cambridgesu.co.uk", "general", None),
         ("stcatharinesjcr@gmail.com", "general", None),
-        ("ab123@cam.ac.uk", "skip", None),
-        ("ab123@jesus.cam.ac.uk", "skip", None),
-        ("jane.smith@gmail.com", "skip", None),
-        ("jane@cuxyz.org", "skip", None),
+        ("ab123@cam.ac.uk", "personal", None),
+        ("ab123@jesus.cam.ac.uk", "personal", None),
+        ("ab123@srcf.net", "personal", None),
+        ("jane.smith@gmail.com", "unknown", None),
+        ("jane@cuxyz.org", "unknown", None),
+        ("chess@cambridgesu.co.uk", "general", None),
+        ("support@sport.cam.ac.uk", "unknown", None),
     ],
 )
 def test_emails_are_role_or_general_never_personal(email: str, kind: str, role: str | None) -> None:
-    words = org_words("Cambridge University XYZ Society", "St Catharine's JCR", "CUXYZ")
-    reading = classify_email(email, org_words=words, site_host="cuxyz.org")
+    words = name_tokens("Cambridge University XYZ Society", "St Catharine's JCR", "CUXYZ")
+    reading = classify_email(email, words, site_host="cuxyz.org")
     assert (reading.kind, reading.role) == (kind, role)
+    assert reading.kept == (kind in ("role", "general"))
 
 
 # --- links ---------------------------------------------------------------------------------------
@@ -130,15 +128,15 @@ def test_emails_are_role_or_general_never_personal(email: str, kind: str, role: 
         ("https://www.instagram.com/catz.jcr/", "instagram", "catz.jcr"),
         ("https://www.facebook.com/groups/795160471728479/", "facebook_group", None),
         ("https://twitter.com/stcatharinesjcr", "x", "stcatharinesjcr"),
-        ("https://www.linkedin.com/company/cuats/", "linkedin", "cuats"),
+        ("https://www.linkedin.com/company/cuats/", "linkedin", None),
         ("https://www.youtube.com/@cucats", "youtube", "cucats"),
         ("https://linktr.ee/cuwes", "linktree", "cuwes"),
     ],
 )
 def test_social_profiles_are_recognised(url: str, platform: str, handle: str | None) -> None:
-    social = social_of(url)
+    social = social_link(url)
     assert social is not None
-    assert (social.platform, social.handle) == (platform, handle)
+    assert (social["platform"], social.get("handle")) == (platform, handle)
 
 
 @pytest.mark.parametrize(
@@ -152,7 +150,7 @@ def test_social_profiles_are_recognised(url: str, platform: str, handle: str | N
     ],
 )
 def test_people_and_share_buttons_are_not_socials(url: str) -> None:
-    assert social_of(url) is None
+    assert social_link(url) is None
 
 
 def test_feeds_and_mailing_lists() -> None:

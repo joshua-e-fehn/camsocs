@@ -59,14 +59,14 @@ from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import FieldObs, IdentityHints, Observation
 from camsocs_pipeline.sources import sport
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
     bare_urls,
     clean_url,
     dedupe_socials,
     find_emails,
     host_of,
     instagram_from_handle,
-    instagram_handle,
+    instagram_handle_of,
     is_social_host,
     read_contacts,
     social_link,
@@ -660,7 +660,7 @@ def build_observations(
         fields = section_fields(section)
         if index in rows_for:
             fields += glance_fields(rows_for[index])
-        slug = link_club(section.heading, instagram_handle(section.socials), clubs)
+        slug = link_club(section.heading, instagram_handle_of(section.socials), clubs)
         drafts.append(
             _Draft(
                 section.heading, fields, section.socials, section.website, slug, index in rows_for
@@ -698,7 +698,7 @@ def build_observations(
                 identity=IdentityHints(
                     name=draft.name,
                     sport_slug=draft.slug,
-                    instagram_handle=instagram_handle(draft.socials),
+                    instagram_handle=instagram_handle_of(draft.socials),
                     website_domain=host_of(draft.website) if draft.website else None,
                 ),
                 internal=internal,

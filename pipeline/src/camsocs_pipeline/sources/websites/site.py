@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 
 from camsocs_pipeline.models.observation import (
     FetchInfo,
@@ -17,7 +16,7 @@ from camsocs_pipeline.models.observation import (
     RelObs,
 )
 from camsocs_pipeline.sources.base import FetchResult
-from camsocs_pipeline.sources.websites.links import org_words
+from camsocs_pipeline.sources.links import host_of, name_tokens
 from camsocs_pipeline.sources.websites.page import Page
 
 #: An organisation's own website or Linktree is its own channel.
@@ -42,12 +41,7 @@ class Target:
 
     @property
     def words(self) -> set[str]:
-        return org_words(self.name, *self.aliases)
-
-
-def host_of(url: str) -> str:
-    host = urlsplit(url).netloc.lower().split(":")[0]
-    return host.removeprefix("www.")
+        return name_tokens(self.name, *self.aliases)
 
 
 @dataclass
