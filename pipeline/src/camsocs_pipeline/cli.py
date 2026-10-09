@@ -25,7 +25,12 @@ import click
 from camsocs_pipeline import __version__
 from camsocs_pipeline.config import ConfigError, Settings, get_settings
 from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
-from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
+from camsocs_pipeline.pipeline.load import (
+    ConvexError,
+    ConvexLoader,
+    StoredFileCache,
+    stored_files_path,
+)
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, run_sync
 from camsocs_pipeline.sources.base import PoliteClient
@@ -209,9 +214,14 @@ def purge_dev(ctx: click.Context, yes: bool) -> None:
     the run log, inbox, listing requests and broker-owned rows are kept."""
     if not yes:
         raise click.ClickException("Refusing without --yes.")
+    settings = _settings(ctx)
     try:
-        with _loader(_settings(ctx)) as loader:
+        with _loader(settings) as loader:
             deleted = loader.purge_dev()
+            # The deployment's stored files went too: forget their ids.
+            cache = StoredFileCache.load(stored_files_path(settings.staging_dir), loader.base_url)
+            cache.clear()
+            cache.save()
     except ConvexError as error:
         raise click.ClickException(str(error)) from error
     total = sum(deleted.values())

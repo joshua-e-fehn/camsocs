@@ -387,10 +387,15 @@ def test_the_stage_posts_events_then_marks_every_mail(make_settings, net) -> Non
     net.get(f"{SITE}/api/pipeline/health").mock(return_value=httpx.Response(200, json={"ok": True}))
     net.post(f"{SITE}/api/pipeline/runs/start").mock(return_value=httpx.Response(200, json={}))
     net.post(f"{SITE}/api/pipeline/runs/finish").mock(return_value=httpx.Response(200, json={}))
+    net.post(f"{SITE}/api/pipeline/suppressions").mock(
+        return_value=httpx.Response(200, json={"organisations": [], "truncated": False})
+    )
 
     report = run_sync(settings=settings, stages=["inbox"])
     assert report.ok, report.summary()
-    assert llm_route.call_count == 2  # the weekly mail and the welcome; never the stranger
+    # The weekly mail only: the list's welcome is all footer once cleaned
+    # (nothing left to read), and the stranger is never read.
+    assert llm_route.call_count == 1
 
     claims = json.loads(routes["claims"].calls[0].request.content)["claims"]
     assert {c["sourceUrl"] for c in claims} >= {f"inbound:{WEEKLY.message_id}"}

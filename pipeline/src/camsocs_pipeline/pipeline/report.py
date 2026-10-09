@@ -37,6 +37,9 @@ class StageReport:
     skipped: int = 0
     error: str | None = None
     notes: list[str] = field(default_factory=list)
+    #: Named counts beyond the four above (`harvestStageResult.metrics`), e.g.
+    #: the resolve stage's quarantine. Sent only when there are some.
+    metrics: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -47,8 +50,9 @@ class StageReport:
         self.error = error
 
     def to_payload(self) -> dict[str, Any]:
-        """The `harvestStageResult` shape in webapp/convex/schema.ts."""
-        return {
+        """The `harvestStageResult` shape in webapp/convex/schema.ts. `metrics`
+        is omitted when empty (never null, never an empty object to store)."""
+        payload: dict[str, Any] = {
             "name": self.name,
             "status": self.status,
             "inserted": self.inserted,
@@ -58,6 +62,9 @@ class StageReport:
             "error": self.error,
             "notes": list(self.notes),
         }
+        if self.metrics:
+            payload["metrics"] = dict(self.metrics)
+        return payload
 
     def __str__(self) -> str:
         if self.status == "failed":

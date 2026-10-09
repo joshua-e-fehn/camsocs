@@ -10,10 +10,13 @@ For each `pending` mail in Convex (`ConvexLoader.inbound_pending`):
    against the organisations in staging (`known_orgs.KnownOrgs`). An
    unverified mail is never attributed and claims no activity.
 3. **Extract events** with the bulk model (`extract/prompts/email_events_v1.md`)
-   from the subject and text, with e-mail addresses and phone numbers redacted
-   first. One mail often lists a week of events with dates like "Wednesday of
-   Week 3"; `extract.when` resolves them against the verified term dates and
-   the mail's date. Every value carries its verbatim quote, checked against the
+   from the subject and text — cleaned first (`extract.mail_text`: quoted
+   replies, forwarded headers, signatures and list footers cut out; e-mail
+   addresses and phone numbers redacted), so the model sees the
+   announcement and not the people around it (DPIA-lite R-4). One mail often
+   lists a week of events with dates like "Wednesday of Week 3";
+   `extract.when` resolves them against the verified term dates and the
+   mail's date. Every value carries its verbatim quote, checked against the
    text the model saw. A society name the model reads from the sign-off
    identifies the sender only when its quote checks out.
 4. **Posters and termcards attached** (images, PDFs) are read with the strong
@@ -57,6 +60,7 @@ from camsocs_pipeline.extract.events import (
 )
 from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
+from camsocs_pipeline.extract.mail_text import clean_mail_text
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
 from camsocs_pipeline.keys import event_key, sha1_hex
@@ -198,13 +202,16 @@ def _process(mail: PendingMail, tools: InboxTools) -> MailOutcome:
     # Never later than now: the claims API refuses a future retrieval time.
     received = min(datetime.fromtimestamp(mail.received_at / 1000, UTC), tools.now())
     anchor = london_date(received)
-    body = redact_contacts(mail.text).strip()
+    cleaned = clean_mail_text(mail.text, subject=mail.subject)
+    body = cleaned.text
     source_text = f"Subject: {redact_contacts(mail.subject)}\n\n{body}"
     calendar_note = tools.calendar.context(anchor)
     prompt, version = load_prompt("email_events_v1")
 
     org_key = identified.org_key
     notes = [f"sender: {identified.how}"]
+    if cleaned.removed:
+        notes.append(cleaned.summary())
     extracted = LlmEvents()
     model = tools.llm.model_for("bulk")
     if body:

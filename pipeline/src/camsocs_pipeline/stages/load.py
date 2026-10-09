@@ -8,11 +8,19 @@ relationships → event organisers → broker inferences. Unkeyed records wait
 for the resolve stage and are counted as skipped.
 
 Re-posting unchanged observations is cheap: the server recognises each claim
-by its fingerprint and writes nothing (reported as `unchanged`).
+by its fingerprint and writes nothing (reported as `unchanged`), and each
+organisation's feed identifiers travel as one merged patch, so a second
+identical load reports nothing updated.
+
+Nothing the suppression list forbids is posted (`camsocs_pipeline.suppressions`:
+listings, fields, addresses and people removed on request); the notes say what
+was held back.
 
 Images staged as a bare ``{"sourceUrl"}`` get our own stored copy on the way
 (`camsocs_pipeline.media`): the bytes come from the fetch cache the harvest
-stage filled, and an image that cannot be had is not posted.
+stage filled, and an image that cannot be had is not posted. Bytes this
+deployment already stores are not uploaded again: their ids are remembered in
+``var/state/stored-files.json`` (`StoredFileCache`).
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ from itertools import islice
 
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.pipeline.load import StoredFileCache, stored_files_path
 from camsocs_pipeline.staging.store import RESOLVED, Record
 
 #: Rejection reasons shown in the stage notes; the rest are counted.
@@ -53,10 +62,15 @@ def run(ctx: StageContext) -> None:
         records = list(islice(records, ctx.limit))
 
     media = CachedImages(ctx.settings)
+    cache = StoredFileCache.load(stored_files_path(ctx.settings.staging_dir), ctx.loader.base_url)
+    ctx.loader.file_cache = cache
     try:
         report = ctx.loader.post_observations(records, run_key=ctx.run.run_key, media=media)
     finally:
         media.close()
+        ctx.loader.file_cache = None
+        if not ctx.dry_run:
+            cache.save()
     report.skipped += awaiting
     claims = report.claims
     ctx.report.inserted += claims.inserted
@@ -74,10 +88,20 @@ def run(ctx: StageContext) -> None:
         )
         for collision in report.collisions[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  {collision}")
+    if ctx.loader.suppressions_note:
+        ctx.report.notes.append(ctx.loader.suppressions_note)
+    if report.suppressed:
+        ctx.report.notes.append(str(report.suppressed))
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
-            f"images: {report.files_stored} stored, {report.files_dropped} not available"
+            f"images: {report.files_stored} stored ({report.files_reused} already on the "
+            f"deployment, not uploaded again), {report.files_dropped} not available"
             + (f" ({media.unavailable})" if media.unavailable else "")
+        )
+    if report.files_stale:
+        ctx.report.notes.append(
+            f"images: {report.files_stale} remembered ids were gone from the deployment — "
+            "forgotten; the next run uploads them again"
         )
     entities = claims.entities
     if entities:

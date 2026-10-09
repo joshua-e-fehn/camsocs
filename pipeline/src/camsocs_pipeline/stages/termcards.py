@@ -124,6 +124,9 @@ def run(ctx: StageContext) -> None:
     current = [*carried, *events]
     if current:
         ctx.staging.write(SOURCE_TYPE, ctx.run.run_key, current)
+    # Staged: the events read this run are new; carried ones are unchanged.
+    ctx.report.inserted += len(events)
+    ctx.report.unchanged += len(carried)
     ctx.report.skipped += sum(skipped.values())
     ctx.report.notes.append(
         f"{len(cards)} termcards known, {read} read, {len(events)} events"

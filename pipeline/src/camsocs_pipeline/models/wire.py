@@ -24,6 +24,9 @@ inbound/file           `InboundFileRequest`            (http action) → ingest/
 inbound/mark           `InboundMarkBatch`              ingest/inbound:mark
 crosswalk              `CrosswalkRequest`              ingest/orgInternal:crosswalk
 worklist               ``{paginationOpts}``            ingest/orgInternal:worklistPage
+suppressions           ``{}``                          ingest/suppressions:list
+coverage               `CoverageRequest`               coverage:page
+coverage/events        `EventsCoverageRequest`         coverage:eventsPage
 termDates              `TermDatesBatch`                ingest/termDates:upsert
 derive                 ``{}``                          derive:daily
 purge                  `PurgeRequest`                  ingest/purge:purge (dev only)
@@ -470,17 +473,90 @@ class PurgeRequest(WireModel):
     confirm: Literal["PURGE-DEV"] = "PURGE-DEV"
 
 
+# --- suppressions, coverage ------------------------------------------------------------
+
+
+class SuppressedField(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    org_key: str
+    field: str
+
+
+class SuppressionList(WireModel):
+    """What accepted removals and objections took off the site (read-only;
+    webapp/convex/lib/suppressions.ts). Contacts are sha256 hashes of the
+    trimmed, lower-cased address — never the address."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    organisations: list[str] = Field(default_factory=list)
+    fields: list[SuppressedField] = Field(default_factory=list)
+    contact_hashes: list[str] = Field(default_factory=list)
+    people: list[str] = Field(default_factory=list)
+    #: More rows than the server returns in one read: the list is incomplete.
+    truncated: bool = False
+
+
+class CoverageRequest(WireModel):
+    cursor: str | None = None
+    limit: int | None = None
+
+
+class CoverageCounts(WireModel):
+    """One page's coverage counts (webapp/lib/broker/coverage.ts `CoverageCounts`)."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    total: int = 0
+    hidden: int = 0
+    counterparts: int = 0
+    by_level: dict[str, int] = Field(default_factory=dict)
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_level_status: dict[str, dict[str, int]] = Field(default_factory=dict)
+    by_org_type: dict[str, int] = Field(default_factory=dict)
+    headline: dict[str, int] = Field(default_factory=dict)
+    held: dict[str, int] = Field(default_factory=dict)
+    missing: dict[str, int] = Field(default_factory=dict)
+
+
+class CoveragePage(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    counts: CoverageCounts
+    rows: int
+    is_done: bool
+    continue_cursor: str
+
+
+class EventsCoverageRequest(WireModel):
+    from_: int = Field(alias="from")
+    cursor: str | None = None
+    limit: int | None = None
+
+
+class EventsCoveragePage(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    by_source: dict[str, int] = Field(default_factory=dict)
+    by_visibility: dict[str, int] = Field(default_factory=dict)
+    cancelled: int = 0
+    rows: int
+    is_done: bool
+    continue_cursor: str
+
+
 __all__ = [
     "BrokerInferences",
     "BrokerProfileInput",
     "ClaimInput",
     "ClaimsBatch",
     "ClaimsResult",
+    "CoverageCounts",
+    "CoveragePage",
+    "CoverageRequest",
     "CrosswalkRequest",
     "CrosswalkRow",
     "EventOrganiser",
     "EventOrganiserSet",
     "EventOrganisersBatch",
+    "EventsCoveragePage",
+    "EventsCoverageRequest",
     "FileResult",
     "FileUpload",
     "InboundFile",
@@ -501,6 +577,8 @@ __all__ = [
     "RelationshipsBatch",
     "SourceInput",
     "SourcesBatch",
+    "SuppressedField",
+    "SuppressionList",
     "TermDate",
     "TermDatesBatch",
     "WireModel",

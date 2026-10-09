@@ -83,7 +83,14 @@ def run(ctx: StageContext) -> None:
         resolution.crosswalk.save(local)
 
     counts = resolution.report.counts
+    ctx.report.inserted += written
     ctx.report.skipped += counts.get("held", 0)
+    # Read by the broker overview's quarantine tile (runs.finish → harvestRuns).
+    ctx.report.metrics.update(
+        quarantineHeld=counts.get("held", 0),
+        quarantineDropped=counts.get("dropped_references", 0),
+        quarantineReview=counts.get("review", 0),
+    )
     ctx.report.notes.append(
         f"{len(records)} staged records from {', '.join(directories)} → {written} keyed "
         f"({counts.get('organisations', 0)} organisation observations, "

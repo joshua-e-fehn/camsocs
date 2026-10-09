@@ -177,6 +177,8 @@ def _as_llm_counterpart(record: Observation, mention: PartnerMention) -> Observa
 
 
 def _report(ctx: StageContext, stats: Stats, written: int, counterparts: int, dropped: int) -> None:
+    # The staged observations are the stage's output (`load` posts them).
+    ctx.report.inserted += written
     ctx.report.skipped += stats.disallowed + stats.unreachable + stats.not_about
     claims = stats.fields_found + stats.fields_inferred
     ratio = f"{stats.fields_found / claims:.0%}" if claims else "n/a"
