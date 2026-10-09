@@ -86,6 +86,7 @@ from camsocs_pipeline.models.wire import (
     WorklistOrg,
     WorklistPage,
 )
+from camsocs_pipeline.pipeline.stored_files import StoredFiles
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,8 @@ class ConvexLoader:
         self.dry_run = dry_run
         self.max_retries = max_retries
         self._api_key = api_key
+        #: Remembered uploads (`pipeline.stored_files`); set by the load stage.
+        self.stored_files: StoredFiles | None = None
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout, headers={"User-Agent": USER_AGENT})
 
@@ -406,13 +409,22 @@ class ConvexLoader:
 
     def upload_file(self, data: bytes, content_type: str) -> FileResult:
         """Stores our own copy of an image or PDF (≤ 2 MB) and returns its
-        storage id; identical bytes are stored once."""
+        storage id; identical bytes are stored once. Bytes this deployment
+        is known to store already (`stored_files`) are not sent again."""
         sha256 = hashlib.sha256(data).hexdigest()
         body = FileUpload(data=base64.b64encode(data).decode("ascii"), content_type=content_type)
         if self.dry_run:
             json.dumps(body.to_wire())
             return FileResult(storage_id="dry-run", sha256=sha256)
-        return FileResult.model_validate(self.post("files", body.to_wire()))
+        if self.stored_files is not None:
+            known = self.stored_files.get(sha256)
+            if known is not None:
+                self.stored_files.reused += 1
+                return FileResult(storage_id=known, sha256=sha256)
+        result = FileResult.model_validate(self.post("files", body.to_wire()))
+        if self.stored_files is not None and result.sha256 == sha256:
+            self.stored_files.put(sha256, result.storage_id)
+        return result
 
     def inbound_pending(self, limit: int = 50) -> list[PendingMail]:
         """The oldest forwarded list mails awaiting extraction."""
