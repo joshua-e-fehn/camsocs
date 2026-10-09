@@ -87,6 +87,7 @@ from camsocs_pipeline.models.wire import (
     WorklistPage,
 )
 from camsocs_pipeline.pipeline.stored_files import StoredFiles
+from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, FetchPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -103,9 +104,15 @@ USER_AGENT = f"camsocs-pipeline/{__version__} (convex ingestion)"
 
 #: Claim fields whose value references a stored file (`{storageId?, sourceUrl?}`).
 STORED_FILE_FIELDS = frozenset({("event", "image"), ("organisation", "logo")})
+#: Stored files an organisation publishes about itself: fetched with the
+#: society purpose (`sources/policy.py`, D3: an SU `/asset/` logo, or a student
+#: group's event poster on its SU event page). The purpose lifts robots.txt
+#: only for the URL classes D3 lists; any other image keeps its robots.txt.
+SOCIETY_FILE_FIELDS = frozenset({("organisation", "logo"), ("event", "image")})
 
-#: Bytes and content type of an image URL, or None (`media.CachedImages`).
-MediaSource = Callable[[str], tuple[bytes, str] | None]
+#: Bytes and content type of an image URL fetched for a purpose, or None
+#: (`media.CachedImages`).
+MediaSource = Callable[[str, FetchPurpose], tuple[bytes, str] | None]
 
 
 class ConvexError(RuntimeError):
@@ -631,7 +638,10 @@ def attach_stored_files(
             continue
         url = value["sourceUrl"]
         if url not in stored:
-            found = media(url)
+            purpose = (
+                SOCIETY if (claim.entity_type, claim.field) in SOCIETY_FILE_FIELDS else GENERAL
+            )
+            found = media(url, purpose)
             stored[url] = (
                 loader.upload_file(found[0], found[1]).storage_id if found is not None else None
             )

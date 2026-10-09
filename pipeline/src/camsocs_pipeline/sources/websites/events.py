@@ -26,7 +26,9 @@ no structured events. Each event must carry a ``when_quote`` that is on the
 page and holds its date — the day number with a month, a numeric date, or a
 term week with its weekday (`dated_quote`); an event without one is dropped.
 A page cannot say "today" (it has no date of its own), so relative days are
-dropped too. Dates are resolved in code (`extract.when`); term weeks need the
+dropped too. The reference date the model is given is the Thursday that
+starts the week the page was read (`week_anchor`), so a re-read within the
+week costs nothing. Dates are resolved in code (`extract.when`); term weeks need the
 term the page names (or its URL / title says), else the event is dropped as
 possibly last term's. An event without a stated time is all day, its start
 ``inferred``. Quotes are checked against the text sent (`claims.llm_field`).
@@ -404,6 +406,13 @@ def dated_quote(event: LlmEvent, source_text: str) -> bool:
     return False
 
 
+def week_anchor(day: date) -> date:
+    """The Thursday that starts `day`'s student week: the reference date the
+    model is given, so a page read again during the week asks nothing new
+    (`extract.memo` keys on the whole request)."""
+    return day - timedelta(days=(day.weekday() - 3) % 7)
+
+
 def page_text(page: Page) -> str:
     """The text the model reads and quotes are checked against: the title and
     the page's cleaned text, contacts redacted, cut to `MAX_PROMPT_CHARS`."""
@@ -427,7 +436,7 @@ def llm_events(
     if len(text.strip()) < 40:
         return []
     retrieved = fetched_at(result)
-    anchor = london_date(retrieved)
+    anchor = week_anchor(london_date(retrieved))
     prompt, version = load_prompt(PROMPT)
     request = f"{calendar.context(anchor)}\n\n--- PAGE {page.url} ---\n{text}"
     extraction = extract_events(
@@ -463,8 +472,13 @@ def llm_events(
         fetch=fetch_info(result),
     )
     events, dropped = build_events(LlmEvents(events=kept), context)
-    if dropped:
-        out.tally.drop("undated or term-less", len(dropped))
+    for reason in dropped:
+        if "long before" in reason:
+            out.tally.drop("past")
+        elif "implausibly far" in reason:
+            out.tally.drop("more than nine months ahead")
+        else:
+            out.tally.drop("undated or term-less")
     return events
 
 
@@ -734,5 +748,6 @@ __all__ = [
     "sites_from",
     "structured_draft",
     "structured_events",
+    "week_anchor",
     "window_from",
 ]

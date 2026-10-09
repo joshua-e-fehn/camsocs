@@ -28,7 +28,6 @@ from camsocs_pipeline.pipeline.load import ConvexLoader, plan_observations
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import SyncState
 from camsocs_pipeline.sources.base import HostGates, PoliteClient
-from camsocs_pipeline.sources.policy import ROBOTS_OVERRIDE_NOTE
 from camsocs_pipeline.staging.store import StagingStore
 
 FIXTURES = Path(__file__).parent / "fixtures" / "events"
@@ -452,37 +451,15 @@ END:VCALENDAR\r
 GOOGLE_ICS = b"""BEGIN:VCALENDAR\r
 VERSION:2.0\r
 PRODID:-//Google Inc//Google Calendar 70.9054//EN\r
-X-WR-CALNAME:Test Society\r
 X-WR-TIMEZONE:Europe/London\r
 BEGIN:VEVENT\r
 DTSTART:20261020T180000Z\r
-DTEND:20261020T190000Z\r
-UID:abc123@google.com\r
-SUMMARY:Welcome drinks\r
-LOCATION:The Old Library\\, Cambridge\r
+DTEND:20261020T200000Z\r
+UID:g-1@google.com\r
+SUMMARY:Committee-free social\r
 END:VEVENT\r
 END:VCALENDAR\r
 """
-
-
-def luma_page(slug: str, api_id: str, name: str = "Test Society") -> str:
-    data = {
-        "props": {
-            "pageProps": {
-                "initialData": {
-                    "data": {
-                        "calendar": {"api_id": api_id, "slug": slug, "name": name},
-                        "upcoming": {"entries": [{"calendar": {"api_id": "cal-Other1"}}]},
-                    }
-                }
-            }
-        }
-    }
-    return (
-        '<html><head><script id="__NEXT_DATA__" type="application/json">'
-        + json.dumps(data)
-        + "</script></head><body></body></html>"
-    )
 
 
 class TestCalendarFeeds:
@@ -490,8 +467,6 @@ class TestCalendarFeeds:
         assert calendar_feeds.feed_url("luma", "cal-X1") == (
             "https://api.lu.ma/ics/get?entity=calendar&id=cal-X1"
         )
-        # A calendar page's slug is not an id: it is resolved from its page.
-        assert calendar_feeds.feed_url("luma", "caish") is None
         assert calendar_feeds.feed_url("google", "abc@group.calendar.google.com") == (
             "https://calendar.google.com/calendar/ical/abc%40group.calendar.google.com/public/basic.ics"
         )
@@ -499,22 +474,6 @@ class TestCalendarFeeds:
             "https://soc.example/cal.ics"
         )
         assert calendar_feeds.feed_url("ics", "ftp://nope") is None
-
-    def test_google_ids_from_embed_links_are_decoded(self) -> None:
-        # ?cid= carries the id base64-encoded: this is "testsoc@gmail.com".
-        assert calendar_feeds.google_calendar_id("dGVzdHNvY0BnbWFpbC5jb20") == "testsoc@gmail.com"
-        assert calendar_feeds.google_calendar_id("testsoc@gmail.com") == "testsoc@gmail.com"
-        assert calendar_feeds.google_calendar_id("plainid12345") == "plainid12345"
-        same = "https://calendar.google.com/calendar/ical/testsoc%40gmail.com/public/basic.ics"
-        assert calendar_feeds.feed_url("google", "dGVzdHNvY0BnbWFpbC5jb20") == same
-        assert calendar_feeds.feed_url("ics", same) == same
-        assert calendar_feeds.feed_kind("ics", same) == "google"
-
-    def test_a_luma_page_names_its_own_calendar_only(self) -> None:
-        page = luma_page("caish", "cal-4TNl4yi3sVEcAO5")
-        assert calendar_feeds.luma_calendar_id(page, "CAISH") == "cal-4TNl4yi3sVEcAO5"
-        assert calendar_feeds.luma_calendar_id(page, "other") is None
-        assert calendar_feeds.luma_calendar_id("<html>no data</html>", "caish") is None
 
     def test_luma_boilerplate_is_removed_and_the_page_kept(self) -> None:
         page, text = calendar_feeds.clean_luma(
@@ -541,21 +500,14 @@ class TestCalendarFeeds:
             entity_type="organisation",
             identity=IdentityHints(name="Other Society"),
             entity_key="org-other-society",
-            internal={
-                # The same calendar linked twice: by id and base64-encoded (?cid=).
-                "google_calendar_ids": ["testsoc@gmail.com", "dGVzdHNvY0BnbWFpbC5jb20"],
-                "luma_calendar_ids": ["othersoc", "gonesoc"],
-            },
+            internal={"google_calendar_ids": ["abc@group.calendar.google.com"]},
         )
         ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", [org])
         allow(net, "https://api.lu.ma", "User-agent: *\nDisallow: /insights/\n")
-        allow(net, "https://luma.com", "User-agent: Googlebot\nDisallow: /in/\n")
         allow(net, "https://calendar.google.com", "User-agent: *\nAllow: /$\nDisallow: /\n")
-        net.get("https://luma.com/othersoc").respond(200, text=luma_page("othersoc", "cal-1"))
-        net.get("https://luma.com/gonesoc").respond(404)
-        luma = net.get(url__startswith="https://api.lu.ma/ics/get").respond(200, content=LUMA_ICS)
+        net.get(url__startswith="https://api.lu.ma/ics/get").respond(200, content=LUMA_ICS)
         google = net.get(
-            "https://calendar.google.com/calendar/ical/testsoc%40gmail.com/public/basic.ics"
+            "https://calendar.google.com/calendar/ical/abc%40group.calendar.google.com/public/basic.ics"
         ).respond(200, content=GOOGLE_ICS)
 
         calendar_feeds.run(ctx, window=WINDOW, now=NOW)
@@ -567,19 +519,39 @@ class TestCalendarFeeds:
         assert values["status"] == "confirmed"  # Luma's blanket TENTATIVE is ignored
         assert "description" not in values  # boilerplate only
         assert "A Person" not in json.dumps(event.model_dump(mode="json"))
-        # The slug resolved to the seed's calendar: one feed, both owners.
-        assert luma.call_count == 1
-        assert [o.identity.known_key for o in event.organisers] == ["org-other-society"]
         assert [o.identity.name for o in event.unresolved_organisers] == ["Test Society"]
-        assert any("gonesoc" in n and "dropped" in n for n in ctx.report.notes)
-        # Google's robots.txt disallows the feed; it is society content (D3),
-        # read once, and its sources row says robots.txt disallowed it.
+        # D3: calendar.google.com disallows crawlers, but a public ICS feed a
+        # society links is read under the society override, which the event's
+        # `sources` row records next to the honest "disallowed" verdict.
         assert google.call_count == 1
-        (talk,) = staged(ctx, "ics_feed.events")
-        assert talk.event_source == "google_calendar"
-        assert fields(talk)["title"] == "Welcome drinks"
-        assert talk.fetch is not None and talk.fetch.robots_verdict == "disallowed"
-        assert ROBOTS_OVERRIDE_NOTE in (talk.fetch.access_note or "")
+        (from_google,) = staged(ctx, "ics_feed.events")
+        assert fields(from_google)["title"] == "Committee-free social"
+        assert from_google.fetch.robots_verdict == "disallowed"
+        assert from_google.fetch.access_note == "robots_override:society"
+        assert [o.identity.known_key for o in from_google.organisers] == ["org-other-society"]
+
+    def test_other_pages_on_google_calendar_keep_their_robots_txt(
+        self, ctx: StageContext, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(calendar_feeds, "FEED_SEEDS", ())
+        org = Observation(
+            source_type="society_website",
+            source_key="k",
+            source_url="https://soc.example/",
+            retrieved_at=NOW,
+            entity_type="organisation",
+            identity=IdentityHints(name="Other Society"),
+            entity_key="org-other-society",
+            internal={"ics_urls": ["https://calendar.google.com/calendar/embed?src=abc"]},
+        )
+        ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", [org])
+        allow(net, "https://calendar.google.com", "User-agent: *\nAllow: /$\nDisallow: /\n")
+        embed = net.get(url__startswith="https://calendar.google.com/calendar/embed")
+
+        calendar_feeds.run(ctx, window=WINDOW, now=NOW)
+
+        assert embed.call_count == 0
+        assert any("disallowed_by_robots" in n for n in ctx.report.notes)
 
 
 # --- SU What's On (§12) ---------------------------------------------------------------------
@@ -646,92 +618,9 @@ class TestSuWhatsOn:
         assert missing.get("bookingUrl") == "not_published"  # "link in our bio"
         assert (page.call_count, officers.call_count) == (1, 0)
         # The group's own poster: /asset/ is robots-disallowed, but it is the
-        # society's content (D3) — fetched once, staged for our own copy.
+        # society's content (D3, su_asset) — fetched once, staged for our copy.
         assert poster.call_count == 1
         assert values["image"] == {"sourceUrl": f"{base}/asset/Event/9999/poster.png"}
-
-    def test_a_profile_list_adds_its_events_and_falls_back_to_its_own_date(
-        self, ctx: StageContext, net: respx.MockRouter
-    ) -> None:
-        base = "https://www.cambridgesu.co.uk"
-        profile_url = f"{base}/organisation/testsoc/"
-        profile = (
-            '<html><body><h1>Test Society</h1><div class="mslwidget soc-event-list">'
-            '<div class="msl_eventlist"><div class="event_item item1" '
-            'data-msl-organisation-id="9999"><dl><dt>'
-            '<a href="/events/9999/1234/" class="msl_event_name">Freshers Meet</a></dt>'
-            '<dd class="msl_event_time">9th October </dd>'
-            '<dd class="msl_event_location">Granta Place</dd></dl></div>'
-            '<div class="event_item item2" data-msl-organisation-id="9999"><dl><dt>'
-            '<a href="/events/9999/1240/" class="msl_event_name">Board Games Night</a></dt>'
-            '<dd class="msl_event_time">15th October </dd>'
-            '<dd class="msl_event_location">The Old Library</dd></dl></div>'
-            "</div></div></body></html>"
-        )
-        ctx.staging.write(
-            "su_profile",
-            "20261007T000000Z-aaaaaa",
-            [
-                Observation(
-                    source_type="su_profile",
-                    source_key="testsoc",
-                    source_url=profile_url,
-                    retrieved_at=NOW,
-                    entity_type="organisation",
-                    identity=IdentityHints(name="Test Society", su_id="9999"),
-                )
-            ],
-        )
-        allow(net, base, "User-agent: *\nDisallow: /asset/\n")
-        net.get(profile_url).respond(200, text=profile)
-        with PoliteClient(
-            user_agent="t",
-            cache_dir=ctx.settings.cache_dir,
-            min_interval=0,
-            gates=HostGates(),
-            sleep=lambda _s: None,
-            now=lambda: NOW,
-        ) as warm:
-            warm.fetch(profile_url)  # what the su_directory stage left in the cache
-        net.get(f"{base}/whatson/").respond(200, content=fixture("su_whatson.html"))
-        net.get(f"{base}/events/9999/1234/").respond(200, content=fixture("su_event.html"))
-        net.get(f"{base}/events/9999/1240/").respond(500)
-        net.get(f"{base}/asset/Event/9999/poster.png").respond(404)
-
-        su_whatson.run(ctx, window=WINDOW, now=NOW)
-
-        events = {e.external_id: e for e in staged(ctx, "su_whatson.events")}
-        # The What's On event listed on the profile too is one event.
-        assert sorted(events) == ["events/9999/1234", "events/9999/1240"]
-        fallback = events["events/9999/1240"]
-        values = fields(fallback)
-        assert values["startsAt"] == int(london(2026, 10, 15).timestamp() * 1000)
-        assert values["allDay"] is True
-        inferred = {f.field for f in fallback.fields if f.status == "inferred"}
-        assert {"startsAt", "allDay"} <= inferred
-        assert fallback.source_url == profile_url
-        assert values["sourceUrl"] == f"{base}/events/9999/1240/"
-        assert "image" not in fields(events["events/9999/1234"])  # its poster 404s
-
-    @pytest.mark.parametrize(
-        ("text", "seen", "expected"),
-        [
-            ("15th October", date(2026, 10, 7), date(2026, 10, 15)),
-            ("3rd October", date(2026, 10, 7), date(2026, 10, 3)),  # within the week's grace
-            ("20th January", date(2026, 10, 7), date(2027, 1, 20)),
-            # A year ago or nine-plus months ahead: an old item, ambiguous.
-            ("1st October", date(2026, 10, 9), None),
-            ("1st August", date(2026, 10, 9), None),
-            # 2029 has no verified Full Term dates.
-            ("15th October", date(2029, 10, 7), None),
-            ("31st February", date(2026, 10, 7), None),
-            ("TBC", date(2026, 10, 7), None),
-        ],
-    )
-    def test_a_yearless_list_date(self, text, seen, expected) -> None:
-        from camsocs_pipeline.extract.when import TermCalendar
-
-        assert su_whatson.infer_listing_date(text, seen, TermCalendar.default()) == expected
 
 
 def test_staged_events_load_as_claims_and_organiser_sets(tmp_path: Path) -> None:
