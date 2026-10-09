@@ -1,6 +1,6 @@
 """The ordered stage registry — the one list `sync` runs.
 
-    seed → harvest → resolve → enrich → events → inbox → load → report
+    seed → harvest → resolve → enrich → classify → events → inbox → load → report
 
 ## Convention for adding a stage (parallel agents: read this)
 
@@ -70,6 +70,13 @@ STAGES: list[Stage] = [
     # Society websites + Linktree: links, JSON-LD, LLM extraction (§13, §14).
     Stage(
         "enrich", fetches=True, description="websites + Linktree → keyed enrichment observations"
+    ),
+    #
+    # ── classify (R2): type, level and facets of every listed organisation ─────
+    # Sources first, rules next, the bulk model with quotes for the rest.
+    Stage(
+        "classify",
+        description="orgType, level, categories, activities, audiences, languages, tags",
     ),
     #
     # ── events (T6): camsocs_pipeline/events/; each writes <source_type>.events ──

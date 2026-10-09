@@ -187,9 +187,22 @@ class StagingStore:
             latest[_part_of(path)] = path
         return sorted(latest.values())
 
-    def read_latest(self, directory: str) -> list[Record]:
-        """Every record of the latest file of each part in `directory`."""
-        return [record for path in self.latest_paths(directory) for record in self.read(path)]
+    def read_latest(self, directory: str, *, exclude_parts: Iterable[str] = ()) -> list[Record]:
+        """Every record of the latest file of each part in `directory`, but
+        the parts named in `exclude_parts` (a stage reading everything but
+        its own previous output)."""
+        excluded = set(exclude_parts)
+        return [
+            record
+            for path in self.latest_paths(directory)
+            if _part_of(path) not in excluded
+            for record in self.read(path)
+        ]
+
+    def read_latest_part(self, directory: str, part: str) -> list[Record]:
+        """Every record of the latest file of one part (a stage's own last output)."""
+        paths = [path for path in self.latest_paths(directory) if _part_of(path) == part]
+        return [record for path in paths for record in self.read(path)]
 
     def directories(self) -> list[str]:
         """Every staging directory that holds at least one file, sources first."""
