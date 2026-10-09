@@ -83,9 +83,12 @@ class RenderedPdf:
     pages: int
 
 
-def render_pdf(data: bytes, *, max_pages: int = MAX_PDF_PAGES) -> RenderedPdf | None:
-    """The first `max_pages` pages as PNG plus their text layer; None if the
-    bytes are not a readable PDF."""
+def render_pdf(
+    data: bytes, *, max_pages: int = MAX_PDF_PAGES, first_page: int = 0
+) -> RenderedPdf | None:
+    """`max_pages` pages from `first_page` (0-based) as PNG plus their text
+    layer; None if the bytes are not a readable PDF. `pages` is the whole
+    document's page count, so a caller can read a long PDF in chunks."""
     try:
         document = pdfium.PdfDocument(data)
     except pdfium.PdfiumError as error:
@@ -94,7 +97,7 @@ def render_pdf(data: bytes, *, max_pages: int = MAX_PDF_PAGES) -> RenderedPdf | 
     try:
         images: list[bytes] = []
         texts: list[str] = []
-        for index in range(min(len(document), max_pages)):
+        for index in range(first_page, min(len(document), first_page + max_pages)):
             page = document[index]
             texts.append(page.get_textpage().get_text_bounded())
             rendered = page.render(scale=PDF_RENDER_SCALE).to_pil()

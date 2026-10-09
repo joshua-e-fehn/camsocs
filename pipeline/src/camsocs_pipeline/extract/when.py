@@ -287,6 +287,32 @@ def _resolve_day(
     raise Unresolvable("no date, term week, relative day or weekday given")
 
 
+def week_anchor(day: date) -> date:
+    """The Thursday that starts `day`'s student week (weeks run Thursday to
+    Wednesday). LLM stages give the model this as the reference date rather
+    than the day itself, so a page or card read again within the week asks
+    nothing new (`extract.memo` keys on the whole request)."""
+    return day - timedelta(days=(day.weekday() - _THURSDAY) % 7)
+
+
+def term_of_dates(days: Iterable[date], calendar: TermCalendar) -> Term | None:
+    """The one verified term every day in `days` falls in (from its Week 0 to
+    a week after Full Term ends), or None — no days, a day outside every
+    term, or days in different terms. A termcard that does not name its term
+    but dates some rows ("Wed 14 Oct") is a card for that term."""
+    found: set[Term] = set()
+    for day in days:
+        terms = [
+            term
+            for term in calendar.terms
+            if term.week_start(0) <= day <= term.end + timedelta(days=7)
+        ]
+        if len(terms) != 1:
+            return None
+        found.add(terms[0])
+    return next(iter(found)) if len(found) == 1 else None
+
+
 def london_date(moment: datetime) -> date:
     """The Europe/London calendar date of an aware instant."""
     if moment.tzinfo is None:
@@ -306,4 +332,6 @@ __all__ = [
     "normalise_weekday",
     "parse_hhmm",
     "resolve_when",
+    "term_of_dates",
+    "week_anchor",
 ]

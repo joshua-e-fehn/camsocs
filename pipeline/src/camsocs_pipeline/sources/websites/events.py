@@ -26,7 +26,11 @@ no structured events. Each event must carry a ``when_quote`` that is on the
 page and holds its date — the day number with a month, a numeric date, or a
 term week with its weekday (`dated_quote`); an event without one is dropped.
 A page cannot say "today" (it has no date of its own), so relative days are
-dropped too. The reference date the model is given is the Thursday that
+dropped too. A calendar date's year must be the one its quote states, or the
+weekday its quote states must fall on it that year; a date with neither is
+kept only within eight weeks of the day the page was read (`year_problem`:
+pages keep last year's programme online without its year). The reference
+date the model is given is the Thursday that
 starts the week the page was read (`week_anchor`), so a re-read within the
 week costs nothing. Dates are resolved in code (`extract.when`); term weeks need the
 term the page names (or its URL / title says), else the event is dropped as
@@ -92,7 +96,7 @@ from camsocs_pipeline.extract.llm import (
     assert_llm_source_allowed,
 )
 from camsocs_pipeline.extract.memo import LLMMemo
-from camsocs_pipeline.extract.when import TermCalendar, london_date
+from camsocs_pipeline.extract.when import TermCalendar, london_date, week_anchor
 from camsocs_pipeline.media import probe_image
 from camsocs_pipeline.models.observation import (
     EventObservation,
@@ -146,6 +150,13 @@ _NUMERIC_DATE = re.compile(r"\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2}|\d{4}))?\b")
 _ISO_DATE = re.compile(r"\b20\d\d-(\d\d)-(\d\d)\b")
 _WEEK = re.compile(r"\b(?:week|wk)\.?\s*(\d{1,2})\b|\b(\d{1,2})(?:st|nd|rd|th)\s+week\b", re.I)
 _WEEKDAY = re.compile(r"\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b", re.I)
+_WEEKDAY_NAME = re.compile(
+    r"\b(mon|tue|wed|thu|fri|sat|sun)(?:day|s|sday|nesday|rsday|urday|r|rs|t)?\.?\b", re.I
+)
+_WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+_YEAR = re.compile(r"\b(20\d\d)\b")
+#: A date a page gives without its year or weekday is trusted this far ahead.
+YEARLESS_HORIZON = timedelta(weeks=8)
 
 
 @dataclass(frozen=True)
@@ -389,9 +400,8 @@ def dated_quote(event: LlmEvent, source_text: str) -> bool:
     if event.relative_day:
         return False
     if event.date:
-        try:
-            day = date.fromisoformat(event.date.strip()[:10])
-        except ValueError:
+        day = _iso(event.date)
+        if day is None:
             return False
         numbers = {int(m.group(1)) for m in _DAY_MONTH.finditer(quote)} | {
             int(m.group(1)) for m in _MONTH_DAY.finditer(quote)
@@ -406,11 +416,33 @@ def dated_quote(event: LlmEvent, source_text: str) -> bool:
     return False
 
 
-def week_anchor(day: date) -> date:
-    """The Thursday that starts `day`'s student week: the reference date the
-    model is given, so a page read again during the week asks nothing new
-    (`extract.memo` keys on the whole request)."""
-    return day - timedelta(days=(day.weekday() - 3) % 7)
+def _iso(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat((value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
+def year_problem(event: LlmEvent, read_on: date) -> str | None:
+    """Why the year of a calendar date cannot be trusted, or None. Pages keep
+    last year's programme online without its year, and "5 March" read in
+    October is then next March to a reader who guesses. So the year must be
+    the one the quote states, or the weekday the quote states must fall on
+    that date in that year; a date with neither is kept only within
+    `YEARLESS_HORIZON` of the day the page was read."""
+    day = _iso(event.date)
+    if day is None:
+        return None
+    quote = event.when_quote or ""
+    years = {int(y) for y in _YEAR.findall(quote)}
+    if years:
+        return None if day.year in years else "the year differs from the page's"
+    weekdays = {_WEEKDAYS[m.group(1).lower()[:3]] for m in _WEEKDAY_NAME.finditer(quote)}
+    if weekdays:
+        return None if day.weekday() in weekdays else "the weekday does not fall on that date"
+    if day - read_on > YEARLESS_HORIZON:
+        return "a date without its year or weekday, months ahead"
+    return None
 
 
 def page_text(page: Page) -> str:
@@ -429,8 +461,12 @@ def llm_events(
     memo: LLMMemo | None,
     calendar: TermCalendar,
     out: SiteResult,
+    source_type: str = SOURCE_TYPE,
+    event_source: str = EVENT_SOURCE,
 ) -> list[EventObservation]:
-    """The model's reading of one page, filtered as the module docstring says."""
+    """The model's reading of one page, filtered as the module docstring says
+    (also a termcard that is an HTML page: `source_type` / `event_source`
+    ``termcard``)."""
     assert_llm_source_allowed(page.url)
     text = page_text(page)
     if len(text.strip()) < 40:
@@ -449,12 +485,17 @@ def llm_events(
     if term_name is None:
         term_name, term_year = term_hint(f"{page.url} {page.title}")
     term = calendar.term_named(term_name, term_year, anchor)
-    kept = [event for event in extracted.events if dated_quote(event, text)]
-    if len(kept) < len(extracted.events):
-        out.tally.drop("no dated quote on the page", len(extracted.events) - len(kept))
+    kept: list[LlmEvent] = []
+    for event in extracted.events:
+        if not dated_quote(event, text):
+            out.tally.drop("no dated quote on the page")
+        elif (problem := year_problem(event, london_date(retrieved))) is not None:
+            out.tally.drop(problem)
+        else:
+            kept.append(event)
     context = EventContext(
-        source_type=SOURCE_TYPE,
-        event_source=EVENT_SOURCE,
+        source_type=source_type,
+        event_source=event_source,
         source_url=page.url,
         retrieved_at=retrieved,
         source_text=text,
@@ -748,6 +789,6 @@ __all__ = [
     "sites_from",
     "structured_draft",
     "structured_events",
-    "week_anchor",
     "window_from",
+    "year_problem",
 ]

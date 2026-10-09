@@ -12,15 +12,25 @@
    it (§14), are skipped with the reason — never "found", never sent to the
    model. A card read under an override says so in its events' access note.
 3. **Read** with the strong model's vision (`image_events_v1`): PDFs are
-   rendered page by page (`extract.images.render_pdf`, at most four pages) and
-   their text layer goes along; images are sent as they are (shrunk). Quotes
-   are checked against the PDF's text layer — an image-only card has no text
-   to check against, so its values stay `inferred`. Replies are cached by the
-   file's content hash, so an unchanged card costs nothing on later runs.
+   rendered page by page (`extract.images.render_pdf`), four pages a call and
+   at most `MAX_CARD_PAGES`, each call with its pages' text layer; images are
+   sent as they are (shrunk). Quotes are checked against the PDF's text
+   layer — an image-only card has no text to check against, so its values
+   stay `inferred`. Replies are cached by the request (the card's pages and
+   the reference date, the Thursday that starts the week), so an unchanged
+   card costs nothing again that week. A card whose URL names an earlier
+   academic year's term, or whose upload path dates it before this year
+   (`sources.termcards.stale_reason`), is not read.
+   A termcard URL that is an HTML page with no card file on it (a "Term
+   card" page that lists the events as text) is read like a society's
+   events page (`sources.websites.events`, bulk model, prompt
+   `website_events_v1`: every event needs a dated quote on the page).
 4. **Dates**: "Week 3 Wednesday" needs to know the term. The card's own words
-   ("Michaelmas 2026", "MT26") win, then the URL or file name; a card that
-   says neither keeps only its events with calendar dates — it may be last
-   term's.
+   ("Michaelmas 2026", "MT26") win, then the URL or file name, then the
+   card's own calendar-dated rows when they all fall in one verified term
+   (`extract.when.term_of_dates`) — dates computed from that inferred term
+   are claimed ``inferred``. A card that gives none of these keeps only its
+   events with calendar dates — it may be last term's.
 5. Events are **public** (the society published the card), or `members_only`
    where the card says so, organised by the card's organisation, and dropped
    when another source already has them (`extract.dedupe`).
@@ -33,11 +43,12 @@ cards read this run plus the previous file's events for cards not reached
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from camsocs_pipeline.extract.dedupe import EventIndex
 from camsocs_pipeline.extract.events import (
     EventContext,
+    LlmEvents,
     build_events,
     extract_events,
     load_prompt,
@@ -46,7 +57,12 @@ from camsocs_pipeline.extract.events import (
 from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
-from camsocs_pipeline.extract.when import TermCalendar, london_date
+from camsocs_pipeline.extract.when import (
+    TermCalendar,
+    london_date,
+    term_of_dates,
+    week_anchor,
+)
 from camsocs_pipeline.known_orgs import KnownOrgs, domain_of
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo
 from camsocs_pipeline.pipeline.context import StageContext
@@ -57,13 +73,24 @@ from camsocs_pipeline.sources.policy import (
     SOCIETY_WEBSITE,
     FetchPurpose,
 )
-from camsocs_pipeline.sources.termcards import Skipped, TermcardFile, fetch_termcard, term_hint
+from camsocs_pipeline.sources.termcards import (
+    NO_CARD_FILE,
+    Skipped,
+    TermcardFile,
+    fetch_termcard,
+    stale_reason,
+    term_hint,
+)
+from camsocs_pipeline.sources.websites import events as website_events
+from camsocs_pipeline.sources.websites.page import parse_page
 
 logger = logging.getLogger(__name__)
 
 SOURCE_TYPE = "termcard"
 EVENT_SOURCE = "termcard"
 MAX_TERMCARDS_PER_RUN = 60
+#: Pages of one PDF card read at most (four a model call).
+MAX_CARD_PAGES = 12
 
 
 def run(ctx: StageContext) -> None:
@@ -86,6 +113,7 @@ def run(ctx: StageContext) -> None:
         exclude=[SOURCE_TYPE, "mailing_list_email"],
     )
     now = datetime.now(UTC)
+    today = london_date(now)
 
     events: list[EventObservation] = []
     reached: set[str] = set()  # organisations whose cards this run reached
@@ -98,26 +126,50 @@ def run(ctx: StageContext) -> None:
     ) as client:
         for org_key, url in cards[:budget]:
             reached.add(org_key)
-            fetched = fetch_termcard(client, url, _purpose(known, org_key, url))
-            if isinstance(fetched, Skipped):
-                reason = fetched.reason.split(" (", 1)[0]
-                skipped[reason] = skipped.get(reason, 0) + 1
-                continue
+            purpose = _purpose(known, org_key, url)
             org = known.get(org_key)
+            org_name = org.display_name if org else org_key
+            stale = stale_reason(url, today)
+            fetched = fetch_termcard(client, url, purpose) if stale is None else Skipped(url, stale)
+            if isinstance(fetched, TermcardFile):
+                stale = stale_reason(fetched.url, today)
             try:
-                found = card_events(
-                    fetched,
-                    org_key=org_key,
-                    org_name=org.display_name if org else org_key,
-                    listed_url=url,
-                    now=now,
-                    llm=llm,
-                    memo=memo,
-                    calendar=calendar,
-                    notes=ctx.report.notes,
-                )
+                if stale is not None:
+                    found = None
+                    fetched = Skipped(url, stale)
+                elif isinstance(fetched, Skipped):
+                    found = None
+                    if fetched.reason == NO_CARD_FILE:
+                        found = page_events(
+                            client,
+                            url,
+                            purpose,
+                            org_key=org_key,
+                            org_name=org_name,
+                            now=now,
+                            llm=llm,
+                            memo=memo,
+                            calendar=calendar,
+                        )
+                else:
+                    found = card_events(
+                        fetched,
+                        org_key=org_key,
+                        org_name=org_name,
+                        listed_url=url,
+                        now=now,
+                        llm=llm,
+                        memo=memo,
+                        calendar=calendar,
+                        notes=ctx.report.notes,
+                    )
             except LLMValidationError:
                 skipped["reply did not validate"] = skipped.get("reply did not validate", 0) + 1
+                continue
+            if found is None:
+                assert isinstance(fetched, Skipped)
+                reason = fetched.reason.split(" (", 1)[0]
+                skipped[reason] = skipped.get(reason, 0) + 1
                 continue
             read += 1
             events.extend(event for event in found if not index.is_duplicate_record(event))
@@ -165,6 +217,73 @@ def _fetch_info(card: TermcardFile) -> FetchInfo:
     )
 
 
+def page_events(
+    client: PoliteClient,
+    url: str,
+    purpose: FetchPurpose,
+    *,
+    org_key: str,
+    org_name: str,
+    now: datetime,
+    llm: LLMClient,
+    memo: LLMMemo | None,
+    calendar: TermCalendar,
+) -> list[EventObservation] | None:
+    """The events a termcard URL lists as HTML text when it links no card
+    file: read like a society's events page (`sources.websites.events`), from
+    the copy `fetch_termcard` just cached. None when there is no such page."""
+    cached = client.cached(url, purpose)
+    if cached is None or "html" not in (cached.content_type or "").lower():
+        return None
+    page = parse_page(cached.final_url or url, cached.text)
+    if {"noindex", "none"} & page.robots:
+        return None
+    site = website_events.Site(org_key, org_name, page.url)
+    out = website_events.SiteResult(site)
+    found = website_events.llm_events(
+        page,
+        cached,
+        site,
+        llm=llm,
+        memo=memo,
+        calendar=calendar,
+        out=out,
+        source_type=SOURCE_TYPE,
+        event_source=EVENT_SOURCE,
+    )
+    return website_events.current(found, website_events.window_from(now), out.tally)
+
+
+def _chunks(card: TermcardFile) -> list[tuple[tuple[bytes, ...], str]]:
+    """``(page images, text layer)`` per model call: a PDF four pages at a
+    time up to `MAX_CARD_PAGES`; an image whole, without a text layer."""
+    if card.kind != "pdf":
+        image = vision_image(card.data)
+        return [((image,), "")] if image else []
+    chunks: list[tuple[tuple[bytes, ...], str]] = []
+    first = 0
+    while first < MAX_CARD_PAGES:
+        rendered = render_pdf(card.data, first_page=first)
+        if rendered is None or not rendered.images:
+            break
+        chunks.append((tuple(rendered.images), redact_contacts(rendered.text)))
+        first += len(rendered.images)
+        if first >= rendered.pages:
+            break
+    return chunks
+
+
+def _dated(extracted: LlmEvents) -> list[date]:
+    """The calendar dates the card itself prints."""
+    days: list[date] = []
+    for event in extracted.events:
+        try:
+            days.append(date.fromisoformat((event.date or "").strip()[:10]))
+        except ValueError:
+            continue
+    return days
+
+
 def _organiser(record: EventObservation) -> str | None:
     keys = [o.identity.known_key for o in record.organisers if o.identity.known_key]
     return keys[0] if keys else None
@@ -183,16 +302,9 @@ def card_events(
     notes: list[str],
 ) -> list[EventObservation]:
     """The events on one termcard file."""
-    anchor = london_date(now)
-    text_layer = ""
-    if card.kind == "pdf":
-        rendered = render_pdf(card.data)
-        images = tuple(rendered.images) if rendered else ()
-        text_layer = redact_contacts(rendered.text) if rendered else ""
-    else:
-        image = vision_image(card.data)
-        images = (image,) if image else ()
-    if not images:
+    anchor = week_anchor(london_date(now))
+    chunks = _chunks(card)
+    if not chunks:
         notes.append(f"  unreadable termcard file for {org_key}")
         return []
 
@@ -201,30 +313,45 @@ def card_events(
     assert_llm_source_allowed(listed_url)
     assert_llm_source_allowed(card.url)
     prompt, version = load_prompt("image_events_v1")
-    request = calendar.context(anchor)
-    if text_layer:
-        request += f"\n\n--- TEXT LAYER ---\n{text_layer}"
-    result = extract_events(
-        llm,
-        memo,
-        prompt=prompt,
-        prompt_version=version,
-        text=request,
-        tier="strong",
-        images=images,
+    replies: list[LlmEvents] = []
+    model = ""
+    for images, chunk_text in chunks:
+        request = calendar.context(anchor)
+        if chunk_text:
+            request += f"\n\n--- TEXT LAYER ---\n{chunk_text}"
+        result = extract_events(
+            llm,
+            memo,
+            prompt=prompt,
+            prompt_version=version,
+            text=request,
+            tier="strong",
+            images=images,
+        )
+        replies.append(result.value)
+        model = result.model
+    extracted = LlmEvents(
+        society_name=next((r.society_name for r in replies if r.society_name), None),
+        term=next((r.term for r in replies if r.term), None),
+        term_year=next((r.term_year for r in replies if r.term), None),
+        events=[event for reply in replies for event in reply.events],
     )
-    extracted = result.value
+    text_layer = "\n".join(chunk_text for _images, chunk_text in chunks if chunk_text)
     term_name, term_year = extracted.term, extracted.term_year
     if term_name is None:
         term_name, term_year = term_hint(f"{listed_url} {card.url}")
     term = calendar.term_named(term_name, term_year, anchor)
+    term_inferred = False
+    if term is None:
+        term = term_of_dates(_dated(extracted), calendar)
+        term_inferred = term is not None
     context = EventContext(
         source_type=SOURCE_TYPE,
         event_source=EVENT_SOURCE,
         source_url=card.url,
         retrieved_at=now,
         source_text=text_layer,
-        model=result.model,
+        model=model,
         prompt_version=version,
         evidence="primary",
         visibility="public",
@@ -234,6 +361,7 @@ def card_events(
         calendar=calendar,
         term=term,
         require_term=True,
+        term_inferred=term_inferred,
         scope=org_key,
         organiser_key=org_key,
         organiser_name=org_name,
@@ -246,4 +374,4 @@ def card_events(
     return events
 
 
-__all__ = ["card_events", "run"]
+__all__ = ["MAX_CARD_PAGES", "card_events", "page_events", "run"]

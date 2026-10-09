@@ -201,6 +201,9 @@ class EventContext:
     #: Refuse term-week dates unless `term` is known (a termcard that does not
     #: say which term it is for may be last term's).
     require_term: bool = False
+    #: `term` was inferred (from the source's own dated rows), not stated:
+    #: dates computed from a term week are then claimed ``inferred``.
+    term_inferred: bool = False
     notes: list[str] = field(default_factory=list)
 
 
@@ -272,6 +275,10 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
         )
 
     when_quote = event.when_quote
+    if context.term_inferred and when.basis == "term_week":
+        # The week and day are the source's words, the term is our inference:
+        # the computed date is not something the text states.
+        when_quote = None
     # Without a stated time the event is filed as all day at midnight: a
     # representation of "no time given", not a fact the text states — both
     # are `inferred`, with no quote (the date's words stay in valueRaw).
@@ -281,7 +288,7 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
         llm("startsAt", epoch_ms(when.starts_at), when_quote if timed else None),
         llm("allDay", when.all_day, when_quote if timed else None),
     ]
-    fields[1].value_raw = when_quote
+    fields[1].value_raw = event.when_quote
     if when.ends_at is not None:
         fields.append(llm("endsAt", epoch_ms(when.ends_at), when_quote))
     if event.description and event.description.strip():

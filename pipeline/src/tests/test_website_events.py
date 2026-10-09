@@ -300,3 +300,21 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     website.run(ctx, now=NOW)
     assert len(staging.read_latest("society_website.events")) == 2
     assert any("2 carried forward" in n for n in ctx.report.notes)
+
+
+@pytest.mark.parametrize(
+    ("event", "problem"),
+    [
+        ({"date": "2026-10-15", "when_quote": "Thursday 15 October"}, None),
+        ({"date": "2027-03-05", "when_quote": "Fri 5 March 2027"}, None),
+        ({"date": "2026-10-20", "when_quote": "20 October"}, None),  # within eight weeks
+        # Last year's programme, read in October: 5 March 2027 is a Friday.
+        ({"date": "2027-03-05", "when_quote": "Thursday 5 March"}, "weekday"),
+        ({"date": "2027-03-05", "when_quote": "5 March"}, "months ahead"),
+        ({"date": "2027-03-05", "when_quote": "5 March 2026"}, "year"),
+        ({"term_week": 3, "weekday": "wednesday", "when_quote": "Week 3 Wednesday"}, None),
+    ],
+)
+def test_a_dates_year_must_be_stated_or_checkable(event: dict, problem: str | None) -> None:
+    found = website.year_problem(LlmEvent(title="x", **event), TODAY)
+    assert (found is None) if problem is None else (found is not None and problem in found)
