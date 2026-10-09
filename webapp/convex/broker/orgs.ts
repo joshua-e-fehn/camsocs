@@ -3,7 +3,7 @@ import {
   paginationResultValidator,
   type WithoutSystemFields,
 } from "convex/server"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import {
   INTERACTION_CHANNELS,
   NEED_OFFER_ITEMS,
@@ -324,7 +324,8 @@ export const setNeedOffer = mutation({
 
 /**
  * Hides a listing from the public site (a "remove" or "object" request), or
- * shows it again. The row and its claims stay — the pipeline keeps it current
+ * shows it again — refused while the listing is on the suppression list
+ * (`broker.listingRequests.acceptRemoval`; lift it first, `broker.suppressions.lift`). The row and its claims stay — the pipeline keeps it current
  * and the broker still sees it — but it loses its directory card, so no public
  * query lists, names or links it, and `orgs.getBySlug` answers null.
  */
@@ -336,6 +337,17 @@ export const setHidden = mutation({
     const org = await findOrganisation(ctx, args.orgKey)
     if (!org) throw new Error("That organisation was not found")
     if ((org.hidden === true) === args.hidden) return null
+    if (!args.hidden) {
+      const suppressed = await ctx.db
+        .query("suppressions")
+        .withIndex("by_orgKey", (q) => q.eq("orgKey", org.key))
+        .take(50)
+      if (suppressed.some((row) => row.scope === "organisation")) {
+        throw new ConvexError(
+          "This listing was removed on request: lift its suppression before showing it again",
+        )
+      }
+    }
     await ctx.db.patch("organisations", org._id, {
       hidden: args.hidden ? true : undefined,
       updatedAt: Date.now(),

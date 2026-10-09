@@ -224,7 +224,15 @@ class TestRoutes:
             broker={"needs": [{"item": "speakers"}]},
         )
         report = loader().post_observations([record, event()], run_key="r1")
-        assert order == ["sources", "claims", "orgInternal", "eventOrganisers", "brokerInferences"]
+        # The suppression list first: nothing is posted before it is applied.
+        assert order == [
+            "suppressions",
+            "sources",
+            "claims",
+            "orgInternal",
+            "eventOrganisers",
+            "brokerInferences",
+        ]
         assert report.claims.entities == {"created": 1}
 
     def test_claims_carry_the_run_key_and_collect_rejections(self, net: respx.MockRouter) -> None:

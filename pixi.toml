@@ -8,6 +8,8 @@
 ##
 ##   pixi run dev / build / pipeline / lint / format / typecheck / test / check-codegen
 ##   pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
+##   pixi run harvest [-- --dry-run]          full sync + coverage report (var/reports/)
+##   pixi run prune-cache [-- --dry-run]      retention R7 for var/cache and staging
 
 [workspace]
 name = "camsocs"
@@ -43,6 +45,19 @@ description = "Production build of the webapp (deploys Convex only on Vercel wit
 cmd = "python -m camsocs_pipeline.cli"
 cwd = "pipeline"
 description = "Run the Python pipeline, e.g. `pixi run pipeline -- sync --dry-run`."
+
+[tasks.harvest]
+cmd = "python -m camsocs_pipeline.cli harvest"
+cwd = "pipeline"
+# Every stage in registry order (seed → harvest → resolve → enrich → events →
+# inbox / Instagram / termcards → load → report), then a re-derivation; writes
+# var/reports/coverage-<date>.md. `pixi run harvest -- --dry-run` reads, writes nothing.
+description = "Full harvest: every stage in order, re-derive, coverage report (var/reports/)."
+
+[tasks.prune-cache]
+cmd = "python -m camsocs_pipeline.cli prune-cache"
+cwd = "pipeline"
+description = "Retention R7: delete var/cache files (and superseded staging) older than 90 days."
 
 [tasks.lint-python]
 cmd = "ruff check . && ruff format --check ."

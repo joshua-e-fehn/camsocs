@@ -1,4 +1,5 @@
 import { type Infer, v } from "convex/values"
+import type { CoverageRow } from "../../lib/broker/coverage"
 import {
   CATEGORIES,
   INTERNAL_SOURCE_TYPES,
@@ -115,6 +116,30 @@ const chips = (entries: Doc<"orgBrokerProfiles">["needs"]) =>
     .filter((entry) => entry.status !== "rejected")
     .map(({ item, status }) => ({ item, status }))
 
+/** Which headline fields an organisation holds (coverage, the broker table). */
+function headlineFields(org: Doc<"organisations">, best: ReturnType<typeof bestRoleAddress>) {
+  return {
+    email: best !== undefined,
+    website: org.website !== undefined,
+    instagram: org.socials.some((social) => social.platform === "instagram"),
+    description: Boolean(org.description || org.shortDescription),
+  }
+}
+
+/** One organisation as the coverage fold counts it (lib/broker/coverage.ts). */
+export function coverageRowOf(org: Doc<"organisations">): CoverageRow {
+  return {
+    level: org.level,
+    orgType: org.orgType,
+    status: org.status,
+    isCounterpart: org.isCounterpart,
+    hidden: org.hidden === true,
+    has: headlineFields(org, bestRoleAddress(org)),
+    heldFields: heldFields(org.meta),
+    missingFields: org.missingFields,
+  }
+}
+
 export function brokerOrgRow(
   org: Doc<"organisations">,
   profile: Doc<"orgBrokerProfiles"> | null,
@@ -131,12 +156,7 @@ export function brokerOrgRow(
     hidden: org.hidden === true,
     collegeKeys: org.collegeKeys,
     categories: org.categories,
-    has: {
-      email: best !== undefined,
-      website: org.website !== undefined,
-      instagram: org.socials.some((social) => social.platform === "instagram"),
-      description: Boolean(org.description || org.shortDescription),
-    },
+    has: headlineFields(org, best),
     missingFields: org.missingFields,
     bestAddress: best as BrokerOrgRow["bestAddress"],
     heldFields: heldFields(org.meta),

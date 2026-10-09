@@ -1,10 +1,12 @@
 "use client"
 
+import { RefreshCwIcon } from "lucide-react"
 import Link from "next/link"
-import { useMemo } from "react"
+import { useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import { StatTile } from "@/components/molecules/stat-tile"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -15,8 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAllBrokerOrgRows, useBrokerSummary } from "@/hooks/convex/broker"
-import { COVERAGE_FIELDS, coverageStats } from "@/lib/broker/coverage"
+import { runWithToast, useBrokerSummary, useRefreshCoverage } from "@/hooks/convex/broker"
+import { COVERAGE_FIELDS } from "@/lib/broker/coverage"
 import {
   capitalise,
   EVENT_SOURCE_LABELS,
@@ -33,6 +35,10 @@ const COVERAGE_LABELS: Record<(typeof COVERAGE_FIELDS)[number], string> = {
   instagram: "Instagram",
   description: "Description",
 }
+
+const NOT_COMPUTED = (
+  <p className="text-sm text-muted-foreground">Not computed yet — refresh the coverage.</p>
+)
 
 const RUN_STATUS_VARIANT = {
   success: "secondary",
@@ -55,12 +61,26 @@ function Meter({ share, label }: { share: number; label: string }) {
   )
 }
 
+/**
+ * The broker's overview. Every number is computed on the server
+ * (`broker.overview.summary`): directory coverage is the latest snapshot
+ * convex/coverage.ts folds over every organisation a page at a time (after
+ * each pipeline run, daily, or on "Refresh"), and the quarantine is what the
+ * pipeline's last resolve stage reported.
+ */
 export function BrokerOverview() {
-  const { rows, complete } = useAllBrokerOrgRows()
   const summary = useBrokerSummary()
-  const stats = useMemo(() => (rows ? coverageStats(rows) : undefined), [rows])
+  const refreshCoverage = useRefreshCoverage()
+  const [refreshing, setRefreshing] = useState(false)
+  const stats = summary?.coverage?.stats
   // Only the statuses that occur, so the table fits a narrow card.
   const statuses = ORG_STATUSES.filter((status) => stats?.byStatus[status])
+
+  const refresh = async () => {
+    setRefreshing(true)
+    await runWithToast(refreshCoverage({}), "Recomputing coverage — the numbers update shortly")
+    setRefreshing(false)
+  }
 
   return (
     <>
@@ -68,45 +88,69 @@ export function BrokerOverview() {
         title="Overview"
         description="Directory coverage, upcoming events, pipeline runs and what needs attention."
       >
-        {rows && !complete && <Badge variant="outline">Loading organisations…</Badge>}
+        {summary?.coverage && (
+          <Badge variant="outline" className="font-mono">
+            coverage {formatDateTime(summary.coverage.computedAt)}
+          </Badge>
+        )}
+        <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing}>
+          <RefreshCwIcon className={refreshing ? "animate-spin" : undefined} />
+          Refresh coverage
+        </Button>
       </BrokerPageHeader>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {stats ? (
+      {summary && !summary.coverage && (
+        <p className="text-sm text-muted-foreground">
+          No coverage computed yet: it is computed after each pipeline run and daily — or now, with
+          “Refresh coverage”.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
+        {summary ? (
           <>
             <StatTile
               emphasis
               label="Listed organisations"
-              value={stats.total}
-              hint={`${stats.byStatus.active ?? 0} active · ${stats.hidden} hidden · ${stats.counterparts} counterpart${stats.counterparts === 1 ? "" : "s"}`}
+              value={stats ? stats.total : "…"}
+              hint={
+                stats
+                  ? `${stats.byStatus.active ?? 0} active · ${stats.hidden} hidden · ${stats.counterparts} counterpart${stats.counterparts === 1 ? "" : "s"}`
+                  : ""
+              }
             />
             <StatTile
               label="Events, next 14 days"
-              value={summary ? summary.events.total : "…"}
-              hint={summary ? `${summary.events.byVisibility.cam_only ?? 0} Cambridge-only` : ""}
+              value={summary.events.total}
+              hint={`${summary.events.byVisibility.cam_only ?? 0} Cambridge-only`}
             />
             <StatTile
               label="Open requests"
-              value={summary ? summary.openRequests.total : "…"}
+              value={summary.openRequests.total}
               hint={
-                summary ? (
-                  <Link className="underline-offset-4 hover:underline" href="/dashboard/requests">
-                    {summary.openRequests.byKind.remove ?? 0} removal ·{" "}
-                    {summary.openRequests.byKind.object ?? 0} objection
-                  </Link>
-                ) : (
-                  ""
-                )
+                <Link className="underline-offset-4 hover:underline" href="/dashboard/requests">
+                  {summary.openRequests.byKind.remove ?? 0} removal ·{" "}
+                  {summary.openRequests.byKind.object ?? 0} objection
+                </Link>
               }
             />
             <StatTile
               label="Follow-ups due"
-              value={summary ? summary.followUpsDue : "…"}
-              hint={summary ? `${summary.stalePeople} stale contacts` : ""}
+              value={summary.followUpsDue}
+              hint={`${summary.stalePeople} stale contacts`}
+            />
+            <StatTile
+              label="Quarantined"
+              value={summary.quarantine ? summary.quarantine.held : "—"}
+              hint={
+                summary.quarantine
+                  ? `${summary.quarantine.review} to review · ${summary.quarantine.dropped} dropped · run ${formatDateTime(summary.quarantine.startedAt)}`
+                  : "No resolve stage reported yet"
+              }
             />
           </>
         ) : (
-          [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+          [0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
         )}
       </div>
 
@@ -127,7 +171,9 @@ export function BrokerOverview() {
                     <Meter share={stats.share[field]} label={COVERAGE_LABELS[field]} />
                   </div>
                 ))
-              : [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-8" />)}
+              : summary === undefined
+                ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-8" />)
+                : NOT_COMPUTED}
           </CardContent>
         </Card>
 
@@ -166,8 +212,10 @@ export function BrokerOverview() {
                     ))}
                 </TableBody>
               </Table>
-            ) : (
+            ) : summary === undefined ? (
               <Skeleton className="h-40" />
+            ) : (
+              NOT_COMPUTED
             )}
           </CardContent>
         </Card>
@@ -218,7 +266,7 @@ export function BrokerOverview() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {stats ? (
-              stats.missingTop.slice(0, 8).map(([field, count]) => (
+              stats.missingTop.slice(0, 8).map(({ field, count }) => (
                 <div key={field} className="flex flex-col gap-1">
                   <div className="flex items-baseline justify-between text-sm">
                     <span>{capitalise(fieldLabel(field))}</span>
@@ -227,8 +275,10 @@ export function BrokerOverview() {
                   <Meter share={stats.total ? count / stats.total : 0} label={fieldLabel(field)} />
                 </div>
               ))
-            ) : (
+            ) : summary === undefined ? (
               <Skeleton className="h-40" />
+            ) : (
+              NOT_COMPUTED
             )}
           </CardContent>
         </Card>

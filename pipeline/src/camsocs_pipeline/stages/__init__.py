@@ -122,7 +122,8 @@ STAGES: list[Stage] = [
     Stage("load", requires=("resolve",), description="staged observations → Convex"),
     #
     # ── report (T14): coverage report ───────────────────────────────────────────
-    # Stage("report"),
+    # Reads the directory back from Convex → var/reports/coverage-<date>.md.
+    Stage("report", description="coverage → var/reports/coverage-<date>.md (read-only)"),
 ]
 
 

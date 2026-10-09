@@ -5,19 +5,21 @@ import {
   INTRODUCTION_STATUSES,
   LISTING_REQUEST_KINDS,
 } from "../../lib/vocab"
-import { query } from "../_generated/server"
+import { internal } from "../_generated/api"
+import { mutation, query } from "../_generated/server"
 import { requireBrokerUser } from "../lib/auth"
 import { DAY_MS, londonIsoDate } from "../lib/derived"
-import { harvestRunFields } from "../schema"
+import { coverageStatsValidator, harvestRunFields } from "../schema"
 
 /**
- * The broker overview's counters that are cheap to compute on the server:
- * events in the next 14 days by source, the latest pipeline runs, open
- * listing requests, due follow-ups, stale people and introductions by status.
- * Directory coverage (organisations by level / status, field shares) comes
- * from the organisation rows the dashboard already loads (`orgs.page`,
- * lib/broker/coverage.ts). There is no quarantine count: identity
- * resolution's quarantine is not stored in Convex.
+ * The broker overview, computed on the server: events in the next 14 days by
+ * source, the latest pipeline runs, open listing requests, due follow-ups,
+ * stale people, introductions by status, the directory coverage (the latest
+ * `coverageSnapshots` row, folded over every organisation a page at a time
+ * by convex/coverage.ts — never in the browser) and the identity-resolution
+ * quarantine (the counts the pipeline's resolve stage reported with its
+ * latest run, `metrics`; the cases themselves are in the pipeline's
+ * var/reports/quarantine.json).
  *
  * ⚠ Every function here calls `requireBrokerUser` first.
  */
@@ -27,6 +29,9 @@ const MAX_EVENTS = 1_000
 const MAX_COUNT = 1_000
 
 const counts = v.record(v.string(), v.number())
+
+/** Runs searched for the latest resolve stage's quarantine counts. */
+const QUARANTINE_RUNS = 20
 
 export const summary = query({
   args: {},
@@ -42,6 +47,20 @@ export const summary = query({
     followUpsDue: v.number(),
     stalePeople: v.number(),
     introductions: counts,
+    coverage: v.union(
+      v.null(),
+      v.object({ stats: coverageStatsValidator, rows: v.number(), computedAt: v.number() }),
+    ),
+    quarantine: v.union(
+      v.null(),
+      v.object({
+        held: v.number(),
+        dropped: v.number(),
+        review: v.number(),
+        runKey: v.string(),
+        startedAt: v.number(),
+      }),
+    ),
   }),
   handler: async (ctx) => {
     await requireBrokerUser(ctx)
@@ -64,7 +83,29 @@ export const summary = query({
       byVisibility[event.visibility]++
     }
 
-    const runs = await ctx.db.query("harvestRuns").withIndex("by_startedAt").order("desc").take(8)
+    const recent = await ctx.db
+      .query("harvestRuns")
+      .withIndex("by_startedAt")
+      .order("desc")
+      .take(QUARANTINE_RUNS)
+    const runs = recent.slice(0, 8)
+    let quarantine = null
+    for (const run of recent) {
+      const metrics = run.stages.find((stage) => stage.name === "resolve")?.metrics
+      if (metrics?.quarantineHeld === undefined) continue
+      quarantine = {
+        held: metrics.quarantineHeld,
+        dropped: metrics.quarantineDropped ?? 0,
+        review: metrics.quarantineReview ?? 0,
+        runKey: run.runKey,
+        startedAt: run.startedAt,
+      }
+      break
+    }
+    const snapshot = await ctx.db
+      .query("coverageSnapshots")
+      .withIndex("by_scope", (q) => q.eq("scope", "directory"))
+      .first()
 
     const open = await ctx.db
       .query("listingRequests")
@@ -104,6 +145,22 @@ export const summary = query({
       followUpsDue: followUps.length,
       stalePeople: stale.filter((person) => !person.archived).length,
       introductions,
+      coverage: snapshot
+        ? { stats: snapshot.stats, rows: snapshot.rows, computedAt: snapshot.computedAt }
+        : null,
+      quarantine,
     }
+  },
+})
+
+/** Recomputes the directory coverage now (it also runs after every pipeline
+ * run and daily); the overview updates when the walk finishes. */
+export const refreshCoverage = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    await ctx.scheduler.runAfter(0, internal.coverage.recompute, {})
+    return null
   },
 })

@@ -170,6 +170,9 @@ class TestCamdram:
         assert "end=2026-12-16" in str(diary_call.request.url)
         assert diary_call.request.headers["authorization"] == "Bearer secret-token"
         assert any("left out" in n or "staged 12 events" in n for n in ctx.report.notes)
+        # What was staged is the stage's output, not "nothing to do".
+        assert ctx.report.inserted == len(records) == 13
+        assert str(ctx.report).startswith("test: 13 new")
 
 
 # --- talks.cam (§6) ------------------------------------------------------------------------

@@ -391,6 +391,12 @@ export type ListingRequestKind = (typeof LISTING_REQUEST_KINDS)[number]
 export const LISTING_REQUEST_STATUSES = ["open", "accepted", "rejected", "done"] as const
 export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
 
+/** What a suppression covers — an accepted removal or objection (retention.md
+ * R8): a whole listing, one field of it, one contact address (stored only as a
+ * sha256), or one named person in the broker tables. */
+export const SUPPRESSION_SCOPES = ["organisation", "field", "contact", "person"] as const
+export type SuppressionScope = (typeof SUPPRESSION_SCOPES)[number]
+
 // --- broker (data-model §4) --------------------------------------------------------
 
 export const CONSENT_BASES = ["public_source", "consent", "legitimate_interest"] as const
@@ -753,6 +759,13 @@ export const LISTING_REQUEST_KIND_LABELS: Record<ListingRequestKind, string> = {
   remove: "Remove this listing",
   object: "Object to processing",
   add: "Add a missing society",
+}
+
+export const SUPPRESSION_SCOPE_LABELS: Record<SuppressionScope, string> = {
+  organisation: "Whole listing",
+  field: "One field",
+  contact: "A contact address",
+  person: "A named person (broker contacts)",
 }
 
 /** What a visitor sees for each organisation field (missing-field lists and

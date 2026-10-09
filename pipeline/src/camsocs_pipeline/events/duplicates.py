@@ -13,6 +13,8 @@ describe one event.
 
 - the same visibility (a ``cam_only`` mail copy never merges into a public
   event: the strictest reading would hide it, data-model §1 rule 3);
+- not two entries of one listing (the same source and source URL: one feed,
+  one page): the listing itself says they are two events;
 - at least one resolved organiser in common (no organiser, no merge);
 - the same Europe/London calendar date;
 - similar titles (`extract.dedupe.similar_titles`: one title's words contain
@@ -154,6 +156,11 @@ def rank(reading: _Reading) -> tuple:
 def same_event(primary: _Reading, other: _Reading) -> bool:
     """The match rules in the module docstring (`other` against a primary)."""
     if primary.record.visibility != other.record.visibility:
+        return False
+    if (
+        primary.record.event_source == other.record.event_source
+        and primary.record.source_url == other.record.source_url
+    ):
         return False
     if not primary.organisers & other.organisers:
         return False

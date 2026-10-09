@@ -11,6 +11,7 @@ import {
   recordBatch,
   upsertRow,
 } from "../lib/ingest"
+import { loadSuppressionIndex } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 import { orgInternalFields as f } from "../schema"
 
@@ -21,7 +22,12 @@ import { orgInternalFields as f } from "../schema"
  * Patch semantics, by `orgKey`: a field absent from the patch is left alone.
  * List fields (`talksListIds`, `icsUrls`, …, and `playwaze` id lists)
  * **merge** — several harvesters contribute feed URLs for one organisation,
- * and one must not erase another's.
+ * and one must not erase another's. The pipeline sends one patch per
+ * organisation per run (`pipeline/load.py` merges its observations'), so an
+ * identical second load writes nothing.
+ *
+ * A listing removed on request (convex/lib/suppressions.ts) is not processed
+ * further: its patches are skipped and counted as `suppressed`.
  */
 
 const LIST_FIELDS = [
@@ -76,14 +82,24 @@ type OrgInternalFields = Omit<
 
 export const patch = internalMutation({
   args: { patches: v.array(orgInternalPatchValidator) },
-  returns: v.object({ inserted: v.number(), updated: v.number(), unchanged: v.number() }),
-  handler: async (ctx, args): Promise<BatchResult> => {
+  returns: v.object({
+    inserted: v.number(),
+    updated: v.number(),
+    unchanged: v.number(),
+    suppressed: v.number(),
+  }),
+  handler: async (ctx, args): Promise<BatchResult & { suppressed: number }> => {
     assertBatchSize(args.patches.length, "orgInternal patches")
     const now = Date.now()
-    const result = emptyBatchResult()
+    const result = { ...emptyBatchResult(), suppressed: 0 }
+    const suppressions = await loadSuppressionIndex(ctx)
     for (const incoming of args.patches) {
       if (!isOrgKey(incoming.orgKey)) {
         throw new Error(`Not an organisation key: ${incoming.orgKey}`)
+      }
+      if (suppressions.organisations.has(incoming.orgKey)) {
+        result.suppressed++
+        continue
       }
       const existing = await ctx.db
         .query("orgInternal")

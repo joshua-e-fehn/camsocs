@@ -23,7 +23,9 @@ import {
   sessionPublicValidator,
   teamPublic,
   teamPublicValidator,
+  withoutSuppressed,
 } from "./lib/projections"
+import { MAX_SUPPRESSIONS } from "./lib/suppressions"
 import { getViewer, visibleEventTiers } from "./lib/viewer"
 
 /**
@@ -157,7 +159,8 @@ export const getBySlug = query({
       .query("organisations")
       .withIndex("by_slug", (i) => i.eq("slug", args.slug))
       .unique()
-    // Hidden by the broker after a remove / object request: as if absent.
+    // Hidden by the broker after a remove / object request: as if absent
+    // (and so is a listing on the suppression list, below).
     if (!org || org.hidden === true) return null
 
     const [teams, sessions] = await Promise.all([
@@ -204,8 +207,23 @@ export const getBySlug = query({
       }
     }
 
+    const suppressed = await ctx.db
+      .query("suppressions")
+      .withIndex("by_orgKey", (i) => i.eq("orgKey", org.key))
+      .take(MAX_SUPPRESSIONS)
+    if (suppressed.some((row) => row.scope === "organisation")) return null
+    const contacts = await ctx.db
+      .query("suppressions")
+      .withIndex("by_scope", (i) => i.eq("scope", "contact"))
+      .take(MAX_SUPPRESSIONS)
+    const projected = withoutSuppressed(
+      await orgPublic(ctx, org),
+      new Set(suppressed.flatMap((row) => (row.scope === "field" && row.field ? [row.field] : []))),
+      new Set(contacts.flatMap((row) => (row.valueHash ? [row.valueHash] : []))),
+    )
+
     return {
-      org: await orgPublic(ctx, org),
+      org: projected,
       teams: teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(teamPublic),
       sessions: sessions
         .sort(

@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { type CoverageRow, coverageStats } from "./coverage"
+import {
+  addCoverageRow,
+  type CoverageRow,
+  coverageStats,
+  emptyCoverage,
+  finishCoverage,
+  mergeCoverage,
+} from "./coverage"
 import { forceLayout } from "./force-layout"
 import { complementaryMatches, type MatchOrg, MEETS } from "./matching"
 
@@ -34,13 +41,31 @@ describe("coverageStats", () => {
     })
     expect(stats.share).toEqual({ email: 1 / 3, website: 1 / 3, instagram: 0, description: 1 / 3 })
     expect(stats.missingTop).toEqual([
-      ["website", 2],
-      ["email", 1],
+      { field: "website", count: 2 },
+      { field: "email", count: 1 },
     ])
+    expect(stats.byOrgType).toEqual({ unknown: 3 })
   })
 
   test("an empty directory has zero shares, not NaN", () => {
     expect(coverageStats([]).share.email).toBe(0)
+  })
+
+  test("pages folded apart and merged equal one fold over every row", () => {
+    const rows = [
+      row({ orgType: "society", heldFields: ["name", "email"], missingFields: ["website"] }),
+      row({ level: "college", heldFields: ["name"], missingFields: ["website", "email"] }),
+      row({ isCounterpart: true, heldFields: ["name"] }),
+      row({ status: "dormant", heldFields: ["name", "website"] }),
+    ]
+    const first = emptyCoverage()
+    for (const r of rows.slice(0, 2)) addCoverageRow(first, r)
+    const second = emptyCoverage()
+    for (const r of rows.slice(2)) addCoverageRow(second, r)
+    const merged = finishCoverage(mergeCoverage(first, second))
+    expect(merged).toEqual(coverageStats(rows))
+    expect(merged.held).toEqual({ name: 3, email: 1, website: 1 })
+    expect(merged.counterparts).toBe(1)
   })
 })
 

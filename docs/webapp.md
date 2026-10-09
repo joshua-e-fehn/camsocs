@@ -62,8 +62,14 @@ convex/
   orgs.ts events.ts venues.ts termDates.ts listingRequests.ts
                              PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
-                             relationships + eventOrganisers, broker, files, inbound, termDates, purge)
+                             relationships + eventOrganisers, broker, files, inbound, termDates, purge,
+                             suppressions)
   derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
+  retention.ts               the retention schedule as paginated walks (daily 04:15 UTC;
+                             docs/compliance/retention.md)
+  coverage.ts                directory coverage folded server-side, a page per scheduled mutation,
+                             into `coverageSnapshots` (after each run, daily 04:45 UTC, on request);
+                             the same fold page by page for the pipeline's coverage report
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
   auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)
   authEmail.ts               internal throttle for the @cam.ac.uk sign-in link
@@ -73,6 +79,8 @@ convex/
   lib/materialise.ts         resolutions → row + meta + derived fields; lib/derived.ts the §6 rules
   lib/entityStore.ts         keyed entity reads/writes, org cards, organisation refresh
   lib/projections.ts         public projections (data-model §7) and their validators
+  lib/suppressions.ts        the suppression list: keys, address hashes, the claim check
+  lib/suppressionEffects.ts  what creating / lifting a suppression does to stored data
   lib/orgFilters.ts          directory filters and disjunctive facet counts, pure
   lib/viewer.ts              getViewer(ctx): signed-in / broker / verified @cam.ac.uk
   lib/auth.ts                requireUserId / getUserId / requireBrokerUser / getBrokerUser
@@ -93,13 +101,15 @@ lib/                         Pure logic + *.test.ts (no server imports)
   url-state.ts               /societies and /events state <-> URL, and the Convex args it preloads
   source-line.ts             What a SourceLine says for a field's public meta (status, source, …)
   listing-request.ts         The request form's draft, validation (server limits) and submit args
+  owner-corrections.ts       Accepting a correction: which fields, how each is edited and parsed
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
   format.ts                  Money, language names, paragraphs
   site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (D4), …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
-  broker/                    Broker analysis shared by browser and tests: coverage, matching,
-                             outreach (CSV + Art 14 notice), force-layout, format
+  broker/                    Broker analysis shared by server, browser and tests: coverage (the
+                             fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
+                             notice), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
@@ -303,6 +313,9 @@ Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `
 
 ## Broker API (private)
 
+Broker mutations throw `ConvexError`s (or plain errors) whose message `hooks/convex/broker.ts`
+`errorMessage` turns into the toast.
+
 Every function in `convex/broker/*` calls `requireBrokerUser` first; `convex/broker/gating.test.ts`
 reads the directory, calls every exported function with validator-generated arguments, and fails
 unless each refuses a signed-out caller, a non-listed account, an unverified broker address and
@@ -312,13 +325,14 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, best non-personal address, held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, best non-personal address, held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
 | `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove` |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
 | `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
-| `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status) |
-| `broker/listingRequests` | `list({status?})`, `setStatus` |
+| `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status, the latest `coverage` snapshot, the latest resolve stage's `quarantine` counts), `refreshCoverage` (schedules the fold now) |
+| `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?})` (remove / object → suppressions, enforced at once) |
+| `broker/suppressions` | `list({orgKey?})` (an address shows only as `contact: true`), `lift({key})` |
 | `broker/session` | `me` |
 
 ## Ingestion API (pipeline only)
@@ -332,17 +346,20 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 
 | Path | Writes |
 |---|---|
-| `claims` | `fieldClaims` + the entity row (created on first claims), re-resolved and re-derived; `{inserted, updated, unchanged, entities: {created, updated, unchanged}, rejected[]}` |
+| `claims` | `fieldClaims` + the entity row (created on first claims), re-resolved and re-derived; `{inserted, updated, unchanged, entities: {created, updated, unchanged}, rejected[]}`. A claim the suppression list forbids is `rejected` ("suppressed: …") |
 | `sources` | `sources` by key (`src-<sha1(url)>`) |
-| `orgInternal` | `orgInternal` by orgKey (patch; lists merge) |
-| `relationships` | `relationships` by server-minted key, evidence merged |
-| `eventOrganisers` | replaces each event's organiser set; mirrors it on the event; co-host / sponsor edges |
-| `brokerInferences` | inferred needs/offers and public-source people (never overwrites manual / confirmed) |
+| `orgInternal` | `orgInternal` by orgKey (patch; lists merge); a suppressed listing's patch is skipped (`suppressed`) |
+| `relationships` | `relationships` by server-minted key, evidence merged; edges with a suppressed end skipped (`suppressed`) |
+| `eventOrganisers` | replaces each event's organiser set; mirrors it on the event; co-host / sponsor edges; suppressed listings left out of the set |
+| `brokerInferences` | inferred needs/offers and public-source people (never overwrites manual / confirmed); suppressed listings and people skipped (`suppressed`) |
 | `files` | `{data: base64, contentType}` → `{storageId, sha256}` (≤ 2 MB, raster image or PDF, deduplicated) |
 | `inbound/pending`, `inbound/mark` | read pending list mail; record extraction outcome |
 | `crosswalk` | read: `{cursor?, limit?}` → a page of `{orgKey, name, aliases, shortName, orgType, level, collegeKeys, isCounterpart, suOrgId, suSlug, proctorsName, sportSlug, camdramSlug, camdramId, cucbcClub, instagramHandle, websiteDomain}`, for the pipeline's identity resolver |
 | `inbound/file` | `{messageId, storageId}` → `{data: base64, contentType, filename}`: one attachment (or the HTML body) of that mail only |
 | `worklist` | `{paginationOpts}` → a page of non-counterpart organisations with status, mailing list, Sympa list, feeds on record and upcoming event sources (read by `camsocs worklist`) |
+| `suppressions` | read: `{}` → `{organisations, fields: {orgKey, field}[], contactHashes, people, truncated}` — what the load stage filters by before posting |
+| `coverage` | read: `{cursor?, limit?}` → `{counts, rows, isDone, continueCursor}`, one page of organisations folded into coverage counts (the coverage report sums them) |
+| `coverage/events` | read: `{from, cursor?, limit?}` → events starting at or after `from` by source and visibility, a page at a time |
 | `termDates` | Full Term dates by (academicYear, term); re-labels events |
 | `derive` | schedules the daily re-derivation now |
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |

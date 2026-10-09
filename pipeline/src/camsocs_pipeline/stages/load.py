@@ -8,13 +8,19 @@ relationships → event organisers → broker inferences. Unkeyed records wait
 for the resolve stage and are counted as skipped.
 
 Re-posting unchanged observations is cheap: the server recognises each claim
-by its fingerprint and writes nothing (reported as `unchanged`).
+by its fingerprint and writes nothing (reported as `unchanged`), and each
+organisation's feed identifiers travel as one merged patch, so a second
+identical load reports nothing updated.
+
+Nothing the suppression list forbids is posted (`camsocs_pipeline.suppressions`:
+listings, fields, addresses and people removed on request); the notes say what
+was held back.
 
 Images staged as a bare ``{"sourceUrl"}`` get our own stored copy on the way
 (`camsocs_pipeline.media`): the bytes come from the fetch cache the harvest
-stage filled, and an image that cannot be had is not posted. Bytes the
-deployment already stores are not uploaded again (`pipeline.stored_files`,
-``var/state/stored-files.json``: sha256 → storageId per deployment).
+stage filled, and an image that cannot be had is not posted. Bytes this
+deployment already stores are not uploaded again: their ids are remembered in
+``var/state/stored-files.json`` (`StoredFileCache`).
 
 Public free text is made safe to publish on the way too (decision D1,
 `extract.redact`): names of private individuals become their roles, with the
@@ -32,7 +38,7 @@ from itertools import islice
 from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
-from camsocs_pipeline.pipeline.stored_files import StoredFiles, stored_files_path
+from camsocs_pipeline.pipeline.load import StoredFileCache, stored_files_path
 from camsocs_pipeline.staging.store import RESOLVED, Record
 
 #: Rejection reasons shown in the stage notes; the rest are counted.
@@ -68,17 +74,17 @@ def run(ctx: StageContext) -> None:
     redactor, redaction_note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
     if redaction_note:
         ctx.report.notes.append(redaction_note)
-    stored = StoredFiles.load(stored_files_path(ctx.settings.staging_dir), ctx.loader.base_url)
-    ctx.loader.stored_files = None if ctx.loader.dry_run else stored
+    cache = StoredFileCache.load(stored_files_path(ctx.settings.staging_dir), ctx.loader.base_url)
+    ctx.loader.file_cache = cache
     try:
         report = ctx.loader.post_observations(
             records, run_key=ctx.run.run_key, media=media, redactor=redactor
         )
     finally:
         media.close()
-        if ctx.loader.stored_files is not None:
-            stored.save()
-            ctx.loader.stored_files = None
+        ctx.loader.file_cache = None
+        if not ctx.dry_run:
+            cache.save()
     report.skipped += awaiting
     claims = report.claims
     ctx.report.inserted += claims.inserted
@@ -99,11 +105,20 @@ def run(ctx: StageContext) -> None:
     if report.redaction.texts:
         ctx.report.notes.append(str(report.redaction))
     ctx.report.notes.extend(report.merged)
+    if ctx.loader.suppressions_note:
+        ctx.report.notes.append(ctx.loader.suppressions_note)
+    if report.suppressed:
+        ctx.report.notes.append(str(report.suppressed))
     if report.files_stored or report.files_dropped:
         ctx.report.notes.append(
-            f"images: {report.files_stored} stored ({stored.reused} already on the server, "
-            f"not uploaded again), {report.files_dropped} not available"
+            f"images: {report.files_stored} stored ({report.files_reused} already on the "
+            f"deployment, not uploaded again), {report.files_dropped} not available"
             + (f" ({media.unavailable})" if media.unavailable else "")
+        )
+    if report.files_stale:
+        ctx.report.notes.append(
+            f"images: {report.files_stale} remembered ids were gone from the deployment — "
+            "forgotten; the next run uploads them again"
         )
     entities = claims.entities
     if entities:

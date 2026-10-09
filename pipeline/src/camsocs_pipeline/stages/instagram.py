@@ -189,6 +189,9 @@ def run(ctx: StageContext) -> None:
     current = carried + records
     if current:
         ctx.staging.write(SOURCE_TYPE, ctx.run.run_key, current)
+    # Staged: the records read this run are new; carried ones are unchanged.
+    ctx.report.inserted += len(records)
+    ctx.report.unchanged += len(carried)
     events = sum(isinstance(record, EventObservation) for record in records)
     ctx.report.notes.append(
         f"{len(due)} handles due of {len(targets)}; "

@@ -5,6 +5,7 @@
 // query instead of an empty page.
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import type { FunctionReturnType } from "convex/server"
+import { ConvexError } from "convex/values"
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
@@ -21,6 +22,8 @@ export type BrokerListingRequest = FunctionReturnType<
   typeof api.broker.listingRequests.list
 >[number]
 export type BrokerOrgRef = FunctionReturnType<typeof api.broker.orgs.search>[number]
+export type BrokerSuppression = FunctionReturnType<typeof api.broker.suppressions.list>[number]
+export type BrokerSummary = FunctionReturnType<typeof api.broker.overview.summary>
 
 const PAGE = 250
 
@@ -85,6 +88,11 @@ export function useBrokerListingRequests(status?: BrokerListingRequest["status"]
   return useQuery(api.broker.listingRequests.list, status ? { status } : {})
 }
 
+/** Suppressions of one listing (removals and objections accepted). */
+export function useBrokerSuppressions(orgKey: string | null) {
+  return useQuery(api.broker.suppressions.list, orgKey ? { orgKey } : "skip")
+}
+
 /** The broker's write operations, grouped by area. */
 export function useBrokerOrgMutations() {
   return {
@@ -123,8 +131,24 @@ export function useSetListingRequestStatus() {
   return useMutation(api.broker.listingRequests.setStatus)
 }
 
-/** The readable part of a thrown Convex error ("Uncaught Error: …" in dev). */
+/** Accepting requests: corrections become owner claims, removals suppressions. */
+export function useListingRequestMutations() {
+  return {
+    acceptCorrections: useMutation(api.broker.listingRequests.acceptCorrections),
+    acceptRemoval: useMutation(api.broker.listingRequests.acceptRemoval),
+    liftSuppression: useMutation(api.broker.suppressions.lift),
+  }
+}
+
+/** Recomputes the overview's directory coverage on the server now. */
+export function useRefreshCoverage() {
+  return useMutation(api.broker.overview.refreshCoverage)
+}
+
+/** The readable part of a thrown Convex error: a `ConvexError`'s message as
+ * data, else the "Uncaught Error: …" line (dev). */
 export function errorMessage(error: unknown): string {
+  if (error instanceof ConvexError && typeof error.data === "string") return error.data
   const text = error instanceof Error ? error.message : String(error)
   const match = /Uncaught Error: ([^\n]+)/.exec(text)
   return (match ? match[1] : text).trim() || "Something went wrong"

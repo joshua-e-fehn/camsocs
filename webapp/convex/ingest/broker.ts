@@ -5,6 +5,7 @@ import { internalMutation } from "../_generated/server"
 import { academicYearOf, nextHandoverDate } from "../lib/derived"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, sameFields } from "../lib/ingest"
+import { loadSuppressionIndex } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 
 /**
@@ -133,6 +134,8 @@ export const ingest = internalMutation({
       /** Rows the broker owns (`method: "manual"`) and the pipeline left alone. */
       protected: v.number(),
     }),
+    /** Rows of a listing or person removed on request (convex/lib/suppressions.ts), skipped. */
+    suppressed: v.number(),
   }),
   handler: async (ctx, args) => {
     const profiles = args.profiles ?? []
@@ -141,9 +144,15 @@ export const ingest = internalMutation({
     const now = Date.now()
     const profileCounts = { inserted: 0, updated: 0, unchanged: 0 }
     const peopleCounts = { inserted: 0, updated: 0, unchanged: 0, protected: 0 }
+    const suppressions = await loadSuppressionIndex(ctx)
+    let suppressed = 0
 
     for (const profile of profiles) {
       assertOrgKey(profile.orgKey)
+      if (suppressions.organisations.has(profile.orgKey)) {
+        suppressed++
+        continue
+      }
       for (const entry of [...(profile.needs ?? []), ...(profile.offers ?? [])]) {
         if (!isHttpUrl(entry.sourceUrl)) throw new Error(`Not an http(s) URL: ${entry.sourceUrl}`)
       }
@@ -170,6 +179,10 @@ export const ingest = internalMutation({
     for (const person of people) {
       assertOrgKey(person.orgKey)
       if (!/^per-[0-9a-f]{40}$/.test(person.key)) throw new Error(`Not a person key: ${person.key}`)
+      if (suppressions.organisations.has(person.orgKey) || suppressions.people.has(person.key)) {
+        suppressed++
+        continue
+      }
       if (!isHttpUrl(person.sourceUrl)) throw new Error(`Not an http(s) URL: ${person.sourceUrl}`)
       const existing = await ctx.db
         .query("people")
@@ -217,6 +230,7 @@ export const ingest = internalMutation({
       unchanged: profileCounts.unchanged + peopleCounts.unchanged,
       profiles: profileCounts,
       people: peopleCounts,
+      suppressed,
     }
   },
 })

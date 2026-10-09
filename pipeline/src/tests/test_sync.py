@@ -275,3 +275,13 @@ def test_load_posts_resolved_organisations_before_their_enrichment(
     assert report.ok
     assert posted == [["su_directory"]]
     assert report.stages[0].skipped == 1
+
+
+def test_stage_metrics_travel_only_when_there_are_some() -> None:
+    from camsocs_pipeline.pipeline.report import StageReport
+
+    plain = StageReport("load")
+    assert "metrics" not in plain.to_payload()
+    resolve = StageReport("resolve")
+    resolve.metrics.update(quarantineHeld=8, quarantineReview=18)
+    assert resolve.to_payload()["metrics"] == {"quarantineHeld": 8, "quarantineReview": 18}

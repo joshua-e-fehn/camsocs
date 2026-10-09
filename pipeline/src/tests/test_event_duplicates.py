@@ -168,3 +168,14 @@ def test_what_never_merges() -> None:
     nobody = reading("su_whatson", "events/1/6", "Hamlet", ms(2026, 10, 15, 19, 30), organisers=())
     records = [CAMDRAM, other_org, late, next_day, different, mail, nobody]
     assert find_duplicates(records).primary_of == {}
+
+
+def test_two_entries_of_one_listing_stay_two_events() -> None:
+    # One feed lists both: the listing itself says they are two events, even
+    # with the same organiser, day, start and look-alike titles.
+    feed = "https://calendar.example.org/basic.ics"
+    first = reading("google_calendar", "uid-1", "Chess club", ms(2026, 10, 15, 19, 0), url=feed)
+    second = reading(
+        "google_calendar", "uid-2", "Chess club beginners", ms(2026, 10, 15, 19, 0), url=feed
+    )
+    assert find_duplicates([first, second]).primary_of == {}

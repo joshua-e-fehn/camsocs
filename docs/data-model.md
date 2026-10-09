@@ -107,7 +107,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | parentKey | string? | Hierarchy, e.g. a team club inside a University club, or a JCR within its college |
 | isCounterpart | boolean | true for external or institutional parties that exist only because they are linked to a society. Default false. Counterparts are never listed in the directory and have no `missingFields` |
 | defunct | boolean? | Marked defunct by a source (a college's inactive list) or manually; makes `status` `archived` |
-| hidden | boolean? | Hidden from the public site by the broker after a remove / object request (`broker.orgs.setHidden`). Not claimable; the pipeline never sets it and re-resolution keeps it. A hidden organisation has no `orgCards` row, so no public query lists, names or links it, and `orgs.getBySlug` is null |
+| hidden | boolean? | Hidden from the public site by the broker (`broker.orgs.setHidden`), or by accepting a remove / object request as a suppression of the whole listing (`broker.listingRequests.acceptRemoval`, §3 `suppressions`) — then it cannot be shown again until the suppression is lifted. Not claimable; the pipeline never sets it and re-resolution keeps it. A hidden organisation has no `orgCards` row, so no public query lists, names or links it, and `orgs.getBySlug` is null |
 | status | `active \| dormant \| archived \| unknown` | Derived (§6) |
 | lastActiveAt | number? | Latest dated activity: the maximum of claimed values (a post, a page update) and the start of the latest past **public** event it organised or co-hosted (derived; its meta then is that event's start's provenance). `cam_only` / `members_only` events never move it |
 | registrations | object | `{ su?, proctors?, sportsService?, camdram?, cucbc? }`, each `{ registered: boolean, year?: string, sourceUrl?: string }`, `year` an academic year like `2026-27`. Claimed per register as `registrations.su`, `registrations.proctors`, … These lapse independently. |
@@ -143,7 +143,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | missingFields | string[] | Derived: fields whose status is `missing`. Drives the phase-2 outreach. |
 | createdAt, updatedAt | number | Stamped by mutations |
 
-**Indexes:** `by_key`, `by_slug`, `by_level_status`, `by_orgType`, `by_isCounterpart`, plus a search index `search_text` on `searchText` with filter fields level, status and orgType.
+**Indexes:** `by_key`, `by_slug`, `by_level_status`, `by_orgType`, `by_isCounterpart`, `by_logoStorageId` (`logo.storageId`: retention asks whether a stored file is still a logo), plus a search index `search_text` on `searchText` with filter fields level, status and orgType.
 
 **Claimable fields.** The fields a claim may target are the tuples `ORGANISATION_FIELDS`, `EVENT_FIELDS`, `TEAM_FIELDS`, `SESSION_FIELDS` and `VENUE_FIELDS` in `webapp/lib/vocab.ts` (mirrored in the pipeline). Each has a value validator (the schema column's), a merge rule and checks in `webapp/convex/lib/fields.ts`: URLs must be `http(s)`, keys must have their prefix, times are `HH:MM`, `shortDescription` ≤ 200 characters, tags lower-kebab, languages ISO 639-1. Derived fields are never claimable.
 
@@ -230,9 +230,9 @@ An event row is created by its first claims, which must include `title`, `starts
 
 **One event, several sources** (`pipeline/.../events/duplicates.py`, applied by the load stage to everything it posts). Two staged readings are one event when they have the same visibility, a resolved organiser in common, the same London date and similar titles (one's words contain the other's, or they share half), and — when both are timed — starts at most 30 minutes apart. The higher-evidence reading keeps the event: timed before all-day, a stated start before an inferred one, parser before LLM, primary before secondary evidence, then structured listings first (Camdram, talks.cam, CUCBC, SU What's On, Google / ICS / Luma feeds, Playwaze, then websites, termcards, Instagram, mail). Each other reading is posted as claims on that event's key, with its own source URL, method and quote, but without the identity claims (`source`, `externalId`, `sourceUrl`) — the event keeps its listing and `sweepGroup` — and without a start of a different granularity (an all-day reading adds no midnight start to a timed event). Its organisers are added (`merge`), never replacing the event's set. Readings are compared with a cluster's primary only, so a matinee and an evening of one show stay two events. A `cam_only` reading never merges into a public event, since the strictest visibility would hide it.
 
-**Event images** are our own copy (as logos): a stage that finds an image checks it (raster, ≤ 2 MB) and stages `image: {sourceUrl}`; the load stage uploads the bytes (`/api/pipeline/files`) and posts `{storageId, sourceUrl}`. An image it cannot store is not posted (`pipeline/.../media.py`). The pipeline remembers which bytes the deployment already stores (`var/state/stored-files.json`: sha256 → storageId per deployment, 30 days; forgotten by `purge-dev`), so an unchanged image is posted with its storage id and not uploaded again (`pipeline/.../pipeline/stored_files.py`).
+**Event images** are our own copy (as logos): a stage that finds an image checks it (raster, ≤ 2 MB) and stages `image: {sourceUrl}`; the load stage uploads the bytes (`/api/pipeline/files`) and posts `{storageId, sourceUrl}`. An image it cannot store is not posted (`pipeline/.../media.py`). The pipeline remembers which bytes the deployment already stores (`var/state/stored-files.json`: sha256 → storageId per deployment; forgotten by `purge-dev`, and an id the claims route refuses as no longer stored is forgotten that run), so an unchanged image is posted with its storage id and not uploaded again (`StoredFileCache` in `pipeline/.../pipeline/load.py`).
 
-**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, `by_visibility_spanEndsAt`, `by_sweepGroup_lastSeenAt`. A title search filters the window's events (every word in the title).
+**Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, `by_visibility_spanEndsAt`, `by_sweepGroup_lastSeenAt`, `by_imageStorageId` (`image.storageId`, for retention). A title search filters the window's events (every word in the title). Events are deleted, with their claims and organiser links, a year after they ended (`convex/retention.ts`, retention.md R3).
 
 `eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, spanEndsAt?, visibility }` (the last three denormalised from the event and kept in step), with indexes `by_org_startsAt`, `by_org_spanEndsAt` and `by_event`. It exists for "events of organisation X". The pipeline sends an event's organiser set whole (`replace`), or — when the source names organisers it could not resolve — as `merge`, which adds and never removes.
 
@@ -339,6 +339,8 @@ These are never returned by public queries.
   | status | `running \| success \| partial \| failed` |
   | counts | Record |
   | warnings, failedUrls | string[] |
+
+  Each stage's result is `{name, status, inserted, updated, unchanged, skipped, error, notes, metrics?}`; `metrics` holds named counts beyond the four (the resolve stage's quarantine: `quarantineHeld`, `quarantineDropped`, `quarantineReview`, which the broker overview shows; the report stage's `listed`, `upcomingEvents`). A stage that stages observations counts them as `inserted`; `load` counts what reached Convex. Rows are deleted after a year (R10).
 - **inboundEmails**: forwarded society list mail.
 
   | Field | Type |
@@ -356,8 +358,9 @@ These are never returned by public queries.
   | extraction | `pending \| done \| failed \| skipped` |
   | extractedEventKeys | string[] |
   | extractionNote | string? |
+  | bodyDeletedAt | number? — when retention emptied the body (`text`, stored HTML, attachments) |
 
-  The inbound webhook (`POST /api/inbound/email`, source-research §16) stores each mail once per `messageId`: `from` is the `From` header as sent, `receivedAt` the `Date` header clamped to now (else the time of receipt), `listId` / `listName` from `List-Id`, the HTML body and kept attachments in storage (`extractionNote` names skipped attachments). The pipeline's `inbox` stage fetches `pending` rows, extracts, posts the events, then marks each row `done` (with `extractedEventKeys` and the resolved `orgKey`), `skipped` (not list mail, or no events) or `failed` (the LLM reply never validated). Raw mail is internal only.
+  The inbound webhook (`POST /api/inbound/email`, source-research §16) stores each mail once per `messageId`: `from` is the `From` header as sent, `receivedAt` the `Date` header clamped to now (else the time of receipt), `listId` / `listName` from `List-Id`, the HTML body and kept attachments in storage (`extractionNote` names skipped attachments). The pipeline's `inbox` stage fetches `pending` rows, extracts, posts the events, then marks each row `done` (with `extractedEventKeys` and the resolved `orgKey`), `skipped` (not list mail, or no events) or `failed` (the LLM reply never validated). Raw mail is internal only. Before any text reaches the LLM the pipeline cuts out quoted replies, forwarded headers, signatures and list footers and redacts addresses and phone numbers (`extract/mail_text.py`). Retention (R4): a processed mail's body goes 30 days after receipt (`bodyDeletedAt`), the row after 90.
 - **listingRequests**: submissions from the public claim / correct / remove / object form.
 
   | Field | Type |
@@ -372,10 +375,32 @@ These are never returned by public queries.
   | status | `open \| accepted \| rejected \| done` |
   | createdAt | number |
   | resolvedAt | number? |
+  | outcome | `{ appliedFields?: string[], suppressionKeys?: string[], acceptedAt }`? — what accepting it did |
 
-  Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour; claims, corrections and additions at most 200 an hour overall, removals and objections their own 1,000 an hour so a flood of the others never shuts the GDPR route). The submitter's address is not verified (the broker inbox says so). Accepted corrections become `owner_submitted` claims, never direct edits. Index `by_kind_createdAt` besides those below.
+  Submitted through the public `listingRequests.submit` (validated, length-limited, at most 5 per address per hour; claims, corrections and additions at most 200 an hour overall, removals and objections their own 1,000 an hour so a flood of the others never shuts the GDPR route). The submitter's address is not verified (the broker inbox says so). Index `by_kind_createdAt` besides those below.
+
+  **Accepting** (`convex/broker/listingRequests.ts`):
+  - a claim or correction (`acceptCorrections`): the broker picks the fields and types the values (`webapp/lib/owner-corrections.ts`); each becomes an `owner_submitted` claim (status `owner_confirmed`, confidence 1, precedence over every harvested reading) through the claims ingestion itself — `sourceUrl` `request:<key>` (internal, never shown), `sourceType` `manual`, `evidence` primary, `retrievedAt` the submission. Never a direct edit; one refused value refuses them all;
+  - a removal or objection (`acceptRemoval`): one or more `suppressions` (below), enforced at once.
+
+  Retention (R8): rejected requests are deleted 90 days after rejection, the rest 2 years after resolution; suppressions stay.
 - **signInLinkSends**: `{ emailHash, clientHash?, sentAt }`, indexes `by_emailHash_sentAt`, `by_clientHash_sentAt`, `by_sentAt`. The throttle for the `@cam.ac.uk` sign-in link (`convex/authEmail.ts`): one row per link sent, the address only as a sha256 of its normalised form and the caller's IP only as a sha256, rows pruned after a day. Limits per address, per client and overall; an address that has signed in before is never refused by the overall cap. Not pipeline-owned and never read by a public query.
-- **storedFiles**: `{ sha256, storageId, contentType, size, createdAt }`, index `by_sha256`. Our own copies of logos, event images and termcards, uploaded through `/api/pipeline/files` (≤ 2 MB; PNG, JPEG, WebP, GIF, AVIF or PDF, checked against the bytes; never SVG) and de-duplicated by content.
+- **storedFiles**: `{ sha256, storageId, contentType, size, createdAt }`, indexes `by_sha256`, `by_storageId`. Our own copies of logos, event images and termcards, uploaded through `/api/pipeline/files` (≤ 2 MB; PNG, JPEG, WebP, GIF, AVIF or PDF, checked against the bytes; never SVG) and de-duplicated by content. The pipeline remembers which bytes a deployment already stores (`var/state/stored-files.json`) and does not upload them again. A file is deleted with its row when retention deletes the last event showing it and no logo uses it (R3).
+- **suppressions** (indexes `by_key`, `by_orgKey`, `by_scope`): what accepted removals and objections took off the site, kept indefinitely so no harvest brings it back (retention.md R8, `convex/lib/suppressions.ts`).
+
+  | Field | Type |
+  |---|---|
+  | key | `sup-<sha1(scope:orgKey:field:valueHash:personKey)>` |
+  | scope | `organisation \| field \| contact \| person` |
+  | orgKey | string? — the listing (for `contact` / `person`: where it was found) |
+  | field | string? — `field`: an organisation field (not `name`, not `isCounterpart`) |
+  | valueHash | string? — `contact`: sha256 of the trimmed, lower-cased address; the address itself is never stored |
+  | personKey | string? — `person`: the broker `people` key |
+  | requestKey, requestKind | string? — the request that asked for it |
+  | createdAt | number |
+
+  Enforced in three layers. **On acceptance**: `organisation` hides the listing and suppresses it from outreach; `field` sets the field's value claims aside (`reviewStatus: rejected`) and records a manual negative claim (`missing` / `not_published`, source `suppression:<key>`); `contact` does the same for every claim of the listing whose value carries the address; `person` deletes the broker row. **In the pipeline**: the load reads the list (`POST /api/pipeline/suppressions`) and filters before posting (`pipeline/.../suppressions.py`; addresses are cut out of free text as `[address removed]`). **In Convex**: every ingestion route refuses what slips through (claims, relationships, event organisers, `orgInternal`, broker inferences), and the public projection strips it (§7). Lifting a suppression (`broker.suppressions.lift`) accepts the set-aside claims again; a lifted listing stays hidden until the broker shows it.
+- **coverageSnapshots** (index `by_scope`): `{ scope: "directory", stats, rows, startedAt, computedAt }` — the directory's coverage (listed organisations by level / status / type, headline and per-field counts, most-missed tracked fields; `webapp/lib/broker/coverage.ts`), folded over every organisation a page at a time by `convex/coverage.ts` after each run, daily and on request. The broker overview reads it; no browser folds the rows.
 
 ## 4. Broker tables (private)
 
@@ -398,7 +423,9 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | notes | string? |
   | archived | boolean |
 
-  A person may also appear in a public listing, but only by role and never by name, unless the organisation itself publishes the name *and* we have consent. That is out of scope for v1, which is why `people` is private.
+  A person may also appear in a public listing, but only by role and never by name, unless the organisation itself publishes the name *and* we have consent. That is out of scope for v1, which is why `people` is private. First-name-only committee members from public pages are kept here too (decision D2, 2026-10-08), with the same `staleAfter`.
+
+  Retention (R5, `convex/retention.ts`): once `staleAfter` has passed, the broker's own (`manual`) rows are archived for a 30-day grace in which the broker may extend `staleAfter`; 30 days after it every row is deleted, unless `consentBasis` is `consent`. A person removed on request is never re-added (§3 `suppressions`, scope `person`).
 - **orgBrokerProfiles**: one per organisation.
 
   | Field | Type |
@@ -425,6 +452,8 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | summary | string |
   | nextStep | string? |
   | followUpOn | ISO date? |
+
+  Indexes `by_key`, `by_orgKey_date`, `by_followUpOn`, `by_date`. Retention (R6): an interaction 3 years old whose organisation has had none since is deleted.
 - **introductions**
 
   | Field | Type |
@@ -435,6 +464,8 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | date | number |
   | status | `idea \| proposed \| sent \| accepted \| met \| declined \| stale` |
   | outcome | string? |
+
+  Indexes `by_key`, `by_status_date`, `by_date`; deleted 3 years after `date` (R6).
 
 ## 5. Taxonomy: CATEGORIES (our own; the SU's 7 are mapped onto these)
 
@@ -488,6 +519,7 @@ These are computed in Convex by `convex/derive.ts`, which runs on ingest and fro
 Implemented in `webapp/convex/lib/projections.ts`; the projections are the `returns` validators of the public queries, so nothing else can leave.
 
 - **Hidden organisations** (`hidden: true`) are absent from every public query: no card, `getBySlug` null, dropped from event organisers and relationship counterparts; an event whose every organiser and co-host is hidden is not shown, and `events.list` with a hidden organisation's key lists nothing.
+- **Suppressions** (§3): a suppressed listing's `getBySlug` is null even if not hidden; a suppressed field reads `missing` / `not_published` with no value; a suppressed address is dropped from `email` / `roleEmails` and replaced by `[address removed]` in free text — whatever the stored row says.
 - **orgPublic** removes `orgInternal`, the broker data, `searchText`, and any `meta.sourceUrl` (and conflict reading) from an internal source (`mailing_list_email`, `manual`) or that is not `http(s)`, and keeps the rest. A `conflicting` field whose other readings are all removed shows its winner's own status (`winnerStatus`), never a promotion to `found`. A `personal_crsid` email is removed (its meta reads `missing` / `not_published`), personal role emails are dropped, and the mailing list shows only `platform` and `signupUrl`. Stored logos become URLs.
 - **eventPublic** is `visibility === "public"`; `cam_only` needs a verified `@cam.ac.uk` session (or the broker); `members_only` is never shown. A mailing-list event has no `sourceUrl`. Organisers are resolved to `{key, slug, name, role}`.
 - **relationships**: only `visibility === "public"` edges, with the counterpart's name and the `http(s)` evidence URLs.

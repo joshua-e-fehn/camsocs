@@ -543,7 +543,11 @@ def write_staging(ctx: StageContext, records: Sequence[Record], tally: Tally) ->
     for record in records:
         by_type.setdefault(record.source_type, []).append(record)
     for source_type, subset in sorted(by_type.items()):
-        ctx.staging.write(events_directory(source_type), ctx.run.run_key, subset)
+        # What the stage staged is its output: counted as new, so the run
+        # report shows it (`load` reports what reached Convex).
+        ctx.report.inserted += ctx.staging.write(
+            events_directory(source_type), ctx.run.run_key, subset
+        )
     ctx.report.notes.extend(tally.notes())
 
 

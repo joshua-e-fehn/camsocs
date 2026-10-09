@@ -29,6 +29,7 @@ import { FIELD_SPECS, KEY_PREFIXES } from "../lib/fields"
 import { assertBatchSize, sameFields } from "../lib/ingest"
 import { materialise, requiredFields } from "../lib/materialise"
 import { baseConfidence, type Resolution, resolveField, storedStatus } from "../lib/resolve"
+import { loadSuppressionIndex, suppressedClaim } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 
 /**
@@ -45,7 +46,10 @@ import { literalUnion } from "../lib/validators"
  * fields.
  *
  * A bad claim is rejected *individually* and reported back with the reason;
- * the rest of the batch still lands. The caller never sends `confidence`
+ * the rest of the batch still lands. So is a claim the suppression list
+ * forbids (convex/lib/suppressions.ts: a listing, field or address removed on
+ * request) — the pipeline filters those out before it posts; this is the
+ * backstop. The caller never sends `confidence`
  * (the validator rejects it) and never sends `null` (omit the value and say
  * `status: "missing"` instead).
  */
@@ -121,9 +125,13 @@ export const ingest = internalMutation({
     }
 
     // 1. Validate and normalise, grouped by entity in arrival order.
+    const suppressions = await loadSuppressionIndex(ctx)
     const groups = new Map<string, Prepared[]>()
     for (const [index, input] of args.claims.entries()) {
-      const problem = validateClaim(input, now) ?? (await checkStorageRef(ctx, input))
+      const problem =
+        validateClaim(input, now) ??
+        suppressedClaim(input, suppressions) ??
+        (await checkStorageRef(ctx, input))
       if (problem) {
         result.rejected.push(rejection(index, input, problem))
         continue
@@ -449,6 +457,36 @@ async function resolveFields(
     out[field] = resolveField(specs[field], claims)
   }
   return out
+}
+
+/**
+ * Re-resolves `fields` of an existing entity from its live claims and writes
+ * it — for when claims changed review status (a suppression accepted or
+ * lifted: convex/broker/listingRequests.ts) rather than arrived. Returns null
+ * when the entity does not exist.
+ */
+export async function reresolveEntity(
+  ctx: MutationCtx,
+  entityType: EntityType,
+  entityKey: string,
+  fields: readonly string[],
+): Promise<"updated" | "unchanged" | null> {
+  const existing = await findEntity(ctx, entityType, entityKey)
+  if (!existing) return null
+  const known = fields.filter((field) => FIELD_SPECS[entityType][field] !== undefined)
+  const resolutions = await resolveFields(ctx, entityType, entityKey, known)
+  // A field whose every claim was set aside resolves as nobody having
+  // claimed it.
+  for (const field of known) {
+    resolutions[field] ??= resolveField(FIELD_SPECS[entityType][field], [])
+  }
+  const now = Date.now()
+  const terms = entityType === "event" ? await loadTerms(ctx) : []
+  const outcome = await writeEntity(ctx, entityType, entityKey, existing, resolutions, {
+    now,
+    terms,
+  })
+  return outcome === "created" ? "updated" : outcome
 }
 
 /** Materialises and writes one entity, plus what hangs off it. */

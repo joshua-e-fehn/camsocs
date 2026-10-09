@@ -28,9 +28,13 @@ landed, and the stage reports them as notes.
 
 There is one method per route (`post_claims`, `upsert_sources`, …; the route
 table is in `models/wire.py`), and `post_observations` posts keyed staged
-observations as all of them, in dependency order. Image fields staged as a
-bare ``{"sourceUrl"}`` (`camsocs_pipeline.media`) are uploaded first and
-posted with their ``storageId`` (`attach_stored_files`).
+observations as all of them, in dependency order. Before anything is posted
+the plan is filtered by the suppression list (`camsocs_pipeline.suppressions`:
+listings, fields, addresses and people removed on request), read once per
+loader. Image fields staged as a bare ``{"sourceUrl"}``
+(`camsocs_pipeline.media`) are uploaded first and posted with their
+``storageId`` (`attach_stored_files`); with a `StoredFileCache` an image this
+deployment already stores is not uploaded again.
 
 `post_observations` is also where public free text is made safe to publish
 (`extract.redact.redact_claims`, decision D1): personal names of private
@@ -51,6 +55,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
@@ -71,10 +76,15 @@ from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
     ClaimInput,
+    CoverageCounts,
+    CoveragePage,
+    CoverageRequest,
     CrosswalkRequest,
     CrosswalkRow,
     EventOrganiser,
     EventOrganiserSet,
+    EventsCoveragePage,
+    EventsCoverageRequest,
     FileResult,
     FileUpload,
     InboundFile,
@@ -85,17 +95,19 @@ from camsocs_pipeline.models.wire import (
     PendingMail,
     PersonInput,
     PersonLink,
+    PlaywazeIds,
     PurgeRequest,
     RelationshipEvidence,
     RelationshipInput,
     SourceInput,
+    SuppressionList,
     TermDate,
     WireModel,
     WorklistOrg,
     WorklistPage,
 )
-from camsocs_pipeline.pipeline.stored_files import StoredFiles
 from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, FetchPurpose
+from camsocs_pipeline.suppressions import SuppressionReport, Suppressions, apply_suppressions
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +133,11 @@ SOCIETY_FILE_FIELDS = frozenset({("organisation", "logo"), ("event", "image")})
 #: Bytes and content type of an image URL fetched for a purpose, or None
 #: (`media.CachedImages`).
 MediaSource = Callable[[str, FetchPurpose], tuple[bytes, str] | None]
+
+
+#: The claims route's refusal of an image claim whose `storageId` the
+#: deployment no longer stores (purged, or deleted by retention).
+STALE_FILE_REASON = "storageId does not name a stored file"
 
 
 class ConvexError(RuntimeError):
@@ -238,10 +255,14 @@ class ConvexLoader:
         self.dry_run = dry_run
         self.max_retries = max_retries
         self._api_key = api_key
-        #: Remembered uploads (`pipeline.stored_files`); set by the load stage.
-        self.stored_files: StoredFiles | None = None
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout, headers={"User-Agent": USER_AGENT})
+        #: sha256 → storageId of files this deployment stores (the load stage
+        #: sets it; `attach_stored_files` reuses ids instead of uploading).
+        self.file_cache: StoredFileCache | None = None
+        self._suppressions: Suppressions | None = None
+        #: Why the suppression list could not be read, when it could not.
+        self.suppressions_note: str | None = None
 
     def __repr__(self) -> str:
         # Never the key.
@@ -424,22 +445,15 @@ class ConvexLoader:
 
     def upload_file(self, data: bytes, content_type: str) -> FileResult:
         """Stores our own copy of an image or PDF (≤ 2 MB) and returns its
-        storage id; identical bytes are stored once. Bytes this deployment
-        is known to store already (`stored_files`) are not sent again."""
+        storage id; identical bytes are stored once (the server de-duplicates
+        by content; `attach_stored_files` skips bytes the `StoredFileCache`
+        knows this deployment stores)."""
         sha256 = hashlib.sha256(data).hexdigest()
         body = FileUpload(data=base64.b64encode(data).decode("ascii"), content_type=content_type)
         if self.dry_run:
             json.dumps(body.to_wire())
             return FileResult(storage_id="dry-run", sha256=sha256)
-        if self.stored_files is not None:
-            known = self.stored_files.get(sha256)
-            if known is not None:
-                self.stored_files.reused += 1
-                return FileResult(storage_id=known, sha256=sha256)
-        result = FileResult.model_validate(self.post("files", body.to_wire()))
-        if self.stored_files is not None and result.sha256 == sha256:
-            self.stored_files.put(sha256, result.storage_id)
-        return result
+        return FileResult.model_validate(self.post("files", body.to_wire()))
 
     def inbound_pending(self, limit: int = 50) -> list[PendingMail]:
         """The oldest forwarded list mails awaiting extraction."""
@@ -503,6 +517,67 @@ class ConvexLoader:
             cursor = page.continue_cursor
         raise ConvexError(f"worklist did not finish in {max_pages} pages")
 
+    def suppressions(self) -> Suppressions:
+        """The suppression list, read once per loader. Empty in a dry run, and
+        when the route is not deployed yet (then no suppression exists there
+        either); `suppressions_note` says which. A truncated list raises:
+        loading against part of it could re-publish what was removed."""
+        if self._suppressions is not None:
+            return self._suppressions
+        if self.dry_run:
+            self.suppressions_note = "dry run: suppression list not read"
+            self._suppressions = Suppressions()
+            return self._suppressions
+        try:
+            body = SuppressionList.model_validate(self.post("suppressions", {}))
+        except ConvexNotFound:
+            self.suppressions_note = "suppressions route not deployed; nothing filtered"
+            self._suppressions = Suppressions()
+            return self._suppressions
+        if body.truncated:
+            raise ConvexError(
+                "The suppression list is truncated; refusing to load against part of it"
+            )
+        self._suppressions = Suppressions.from_wire(body)
+        return self._suppressions
+
+    def coverage(self, *, page_size: int = 100, max_pages: int = 200) -> tuple[CoverageCounts, int]:
+        """Directory coverage summed over the server's pages (`coverage`):
+        the counts and how many organisation rows they cover."""
+        total = CoverageCounts()
+        rows = 0
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body = CoverageRequest(cursor=cursor, limit=page_size).to_wire()
+            page = CoveragePage.model_validate(self.post("coverage", body))
+            total = merge_coverage(total, page.counts)
+            rows += page.rows
+            if page.is_done:
+                return total, rows
+            cursor = page.continue_cursor
+        raise ConvexError(f"coverage did not finish in {max_pages} pages")
+
+    def event_coverage(
+        self, from_ms: int, *, page_size: int = 500, max_pages: int = 200
+    ) -> EventsCoveragePage:
+        """Events starting at or after `from_ms`, counted by source and
+        visibility over the server's pages (`coverage/events`)."""
+        total = EventsCoveragePage(rows=0, is_done=True, continue_cursor="")
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body = EventsCoverageRequest(from_=from_ms, cursor=cursor, limit=page_size).to_wire()
+            page = EventsCoveragePage.model_validate(self.post("coverage/events", body))
+            for name in ("by_source", "by_visibility"):
+                counts = getattr(total, name)
+                for key, count in getattr(page, name).items():
+                    counts[key] = counts.get(key, 0) + count
+            total.cancelled += page.cancelled
+            total.rows += page.rows
+            if page.is_done:
+                return total
+            cursor = page.continue_cursor
+        raise ConvexError(f"coverage/events did not finish in {max_pages} pages")
+
     def upsert_term_dates(self, terms: Sequence[TermDate]) -> BatchResult:
         return self.post_batches("termDates", "terms", terms, unit="terms")
 
@@ -534,25 +609,38 @@ class ConvexLoader:
     ) -> LoadReport:
         """Posts keyed observations as every row they imply, in dependency
         order: sources → (files) → claims → orgInternal → relationships →
-        event organisers → broker inferences. Unkeyed records are skipped
-        (they wait for the resolve stage) and counted. With `media`, image
-        values that name only a ``sourceUrl`` are uploaded first. Public free
-        text is redacted first (D1, `extract.redact`) with `redactor`, or
-        with the deterministic rule alone when none is given."""
+        event organisers → broker inferences — after taking out whatever the
+        suppression list forbids. Unkeyed records are skipped (they wait for
+        the resolve stage) and counted. With `media`, image values that name
+        only a ``sourceUrl`` are uploaded first. Public free text is redacted
+        (D1, `extract.redact`) with `redactor`, or with the deterministic rule
+        alone when none is given, after the suppression list has cut out what
+        it forbids (so a suppressed address never reaches `valueRaw`)."""
         records = list(records)
         plan = plan_observations(records)
         report = LoadReport(
             skipped=plan.skipped, collisions=plan.collisions, merged=plan.duplicates.notes()
         )
+        report.suppressed = apply_suppressions(plan, self.suppressions())
         plan.claims, report.redaction = redact_claims(
             plan.claims, redactor or Redactor(), private=private_names(records)
         )
         report.sources = self.upsert_sources(plan.sources)
+        reused_before = self.file_cache.reused if self.file_cache else 0
         if media is not None and not self.dry_run:
             plan.claims, report.files_stored, report.files_dropped = attach_stored_files(
                 plan.claims, self, media
             )
         report.claims = self.post_claims(plan.claims, run_key=run_key)
+        if self.file_cache is not None:
+            report.files_reused = self.file_cache.reused - reused_before
+            if any(
+                isinstance(item, dict) and item.get("reason") == STALE_FILE_REASON
+                for item in report.claims.rejected
+            ):
+                # Some cached id is gone from the deployment: forget every id
+                # reused this run, so the next run uploads them again.
+                report.files_stale = self.file_cache.forget_reused()
         report.org_internal = self.patch_org_internal(plan.org_internal)
         report.relationships = self.upsert_relationships(plan.relationships)
         report.event_organisers = self.set_event_organisers(plan.event_organisers)
@@ -590,9 +678,15 @@ class LoadReport:
     collisions: list[str] = field(default_factory=list)
     #: Event readings folded into another source's event (`events.duplicates`).
     merged: list[str] = field(default_factory=list)
+    #: What the suppression list held back.
+    suppressed: SuppressionReport = field(default_factory=SuppressionReport)
     #: Image claims given a stored copy, and those dropped for want of one.
     files_stored: int = 0
     files_dropped: int = 0
+    #: Of the stored copies: ids reused from the `StoredFileCache` (no upload).
+    files_reused: int = 0
+    #: Cached ids forgotten because the deployment no longer had one of them.
+    files_stale: int = 0
     #: What the D1 redaction of public free text did.
     redaction: RedactionStats = field(default_factory=RedactionStats)
     sources: BatchResult = field(default_factory=lambda: BatchResult("sources"))
@@ -631,15 +725,84 @@ class LoadPlan:
     duplicates: Duplicates = field(default_factory=Duplicates)
 
 
+class StoredFileCache:
+    """sha256 → ``storageId`` of the files one deployment already stores
+    (``var/state/stored-files.json``, keyed by deployment URL), so the load
+    stage uploads an image only when its bytes are new to that deployment.
+
+    Ids are trusted until the deployment says otherwise: a claim refused with
+    `STALE_FILE_REASON` makes the loader forget the ids it reused that run
+    (`forget_reused`), and `camsocs purge-dev` forgets the dev deployment's.
+    """
+
+    def __init__(self, path: Path, deployment: str, entries: dict[str, str] | None = None):
+        self.path = path
+        self.deployment = deployment.rstrip("/")
+        self.entries: dict[str, str] = dict(entries or {})
+        self.reused = 0
+        self._reused_ids: set[str] = set()
+        self._others: dict[str, dict[str, str]] = {}
+
+    @classmethod
+    def load(cls, path: Path, deployment: str) -> StoredFileCache:
+        """The cache for `deployment`; empty when the file is missing or unreadable."""
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        key = deployment.rstrip("/")
+        cache = cls(path, key, data.get(key) if isinstance(data.get(key), dict) else None)
+        cache._others = {k: v for k, v in data.items() if k != key and isinstance(v, dict)}
+        return cache
+
+    def get(self, sha256: str) -> str | None:
+        storage_id = self.entries.get(sha256)
+        if storage_id is not None:
+            self.reused += 1
+            self._reused_ids.add(storage_id)
+        return storage_id
+
+    def put(self, sha256: str, storage_id: str) -> None:
+        self.entries[sha256] = storage_id
+
+    def forget_reused(self) -> int:
+        """Forgets every id `get` handed out; returns how many entries went."""
+        stale = {sha for sha, sid in self.entries.items() if sid in self._reused_ids}
+        for sha in stale:
+            del self.entries[sha]
+        self._reused_ids.clear()
+        return len(stale)
+
+    def clear(self) -> None:
+        self.entries.clear()
+
+    def save(self) -> None:
+        """Writes atomically, keeping other deployments' entries."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        data = {**self._others, self.deployment: dict(sorted(self.entries.items()))}
+        temporary = self.path.with_suffix(f"{self.path.suffix}.tmp")
+        temporary.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(self.path)
+
+
+def stored_files_path(staging_dir: Path) -> Path:
+    """``var/state/stored-files.json`` (next to the crosswalk cache; gitignored)."""
+    return staging_dir.parent / "state" / "stored-files.json"
+
+
 def attach_stored_files(
     claims: Sequence[ClaimInput], loader: ConvexLoader, media: MediaSource
 ) -> tuple[list[ClaimInput], int, int]:
     """Gives every image claim that names only a ``sourceUrl`` our own copy:
     reads the bytes through `media`, uploads them (`POST files`, de-duplicated
-    by content) and adds the ``storageId``. A claim whose bytes cannot be had
-    is dropped rather than posted as a bare URL — it would otherwise replace
-    an earlier stored copy from the same source. Returns (claims, stored,
-    dropped); one URL is uploaded once per call."""
+    by content) and adds the ``storageId`` — or, when `loader.file_cache`
+    already knows those bytes' id on this deployment, adds that id without
+    uploading. A claim whose bytes cannot be had is dropped rather than posted
+    as a bare URL — it would otherwise replace an earlier stored copy from the
+    same source. Returns (claims, stored, dropped); one URL is read once per
+    call."""
     stored: dict[str, str | None] = {}
     kept: list[ClaimInput] = []
     uploaded = dropped = 0
@@ -659,9 +822,7 @@ def attach_stored_files(
                 SOCIETY if (claim.entity_type, claim.field) in SOCIETY_FILE_FIELDS else GENERAL
             )
             found = media(url, purpose)
-            stored[url] = (
-                loader.upload_file(found[0], found[1]).storage_id if found is not None else None
-            )
+            stored[url] = _stored_id(loader, found) if found is not None else None
         storage_id = stored[url]
         if storage_id is None:
             dropped += 1
@@ -671,8 +832,48 @@ def attach_stored_files(
     return kept, uploaded, dropped
 
 
+def _stored_id(loader: ConvexLoader, found: tuple[bytes, str]) -> str:
+    data, content_type = found
+    cache = loader.file_cache
+    sha256 = hashlib.sha256(data).hexdigest()
+    if cache is not None:
+        known = cache.get(sha256)
+        if known is not None:
+            return known
+    result = loader.upload_file(data, content_type)
+    if cache is not None and not loader.dry_run:
+        cache.put(sha256, result.storage_id)
+    return result.storage_id
+
+
 def _is_http(url: str) -> bool:
     return url.startswith(("http://", "https://"))
+
+
+def merge_coverage(a: CoverageCounts, b: CoverageCounts) -> CoverageCounts:
+    """`a` + `b` (webapp/lib/broker/coverage.ts `mergeCoverage`)."""
+
+    def add(x: dict[str, int], y: dict[str, int]) -> dict[str, int]:
+        out = dict(x)
+        for key, count in y.items():
+            out[key] = out.get(key, 0) + count
+        return out
+
+    by_level_status = {level: dict(statuses) for level, statuses in a.by_level_status.items()}
+    for level, statuses in b.by_level_status.items():
+        by_level_status[level] = add(by_level_status.get(level, {}), statuses)
+    return CoverageCounts(
+        total=a.total + b.total,
+        hidden=a.hidden + b.hidden,
+        counterparts=a.counterparts + b.counterparts,
+        by_level=add(a.by_level, b.by_level),
+        by_status=add(a.by_status, b.by_status),
+        by_level_status=by_level_status,
+        by_org_type=add(a.by_org_type, b.by_org_type),
+        headline=add(a.headline, b.headline),
+        held=add(a.held, b.held),
+        missing=add(a.missing, b.missing),
+    )
 
 
 def plan_observations(records: Iterable[Observation | EventObservation]) -> LoadPlan:
@@ -739,7 +940,55 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     plan.claims, plan.collisions = _without_collisions(plan.claims)
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)
+    plan.org_internal = merge_org_internal(plan.org_internal)
     return plan
+
+
+#: `OrgInternalPatch` list fields; the server merges them too.
+_INTERNAL_LISTS = (
+    "talks_list_ids",
+    "ics_urls",
+    "luma_calendar_ids",
+    "google_calendar_ids",
+    "ticketing_urls",
+)
+
+
+def _union(*lists: list[str] | None) -> list[str]:
+    return list(dict.fromkeys(item for items in lists for item in items or []))
+
+
+def merge_org_internal(patches: Sequence[OrgInternalPatch]) -> list[OrgInternalPatch]:
+    """One patch per organisation, folded in staging order the way the server
+    applies a sequence of patches: lists merge, a later scalar replaces an
+    earlier one. Posting the fold instead of the sequence is what makes a
+    second identical load write nothing — two sources giving one organisation
+    different scalars (a website domain, an Instagram handle) used to flip
+    the row back and forth on every load."""
+    merged: dict[str, OrgInternalPatch] = {}
+    for patch in patches:
+        current = merged.get(patch.org_key)
+        if current is None:
+            merged[patch.org_key] = patch.model_copy(deep=True)
+            continue
+        update: dict[str, Any] = {}
+        for name in type(patch).model_fields:
+            value = getattr(patch, name)
+            if value is None or name == "org_key":
+                continue
+            if name in _INTERNAL_LISTS:
+                update[name] = _union(getattr(current, name), value)
+            elif name == "playwaze":
+                before = current.playwaze
+                update[name] = PlaywazeIds(
+                    community_id=value.community_id or (before.community_id if before else None),
+                    league_ids=_union(before.league_ids if before else None, value.league_ids),
+                    team_ids=_union(before.team_ids if before else None, value.team_ids),
+                )
+            else:
+                update[name] = value
+        merged[patch.org_key] = current.model_copy(update=update)
+    return list(merged.values())
 
 
 def _without_collisions(claims: list[ClaimInput]) -> tuple[list[ClaimInput], list[str]]:
