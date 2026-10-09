@@ -344,6 +344,8 @@ export function withoutSuppressed(
     }
     out.meta[field] = notPublished
   }
+  // A field removed on request is not one to ask visitors to complete.
+  if (fields.size > 0) out.missingFields = out.missingFields.filter((field) => !fields.has(field))
   if (contacts.size > 0) {
     if (out.email !== undefined && contacts.has(contactHash(out.email))) {
       out.email = undefined

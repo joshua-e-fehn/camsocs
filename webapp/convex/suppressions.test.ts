@@ -209,6 +209,8 @@ describe("accepting a removal", () => {
         status: "missing",
         missingReason: "not_published",
       })
+      // Not one to ask visitors to complete, either.
+      expect(listing?.org.missingFields).not.toContain("description")
       // Neither the same reading posted again nor a new one gets in.
       const again = await t.mutation(internal.ingest.claims.ingest, {
         claims: [
