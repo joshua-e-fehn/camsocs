@@ -13,9 +13,10 @@ import httpx
 import respx
 from pydantic import SecretStr
 
-from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.claims import claims_for_observation, parser_field
 from camsocs_pipeline.config import LLMSettings
 from camsocs_pipeline.extract.llm import LLMClient
+from camsocs_pipeline.extract.redact import Redactor, private_names, redact_claims
 from camsocs_pipeline.models.observation import IdentityHints, Observation
 from camsocs_pipeline.pipeline.context import Stage
 from camsocs_pipeline.pipeline.load import plan_observations
@@ -189,14 +190,15 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     assert home.internal["sympa_list"] == "soc-cuats"
     assert {s["platform"] for s in fields["socials"].value} == {"facebook_group", "x"}
 
-    # LLM: verbatim quote → found; paraphrase → inferred; named person → dropped.
+    # LLM: verbatim quote → found; paraphrase → inferred.
     assert fields["shortDescription"].quote_check in ("exact", "normalised")
     assert fields["shortDescription"].status is None
     assert fields["howToJoin"].status == "inferred"
     assert fields["howToJoin"].quote_check == "absent"
-    # Withheld for naming someone: recorded as not published, not as absent.
-    assert fields["description"].value is None
-    assert fields["description"].missing_reason == "not_published"
+    # A text naming a committee member is staged as written (internal); the
+    # committee's names travel privately so the load step redacts them (D1).
+    assert fields["description"].value.startswith("Led by Sam Sample")
+    assert "Sam Sample" in home.broker["private_names"]
     assert fields["joinUrl"].value == "https://www.cuats.co.uk/register/"
     # Not a link on the page: never invented.
     assert fields["termcardUrl"].value is None
@@ -213,9 +215,23 @@ def test_a_recorded_wordpress_site_is_read_honestly(tmp_path: Path, net: respx.M
     assert {f.field: f.value for f in sessions[0].fields}["dayOfWeek"] == 0
     people = [p for r in result.website for p in r.broker.get("people", [])]
     assert people == [{"name": "Sam Sample", "role": "President", "method": "llm"}]
-    for record in result.website:
-        for obs in record.fields:
-            assert "Sam Sample" not in json.dumps(obs.value)
+    # What would be posted: no committee member's name in any public value,
+    # the original kept only as the internal valueRaw.
+    posted, _stats = redact_claims(
+        [c for r in result.website for c in claims_for_observation(r)],
+        Redactor(),
+        private=private_names(result.website),
+    )
+    for claim in posted:
+        assert "Sam Sample" not in json.dumps(claim.value)
+    (description,) = [c for c in posted if c.field == "description"]
+    assert description.value.startswith("Led by a member of the committee")
+    assert description.value_raw.startswith("Led by Sam Sample")
+    assert description.extractor.endswith("+redacted:v1:rule")
+    assert all(
+        "private_names" not in json.dumps(row.to_wire())
+        for row in plan_observations(result.website).people
+    )
     needs = [n for r in result.website for n in r.broker.get("needs", [])]
     assert [n["item"] for n in needs] == ["sponsorship"]
 

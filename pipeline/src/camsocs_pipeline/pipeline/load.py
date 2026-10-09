@@ -31,6 +31,13 @@ table is in `models/wire.py`), and `post_observations` posts keyed staged
 observations as all of them, in dependency order. Image fields staged as a
 bare ``{"sourceUrl"}`` (`camsocs_pipeline.media`) are uploaded first and
 posted with their ``storageId`` (`attach_stored_files`).
+
+`post_observations` is also where public free text is made safe to publish
+(`extract.redact.redact_claims`, decision D1): personal names of private
+individuals are replaced by their roles, the original text travels as the
+claim's internal `valueRaw`, and a text that cannot be made safe is posted as
+``not_published``. No claim reaches Convex without that step: without a
+redactor the deterministic rule is used.
 """
 
 from __future__ import annotations
@@ -51,6 +58,7 @@ import httpx
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.claims import claims_for_event, claims_for_observation, epoch_ms
+from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
 from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import (
@@ -501,14 +509,21 @@ class ConvexLoader:
         *,
         run_key: str | None = None,
         media: MediaSource | None = None,
+        redactor: Redactor | None = None,
     ) -> LoadReport:
         """Posts keyed observations as every row they imply, in dependency
         order: sources → (files) → claims → orgInternal → relationships →
         event organisers → broker inferences. Unkeyed records are skipped
         (they wait for the resolve stage) and counted. With `media`, image
-        values that name only a ``sourceUrl`` are uploaded first."""
+        values that name only a ``sourceUrl`` are uploaded first. Public free
+        text is redacted first (D1, `extract.redact`) with `redactor`, or
+        with the deterministic rule alone when none is given."""
+        records = list(records)
         plan = plan_observations(records)
         report = LoadReport(skipped=plan.skipped, collisions=plan.collisions)
+        plan.claims, report.redaction = redact_claims(
+            plan.claims, redactor or Redactor(), private=private_names(records)
+        )
         report.sources = self.upsert_sources(plan.sources)
         if media is not None and not self.dry_run:
             plan.claims, report.files_stored, report.files_dropped = attach_stored_files(
@@ -553,6 +568,8 @@ class LoadReport:
     #: Image claims given a stored copy, and those dropped for want of one.
     files_stored: int = 0
     files_dropped: int = 0
+    #: What the D1 redaction of public free text did.
+    redaction: RedactionStats = field(default_factory=RedactionStats)
     sources: BatchResult = field(default_factory=lambda: BatchResult("sources"))
     claims: BatchResult = field(default_factory=lambda: BatchResult("claims"))
     org_internal: BatchResult = field(default_factory=lambda: BatchResult("orgInternal"))

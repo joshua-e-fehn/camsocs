@@ -58,6 +58,7 @@ from camsocs_pipeline.extract.events import (
 from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
 from camsocs_pipeline.extract.memo import LLMMemo
+from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.extract.when import TermCalendar, london_date
 from camsocs_pipeline.keys import event_key, sha1_hex
 from camsocs_pipeline.known_orgs import KnownOrgs
@@ -132,7 +133,11 @@ def finish(ctx: StageContext, outcomes: Sequence[MailOutcome]) -> None:
     if records:
         with ctx.staging.writer(SOURCE_TYPE, ctx.run.run_key) as out:
             out.write_all(records)
-        report = ctx.loader.post_observations(records, run_key=ctx.run.run_key)
+        # Event descriptions are public text: names become roles (D1).
+        redactor, note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
+        if note:
+            ctx.report.notes.append(note)
+        report = ctx.loader.post_observations(records, run_key=ctx.run.run_key, redactor=redactor)
         ctx.report.inserted += report.claims.inserted
         ctx.report.updated += report.claims.updated
         ctx.report.unchanged += report.claims.unchanged
