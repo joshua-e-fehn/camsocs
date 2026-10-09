@@ -175,8 +175,11 @@ meta and last-failure note go together, once all are older), LLM replies under
     slips through. The `inbox` stage's posts go through the same filter.
   - **Idempotent.** Each organisation's feed identifiers travel as one merged `orgInternal`
     patch (lists merged, the later scalar wins — the state the server's sequence of patches
-    used to end in), so a second identical load reports 0 updated; claims are no-ops by
-    fingerprint.
+    used to end in), and each event's organisers as one set folded from all its readings,
+    so a second identical load reports 0 updated; claims are no-ops by fingerprint. Two
+    stages' readings of one field of one page (the colleges stage and enrichment on a JCR's
+    home page) are joined when they differ only in form or are parts of one list; only real
+    disagreements are dropped as collisions.
   - **Images are uploaded once per deployment.** `var/state/stored-files.json` remembers
     sha256 → storageId per deployment URL (`StoredFileCache`); bytes the deployment already
     stores are not sent again (the notes count them). An id the deployment no longer has
