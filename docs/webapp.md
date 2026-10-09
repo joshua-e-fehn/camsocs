@@ -20,6 +20,7 @@ Folded from the template's `webapp/agents.md`. Root rules live in `/AGENTS.md`.
 | Validation         | zod                                         | 4.6.5              |
 | Lint / format      | Biome                                       | 2.4.7 (pinned)     |
 | Tests              | `bun test` + convex-test + happy-dom        | 0.0.55 / 20.14.5   |
+| E2E smoke          | Playwright (Chromium), `bun run e2e`        | 1.64.0             |
 | Hooks              | husky + lint-staged                         | 9.1.7 / 16.4.0     |
 | Hosting            | Vercel (root dir `webapp`) + Convex         | —                  |
 
@@ -44,7 +45,7 @@ app/                         Next.js App Router pages
                              it is closed): overview, organisations (?org=<key> opens the drawer),
                              people, interactions, introductions, graph, reports (missing data +
                              outreach CSV), requests
-  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/
+  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/, /sign-in
   opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
   not-found.tsx              404 outside the site frame
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
@@ -96,7 +97,11 @@ lib/                         Pure logic + *.test.ts (no server imports)
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
   format.ts                  Money, language names, paragraphs
-  site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (placeholder), …
+  rich-text.ts               Description markdown subset → a tree (never HTML); molecules/rich-text renders it
+  event-runs.ts              A show's nights as one run; events already running at a view's start ("Ongoing")
+  monogram.ts                Initials for an organisation without a logo
+  pagination.ts              The page numbers a pager shows
+  site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL, …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
   broker/                    Broker analysis shared by browser and tests: coverage, matching,
                              outreach (CSV + Art 14 notice), force-layout, format
@@ -109,9 +114,14 @@ lib/                         Pure logic + *.test.ts (no server imports)
   convex-url.ts              Build-time check that both Convex URLs name one deployment
 scripts/
   check-codegen.ts           Committed api.d.ts lists every convex module
+  measure-public-api.ts      Response size and time of the public queries against .env.local's deployment
   build-env-defaults.sh      Placeholder Convex URLs only for builds going nowhere (+ .test.ts)
   convex-deploy-if-key.sh    Deploys only on Vercel; refuses a stray exported CONVEX_DEPLOY_KEY
 test/setup.ts                happy-dom preload (keeps native fetch/Headers/Request/Response)
+e2e/                         Playwright smoke suite (not part of `bun test`; bunfig ignores it)
+  fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
+  smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, form
+playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 ```
 
 ### Component architecture (Atomic Design)
@@ -142,7 +152,24 @@ Opening an event only changes `?event=` with `window.history.pushState` (no serv
   syntax). `convex/_generated/` and `convex/betterAuth/_generated/` are excluded; `components/ui/`
   has relaxed a11y rules (generated code).
 - Scripts: `bun run lint`, `bun run format`, `bun run check` (lint + format, writes),
-  `bun run typecheck`, `bun run test`, `bun run check:codegen`, `bun run build`.
+  `bun run typecheck`, `bun run test`, `bun run check:codegen`, `bun run build`,
+  `bun run e2e` (below).
+
+## E2E smoke suite
+
+`bun run e2e:install` once (Playwright's Chromium), then `bun run e2e`: it starts `next dev` on
+port 3100 against the deployment in `.env.local` (or tests `E2E_BASE_URL`, production included)
+and loads every public page at desktop (1440×900) and phone (390×844) size — the pages tagged
+`@dark` again in dark mode — checking one `<h1>`, no horizontal overflow, a title and description,
+no uncaught error or console error, then saving a full-page screenshot to
+`<repo>/var/screenshots/<London date>/<E2E_LABEL or "latest">/<project>/` (gitignored). It also
+opens the mobile filter sheet, an event's details and submits the request form.
+
+**Read-only by construction** (`e2e/fixtures.ts`): the Convex WebSocket is routed through
+Playwright and every `Mutation` / `Action` message is answered by the guard instead of the server
+(the test fails if any page tries one); the request-form test registers a mock result for
+`listingRequests:submit`, so the success state renders and nothing is written. Non-GET
+`/api/auth/*` requests are aborted. Server-rendered pages call public queries only.
 - Pre-commit: husky runs `webapp/.husky/pre-commit` (it `cd webapp`s, since `.git` is one level
   up; `prepare` is `cd .. && husky webapp/.husky`), which runs lint-staged →
   `biome check --write --no-errors-on-unmatched` on staged JS/TS/JSON. Unfixable lint errors block
@@ -184,10 +211,13 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
 ## Environments
 
 Dev and prod are separate Convex deployments of the `camsocs` project with independent data.
+Production setup, step by step (Convex prod, Vercel, the pipeline's `--env prod`): `docs/deploy.md`.
 
 - `.env.local` (written by `bunx convex dev`): `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`,
   `NEXT_PUBLIC_CONVEX_SITE_URL`, optionally `NEXT_PUBLIC_SITE_URL`. See `.env.example`.
 - Vercel production: the three `NEXT_PUBLIC_*` values + `CONVEX_DEPLOY_KEY` (production only).
+  A deploying build never defaults `NEXT_PUBLIC_SITE_URL` to localhost: unset, `lib/site.ts`
+  uses `https://camsocs.vercel.app`.
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`,
   `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link).
@@ -260,7 +290,7 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 |---|---|---|
 | `orgs.list` | `OrgFilters & { paginationOpts }` | `{ page: OrgCardPublic[], isDone, continueCursor }` — name order, or search relevance with `q`; works with `usePaginatedQuery` (cursor = offset) |
 | `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly, truncated }`, each but the last `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns; `truncated` when a search matched more than one query returns (1,024, Convex's limit) and the counts cover the best matches only |
-| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventPublic[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
+| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 
 `OrgCardPublic`: `key, slug, name, shortName?, shortDescription?, orgType?, level?, status,
@@ -280,14 +310,20 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventPublic[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'. Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'. Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
-`EventPublic`: `key, title, description?, startsAt, endsAt?, allDay, termWeekLabel?, venueKey?,
-venueText?, organisers: {key, slug, name, role}[], speakers, price?, bookingUrl?, signupRequired?,
-visibility, eventType, imageUrl?, cancelled, status, source, sourceUrl? (absent for mailing-list
-events), lastSeenAt, confidence, meta`.
+`EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,
+allDay, termWeekLabel?, venueKey?, venueText?, organisers: {key, slug, name, role}[], speakers,
+price?, bookingUrl?, signupRequired?, visibility, eventType, imageUrl?, cancelled, status, source,
+sourceUrl? (absent for mailing-list events), lastSeenAt, confidence, meta`.
+
+`EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
+allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,
+status, source, sourceUrl?` — no description, speakers, price, image or `meta`. A month of events
+was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);
+the sheet reads the rest with `events.get`.
 
 ### Reference data and the form
 

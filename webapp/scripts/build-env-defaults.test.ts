@@ -155,6 +155,22 @@ describe("build-env-defaults.sh — both URLs set", () => {
   })
 
   for (const { label, env } of DEPLOYING) {
+    test(`leaves NEXT_PUBLIC_SITE_URL unset for lib/site.ts when ${label} is set`, () => {
+      // A deploying build without it must not be stamped with localhost: the
+      // sitemap, robots and canonical links would all point there. lib/site.ts
+      // falls back to the production origin instead.
+      const { app, status } = run({
+        ...env,
+        NEXT_PUBLIC_CONVEX_URL: REAL.cloud,
+        NEXT_PUBLIC_CONVEX_SITE_URL: REAL.site,
+      })
+      expect(status).toBe(0)
+      // printf prints an empty last line, which the trim in run() drops.
+      expect(app ?? "").toBe("")
+    })
+  }
+
+  for (const { label, env } of DEPLOYING) {
     test(`still passes through when ${label} is set`, () => {
       // The legitimate production and preview path: fully configured *and*
       // deploying. The deploy-context checks must not break the case they exist

@@ -1,11 +1,9 @@
 /**
  * Site-wide facts the public pages, metadata and compliance pages state.
  *
- * ⚠ `CONTACT_EMAIL` and `ICO_REGISTRATION_NUMBER` are deliberately empty until
- * Joshua fills them in (PLAN.md J6 and the privacy notice). The pages handle the
- * empty value by pointing at the request form, which is a working electronic
- * route for objections, removals and complaints in the meantime. Never put a
- * guessed address here.
+ * ⚠ `ICO_REGISTRATION_NUMBER` is deliberately empty until Joshua fills it in
+ * (PLAN.md J6 and the privacy notice); the pages leave the line out while it
+ * is. Never put a guessed value here.
  */
 
 export const SITE_NAME = "camsocs"
@@ -24,16 +22,17 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.ve
 /** The data controller (UK GDPR Art 4(7)): an individual, not an organisation. */
 export const CONTROLLER_NAME = "Joshua Fehn"
 
-/** Contact address for privacy requests, takedowns and complaints. Empty until
- * Joshua sets one; see the module comment. */
-export const CONTACT_EMAIL = ""
+/** Contact address for privacy requests, takedowns and complaints, beside the
+ * request form (PLAN.md decisions, 2026-10-08: an alias Joshua creates; it
+ * forwards to him). The pages fall back to the form alone if this is empty. */
+export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 
 /** The Information Commission data protection fee registration number, once
  * paid (PLAN.md J6). Empty until then. */
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-10-07"
+export const PRIVACY_NOTICE_UPDATED = "2026-10-09"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"

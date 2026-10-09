@@ -1,7 +1,7 @@
 # Record of processing activities (UK GDPR Art 30)
 
 Controller: **Joshua Fehn**, as an individual (personal / portfolio project; PLAN.md §1). No joint controllers, no representative, no DPO (not required: no large-scale special-category processing, no public authority).
-Contact: the public request form (`/request`) and `CONTACT_EMAIL` in `webapp/lib/site.ts` (**to be set**). ICO / Information Commission fee: **Tier 1, to be paid** (PLAN.md J6); record the number in `ICO_REGISTRATION_NUMBER`.
+Contact: the public request form (`/request`) and camsocs@joshua-fehn.de (`CONTACT_EMAIL` in `webapp/lib/site.ts`; an alias Joshua creates, decision 2026-10-08). ICO / Information Commission fee: **Tier 1, to be paid** (PLAN.md J6); record the number in `ICO_REGISTRATION_NUMBER`.
 
 Why a record is kept: the directory is maintained continuously, so the processing is not "occasional" (landscape brief §5.2). This file is the record; `docs/data-model.md` is the authority on fields, and the public notice is `webapp/app/(site)/privacy/page.tsx`.
 

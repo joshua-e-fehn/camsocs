@@ -85,8 +85,11 @@ export default async function AboutPage() {
               .
             </li>
             <li>
-              <strong>robots.txt is respected</strong>, including crawl delays and blocks aimed at
-              AI agents. The harvester makes one request at a time per site.
+              <strong>Societies&apos; own pages, at a polite pace.</strong> A society&apos;s
+              website, the calendars and files it links to, and college society lists are read even
+              where robots.txt asks crawlers to stay away; every other site&apos;s robots.txt is
+              respected in full. The harvester makes one request at a time per site and honours
+              crawl delays.
             </li>
             <li>
               <strong>Nothing behind a login.</strong> Pages that need a Raven or members&apos;
@@ -103,7 +106,7 @@ export default async function AboutPage() {
               provider, reads free text from societies&apos; own pages to pull out facts such as how
               to join. A fact counts as <em>found</em> only when the model quotes the source word
               for word and the quote is checked; otherwise it is labelled <em>inferred</em>. Content
-              from talks.cam is never given to an AI model.
+              from talks.cam and tbc.xyz is never given to an AI model.
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown

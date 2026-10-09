@@ -116,8 +116,8 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | done |
 | T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | form and admin inbox (`/dashboard/requests`) done; accepted corrections → `owner_submitted` claims and the removal suppression list todo |
 | T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`); J6 and the DPIA todos open |
-| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | todo |
-| T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | todo |
+| T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report | ready to run: `docs/deploy.md` (steps, env for Vercel and Convex prod), `pipeline --env prod`; the deploy itself, the prod harvest and the coverage report todo |
+| T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | browser checks done (R5: `webapp/e2e/`, `bun run e2e`, screenshots at 1440×900 and 390×844, light and dark; fixes from them); adversarial review and data-quality sample todo |
 
 ### Joshua's tasks (front-loaded)
 
@@ -167,3 +167,5 @@ See `AGENTS.md` and `docs/research/2026-10-07-repo-conventions.md` §2. The layo
 | 2026-10-07 | Inbound list mail: Resend receiving subdomain → Svix-verified webhook `/api/inbound/email` (content fetched from Resend's Receiving API); a provider-agnostic JSON route behind a shared secret as the fallback. Outlook rule *redirects* (keeps `List-Id`). |
 | 2026-10-07 | Dates like "Wednesday of Week 3" are resolved in code from the verified term dates; the LLM only reports what the text says. LLM-extracted events from images without a text layer stay `inferred`. |
 | 2026-10-07 | SU resource termcards are not fetched: their files sit under robots-disallowed `/asset/` and `/resourcehandler/` (source-research §1, §21). |
+| 2026-10-08 | robots.txt (D3): pages and feeds that belong to or were published by a society, club, JCR or MCR (its website, its Linktree, Google Calendar ICS feeds it links, SU `/asset/` files linked from its profile, college/JCR/MCR society lists) may be crawled even where robots.txt disallows; every other site's robots.txt is honoured and it is never fetched against it (University Events API, University and college marketing pages, search engines, third parties). Still always: honest User-Agent, Crawl-delay / minimum interval, one request in flight per host, nothing login-gated / Raven / members-only / 403, no decoding of obfuscated emails, no Instagram / Facebook / LinkedIn scraping. AI opt-outs on society content are overridden likewise, except talks.cam and tbc.xyz (never). The About page says so. |
+| 2026-10-08 | Public contact address (D4): camsocs@joshua-fehn.de (`CONTACT_EMAIL`, `webapp/lib/site.ts`; Joshua creates the alias). |

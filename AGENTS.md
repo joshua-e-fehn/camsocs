@@ -62,11 +62,13 @@ camsocs is a verified, current database of Cambridge student societies and sport
 pixi install
 pixi run dev | build | lint | format | typecheck | test | check-codegen
 pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
+pixi run pipeline -- --env prod status   # pipeline/.env.prod on top of pipeline/.env (docs/deploy.md §4)
+cd webapp && bun run e2e                 # Playwright smoke + screenshots → var/screenshots/<date>/ (read-only guard)
 cd webapp && unset CONVEX_DEPLOY_KEY && bunx convex dev --once   # push to dev and regenerate convex/_generated (commit it)
 cd webapp && bunx convex env list                                # add --prod for production
 ```
 
-- Dev Convex deployment: `hushed-rhinoceros-215` (team `joshua-fehn`, project `camsocs`).
+- Dev Convex deployment: `hushed-rhinoceros-215` (team `joshua-fehn`, project `camsocs`). Production (Vercel + Convex prod + the pipeline's `--env prod`): `docs/deploy.md`.
 - **Never export `CONVEX_DEPLOY_KEY` in a shell.** It overrides `.env.local`, and once deployed one project's functions onto another project's production. `scripts/convex-deploy-if-key.sh` deploys only on Vercel.
 - Secrets live in `webapp/.env.local` (Convex) and `pipeline/.env` (pipeline). Both are gitignored, and their values must never be printed.
 - Bun is the only JS/TS package manager. Never use npm, pnpm or yarn.
