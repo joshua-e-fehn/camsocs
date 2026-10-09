@@ -35,14 +35,15 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from camsocs_pipeline.config import PIPELINE_DIR
 from camsocs_pipeline.models.observation import IdentityHints
+from camsocs_pipeline.models.vocab import ORGANISATION_FIELDS
 from camsocs_pipeline.models.wire import CrosswalkRow
 from camsocs_pipeline.resolve.colleges import BY_ID as COLLEGES_BY_ID
 from camsocs_pipeline.resolve.colleges import BY_KEY as COLLEGES_BY_KEY
@@ -85,6 +86,8 @@ class CrosswalkEntry(BaseModel):
     level: str | None = None
     #: Org-type family (`families.family_of`), None when no source said.
     family: str | None = None
+    #: ``jcr`` / ``mcr`` for a college's student body (`identity.BODY_TYPES`).
+    body: str | None = None
     colleges: list[str] = Field(default_factory=list)
     #: Identifier strings (see module docstring).
     ids: list[str] = Field(default_factory=list)
@@ -103,6 +106,7 @@ class CrosswalkEntry(BaseModel):
             families=frozenset({self.family} if self.family else ()),
             college_sets=frozenset({frozenset(self.colleges)} if self.colleges else ()),
             explicit=explicit,
+            bodies=frozenset({self.body} if self.body else ()),
         )
 
 
@@ -165,6 +169,7 @@ class Crosswalk:
                 name=entry.name or current.name,
                 level=entry.level or current.level,
                 family=entry.family or current.family,
+                body=entry.body or current.body,
                 colleges=sorted({*current.colleges, *entry.colleges}),
                 ids=sorted({*current.ids, *entry.ids}),
                 signatures=sorted({*current.signatures, *entry.signatures}),
@@ -176,6 +181,18 @@ class Crosswalk:
             self._by_id.setdefault(identifier, set()).add(entry.key)
         for signature in entry.signatures:
             self._by_signature.setdefault(signature, set()).add(entry.key)
+
+    def retire(self, key: str) -> None:
+        """Forget `key`: an operator's decision merged its organisation into
+        another (its row is removed from Convex separately), so its
+        identifiers must not bring it back."""
+        entry = self.entries.pop(key, None)
+        if entry is None:
+            return
+        for identifier in entry.ids:
+            self._by_id.get(identifier, set()).discard(key)
+        for signature in entry.signatures:
+            self._by_signature.get(signature, set()).discard(key)
 
     def keys_for(self, identifiers: frozenset[str] | set[str] | list[str]) -> set[str]:
         found: set[str] = set()
@@ -251,6 +268,7 @@ class Crosswalk:
                     name=identity.name,
                     level=identity.level,
                     family=identity.family,
+                    body=identity.body,
                     colleges=sorted(identity.colleges),
                     ids=sorted(identity.ids),
                     signatures=sorted(identity.signatures),
@@ -299,6 +317,7 @@ class Crosswalk:
                     name=identity.name,
                     level=identity.level,
                     family=identity.family,
+                    body=identity.body,
                     colleges=sorted(identity.colleges),
                     ids=sorted(identity.ids),
                     signatures=sorted(identity.signatures),
@@ -312,14 +331,64 @@ def _text(value: Any) -> str | None:
     return str(value) if value not in (None, "") else None
 
 
+class ManualClaim(BaseModel):
+    """An operator's statement about one organisation, posted as a ``manual``
+    claim (data-model §0 rule 2: the one way besides an owner's to override
+    the sources). ``ref`` names an observation of the organisation (as the
+    quarantine report prints refs); the claim follows its key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ref: str
+    #: An organisation field (`models.vocab.ORGANISATION_FIELDS`).
+    field: str
+    #: Never null: say what is true, not what is unknown.
+    value: Any
+    #: Why — stored as the claim's ``valueRaw`` (internal, never public).
+    why: str
+    #: When it was decided (ISO date): the claim's retrieval date.
+    decided: date
+
+    @field_validator("value")
+    @classmethod
+    def _not_null(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("a manual claim needs a value")
+        return value
+
+    @field_validator("field")
+    @classmethod
+    def _organisation_field(cls, value: str) -> str:
+        if value not in ORGANISATION_FIELDS:
+            raise ValueError(f"{value} is not an organisation field")
+        return value
+
+
+def _refs_of(entries: Any) -> Any:
+    """``same`` / ``distinct`` entries are lists of refs, or ``{refs, why}``
+    objects that keep the evidence next to the decision."""
+    if not isinstance(entries, list):
+        return entries
+    return [entry.get("refs") if isinstance(entry, dict) else entry for entry in entries]
+
+
 class Decisions(BaseModel):
-    """Operator decisions on quarantined matches, by observation ref
-    (``<source_type>:<source_key>``, as the quarantine report prints them)."""
+    """Operator decisions, by observation ref (``<source_type>:<source_key>``,
+    as the quarantine report prints them). In the file, each ``same`` /
+    ``distinct`` entry may be ``{"refs": [...], "why": "..."}``: the reason
+    is for the reader; only the refs are used."""
 
     #: Each group is one organisation, whatever the matching rules say.
     same: list[list[str]] = Field(default_factory=list)
     #: Each pair is two organisations, whatever the matching rules say.
     distinct: list[list[str]] = Field(default_factory=list)
+    #: Manual claims about organisations (`ManualClaim`).
+    claims: list[ManualClaim] = Field(default_factory=list)
+
+    @field_validator("same", "distinct", mode="before")
+    @classmethod
+    def _groups(cls, value: Any) -> Any:
+        return _refs_of(value)
 
     @classmethod
     def load(cls, path: Path) -> Decisions:
@@ -333,6 +402,7 @@ __all__ = [
     "Crosswalk",
     "CrosswalkEntry",
     "Decisions",
+    "ManualClaim",
     "Match",
     "crosswalk_path",
     "ident",
