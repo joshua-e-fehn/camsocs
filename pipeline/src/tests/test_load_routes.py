@@ -196,6 +196,44 @@ class TestPlan:
             "org-boat-club-rowing sport.collegeCompetition: 2 readings from one source"
         ]
 
+    def test_two_stages_reading_one_home_page_join_their_readings(self) -> None:
+        # The colleges stage and enrichment both read a JCR's home page: the
+        # same URL with and without its slash, and parts of one list of
+        # socials, are one reading each — not a collision that drops both.
+        def home(stage: str, website: str, socials: list[dict]) -> Observation:
+            return Observation(
+                source_type="society_website",
+                source_key=f"{stage}:home",
+                source_url="https://quokkajcr.example/",
+                retrieved_at=AT,
+                entity_type="organisation",
+                identity=IdentityHints(name="Quokka JCR"),
+                entity_key="org-quokka-jcr",
+                fields=[
+                    parser_field("website", website, extractor=stage, evidence="primary"),
+                    parser_field("socials", socials, extractor=stage, evidence="primary"),
+                ],
+            )
+
+        insta = {"platform": "instagram", "url": "https://instagram.com/quokkajcr"}
+        welfare = {"platform": "instagram", "url": "https://instagram.com/quokkajcr_welfare"}
+        face = {"platform": "facebook_page", "url": "https://facebook.com/quokkajcr"}
+        plan = plan_observations(
+            [
+                home("colleges", "https://quokkajcr.example", [insta, face, welfare]),
+                home("website", "https://quokkajcr.example/", [face, insta]),
+            ]
+        )
+        assert plan.collisions == []
+        by_field = {c.field: c for c in plan.claims}
+        assert by_field["website"].value == "https://quokkajcr.example"
+        assert [s["url"] for s in by_field["socials"].value] == [
+            face["url"],
+            insta["url"],
+            welfare["url"],
+        ]
+        assert sum(c.field == "socials" for c in plan.claims) == 1
+
     def test_internal_source_urls_make_no_source_row(self) -> None:
         mail = event(
             source_type="mailing_list_email",

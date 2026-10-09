@@ -52,6 +52,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -107,6 +108,7 @@ from camsocs_pipeline.models.wire import (
     WorklistOrg,
     WorklistPage,
 )
+from camsocs_pipeline.sources.links import social_key
 from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, SOCIETY_WEBSITE, FetchPurpose
 from camsocs_pipeline.suppressions import SuppressionReport, Suppressions, apply_suppressions
 
@@ -902,7 +904,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     same organiser, London date and visibility, a similar title, starts at
     most 30 minutes apart) become claims on that source's event, with their
     own provenance, instead of events of their own; they are planned after
-    every other record, so the event and its organiser set exist first."""
+    every other record, so the event exists first. Each event gets one
+    organiser set, folded from all of its readings (`replace` when every one
+    resolved its organisers, else `merge`)."""
     plan = LoadPlan()
     items = list(records)
     duplicates = find_duplicates(record for record in items if record.is_keyed)
@@ -911,8 +915,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     #: The organisations each fetched page was observed for. A page observed
     #: for several (a directory, a register, an A–Z) belongs to none of them.
     owners: dict[str, set[str]] = {}
-    #: The organisations each event's organiser sets so far name.
-    planned_organisers: dict[str, set[str]] = {}
+    #: Each event's one organiser set, folded from every reading of it:
+    #: event key → (organisers in order, whether every reading resolved).
+    organiser_sets: dict[str, tuple[list[EventOrganiser], bool]] = {}
     for record in primaries_first(items, duplicates):
         assert isinstance(record, Observation | EventObservation)
         if not record.is_keyed:
@@ -927,31 +932,19 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
                 not o.identity.known_key for o in record.organisers
             )
             target = event_key(*(primary or event_identity(record)))
-            known = planned_organisers.setdefault(target, set())
-            organisers = [
+            folded, resolved = organiser_sets.get(target, ([], True))
+            known = {o.org_key for o in folded}
+            # A second source's reading adds only organisations the event's
+            # own reading does not name: Camdram's co-host stays a co-host
+            # when the co-host's site calls the show its own. Every reading
+            # folds into one set per event, so no load removes an organiser
+            # (a replace) that the next request adds back (a merge).
+            folded = folded + [
                 EventOrganiser(org_key=o.identity.known_key, role=o.role)
                 for o in record.organisers
-                if o.identity.known_key
-                # A second source's reading adds only organisations the
-                # event's own reading does not name: Camdram's co-host stays a
-                # co-host when the co-host's site calls the show its own (a
-                # role added beside it would be removed and re-added by every
-                # load's replace-then-merge).
-                and not (primary and o.identity.known_key in known)
+                if o.identity.known_key and o.identity.known_key not in known
             ]
-            known.update(o.org_key for o in organisers)
-            if organisers or not primary:
-                plan.event_organisers.append(
-                    EventOrganiserSet(
-                        event_key=target,
-                        organisers=organisers,
-                        # Organisers the source names but this run could not
-                        # resolve (a fresh machine, a --limit run, an
-                        # ambiguous name), or a second source's reading of an
-                        # event: add what is known, remove nothing.
-                        mode="merge" if unresolved or primary else "replace",
-                    )
-                )
+            organiser_sets[target] = (folded, resolved and not unresolved)
         else:
             plan.claims.extend(claims_for_observation(record))
             if record.entity_type == "organisation":
@@ -969,6 +962,17 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     for url, keys in owners.items():
         if len(keys) > 1:
             sources[url] = sources[url].model_copy(update={"org_key": None})
+    plan.event_organisers = [
+        EventOrganiserSet(
+            event_key=target,
+            organisers=organisers,
+            # Organisers a reading names but this run could not resolve (a
+            # fresh machine, a --limit run, an ambiguous name): add what is
+            # known, remove nothing.
+            mode="replace" if resolved else "merge",
+        )
+        for target, (organisers, resolved) in organiser_sets.items()
+    ]
     plan.claims, plan.collisions = _without_collisions(plan.claims)
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)
@@ -1023,32 +1027,86 @@ def merge_org_internal(patches: Sequence[OrgInternalPatch]) -> list[OrgInternalP
     return list(merged.values())
 
 
+#: List fields whose readings from one page by two stages are joined (one
+#: social or role address each stage found), keyed by what makes items equal.
+_UNION_FIELDS: dict[str, Callable[[Any], str]] = {
+    "socials": lambda item: social_key(item) if isinstance(item, dict) else canonical_json(item),
+    "roleEmails": lambda item: (
+        f"{item.get('role')}|{str(item.get('email', '')).lower()}"
+        if isinstance(item, dict)
+        else canonical_json(item)
+    ),
+    "aliases": lambda item: str(item).strip().lower(),
+}
+#: Fields holding one URL: two spellings of one URL are one reading.
+_URL_FIELDS = frozenset({"website", "joinUrl", "termcardUrl", "contactFormUrl", "bookingUrl"})
+
+
+def _same_url(value: Any) -> str:
+    """A URL compared as the server compares them: no scheme, ``www.`` or
+    trailing slash, case-insensitive."""
+    return re.sub(r"^https?://(www\.)?", "", str(value).strip().lower()).rstrip("/")
+
+
+def _reconciled(group: list[ClaimInput]) -> ClaimInput | None:
+    """One claim for readings of one field from one page by one method that
+    differ only in form (a URL's trailing slash) or are parts of one list
+    (two stages' socials of one home page), or None when they disagree."""
+    field_name = group[0].field
+    values = [claim.value for claim in group]
+    if any(value is None for value in values):
+        return None
+    if field_name in _URL_FIELDS:
+        return group[0] if len({_same_url(value) for value in values}) == 1 else None
+    key = _UNION_FIELDS.get(field_name)
+    if key is None or not all(isinstance(value, list) for value in values):
+        return None
+    union: dict[str, Any] = {}
+    for value in values:
+        for item in value:
+            union.setdefault(key(item), item)
+    joined = [union[k] for k in sorted(union)]
+    return group[0].model_copy(update={"value": joined})
+
+
 def _without_collisions(claims: list[ClaimInput]) -> tuple[list[ClaimInput], list[str]]:
-    """Drops claims that would overwrite each other: two different readings of
-    one field of one entity from the same source and method (two rows of one
-    PDF resolved to one organisation). The server keeps only the newest per
-    (source, method), so either would win by arrival order — neither is
-    posted, and the collision is reported."""
-    readings: dict[tuple[str, str, str, str, str], set[str]] = defaultdict(set)
+    """Claims that would overwrite each other: two different readings of one
+    field of one entity from the same source and method (two rows of one PDF
+    resolved to one organisation; the colleges stage and enrichment reading
+    one JCR's home page). The server keeps only the newest per (source,
+    method), so either would win by arrival order. Readings that differ only
+    in form, or are parts of one list, become one claim (`_reconciled`);
+    otherwise neither is posted, and the collision is reported."""
+    groups: dict[tuple[str, str, str, str, str], list[ClaimInput]] = defaultdict(list)
     for claim in claims:
         group = (claim.entity_type, claim.entity_key, claim.field, claim.source_key, claim.method)
-        readings[group].add(
+        groups[group].append(claim)
+    readings = {
+        group: {
             canonical_json(claim.value)
             if claim.value is not None
             else f"!{claim.status}:{claim.missing_reason}"
-        )
+            for claim in members
+        }
+        for group, members in groups.items()
+    }
     clashing = {group for group, values in readings.items() if len(values) > 1}
     if not clashing:
         return claims, []
-    kept = [
-        claim
-        for claim in claims
-        if (claim.entity_type, claim.entity_key, claim.field, claim.source_key, claim.method)
-        not in clashing
-    ]
+    replacement = {group: _reconciled(groups[group]) for group in clashing}
+    kept: list[ClaimInput] = []
+    placed: set[tuple[str, str, str, str, str]] = set()
+    for claim in claims:
+        group = (claim.entity_type, claim.entity_key, claim.field, claim.source_key, claim.method)
+        if group not in clashing:
+            kept.append(claim)
+        elif replacement[group] is not None and group not in placed:
+            placed.add(group)
+            kept.append(replacement[group])  # type: ignore[arg-type]
     notes = sorted(
         f"{entity_key} {field_name}: {len(readings[group])} readings from one source"
         for group in clashing
+        if replacement[group] is None
         for _type, entity_key, field_name, _source, _method in [group]
     )
     return kept, notes

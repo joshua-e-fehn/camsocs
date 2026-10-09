@@ -139,10 +139,80 @@ def test_a_duplicate_adds_new_organisers_and_never_a_second_role() -> None:
     ]
     plan = plan_observations([site, show])
     sets = [(s.mode, [(o.org_key, o.role) for o in s.organisers]) for s in plan.event_organisers]
+    # One set per event, folded from both readings: a replace followed by a
+    # merge (in another request, maybe) removed the guest and added it back
+    # on every load (review 2026-10-10).
     assert sets == [
-        ("replace", [(ORG, "organiser"), ("org-fl", "co_host")]),
-        ("merge", [("org-guest", "organiser")]),
+        ("replace", [(ORG, "organiser"), ("org-fl", "co_host"), ("org-guest", "organiser")])
     ]
+    assert len({s.event_key for s in plan.event_organisers}) == len(plan.event_organisers)
+
+
+def test_a_camdram_show_without_a_society_merges_with_its_companys_page() -> None:
+    show = reading(
+        "camdram",
+        "show:7/performance:7/2026-10-30",
+        "Tom Example: Ribbing For Your Pleasure",
+        ms(2026, 10, 30, 23, 0),
+        organisers=(),
+    )
+    site = reading(
+        "website",
+        "org-fl:2026-10-30:tom-example-ribbing-for-your-pleasure",
+        "Tom Example: Ribbing For Your Pleasure",
+        ms(2026, 10, 30, 23, 0),
+        organisers=("org-fl",),
+    )
+    plan = plan_observations([site, show])
+    assert plan.duplicates.primary_of == {
+        ("website", "org-fl:2026-10-30:tom-example-ribbing-for-your-pleasure"): (
+            "camdram",
+            "show:7/performance:7/2026-10-30",
+        )
+    }
+    (only,) = plan.event_organisers
+    assert [(o.org_key, o.role) for o in only.organisers] == [("org-fl", "organiser")]
+
+
+def test_one_organisers_card_and_page_at_the_same_minute_are_one_event() -> None:
+    card = reading(
+        "termcard",
+        "org:2026-10-20:seminar-2",
+        "Seminar 2: Ethics in Modelling",
+        ms(2026, 10, 20, 16),
+    )
+    page = reading(
+        "website",
+        "org:2026-10-20:seminar",
+        "Seminar: Financial Mathematics and Modelling",
+        ms(2026, 10, 20, 16),
+    )
+    assert len(find_duplicates([card, page]).primary_of) == 1
+    # Not at another minute, and not with nothing but "Seminar" in common.
+    later = reading(
+        "website", "org:2026-10-20:x", "Seminar: Survival Psychology", ms(2026, 10, 20, 16)
+    )
+    assert find_duplicates([card, later]).primary_of == {}
+
+
+def test_a_feeds_time_and_a_pages_an_hour_apart_in_summer_time_are_one_event() -> None:
+    feed = reading("google_calendar", "uid-9/x", "Open training session", ms(2026, 10, 9, 20, 0))
+    page = reading(
+        "website", "org:2026-10-09:open-training-session", "Open training session",
+        ms(2026, 10, 9, 19, 0), llm=True,
+    )  # fmt: skip
+    duplicates = find_duplicates([feed, page])
+    assert duplicates.primary_of == {
+        ("website", "org:2026-10-09:open-training-session"): ("google_calendar", "uid-9/x")
+    }
+    # The feed's time stands: the page adds no competing start.
+    assert duplicates.coarser == {("website", "org:2026-10-09:open-training-session")}
+    # In winter (GMT) an hour apart is two events.
+    winter_feed = reading("google_calendar", "uid-9/y", "Open training", ms(2026, 11, 20, 20, 0))
+    winter_page = reading(
+        "website", "org:2026-11-20:open-training", "Open training", ms(2026, 11, 20, 19, 0)
+    )
+    assert find_duplicates([winter_feed, winter_page]).primary_of == {}
 
 
 def test_an_all_day_reading_adds_no_competing_start() -> None:

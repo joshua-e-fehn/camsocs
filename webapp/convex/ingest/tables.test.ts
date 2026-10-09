@@ -247,6 +247,26 @@ describe("eventOrganisers", () => {
     })
     const links = await t.run(async (ctx) => await ctx.db.query("eventOrganisers").collect())
     expect(links.map((l) => l.orgKey)).toEqual(["org-adc"])
+
+    // The pipeline folds every reading of an event into one set (a primary
+    // and a second source's organisers): a second identical load writes
+    // nothing (review 2026-10-10; a replace then a merge rewrote it each time).
+    const folded = {
+      eventKey: key,
+      organisers: [
+        { orgKey: "org-adc", role: "organiser" as const },
+        { orgKey: "org-footlights", role: "co_host" as const },
+        { orgKey: "org-bank", role: "organiser" as const },
+      ],
+    }
+    const first = await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [folded],
+    })
+    expect(first.updated).toBe(1)
+    const second = await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [folded],
+    })
+    expect(second).toMatchObject({ inserted: 0, updated: 0, unchanged: 1 })
   })
 
   test("a merge set (some organisers unresolved) adds and never removes", async () => {

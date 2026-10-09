@@ -15,12 +15,20 @@ describe one event.
   event: the strictest reading would hide it, data-model §1 rule 3);
 - not two entries of one listing (the same source and source URL: one feed,
   one page): the listing itself says they are two events;
-- at least one resolved organiser in common (no organiser, no merge);
+- at least one resolved organiser in common — or, for a structured listing
+  that names no organiser (a Camdram show without a society), a society's
+  own page or card listing an event of the same name at the same minute;
 - the same Europe/London calendar date;
 - similar titles (`extract.dedupe.similar_titles`: one title's words contain
-  the other's, or they share at least half);
+  the other's, or they share at least half) — or, with an organiser in common
+  and the very same start, one distinctive word in common ("Seminar 2:
+  Ethics in Modelling" on a termcard is "Seminar: Financial Mathematics and
+  Modelling" on the events page, Tuesday 16:00);
 - when both are timed, starts at most `MAX_START_GAP` (30 minutes) apart; an
-  all-day reading matches any time that day.
+  all-day reading matches any time that day. A feed's time and a page's time
+  exactly one hour apart in British Summer Time are one event too: the
+  page's reader took the feed's UTC for local time, or the other way round;
+  the feed's time stands (`BST_SLIP`).
 
 **Which reading is primary** — the higher-evidence one (`rank`): a timed
 reading before an all-day one; a start the source states before an inferred
@@ -49,7 +57,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from camsocs_pipeline.extract.dedupe import similar_titles
+from camsocs_pipeline.extract.dedupe import similar_titles, title_tokens
 from camsocs_pipeline.keys import event_key
 from camsocs_pipeline.models.observation import EventObservation, FieldObs
 
@@ -57,6 +65,39 @@ LONDON = ZoneInfo("Europe/London")
 
 #: Two timed readings of one event start at most this far apart.
 MAX_START_GAP = timedelta(minutes=30)
+#: A feed's and a page's times this far apart in British Summer Time.
+BST_SLIP = timedelta(hours=1)
+#: Listings whose entry may name no organiser (a Camdram show without a society).
+_LISTINGS = frozenset({"camdram", "talks_cam", "su_whatson", "cucbc"})
+#: A society's own page or card.
+_OWN_PAGES = frozenset({"website", "termcard"})
+#: Feeds whose times are instants (UTC or zoned), as read by a parser.
+_FEEDS = frozenset({"google_calendar", "ics", "luma"})
+#: Words too common in event titles to make two titles one.
+_GENERIC_TITLE_WORDS = frozenset(
+    {
+        "seminar",
+        "talk",
+        "lecture",
+        "event",
+        "social",
+        "meeting",
+        "session",
+        "workshop",
+        "night",
+        "evening",
+        "week",
+        "term",
+        "michaelmas",
+        "lent",
+        "easter",
+        "freshers",
+        "welcome",
+        "drinks",
+        "training",
+        "series",
+    }
+)
 
 #: Structured listings first, then the readings an LLM made.
 SOURCE_ORDER: tuple[str, ...] = (
@@ -113,7 +154,9 @@ def _field(record: EventObservation, name: str) -> FieldObs | None:
 def _reading(record: EventObservation) -> _Reading | None:
     title, starts = _field(record, "title"), _field(record, "startsAt")
     organisers = frozenset(o.identity.known_key for o in record.organisers if o.identity.known_key)
-    if title is None or starts is None or not organisers:
+    if title is None or starts is None:
+        return None
+    if not organisers and record.event_source not in _LISTINGS:
         return None
     if not isinstance(title.value, str) or not isinstance(starts.value, int):
         return None
@@ -153,6 +196,24 @@ def rank(reading: _Reading) -> tuple:
     )
 
 
+def bst_slip(primary: _Reading, other: _Reading) -> bool:
+    """A feed's time and a page's exactly an hour apart in British Summer
+    Time (module docstring): one event, the feed's time stands."""
+    sources = {primary.record.event_source, other.record.event_source}
+    if not (sources & _FEEDS and sources & _OWN_PAGES):
+        return False
+    if primary.all_day or other.all_day:
+        return False
+    offset = primary.starts_at.astimezone(LONDON).utcoffset()
+    return offset == BST_SLIP and abs(primary.starts_at - other.starts_at) == BST_SLIP
+
+
+def _distinctive(title: str) -> frozenset[str]:
+    return frozenset(
+        word for word in title_tokens(title) if word not in _GENERIC_TITLE_WORDS and len(word) > 2
+    )
+
+
 def same_event(primary: _Reading, other: _Reading) -> bool:
     """The match rules in the module docstring (`other` against a primary)."""
     if primary.record.visibility != other.record.visibility:
@@ -162,14 +223,30 @@ def same_event(primary: _Reading, other: _Reading) -> bool:
         and primary.record.source_url == other.record.source_url
     ):
         return False
-    if not primary.organisers & other.organisers:
-        return False
     if primary.day != other.day:
         return False
     timed = not primary.all_day and not other.all_day
-    if timed and abs(primary.starts_at - other.starts_at) > MAX_START_GAP:
+    gap = abs(primary.starts_at - other.starts_at)
+    slip = bst_slip(primary, other)
+    if timed and gap > MAX_START_GAP and not slip:
         return False
-    return similar_titles(primary.title, other.title)
+    same_start = timed and (gap < timedelta(minutes=1) or slip)
+    if primary.organisers & other.organisers:
+        if similar_titles(primary.title, other.title):
+            return True
+        return same_start and bool(_distinctive(primary.title) & _distinctive(other.title))
+    if primary.organisers and other.organisers:
+        return False
+    # One side names no organiser: a structured listing's entry (a Camdram
+    # show without a society) and a society's own page listing the same name
+    # at the same minute.
+    listing, page = (primary, other) if not primary.organisers else (other, primary)
+    if listing.organisers or listing.record.event_source not in _LISTINGS:
+        return False
+    if page.record.event_source not in _OWN_PAGES:
+        return False
+    left, right = title_tokens(primary.title), title_tokens(other.title)
+    return same_start and bool(left and right) and (left <= right or right <= left)
 
 
 @dataclass
@@ -178,7 +255,8 @@ class Duplicates:
 
     #: (source, externalId) of a duplicate reading → its primary's.
     primary_of: dict[EventId, EventId] = field(default_factory=dict)
-    #: Readings whose timing granularity differs from their primary's.
+    #: Readings whose timing does not join their primary's: another
+    #: granularity (all-day vs timed), or an hour's BST slip.
     coarser: set[EventId] = field(default_factory=set)
 
     def __len__(self) -> int:
@@ -221,7 +299,9 @@ def find_duplicates(records: Iterable[object]) -> Duplicates:
                 primaries.append(reading)
                 continue
             result.primary_of[reading.id] = match.id
-            if match.all_day != reading.all_day:
+            if match.all_day != reading.all_day or bst_slip(match, reading):
+                # A start of another granularity, or an hour's slip: the
+                # primary's timing stands, this reading adds none.
                 result.coarser.add(reading.id)
     return result
 
