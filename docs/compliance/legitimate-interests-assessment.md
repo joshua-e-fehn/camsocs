@@ -16,6 +16,7 @@ The ICO three-part test — purpose, necessity, balance — is applied to two pr
 
 - The directory is about organisations. The only personal data it needs is the **role contact address** an organisation publishes, so that a student can reach the society. Role addresses are the least intrusive contact route; a personal CRSid address is never shown publicly (removed by the public projection, `convex/lib/projections.ts`), and named officers are never shown.
 - Speaker names on events appear only as the organiser published them.
+- Other names in public text (committee members, performers, students) are replaced by their roles before publishing (decision D1); the original wording stays internal.
 - Mailing-list mail (P3) is the only route for events that societies do not post anywhere public. It is needed only for the events; the messages are never published, events from them are shown only to verified `@cam.ac.uk` users (the audience the list itself reaches), and messages are deleted after 90 days (`retention.md` R4).
 - LLM extraction (P5) is needed to read free text at the scale of ~1,500 groups. It is limited to the text of the page or message, never talks.cam (robots.txt), and every LLM value without a verified verbatim quote is labelled `inferred`.
 - Less intrusive alternatives considered: asking every society first (the phase-2 outreach does this, but cannot be the only route for 1,500 groups in the time available); publishing names (rejected); scraping Instagram (rejected: platform terms, brief §5.4).
@@ -26,7 +27,7 @@ The ICO three-part test — purpose, necessity, balance — is applied to two pr
 |---|---|
 | Nature of the data | Role addresses and organisation facts. No special category data: a faith or political society is listed, its members are not (Art 9 risk avoided by not naming people) |
 | Reasonable expectations | Societies published the data to be found; registers publish it for the same reason. A student society expects to be listed in student directories |
-| Source | Publicly accessible pages only; nothing behind a login; robots.txt and crawl delays honoured; obfuscated addresses never decoded |
+| Source | Publicly accessible pages only; nothing behind a login; crawl delays always honoured; robots.txt honoured except on the pages and feeds societies publish about themselves (decision D3: they publish them to be found), never overridden for talks.cam or non-society sites; obfuscated addresses never decoded |
 | Impact | Low: more contact from prospective members. The PECR risk of marketing to a role address is not part of this activity |
 | Safeguards | Per-fact source, date and status on every page; claim / correct / remove / object form on every listing and in the footer; Art 14 notice to each society's role address by about 13 Nov 2026 (PLAN.md J7); removal honoured permanently (suppression list, `retention.md` open items); unofficial disclaimer; no University branding |
 | Children | Society officers are students, almost all adults; nothing is aimed at children |

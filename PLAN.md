@@ -59,7 +59,7 @@ The full field set is in `docs/data-model.md`.
 - [ ] Organisation graph:
   - relationships (sponsors, co-hosts, sister societies, affiliations);
   - filters by need or offer.
-- [ ] People: named committee members from public sources, marked stale after handover.
+- [ ] People: named committee members from public sources, marked stale after handover. First-name-only entries are kept (D2).
 - [ ] Needs and offers per organisation, each inferred or confirmed.
 - [ ] Interaction log and follow-ups.
 - [ ] Introductions (party A ↔ party B, reason, status, outcome).
@@ -83,11 +83,12 @@ Per-source detail lives in `docs/source-research.md`. Each harvester gets its ow
 
 **Hard rules**
 - No Instagram, Facebook or LinkedIn scraping.
-- Respect robots.txt, including the full-site block on the Caius JCR site and the AI-agent blocks on talks.cam and tbc.xyz.
+- Respect robots.txt on every page that is not a society's own (D3). Pages and feeds a society publishes (its website, Linktree, the public Google calendars it links, files on its SU profile, college / JCR / MCR society lists, the Caius JCR site among them) may be read where robots.txt disallows, through the one fetch policy (`pipeline/.../sources/policy.py`). talks.cam and tbc.xyz are never overridden, and their AI-agent blocks always hold. The University Events API is never fetched.
 - Do not decode obfuscated emails (Queens' JCR via Cloudflare, Wolfson via script).
 - Do not fetch Raven-gated or members-only pages (Homerton list, Lucy Cavendish, Peterhouse 403).
 - Do not bulk-store personal CRSids from college lists in public fields.
 - Use an honest User-Agent: `camsocs-bot/0.1 (+https://camsocs.vercel.app/about)`.
+- Public free text names no private individual: names are replaced by roles before publishing (D1), and the original stays internal.
 
 **LLM**
 - cliproxy (`https://cliproxy.mymya.cloud/v1`, OpenAI-compatible), Codex models only:
@@ -107,7 +108,7 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T2 | A Foundation | Domain schema from `docs/data-model.md`. Ingestion mutations and the field resolution / derivation engine. Vocab parity test. | done |
 | T3 | B Harvest | Seed harvesters: SU directory + profiles, Proctors, Sport A–Z + pages + guide PDF, Camdram societies, CUCBC, colleges, JCR/MCR bodies | done (SU, Proctors, Sport A–Z + pages + guide, Camdram, CUCBC, colleges + JCR/MCR) |
 | T4 | B Harvest | Identity resolution and de-duplication across sources (SU id, Instagram handle, normalised name + level + college), with a quarantine | done (crosswalk, quarantine report, `resolve-decisions.json`) |
-| T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | done (Linktree blocked by robots.txt) |
+| T5 | B Harvest | Website / Linktree enrichment plus LLM field extraction (practical information, contacts, socials, categories, needs and offers, feeds) | done (Linktree read under the D3 override; its edge may still answer 403) |
 | T6 | B Harvest | Event feeds (Camdram, talks.cam, ICS / Luma / Google, University Events API, Playwaze, CUCBC, SU What's On) plus `termDates` | done |
 | T7 | B Harvest | Inbound email route (provider-agnostic webhook plus a Resend adapter) and pipeline extraction of events from mail; mailing-list sign-up worklist | done |
 | T8 | B Harvest | Instagram Business Discovery client (no-op until a token exists) and termcard OCR | done |
@@ -166,4 +167,8 @@ See `AGENTS.md` and `docs/research/2026-10-07-repo-conventions.md` §2. The layo
 | 2026-10-07 | Field set confirmed as in `docs/data-model.md`. |
 | 2026-10-07 | Inbound list mail: Resend receiving subdomain → Svix-verified webhook `/api/inbound/email` (content fetched from Resend's Receiving API); a provider-agnostic JSON route behind a shared secret as the fallback. Outlook rule *redirects* (keeps `List-Id`). |
 | 2026-10-07 | Dates like "Wednesday of Week 3" are resolved in code from the verified term dates; the LLM only reports what the text says. LLM-extracted events from images without a text layer stay `inferred`. |
-| 2026-10-07 | SU resource termcards are not fetched: their files sit under robots-disallowed `/asset/` and `/resourcehandler/` (source-research §1, §21). |
+| 2026-10-07 | SU resource termcards are not fetched: their files sit under robots-disallowed `/asset/` and `/resourcehandler/` (source-research §1, §21). *Superseded on 2026-10-08 by D3.* |
+| 2026-10-08 | **D1 — names in public text are redacted to roles.** Personal names of private individuals in public free text (organisation descriptions and short descriptions from the SU, websites and Camdram; how to join, time commitment, accessibility, membership and trial notes; session notes; event descriptions) are replaced by the person's role or a neutral phrase before publishing ("contact our President, Anna" → "contact our President"). The original stays internal (`fieldClaims.valueRaw`). Speakers of public talks published as `events.speakers` are not redacted. Implemented as the LLM pass `extract/prompts/redact_names_v1.md` with deterministic checks and a conservative rule fallback that withholds a field it cannot make safe (`extract/redact.py`). |
+| 2026-10-08 | **D2 — first-name-only committee members are kept** in the private broker `people` table, with `staleAfter` the next 30 June. |
+| 2026-10-08 | **D3 — society pages may be crawled where robots.txt disallows.** Joshua: "still crawl, it is fine for the societies; don't crawl any non-societies-related webpages". In scope: society websites, societies' Linktree pages, Google Calendar public ICS feeds societies link, SU `/asset/` files linked from a society profile (logos, termcards) and college / JCR / MCR society-list pages (the Caius JCR site). AI opt-outs (an AI crawler blocked by name, `ai-input=no`, `noai`) on that content are overridden for LLM processing too. Never: talks.cam and tbc.xyz (parser only, never the LLM), the University Events API (never fetched), other non-society pages (robots.txt holds). Unchanged: honest User-Agent, Crawl-delay and the minimum interval, one request per host, nothing behind a login, 403 or members-only, no decoding of obfuscated emails, no Instagram / Facebook / LinkedIn scraping. Provenance: `robots_override:society` / `ai_optout_override:society` on the `sources` row. One policy, `pipeline/.../sources/policy.py`. |
+| 2026-10-08 | **D4 — public contact address** `camsocs@joshua-fehn.de` (`CONTACT_EMAIL` in `webapp/lib/site.ts`; Joshua creates the alias). |

@@ -96,7 +96,7 @@ lib/                         Pure logic + *.test.ts (no server imports)
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
   format.ts                  Money, language names, paragraphs
-  site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (placeholder), …
+  site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (D4), …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
   broker/                    Broker analysis shared by browser and tests: coverage, matching,
                              outreach (CSV + Art 14 notice), force-layout, format
