@@ -93,11 +93,11 @@ export function EventItem({
       )}
     >
       <div className="flex w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-muted py-1.5 font-mono leading-tight">
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
+        <span className="text-[11px] tracking-wider text-muted-foreground uppercase">
           {weekdayShort(day)}
         </span>
         <span className="text-lg font-semibold tabular-nums">{date}</span>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
+        <span className="text-[11px] tracking-wider text-muted-foreground uppercase">
           {monthShort(day)}
         </span>
       </div>
@@ -107,7 +107,7 @@ export function EventItem({
             {runLabel ?? formatEventTime(event)}
           </time>
           {!runLabel && event.termWeekLabel && (
-            <span className="font-mono text-[11px] tracking-tight">· {event.termWeekLabel}</span>
+            <span className="font-mono text-xs tracking-tight">· {event.termWeekLabel}</span>
           )}
           <Badge variant="secondary" className="font-normal">
             {EVENT_TYPE_LABELS[event.eventType]}

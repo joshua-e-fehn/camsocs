@@ -2,6 +2,7 @@ import { preloadQuery } from "convex/nextjs"
 import type { Metadata } from "next"
 import { OrgDirectory } from "@/components/organisms/org-directory"
 import { api } from "@/convex/_generated/api"
+import { pageMetadata } from "@/lib/page-metadata"
 import {
   DIRECTORY_PAGE_SIZE,
   directoryCursor,
@@ -21,12 +22,12 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     : category
       ? `${category} societies and clubs`
       : "Societies and clubs"
-  return {
+  return pageMetadata({
     title,
     description:
       "Browse and filter Cambridge student societies and sports clubs by category, level, college, activities and more. Every fact is sourced.",
-    alternates: { canonical: "/societies" },
-  }
+    path: "/societies",
+  })
 }
 
 /**

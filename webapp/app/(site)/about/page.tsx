@@ -6,15 +6,16 @@ import { ProseSection } from "@/components/molecules/prose-section"
 import { StatusChip } from "@/components/molecules/source-line"
 import { api } from "@/convex/_generated/api"
 import { formatInstantDate, londonTime } from "@/lib/calendar"
+import { pageMetadata } from "@/lib/page-metadata"
 import { BOT_USER_AGENT, CONTACT_EMAIL, CONTROLLER_NAME, DISCLAIMER } from "@/lib/site"
 import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-line"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "About",
   description:
-    "What camsocs is, who runs it, and how it collects data: public sources only, robots.txt respected, no Instagram scraping, every fact sourced.",
-  alternates: { canonical: "/about" },
-}
+    "What camsocs is, who runs it, and how it collects data: public sources only, read at a polite pace, no Instagram scraping, every fact sourced.",
+  path: "/about",
+})
 
 const SOURCES = [
   ["Cambridge SU society directory", "society names, categories, descriptions, contact links"],

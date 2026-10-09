@@ -50,7 +50,7 @@ export function StatusChip({ status, className }: { status: KnownStatus; classNa
     <span
       title={details.description}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-px font-sans text-[11px] font-medium",
+        "inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-px font-sans text-xs font-medium",
         TONE[details.tone],
         className,
       )}

@@ -4,16 +4,17 @@ import { EventsCalendar } from "@/components/organisms/events-calendar"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { londonIsoDate, viewWindow } from "@/lib/calendar"
+import { pageMetadata } from "@/lib/page-metadata"
 import { eventListArgs, parseEventsParams, type SearchParams } from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Events",
   description:
     "Talks, socials, matches and shows from Cambridge societies and clubs, in one calendar. Each event shows where it was listed.",
-  alternates: { canonical: "/events" },
-}
+  path: "/events",
+})
 
 /**
  * The calendar. Preloads, for the view and filters in the URL: the events the

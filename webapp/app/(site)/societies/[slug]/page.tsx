@@ -6,6 +6,7 @@ import { OrgProfile } from "@/components/organisms/org-profile"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
+import { pageMetadata } from "@/lib/page-metadata"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
 import { isOrgSlug } from "@/lib/url-state"
 
@@ -28,12 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { org } = page
   const description =
     org.shortDescription ?? `${org.name}: what it does, how to join and how to get in touch.`
-  return {
-    title: org.name,
-    description,
-    alternates: { canonical: `/societies/${org.slug}` },
-    openGraph: { title: org.name, description, url: `/societies/${org.slug}` },
-  }
+  return pageMetadata({ title: org.name, description, path: `/societies/${org.slug}` })
 }
 
 /** How many Cambridge-only upcoming events this viewer cannot see. Null when

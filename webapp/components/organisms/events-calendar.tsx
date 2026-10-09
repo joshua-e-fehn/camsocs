@@ -494,7 +494,7 @@ export function EventsCalendar({
             <div className="flex flex-col gap-1">
               <div
                 aria-hidden
-                className="grid grid-cols-7 gap-1 font-mono text-[11px] text-muted-foreground uppercase"
+                className="grid grid-cols-7 gap-1 font-mono text-xs text-muted-foreground uppercase"
               >
                 {WEEKDAYS.map((name) => (
                   <span key={name} className="px-1 text-center md:text-left">

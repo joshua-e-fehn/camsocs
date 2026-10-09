@@ -46,6 +46,9 @@ export function camSignInHref(next: string): string {
   return `${CAM_SIGN_IN_HREF}&next=${encodeURIComponent(next)}`
 }
 
+/** What the share image shows, for its alt text (app/opengraph-image.tsx). */
+export const SHARE_IMAGE_ALT = `camsocs — ${SITE_TAGLINE.charAt(0).toLowerCase()}${SITE_TAGLINE.slice(1)}`
+
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =
   "camsocs is an independent, unofficial project. It is not affiliated with, endorsed by or run by the University of Cambridge, any of its colleges or Cambridge SU."

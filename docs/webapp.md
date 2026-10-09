@@ -101,6 +101,7 @@ lib/                         Pure logic + *.test.ts (no server imports)
   event-runs.ts              A show's nights as one run; events already running at a view's start ("Ongoing")
   monogram.ts                Initials for an organisation without a logo
   pagination.ts              The page numbers a pager shows
+  page-metadata.ts           A page's title, description, share card (with the share image) and canonical
   site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL, …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
   broker/                    Broker analysis shared by browser and tests: coverage, matching,

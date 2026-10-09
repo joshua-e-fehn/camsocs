@@ -277,8 +277,8 @@ export async function accessibilityViolations(page: Page): Promise<string[]> {
 
 /**
  * The checks every page gets, then a full-page screenshot named `name`:
- * one `<h1>`, no horizontal overflow, a `<title>` and a description, no
- * axe-core violation (in the page's current theme, so contrast is checked in
+ * one `<h1>`, no horizontal overflow, a `<title>`, a description and a share
+ * image, no axe-core violation (in the page's current theme, so contrast is checked in
  * light and dark).
  */
 export async function checkAndCapture(
