@@ -259,7 +259,7 @@ class EventObservation(_ObservationBase):
     organisers: list[OrganiserObs] = Field(default_factory=list)
     #: Organisers the source names but nobody could match to a key yet (an
     #: events stage resolves against the keyed observations in staging,
-    #: `events.organisers`). Kept for a later resolver pass and for coverage
+    #: `resolve.lookup.OrgLookup`). Kept for a later resolver pass and for coverage
     #: reports; never posted, and they do not hold the event back.
     unresolved_organisers: list[OrganiserObs] = Field(default_factory=list)
     #: Where it happens, when the source names a venue. With a resolved key it

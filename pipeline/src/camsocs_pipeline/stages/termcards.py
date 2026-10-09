@@ -1,7 +1,7 @@
 """Stage `termcards`: a term's events from societies' termcards (source-research §21).
 
 1. **Inputs**: every `termcardUrl` an organisation has in staging
-   (`KnownOrgs.termcards`; the SU, website and enrichment harvesters claim it).
+   (`OrgLookup.termcards`; the SU, website and enrichment harvesters claim it).
 2. **Fetch** politely (`sources.termcards.fetch_termcard`): the file, or the
    first termcard file a page links or embeds. SU-hosted cards (§21),
    talks.cam and social networks are never fetched; robots-blocked, 401/403
@@ -44,9 +44,9 @@ from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
-from camsocs_pipeline.known_orgs import KnownOrgs
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.termcards import Skipped, TermcardFile, fetch_termcard, term_hint
 
@@ -58,7 +58,7 @@ MAX_TERMCARDS_PER_RUN = 60
 
 
 def run(ctx: StageContext) -> None:
-    known = KnownOrgs.from_staging(ctx.staging)
+    known = OrgLookup.for_stage(ctx)
     cards = known.termcards()
     if not cards:
         ctx.report.notes.append("no organisation in staging has a termcard URL yet")

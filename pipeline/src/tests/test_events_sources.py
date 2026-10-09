@@ -21,12 +21,12 @@ from camsocs_pipeline.events import (
 )
 from camsocs_pipeline.events.common import LONDON, default_window
 from camsocs_pipeline.events.ics import IcsEvent
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, Observation
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader, plan_observations
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import SyncState
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import HostGates, PoliteClient
 from camsocs_pipeline.staging.store import StagingStore
 
@@ -375,7 +375,7 @@ class TestPlaywaze:
 
 class TestUniEvents:
     def test_only_events_naming_one_student_group_are_kept(self) -> None:
-        index = OrganiserIndex()
+        index = OrgLookup()
         for key, name, org_type in (
             ("org-cu-chess-club", "CU Chess Club", "society"),
             ("org-cambridge-university-chess-club-juniors", "CU Chess Club Juniors", "society"),

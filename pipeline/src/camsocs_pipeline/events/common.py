@@ -21,7 +21,7 @@ link retracts it (data-model §1 rule 1). Values a rule guessed rather than read
 (``inferred``: an event type from keywords, a date from a fixed calendar, a
 re-read timezone) are claimed as ``inferred``.
 
-**Organisers.** Hints are resolved against `OrganiserIndex`; an organiser
+**Organisers.** Hints are resolved with `resolve.lookup.OrgLookup.reference_key`; an organiser
 nobody can match yet goes to ``unresolved_organisers`` instead of holding the
 event back (`models.observation.EventObservation`).
 
@@ -356,7 +356,7 @@ def finalise(
 
 
 class _Resolver(Protocol):
-    """The slice of `events.organisers.OrganiserIndex` the builder needs."""
+    """The slice of `resolve.lookup.OrgLookup` the builder needs."""
 
     def resolve(self, hints: IdentityHints) -> str | None: ...
 

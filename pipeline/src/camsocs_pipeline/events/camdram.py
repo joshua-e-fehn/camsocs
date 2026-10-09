@@ -25,7 +25,7 @@ last day, external id ``show:<id>/performance:<run id>``. Non-show diary events
 ``organiser``, the rest ``co_host`` (shows are often co-funded; the
 eventOrganisers route turns co-hosts into ``co_hosted`` relationship edges).
 Each is an identity hint with its Camdram id and slug, resolved against
-staging (`events.organisers`).
+staging and the crosswalk (`resolve.lookup.OrgLookup`).
 
 **Venues.** A performance's ``venue`` object becomes a `venues` row
 (``ven-<slug(name)>``, with address and coordinates from ``/venues.json``) and
@@ -58,11 +58,11 @@ from camsocs_pipeline.events.common import (
     polite_client,
     write_staging,
 )
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.keys import venue_key
 from camsocs_pipeline.media import probe_image
 from camsocs_pipeline.models.observation import IdentityHints, Observation, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 
 logger = logging.getLogger(__name__)
@@ -448,7 +448,7 @@ def run(
     window = window or default_window(now)
     headers = _headers(ctx)
     interval = None if headers else UNAUTHENTICATED_INTERVAL
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     tally = Tally()
     end_day = window.end.astimezone(LONDON).date().isoformat()
     with polite_client(ctx.settings, min_interval=interval) as client:

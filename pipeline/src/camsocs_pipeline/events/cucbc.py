@@ -49,11 +49,11 @@ from camsocs_pipeline.events.common import (
     write_staging,
 )
 from camsocs_pipeline.events.ics import IcsError, parse_ics
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.keys import slugify
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.models.wire import TermDate
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.seeds.term_dates import TERM_DATES
 
 BASE = "https://www.cucbc.org"
@@ -316,7 +316,7 @@ def run(
     ctx: StageContext, *, window: EventWindow | None = None, now: datetime | None = None
 ) -> None:
     window = window or default_window(now)
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     tally = Tally()
     pending: list[Sourced] = []
     calendar_events = 0

@@ -162,6 +162,10 @@ def mock_run_log(net) -> None:
     net.get(f"{SITE}/api/pipeline/health").mock(return_value=httpx.Response(200, json={"ok": True}))
     net.post(f"{SITE}/api/pipeline/runs/start").mock(return_value=httpx.Response(200, json={}))
     net.post(f"{SITE}/api/pipeline/runs/finish").mock(return_value=httpx.Response(200, json={}))
+    # The organisation lookup reads Convex's crosswalk (resolve/lookup.py).
+    net.post(f"{SITE}/api/pipeline/crosswalk").mock(
+        return_value=httpx.Response(200, json={"rows": [], "isDone": True})
+    )
 
 
 def caption_completion(request: httpx.Request) -> httpx.Response:

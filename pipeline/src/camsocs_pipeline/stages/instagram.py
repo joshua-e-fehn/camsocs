@@ -6,7 +6,7 @@ Gated on `META_IG_USER_ID` + `META_ACCESS_TOKEN`: without both it notes
 green. instagram.com is never fetched.
 
 1. **Targets**: organisations in staging with exactly one Instagram handle
-   that no other organisation claims (`KnownOrgs.instagram_targets`).
+   that no other organisation claims (`OrgLookup.instagram_targets`).
 2. **Rotation**: Business Discovery is rate-limited per hour, so a run checks
    at most `MAX_HANDLES_PER_RUN` (or `--limit`) handles — never-checked first,
    then the longest unchecked; a handle checked in the last `RECHECK_HOURS` is
@@ -55,7 +55,6 @@ from camsocs_pipeline.extract.images import upload_image, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
-from camsocs_pipeline.known_orgs import KnownOrgs
 from camsocs_pipeline.models.observation import (
     EventObservation,
     FetchInfo,
@@ -64,6 +63,7 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.instagram import (
     BusinessDiscovery,
     InstagramError,
@@ -106,7 +106,7 @@ def run(ctx: StageContext) -> None:
     if not settings.meta_configured:
         ctx.report.notes.append("skipped: not configured (META_IG_USER_ID / META_ACCESS_TOKEN)")
         return
-    known = KnownOrgs.from_staging(ctx.staging)
+    known = OrgLookup.for_stage(ctx)
     targets = known.instagram_targets()
     if not targets:
         ctx.report.notes.append("no organisation in staging has an Instagram handle yet")
@@ -227,7 +227,7 @@ def _account(
     profile: Profile | None,
     client: BusinessDiscovery,
     now: datetime,
-    known: KnownOrgs,
+    known: OrgLookup,
 ) -> Observation:
     """What we learnt about the account itself: orgInternal identifiers and,
     from the newest post, `lastActiveAt`."""
@@ -265,7 +265,7 @@ def _account(
 
 
 def _events(
-    org_key: str, profile: Profile, now: datetime, known: KnownOrgs, tools: Tools
+    org_key: str, profile: Profile, now: datetime, known: OrgLookup, tools: Tools
 ) -> list[EventObservation]:
     """Events from the account's recent posts, newest post first, each event
     once (by its external id), minus those another source already has."""

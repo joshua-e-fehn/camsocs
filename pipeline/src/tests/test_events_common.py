@@ -22,11 +22,11 @@ from camsocs_pipeline.events.common import (
     infer_event_type,
     merge_drafts,
 )
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.keys import event_key
 from camsocs_pipeline.media import CachedImages, sniff_raster
 from camsocs_pipeline.models.observation import IdentityHints, Observation, OrganiserObs
 from camsocs_pipeline.pipeline.load import ConvexLoader, attach_stored_files, plan_observations
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.staging.store import StagingStore, events_directory
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -130,7 +130,7 @@ class TestBuilder:
         assert fields["bookingUrl"].missing_reason == "not_published"
 
     def test_organisers_resolve_through_the_index_or_wait_unresolved(self) -> None:
-        index = OrganiserIndex()
+        index = OrgLookup()
         index.add(organisation("org-test-players", "Test Players", camdram_id=22))
         d = draft(
             organisers=[
@@ -211,7 +211,7 @@ class TestText:
         assert infer_event_type("Something") == "other"
 
 
-class TestOrganiserIndex:
+class TestOrgLookupForEvents:
     def test_it_reads_keyed_organisations_and_their_feeds_from_staging(
         self, tmp_path: Path
     ) -> None:
@@ -221,7 +221,7 @@ class TestOrganiserIndex:
         unkeyed = organisation("org-x", "Unresolved")
         unkeyed.entity_key = None
         staging.write("_resolved", "20261007T000000Z-aaaaaa", [resolved, unkeyed])
-        index = OrganiserIndex.from_staging(staging)
+        index = OrgLookup.from_staging(staging)
         assert len(index) == 1
         assert index.resolve(IdentityHints(name="?", su_id="7641")) == "org-cuas"
         assert index.resolve(IdentityHints(name="CU Astronomical Society")) == "org-cuas"
@@ -232,13 +232,13 @@ class TestOrganiserIndex:
         ]
 
     def test_ambiguous_names_resolve_to_nobody(self) -> None:
-        index = OrganiserIndex()
+        index = OrgLookup()
         index.add(organisation("org-chess-a", "Chess Club"))
         index.add(organisation("org-chess-b", "Chess Club"))
         assert index.resolve(IdentityHints(name="Chess Club")) is None
 
     def test_boat_clubs_resolve_by_college(self) -> None:
-        index = OrganiserIndex()
+        index = OrgLookup()
         index.add(
             organisation(
                 "org-jesus-college-boat-club",

@@ -22,9 +22,10 @@ Shared pieces:
   `EventObservation`, every field through `claims.parser_field`);
 - `events.checks` — date sanity (impossible years, end before start) and the
   "link in bio" flag;
-- `events.organisers` — `OrganiserIndex`: the keyed organisations already in
-  staging (resolver output and later stages), which the events stages resolve
-  organiser hints against, and the feeds (`orgInternal`) they list;
+- `resolve.lookup.OrgLookup` (not in this package: inbox, Instagram and
+  termcards use it too) — the keyed organisations in staging plus the
+  crosswalk (local and Convex's), which the events stages resolve organiser
+  hints against (`reference_key`), and the feeds (`orgInternal`) they list;
 - `events.ics` — generic iCalendar parsing: timezone normalisation to
   Europe/London (with the documented bogus-zone heuristic), recurrence
   expansion inside the window, de-duplication by UID;
@@ -32,6 +33,7 @@ Shared pieces:
 
 Events stages run after resolve, so they write keyed observations to their own
 ``<source_type>.events`` staging directory (`staging.store.events_directory`)
-and never call Convex; `load` posts them. No event text ever reaches an LLM
-here, and talks.cam content never may (source-research §6).
+and never write to Convex (they read its crosswalk); `load` posts them. No
+event text ever reaches an LLM here, and talks.cam content never may
+(source-research §6).
 """

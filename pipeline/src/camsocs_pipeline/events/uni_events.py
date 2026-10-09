@@ -43,9 +43,9 @@ from camsocs_pipeline.events.common import (
     write_staging,
 )
 from camsocs_pipeline.events.ics import IcsError, IcsEvent, parse_ics
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 
 FEED_URL = (
     "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/"
@@ -78,7 +78,7 @@ class _Name:
     length: int
 
 
-def society_names(index: OrganiserIndex) -> list[_Name]:
+def society_names(index: OrgLookup) -> list[_Name]:
     names: list[_Name] = []
     for key, name in index.organisations().items():
         if index.org_type(key) not in STUDENT_GROUP_TYPES:
@@ -135,7 +135,7 @@ def run(
     ctx: StageContext, *, window: EventWindow | None = None, now: datetime | None = None
 ) -> None:
     window = window or default_window(now)
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     names = society_names(index)
     tally = Tally()
     with polite_client(ctx.settings) as client:

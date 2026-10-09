@@ -2,7 +2,7 @@
 organisation's own page (or the feed's own metadata), with the date checked.
 
 The events stages read feeds from `orgInternal` identifiers in staging
-(`events.organisers.OrganiserIndex.feeds`), which website enrichment fills.
+(`resolve.lookup.OrgLookup.feeds`), which website enrichment fills.
 These seeds cover the gap until it has run; a seed whose list or feed is also
 discovered is fetched once. Add one only after reading it where `found_on`
 says, and never guess a list id: talks.cam list ids change (source-research §6).

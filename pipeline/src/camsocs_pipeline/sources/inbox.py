@@ -33,8 +33,8 @@ import re
 from dataclasses import dataclass
 from email.utils import getaddresses
 
-from camsocs_pipeline.known_orgs import KnownOrgs, sympa_list_name
 from camsocs_pipeline.models.wire import PendingMail
+from camsocs_pipeline.resolve.lookup import OrgLookup, sympa_list_name
 
 _FORWARD_MARKERS = re.compile(
     r"(?im)^\s*(?:-{2,}\s*(?:forwarded message|original message)\s*-{2,}|begin forwarded message:)"
@@ -120,7 +120,7 @@ class Identified:
     how: str
 
 
-def identify_sender(mail: PendingMail, known: KnownOrgs) -> Identified:
+def identify_sender(mail: PendingMail, known: OrgLookup) -> Identified:
     """The organisation a mail is from, by deterministic signals from a
     verified sender only (module docstring)."""
     if mail.org_key:
