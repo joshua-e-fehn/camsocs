@@ -106,3 +106,18 @@ def test_a_college_named_elsewhere_is_confirmed_on_that_page() -> None:
     unconfirmed, _ = harvest(lmbc_page="We row.")
     assert club(unconfirmed, "Lady Margaret Boat Club").relationships == []
     assert any("no longer names" in note for note in unconfirmed.notes)
+
+
+def test_another_universitys_club_is_a_counterpart() -> None:
+    listing = ok(LISTING, fixture("cucbc_clubs.html"))
+    client = FakeClient({LISTING: listing})
+    aru = cucbc.club_observation(
+        cucbc.ClubRow(name="Anglia Ruskin Boat Club", details_url=None, website=None),
+        listing,
+        client,
+        None,
+    )
+    values = {f.field: f.value for f in aru.fields}
+    assert (values["orgType"], values["isCounterpart"]) == ("other_university_society", True)
+    caius = {f.field: f.value for f in club(harvest()[0], "Caius Boat Club").fields}
+    assert caius["isCounterpart"] is False

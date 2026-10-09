@@ -112,3 +112,66 @@ LEAD = "We put on plays every term."
 )
 def test_public_description_stops_before_people(text: str, expected: str | None) -> None:
     assert camdram.public_description(text) == expected
+
+
+def test_another_universitys_society_is_a_counterpart(harvest) -> None:
+    other = fields(by_slug(harvest, "other-uni-theatre"))
+    assert (other["orgType"], other["isCounterpart"]) == ("other_university_society", True)
+
+
+@pytest.mark.parametrize(
+    ("slug", "name", "description", "expected"),
+    [
+        ("cam-fm", "Cam FM", "Cam FM is Cambridge's student radio station.",
+         ("media", ("media_publishing",), False)),
+        ("cambridge-university-film-association", "Cambridge University Film Association", "",
+         ("society", ("theatre_film_dance", "media_publishing"), False)),
+        ("trolleydolly-productions", "Trolleydolly Productions",
+         "Trolleydolly Productions is a new Cambridge film-makers' society.",
+         ("society", ("theatre_film_dance", "media_publishing"), False)),
+        ("bread-theatre-film-company", "Bread Theatre & Film Company", "",
+         ("theatre_company", ("theatre_film_dance", "media_publishing"), False)),
+        ("trinity-hall-music-society", "Trinity Hall Music Society", None,
+         ("society", ("music",), False)),
+        ("cambridge-university-ballet-club", "Cambridge University Ballet Club", None,
+         ("society", ("theatre_film_dance",), False)),
+        ("cambridge-university-opera-society", "Cambridge University Opera Society", "",
+         ("theatre_company", ("theatre_film_dance", "music"), False)),
+        ("camdram", "Camdram", "Camdram's meta-page on Camdram.", ("other", (), True)),
+        ("adc-online", "ADC Online", "https://www.adctheatre.com/",
+         ("other", ("theatre_film_dance",), True)),
+        ("girton-musical-theatre", "Girton Musical Theatre",
+         "We are based in the village of Girton",
+         ("theatre_company", ("theatre_film_dance", "music"), True)),
+        ("cambridge-creatives", "Cambridge Creatives",
+         "We host Q&As with professionals in film, tv and theatre.",
+         ("theatre_company", ("theatre_film_dance",), False)),
+    ],
+)  # fmt: skip
+def test_not_everything_on_camdram_is_a_theatre_company(
+    slug: str, name: str, description: str | None, expected: tuple
+) -> None:
+    kind = camdram.camdram_type(slug, name, description)
+    assert (kind.org_type, kind.categories, kind.counterpart) == expected
+
+
+def test_a_community_company_is_external_and_never_listed() -> None:
+    society = {
+        "id": 99,
+        "name": "Pied Pipers",
+        "slug": "pied-pipers",
+        "description": "The Pied Pipers Musical Theatre Club is an amateur community Musical "
+        "Theatre Company based in Cambridge, UK.",
+    }
+    result = ok(URL, "[]", ctype="application/json")
+    observation = camdram.society_observation(society, result, FakeClient({}))
+    assert observation is not None
+    values = fields(observation)
+    assert (values["isCounterpart"], values["level"]) == (True, "external")
+    meta = camdram.society_observation(
+        {"id": 1, "name": "Camdram", "slug": "camdram", "description": "meta"},
+        result,
+        FakeClient({}),
+    )
+    assert meta is not None
+    assert "level" not in fields(meta) and fields(meta)["orgType"] == "other"

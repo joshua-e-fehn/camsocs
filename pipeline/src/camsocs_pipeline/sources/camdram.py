@@ -1,13 +1,35 @@
 """Camdram societies (source-research §5): ``societies.json``, one request.
 
-Each society becomes a ``theatre_company`` observation (source type
-``camdram``): identity by ``camdram_id`` / ``camdram_slug``, name and short
-name, ``registrations.camdram``, its image as the logo's source (our own copy
-is made later; a logo is never hotlinked), and its Facebook page
-(``facebook_id`` is a page id or a page URL → a ``facebook.com`` link; anything
-else, such as a link shortener, is dropped). ``college`` places a society in
-its college (``level`` college + ``member_college``); "Anglia Ruskin" is
-another university (``level`` external).
+Each society becomes a ``camdram`` observation: identity by ``camdram_id`` /
+``camdram_slug``, name and short name, ``registrations.camdram``, its image as
+the logo's source (our own copy is made later; a logo is never hotlinked),
+and its Facebook page (``facebook_id`` is a page id or a page URL → a
+``facebook.com`` link; anything else, such as a link shortener, is dropped).
+``college`` places a society in its college (``level`` college +
+``member_college``) — the only college signal used: "Girton Musical Theatre"
+is a village group, not Girton College's.
+
+**Not everything on Camdram is a theatre company** (`camdram_type`, re-checked
+2026-10-09 against every entry's name and description):
+
+- a student radio station (Cam FM: "Cambridge's student radio station") is
+  ``media`` (category media_publishing);
+- film societies ("Film Association", "Filmmaking Society", "a new Cambridge
+  film-makers' society", "a student-led film production company") are
+  ``society`` with categories theatre_film_dance + media_publishing; a
+  "Theatre & Film Company" stays a theatre company with both categories;
+- a music society is a ``society`` (music); opera, musical theatre and
+  Gilbert & Sullivan companies stay theatre companies with music added; a
+  ballet club is a dance ``society``; Amnesty International's group is a
+  campaigning ``society`` (causes_volunteering);
+- entries that are not student groups are counterparts, never listed:
+  Camdram's own meta-page and ADC Online (the ADC Theatre's online
+  programme) as ``other``; community companies (Pied Pipers "an amateur
+  community Musical Theatre Company", Girton Musical Theatre "based in the
+  village of Girton … anyone over the age of 16", The Festival Players "for
+  all ages", WRiTEON "not specifically a student organisation") at level
+  ``external`` — city clubs are out of scope (PLAN §2.2); another
+  university's society ("Anglia Ruskin") is ``other_university_society``.
 
 **Descriptions carry committees** (§5's trap): role addresses
 (``president@cuadc.org``) become ``roleEmails`` — never people — and a general
@@ -22,6 +44,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 
 from camsocs_pipeline.claims import parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
@@ -122,6 +145,87 @@ def facebook_url(value: object) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class CamdramType:
+    """What kind of organisation a Camdram entry is (module docstring)."""
+
+    org_type: str = "theatre_company"
+    categories: tuple[str, ...] = ("theatre_film_dance",)
+    #: Not a student group we list (`isCounterpart`).
+    counterpart: bool = False
+    #: The level when it does not follow from the college (an outside group).
+    level: str | None = None
+    #: Why, for the claims' ``valueRaw`` when the type is not the default.
+    reason: str | None = None
+
+
+#: Entries that are not student groups, by slug (checked 2026-10-09).
+_NOT_STUDENT_GROUPS: dict[str, CamdramType] = {
+    "camdram": CamdramType(
+        "other", (), True, None, "Camdram's own meta-page: \"We don't fund any shows\""
+    ),
+    "adc-online": CamdramType(
+        "other", ("theatre_film_dance",), True, None, "the ADC Theatre's online programme"
+    ),
+    "pied-pipers": CamdramType(
+        "theatre_company", ("theatre_film_dance", "music"), True, "external",
+        "\"an amateur community Musical Theatre Company\"",
+    ),
+    "girton-musical-theatre": CamdramType(
+        "theatre_company", ("theatre_film_dance", "music"), True, "external",
+        "\"based in the village of Girton\", open to anyone over 16",
+    ),
+    "the-festival-players": CamdramType(
+        "theatre_company", ("theatre_film_dance", "music"), True, "external",
+        "\"a friendly, Cambridge-based musical theatre society for all ages\"",
+    ),
+    "writeon": CamdramType(
+        "theatre_company", ("theatre_film_dance",), True, "external",
+        "\"we are not specifically a student organisation\"",
+    ),
+    "cambridge-university-amnesty-international": CamdramType(
+        "society", ("causes_volunteering",), False, None,
+        "Amnesty International's student group, which staged a production",
+    ),
+}  # fmt: skip
+
+_RADIO = re.compile(r"\bradio\b|\b\d{2,3}(\.\d)?\s?fm\b|^cam fm$", re.IGNORECASE)
+_FILM = re.compile(
+    r"\bfilm\s?(making|makers?|production|association|society)\b|\bfilm-?makers?\b"
+    r"|\bfilmmaking\b",
+    re.IGNORECASE,
+)
+_THEATRE_WORDS = re.compile(r"\b(theatre|theater|drama|dramatic|players)\b", re.IGNORECASE)
+_MUSICAL = re.compile(r"\b(opera|operatic|musical|gilbert|g\s?&\s?s)\b", re.IGNORECASE)
+_MUSIC_SOCIETY = re.compile(r"\bmusic society\b", re.IGNORECASE)
+_DANCE = re.compile(r"\b(ballet|dance|dancing)\b", re.IGNORECASE)
+
+
+def camdram_type(slug: str, name: str, description: str | None) -> CamdramType:
+    """The kind of organisation one Camdram entry is (module docstring)."""
+    if slug in _NOT_STUDENT_GROUPS:
+        return _NOT_STUDENT_GROUPS[slug]
+    lead = " ".join((description or "").split())[:300]
+    if _RADIO.search(name) or re.search(r"\bstudent radio\b", lead, re.IGNORECASE):
+        return CamdramType("media", ("media_publishing",), reason="a student radio station")
+    if _FILM.search(name) or _FILM.search(lead) or re.search(r"\bfilm\b", name, re.IGNORECASE):
+        if _THEATRE_WORDS.search(name):
+            return CamdramType(
+                "theatre_company", ("theatre_film_dance", "media_publishing"),
+                reason="a theatre and film company",
+            )  # fmt: skip
+        return CamdramType(
+            "society", ("theatre_film_dance", "media_publishing"), reason="a film society"
+        )
+    if _MUSIC_SOCIETY.search(name):
+        return CamdramType("society", ("music",), reason="a music society")
+    if _DANCE.search(name) and not _THEATRE_WORDS.search(name):
+        return CamdramType("society", ("theatre_film_dance",), reason="a dance society")
+    if _MUSICAL.search(name):
+        return CamdramType(categories=("theatre_film_dance", "music"))
+    return CamdramType()
+
+
 def society_observation(
     society: dict, result: FetchResult, client: PoliteClient
 ) -> Observation | None:
@@ -132,32 +236,47 @@ def society_observation(
     short = str(society.get("short_name") or "").strip()
     college_text = str(society.get("college") or "").strip()
     college = canonical_college(college_text)
+    raw_description = society.get("description")
+    other_university = not college and college_text.lower() in OTHER_UNIVERSITIES
+    kind = (
+        CamdramType("other_university_society", ("theatre_film_dance",), True, "external")
+        if other_university
+        else camdram_type(slug, name, raw_description if isinstance(raw_description, str) else None)
+    )
     extractor = "camdram.societies"
     evidence = "secondary"
     fields = [
         parser_field("name", name, extractor=f"{extractor}.name", evidence=evidence),
-        parser_field("orgType", "theatre_company", extractor=extractor, evidence=evidence),
-        parser_field("isCounterpart", False, extractor=extractor, evidence=evidence),
+        parser_field(
+            "orgType", kind.org_type, extractor=f"{extractor}.type", evidence=evidence,
+            value_raw=kind.reason,
+        ),
+        parser_field("isCounterpart", kind.counterpart, extractor=extractor, evidence=evidence),
         parser_field(
             "registrations.camdram",
             {"registered": True, "sourceUrl": SOCIETY_PAGE.format(slug=slug)},
             extractor=f"{extractor}.listed",
             evidence="primary",
         ),
-        # Camdram lists theatre (and film / performance) groups: the category by rule.
-        parser_field(
-            "categories", ["theatre_film_dance"], extractor=f"{extractor}.category_rule",
-            evidence=evidence, inferred=True,
-        ),
     ]  # fmt: skip
+    if kind.categories:
+        # Camdram lists theatre (and film / performance) groups: categories by rule.
+        fields.append(
+            parser_field(
+                "categories", list(kind.categories), extractor=f"{extractor}.category_rule",
+                evidence=evidence, inferred=True,
+            )
+        )  # fmt: skip
     if college:
         fields.append(
             parser_field("level", "college", extractor=f"{extractor}.college", evidence=evidence)
         )
-    elif college_text.lower() in OTHER_UNIVERSITIES:
+    elif kind.level is not None:
         fields.append(
-            parser_field("level", "external", extractor=f"{extractor}.college", evidence=evidence)
+            parser_field("level", kind.level, extractor=f"{extractor}.type", evidence=evidence)
         )
+    elif kind.org_type == "other":
+        pass  # a platform, not a group: no level
     else:
         # No college on Camdram: most such societies are University-wide, but
         # Camdram does not say so.
@@ -174,7 +293,6 @@ def society_observation(
         fields.append(
             parser_field("aliases", [short], extractor=f"{extractor}.name", evidence=evidence)
         )
-    raw_description = society.get("description")
     description = public_description(raw_description if isinstance(raw_description, str) else None)
     if description:
         fields.append(
@@ -228,7 +346,7 @@ def society_observation(
         identity=IdentityHints(
             name=name,
             aliases=[short] if short and short != name else [],
-            org_type="theatre_company",
+            org_type=kind.org_type,
             level="college" if college else None,
             college_hint=college or (college_text or None),
             camdram_id=camdram_id,
@@ -276,6 +394,8 @@ def harvest(client: PoliteClient, limit: int | None = None) -> Harvest:
 
 __all__ = [
     "SOCIETIES_URL",
+    "CamdramType",
+    "camdram_type",
     "description_contacts",
     "facebook_url",
     "harvest",
