@@ -19,6 +19,7 @@ from camsocs_pipeline.sources.policy import (
     SOCIETY_WEBSITE,
     FetchPurpose,
     ai_optout_override,
+    is_general_host,
     never_fetched,
     robots_override,
     society_class,
@@ -238,6 +239,24 @@ def test_talks_cam_and_general_hosts_are_never_overridden(
         "disallowed_by_robots"
     )
     assert talk.call_count == central.call_count == 0
+
+
+def test_a_government_site_a_society_names_keeps_its_robots_txt(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    # The OTC's stated "website" is a page on army.mod.uk: published by the
+    # government, not by a society, so D3 does not lift its robots.txt.
+    army = "https://www.army.mod.uk/who-we-are/corps-regiments-and-units/uotc/"
+    net.get("https://www.army.mod.uk/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
+    page = net.get(army)
+    for url in (army, "https://www.gov.uk/x", "https://www.nhs.uk/x"):
+        assert is_general_host(url)
+        assert society_class(url, SOCIETY_WEBSITE) is None
+
+    assert make_client(tmp_path).fetch(army, purpose=SOCIETY_WEBSITE).outcome == (
+        "disallowed_by_robots"
+    )
+    assert page.call_count == 0
 
 
 def test_never_fetched_hosts_are_refused_before_any_request(

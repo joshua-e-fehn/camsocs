@@ -115,6 +115,14 @@ GENERAL_HOSTS = frozenset(
 )
 GENERAL_DOMAINS = (
     "admin.cam.ac.uk",
+    # Government and public-service sites: a unit's or a service's page there
+    # (the University Officers' Training Corps on army.mod.uk, seen in the
+    # 2026-10-09 harvest) is published by the government, not by a society.
+    "gov.uk",
+    "mod.uk",
+    "nhs.uk",
+    "police.uk",
+    "parliament.uk",
     "x.com",
     "twitter.com",
     "tiktok.com",
