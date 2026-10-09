@@ -11,8 +11,20 @@ Re-verified 2026-10-07:
   per host).
 - Discovery is therefore Sport Cambridge's college leagues A–Z page
   (`DISCOVERY_URL`, robots allows it), which links each league as
-  ``…/<community slug>/<community id>/league-display/Leagues/<league id>``.
+  ``…/<community slug>/<community id>/league-display/Leagues/<league id>``,
+  or a whole community as ``…/PublicTiles`` / ``…/community-details``.
   On 2026-10-07 every link still pointed to a **2025-26** community.
+- **Every league of a community** (re-verified 2026-10-09): a community's
+  public tiles page on the main host (``/<slug>/<id>/PublicTiles``, robots
+  allows it, no sign-in) links all its leagues
+  (``league-display/Leagues/<league id>``). So for each community of the
+  current season the A–Z links — by a league or by the community — the stage
+  reads its tiles page and takes every league it lists, not only the one
+  Sport Cambridge links. The leagues app's ``/Home`` still redirects to
+  ``/confirminvitation?Token=…``, titled "Sign in" (checked 2026-10-09), and
+  the network's own ``Community-Network`` page redirects to ``/``: neither is
+  read. On 2026-10-09 the A–Z still linked only 2025-26 (and one 2024-25)
+  communities.
 
 **Season roll-over.** Community slugs end in their season ("…-netball-25-26",
 or cut short as "…-union-25-"). A community whose season is known and is not
@@ -76,6 +88,12 @@ _LEAGUE_LINK = re.compile(
     r"(?P<slug>[A-Za-z0-9-]+)/(?P<community>[A-Za-z0-9]+)/league-display/Leagues/"
     r"(?P<league>[A-Za-z0-9]+)"
 )
+_COMMUNITY_LINK = re.compile(
+    r"https?://(?:public-)?cambridgeuniversityleagues\.playwaze\.com/"
+    r"(?P<slug>[A-Za-z0-9-]+)/(?P<community>[A-Za-z0-9]+)/"
+    r"(?:league-display|PublicTiles|community-details)"
+)
+_TILES_LEAGUE = re.compile(r"league-display/Leagues/(?P<league>[A-Za-z0-9]+)")
 _SEASON = re.compile(r"-(?P<start>\d{2})-(?P<end>\d{2})?$")
 _BASE_COMMUNITY = re.compile(r'"BaseCommunityId"\s*:\s*"(?P<id>[^"]+)"')
 _FIXTURE_URL = re.compile(r'FixturePageURL\s*=\s*"(?P<url>/[^"]+)"')
@@ -122,6 +140,22 @@ class LeagueRef:
         return match["start"] if match else None
 
 
+@dataclass(frozen=True)
+class CommunityRef:
+    slug: str
+    community_id: str
+
+    @property
+    def tiles_url(self) -> str:
+        """The community's public tiles page on the main host."""
+        return f"{BASE}/{self.slug}/{self.community_id}/PublicTiles"
+
+    @property
+    def season(self) -> str | None:
+        match = _SEASON.search(self.slug)
+        return match["start"] if match else None
+
+
 @dataclass
 class LeaguePage:
     title: str | None
@@ -150,6 +184,23 @@ def current_season(today: date) -> str:
 def parse_league_links(html: str) -> list[LeagueRef]:
     found = dict.fromkeys(
         LeagueRef(m["slug"], m["community"], m["league"]) for m in _LEAGUE_LINK.finditer(html)
+    )
+    return list(found)
+
+
+def parse_communities(html: str) -> list[CommunityRef]:
+    """Every community the discovery page links, by a league or as a whole."""
+    found = dict.fromkeys(
+        CommunityRef(m["slug"], m["community"]) for m in _COMMUNITY_LINK.finditer(html)
+    )
+    return list(found)
+
+
+def community_leagues(html: str, community: CommunityRef) -> list[LeagueRef]:
+    """The leagues a community's tiles page lists."""
+    found = dict.fromkeys(
+        LeagueRef(community.slug, community.community_id, m["league"])
+        for m in _TILES_LEAGUE.finditer(html)
     )
     return list(found)
 
@@ -283,12 +334,30 @@ def run(
         if not discovery.ok:
             raise RuntimeError(f"league list not fetched: {describe_failure(discovery)}")
         leagues = parse_league_links(discovery.text)
+        communities = parse_communities(discovery.text)
         current = [league for league in leagues if league.season in (season, None)]
-        stale = sorted({league.slug for league in leagues if league.season not in (season, None)})
+        stale = sorted(
+            {c.slug for c in communities if c.season not in (season, None)}
+            | {league.slug for league in leagues if league.season not in (season, None)}
+        )
         if stale:
             ctx.report.notes.append(
                 f"{len(stale)} linked communities are not 20{season}-{int(season) + 1:02d} "
                 f"(roll-over pending; skipped): {', '.join(stale)}"
+            )
+        for community in communities:
+            if community.season not in (season, None):
+                continue
+            tiles = client.fetch(community.tiles_url)
+            if not tiles.ok:
+                ctx.report.notes.append(f"community tiles: {describe_failure(tiles)}")
+                continue
+            for league in community_leagues(tiles.text, community):
+                if league not in current:
+                    current.append(league)
+        if not current:
+            ctx.report.notes.append(
+                f"no 20{season}-{int(season) + 1:02d} league is linked yet; nothing to read"
             )
         if ctx.limit is not None:
             current = current[: ctx.limit]
@@ -321,11 +390,14 @@ def run(
 
 
 __all__ = [
+    "CommunityRef",
     "Fixture",
     "LeagueRef",
+    "community_leagues",
     "current_season",
     "fixture_draft",
     "fixture_form",
+    "parse_communities",
     "parse_fixtures",
     "parse_league_links",
     "parse_league_page",

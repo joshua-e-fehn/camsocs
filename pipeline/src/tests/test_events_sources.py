@@ -319,6 +319,23 @@ class TestPlaywaze:
         assert links[1].url.startswith("https://cambridgeuniversityleagues.playwaze.com/")
         assert playwaze.current_season(date(2026, 10, 7)) == "26"
         assert playwaze.current_season(date(2027, 3, 1)) == "26"
+        communities = playwaze.parse_communities(fixture("sport_leagues.html").decode())
+        assert [(c.slug, c.season) for c in communities] == [
+            ("cambridge-university-netball-25-26", "25"),
+            ("cambridge-university-hockey-26-27", "26"),
+            ("cambridge-university-rugby-football-union-25-", "25"),
+        ]
+        tiles = (
+            '<a href="/cambridge-university-hockey-26-27/abc123/league-display/Leagues/def456">'
+            'Men</a><a href="/cambridge-university-hockey-26-27/abc123/league-display/Leagues/'
+            'ghi789">Women</a>'
+        )
+        assert [
+            league.league_id for league in playwaze.community_leagues(tiles, communities[1])
+        ] == [
+            "def456",
+            "ghi789",
+        ]
 
     def test_fixtures_parse_into_matches(self) -> None:
         page = playwaze.parse_league_page(fixture("playwaze_league.html").decode())
@@ -350,6 +367,18 @@ class TestPlaywaze:
         allow(net, "https://www.sport.cam.ac.uk")
         allow(net, "https://cambridgeuniversityleagues.playwaze.com", "user-agent: *\nallow: /\n")
         net.get(playwaze.DISCOVERY_URL).respond(200, content=fixture("sport_leagues.html"))
+        # The community's tiles page lists a second league Sport Cambridge
+        # does not link (its page is gone here).
+        hockey = "https://cambridgeuniversityleagues.playwaze.com/cambridge-university-hockey-26-27"
+        net.get(f"{hockey}/abc123/PublicTiles").respond(
+            200,
+            text=(
+                '<a href="/cambridge-university-hockey-26-27/abc123/league-display/Leagues/'
+                'def456">Men</a><a href="/cambridge-university-hockey-26-27/abc123/'
+                'league-display/Leagues/ghi789">Women</a>'
+            ),
+        )
+        second = net.get(f"{hockey}/abc123/league-display/Leagues/ghi789").respond(404)
         net.get(
             "https://cambridgeuniversityleagues.playwaze.com/cambridge-university-hockey-26-27"
             "/abc123/league-display/Leagues/def456"
@@ -367,6 +396,8 @@ class TestPlaywaze:
         body = fixtures.calls[0].request.content.decode()
         assert "request%5BBaseCommunityId%5D=abc123" in body
         assert any("netball-25-26" in note for note in ctx.report.notes)
+        assert any("rugby-football-union-25-" in note for note in ctx.report.notes)
+        assert second.call_count == 1
         assert not any("public-" in str(c.request.url) for c in net.calls)
 
 
