@@ -467,3 +467,18 @@ def test_a_website_events_image_is_fetched_at_load_as_the_stage_probed_it() -> N
     assert robots_override("https://cuquokka.example/img/poster.png", own)
     assert not robots_override("https://cdn.example.net/poster.png", own)
     assert file_purpose(image("ics_feed", "https://calendar.google.com/x.ics")) == SOCIETY
+
+
+def test_a_venues_booking_calendar_is_no_events_page() -> None:
+    from camsocs_pipeline.events.checks import is_booking, is_venue_booking_page
+
+    # The shape of the Hawks' Club's events page (2026-10-09).
+    page = (
+        "To book into an existing event, please click on the event in the calendar below. "
+        "If you wish to initiate an event, please contact the steward. "
+        "Event Calendar Small Bore – Lounge 9 Oct View event"
+    )
+    assert is_venue_booking_page(page)
+    assert not is_venue_booking_page("Book your tickets for the Michaelmas ball now!")
+    assert is_booking("Small Bore – Lounge") and is_booking("’96 Reunion – Dining Room")
+    assert not is_booking("Jazz at the Bar") and not is_booking("Quiz – The Bar")

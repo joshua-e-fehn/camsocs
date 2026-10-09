@@ -41,6 +41,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
+from email.utils import parsedate_to_datetime
 from urllib.parse import unquote, urljoin
 
 from selectolax.lexbor import LexborHTMLParser
@@ -145,6 +146,23 @@ def stale_reason(text: str, today: date) -> str | None:
         uploaded = date(int(upload.group(1)), int(upload.group(2)), 1)
         if uploaded < date(current, 3, 1):
             return "uploaded before this academic year"
+    return None
+
+
+def modified_reason(last_modified: str | None, today: date) -> str | None:
+    """Why a card file whose server says it was last modified on
+    `last_modified` (an HTTP date) is last year's, or None: a card not
+    touched since before 1 March of this academic year's first calendar
+    year cannot be this year's (a Belgian Society card served as "Thu, 09 Jan
+    2025" gave the 2024 Freshers' Fair as this October's)."""
+    if not last_modified:
+        return None
+    try:
+        modified = parsedate_to_datetime(last_modified)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if modified.date() < date(academic_start_year(today), 3, 1):
+        return "last modified before this academic year"
     return None
 
 
@@ -304,6 +322,7 @@ __all__ = [
     "TermcardFile",
     "academic_start_year",
     "fetch_termcard",
+    "modified_reason",
     "never_fetched",
     "stale_reason",
     "term_hint",

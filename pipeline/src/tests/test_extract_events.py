@@ -4,6 +4,7 @@ honesty, visibility, redaction, de-duplication and the reply cache."""
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -240,3 +241,19 @@ def test_every_prompt_exists_and_names_its_rules() -> None:
         text, version = load_prompt(name)
         assert version == name
         assert "term_week" in text and "quote" in text
+
+
+def test_a_run_of_days_is_one_all_day_event_until_its_last_day() -> None:
+    text = "The Resistible Rise of Arturo Ui · Tue 26 Jan - Sat 30 Jan 2027 · ADC Theatre"
+    event = LlmEvent(
+        title="The Resistible Rise of Arturo Ui",
+        date="2027-01-26",
+        when_quote="Tue 26 Jan - Sat 30 Jan 2027",
+    )
+    fields = fields_of(build_event(event, context(source_text=text, anchor=date(2026, 10, 19))))
+    assert fields["allDay"].value is True
+    # Midnight after Saturday 30 January (London), from the quoted range.
+    assert fields["endsAt"].value == int(
+        datetime(2027, 1, 31, 0, 0, tzinfo=ZoneInfo("Europe/London")).timestamp() * 1000
+    )
+    assert fields["endsAt"].quote_check == "exact"

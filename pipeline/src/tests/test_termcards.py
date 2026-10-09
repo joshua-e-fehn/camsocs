@@ -553,3 +553,17 @@ def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
     assert {e.event_source for e in events} == {"termcard"}
     assert by_title["Orrery building"].visibility == "members_only"
     assert llm.calls[0]["tier"] == "bulk" and llm.calls[0]["version"] == "website_events_v1"
+
+
+def test_a_card_last_modified_before_this_academic_year_is_old() -> None:
+    from datetime import date
+
+    from camsocs_pipeline.sources.termcards import modified_reason
+
+    today = date(2026, 10, 10)
+    assert modified_reason("Thu, 09 Jan 2025 15:20:47 GMT", today) == (
+        "last modified before this academic year"
+    )
+    assert modified_reason("Mon, 02 Mar 2026 09:00:00 GMT", today) is None
+    assert modified_reason("Tue, 15 Sep 2026 09:00:00 GMT", today) is None
+    assert modified_reason(None, today) is None and modified_reason("garbage", today) is None

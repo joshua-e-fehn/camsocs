@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from camsocs_pipeline.claims import epoch_ms, llm_field, missing_field, parser_field
 from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote, normalise_text
@@ -64,6 +65,7 @@ from camsocs_pipeline.models.vocab import EVENT_TYPES
 SPEAKER_EVENT_TYPES = frozenset({"talk", "workshop"})
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+LONDON = ZoneInfo("Europe/London")
 
 _URL = re.compile(r"https?://[^\s<>()\"']+", re.I)
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -152,6 +154,9 @@ class LlmEvent(BaseModel):
     )
     speakers: list[LlmSpeaker] = Field(default_factory=list)
     speakers_quote: str | None = None
+    #: Set by a stage, never by the model (not in the schema): the date's year
+    #: is our inference (a yearless date on a web page), so it is `inferred`.
+    _year_inferred: bool = PrivateAttr(default=False)
 
 
 class LlmEvents(BaseModel):
@@ -242,6 +247,44 @@ def external_id(context: EventContext, when: When, title: str) -> str:
     return f"{context.scope}:{when.local_date.isoformat()}:{title_slug(title)}{context.id_suffix}"
 
 
+_MONTH_NAMES = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}  # fmt: skip
+_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
+#: A run of days as pages write it: "Tue 26 Jan - Sat 30 Jan 2027",
+#: "26–30 January", "Mon 3 to Fri 7 November".
+_DAY_RANGE = re.compile(
+    rf"\b(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?\s*(?P<m1>{_MONTH})?\s*(?:[-–—]|\bto\b|\buntil\b)\s*"
+    rf"(?:[A-Za-z]{{3,9}}\.?,?\s+)?(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?\s*(?P<m2>{_MONTH})",
+    re.IGNORECASE,
+)
+#: A run longer than this is not one event's dates.
+MAX_RUN_DAYS = 31
+
+
+def run_end(quote: str | None, first: date) -> date | None:
+    """The last day of a run of days the quote states ("Tue 26 Jan - Sat 30
+    Jan 2027") that begins on `first`, or None: the second date's month and
+    day, in `first`'s year (or the next, across New Year), at most
+    `MAX_RUN_DAYS` later."""
+    if not quote:
+        return None
+    for match in _DAY_RANGE.finditer(quote):
+        month = _MONTH_NAMES.get(match.group("m2")[:3].lower())
+        if month is None or int(match.group("d1")) != first.day:
+            continue
+        try:
+            last = date(first.year, month, int(match.group("d2")))
+            if last < first:
+                last = date(first.year + 1, month, int(match.group("d2")))
+        except ValueError:
+            continue
+        if first < last <= first + timedelta(days=MAX_RUN_DAYS):
+            return last
+    return None
+
+
 def _quote_or_value(quote: str | None, value: str | None) -> str | None:
     """The model's quote, else the value itself — a title or venue that occurs
     verbatim in the text is its own evidence."""
@@ -287,6 +330,9 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
         # The week and day are the source's words, the term is our inference:
         # the computed date is not something the text states.
         when_quote = None
+    if event._year_inferred:
+        # The day and month are the source's words, the year is ours.
+        when_quote = None
     # Without a stated time the event is filed as all day at midnight: a
     # representation of "no time given", not a fact the text states — both
     # are `inferred`, with no quote (the date's words stay in valueRaw).
@@ -299,6 +345,11 @@ def build_event(event: LlmEvent, context: EventContext) -> EventObservation:
     fields[1].value_raw = event.when_quote
     if when.ends_at is not None:
         fields.append(llm("endsAt", epoch_ms(when.ends_at), when_quote))
+    elif when.all_day and (last := run_end(event.when_quote, when.local_date)) is not None:
+        # A run of days ("Tue 26 Jan - Sat 30 Jan"): all day until midnight
+        # after its last day (an exclusive end, as every all-day event).
+        end = datetime.combine(last + timedelta(days=1), time(0, 0), tzinfo=LONDON)
+        fields.append(llm("endsAt", epoch_ms(end), when_quote))
     if event.description and event.description.strip():
         text = event.description.strip()[:20_000]
         fields.append(llm("description", text, text))
@@ -481,6 +532,7 @@ __all__ = [
     "load_prompt",
     "quote_supported",
     "redact_contacts",
+    "run_end",
     "title_slug",
     "verbatim_url",
 ]

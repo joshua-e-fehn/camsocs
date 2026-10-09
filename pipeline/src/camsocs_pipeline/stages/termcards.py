@@ -78,6 +78,7 @@ from camsocs_pipeline.sources.termcards import (
     Skipped,
     TermcardFile,
     fetch_termcard,
+    modified_reason,
     stale_reason,
     term_hint,
 )
@@ -132,7 +133,9 @@ def run(ctx: StageContext) -> None:
             stale = stale_reason(url, today)
             fetched = fetch_termcard(client, url, purpose) if stale is None else Skipped(url, stale)
             if isinstance(fetched, TermcardFile):
-                stale = stale_reason(fetched.url, today)
+                stale = stale_reason(fetched.url, today) or modified_reason(
+                    fetched.fetch.last_modified, today
+                )
             try:
                 if stale is not None:
                     found = None

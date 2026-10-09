@@ -29,10 +29,15 @@ no structured events. Each event must carry a ``when_quote`` that is on the
 page and holds its date — the day number with a month, a numeric date, or a
 term week with its weekday (`dated_quote`); an event without one is dropped.
 A page cannot say "today" (it has no date of its own), so relative days are
-dropped too. A calendar date's year must be the one its quote states, or the
-weekday its quote states must fall on it that year; a date with neither is
-kept only within eight weeks of the day the page was read (`year_problem`:
-pages keep last year's programme online without its year). The reference
+dropped too. A calendar date's year must be the one its quote states; a
+yearless date is never taken from a page about an earlier season (a
+"2025/2026 season" post, a fixtures table scored "2025-26", an archive whose
+latest year is last season's: `page_dating`), and needs a second signal —
+its stated weekday falls on it that year *and* the page names this year or
+the term, or, with no weekday, it lies within eight weeks of the day the
+page was read (`year_problem`: pages keep last year's programme online
+without its year). The year of a yearless date is our inference, so its
+start is ``inferred``. The reference
 date the model is given is the Thursday that
 starts the week the page was read (`week_anchor`), so a re-read within the
 week costs nothing. Dates are resolved in code (`extract.when`); term weeks need the
@@ -68,6 +73,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from camsocs_pipeline.config import ConfigError
+from camsocs_pipeline.events.checks import is_booking, is_venue_booking_page
 from camsocs_pipeline.events.common import (
     LONDON,
     EventDraft,
@@ -427,13 +433,56 @@ def _iso(value: str | None) -> date | None:
         return None
 
 
-def year_problem(event: LlmEvent, read_on: date) -> str | None:
+#: An academic year or a season as pages write it: "2025/2026", "2025-26".
+_SEASON = re.compile(r"\b(20\d\d)\s*[/–-]\s*(20\d\d|\d\d)\b")
+
+
+@dataclass(frozen=True)
+class PageDating:
+    """What a page says about its own year (`page_dating`)."""
+
+    #: Why the page is last season's or older (yearless dates then cannot
+    #: be this year's), or None.
+    stale: str | None = None
+    #: The page names this academic year (a year since it began, or its season).
+    current: bool = False
+    #: The page (or its URL / title) names the term.
+    term: bool = False
+
+
+def page_dating(text: str, read_on: date, *, term: bool = False) -> PageDating:
+    """A page's own year (module docstring): a page whose seasons are all
+    earlier ones ("the upcoming 2025/2026 season", a fixtures table scored
+    "2025-26"), or that names no year since last season, is stale."""
+    current = read_on.year if read_on.month >= 7 else read_on.year - 1
+    seasons: set[int] = set()
+    for match in _SEASON.finditer(text):
+        first, second = int(match.group(1)), int(match.group(2)) % 100
+        if second == (first + 1) % 100:
+            seasons.add(first)
+    years = {int(y) for y in _YEAR.findall(text)}
+    names_current = current in seasons or any(year >= current for year in years)
+    if seasons and max(seasons) < current and current not in seasons:
+        return PageDating("the page is about an earlier season", False, term)
+    if years and max(years) < current:
+        return PageDating("the page names no year since last season", False, term)
+    return PageDating(None, names_current, term)
+
+
+#: A page that names this year (the default for a single event checked alone).
+CURRENT_PAGE = PageDating(current=True)
+
+
+def year_problem(event: LlmEvent, read_on: date, dating: PageDating = CURRENT_PAGE) -> str | None:
     """Why the year of a calendar date cannot be trusted, or None. Pages keep
     last year's programme online without its year, and "5 March" read in
     October is then next March to a reader who guesses. So the year must be
-    the one the quote states, or the weekday the quote states must fall on
-    that date in that year; a date with neither is kept only within
-    `YEARLESS_HORIZON` of the day the page was read."""
+    the one the quote states; a yearless date is never taken from a page
+    about an earlier season (`page_dating`), and needs a second signal: the
+    weekday the quote states must fall on that date in that year *and* the
+    page must name this year or the term, or (with no weekday) it must lie
+    within `YEARLESS_HORIZON` of the day the page was read. A yearless date
+    kept is our inference (`LlmEvent._year_inferred`)."""
     day = _iso(event.date)
     if day is None:
         return None
@@ -441,11 +490,17 @@ def year_problem(event: LlmEvent, read_on: date) -> str | None:
     years = {int(y) for y in _YEAR.findall(quote)}
     if years:
         return None if day.year in years else "the year differs from the page's"
+    if dating.stale is not None:
+        return dating.stale
     weekdays = {_WEEKDAYS[m.group(1).lower()[:3]] for m in _WEEKDAY_NAME.finditer(quote)}
     if weekdays:
-        return None if day.weekday() in weekdays else "the weekday does not fall on that date"
-    if day - read_on > YEARLESS_HORIZON:
+        if day.weekday() not in weekdays:
+            return "the weekday does not fall on that date"
+        if not (dating.current or dating.term):
+            return "a yearless date with only its weekday to go on"
+    elif day - read_on > YEARLESS_HORIZON:
         return "a date without its year or weekday, months ahead"
+    event._year_inferred = True
     return None
 
 
@@ -491,11 +546,20 @@ def llm_events(
     if term_name is None:
         term_name, term_year = term_hint(f"{page.url} {page.title}")
     term = calendar.term_named(term_name, term_year, anchor)
+    read_on = london_date(retrieved)
+    dating = page_dating(text, read_on, term=term is not None)
+    if is_venue_booking_page(text):
+        # A venue's booking calendar: other groups' functions, not events of
+        # the site's organisation.
+        out.tally.drop("a venue's booking calendar", len(extracted.events))
+        return []
     kept: list[LlmEvent] = []
     for event in extracted.events:
-        if not dated_quote(event, text):
+        if is_booking(event.title):
+            out.tally.drop("a room booking, not an event")
+        elif not dated_quote(event, text):
             out.tally.drop("no dated quote on the page")
-        elif (problem := year_problem(event, london_date(retrieved))) is not None:
+        elif (problem := year_problem(event, read_on, dating)) is not None:
             out.tally.drop(problem)
         else:
             kept.append(event)
@@ -802,12 +866,14 @@ def _dry_run(ctx: StageContext, sites: list[Site], now: datetime) -> None:
 __all__ = [
     "HORIZON",
     "MAX_EVENT_PAGES",
+    "PageDating",
     "Site",
     "SiteResult",
     "current",
     "dated_quote",
     "event_pages",
     "home_lists_events",
+    "page_dating",
     "page_text",
     "read_site",
     "run",

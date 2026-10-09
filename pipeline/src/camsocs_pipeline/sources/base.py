@@ -152,6 +152,8 @@ class FetchResult:
     #: Set when robots.txt disallowed the URL and the fetch went ahead under
     #: the D3 society override (`policy.ROBOTS_OVERRIDE_NOTE`).
     override: str | None = None
+    #: The response's ``Last-Modified`` header, as sent (a termcard's age).
+    last_modified: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -632,6 +634,7 @@ class PoliteClient:
                 content_sha256=meta.get("content_sha256"),
                 from_cache=True,
                 override=override,
+                last_modified=response.headers.get("last-modified") or meta.get("last_modified"),
             )
             if override != meta.get("override"):
                 self._write_cache(
@@ -672,6 +675,7 @@ class PoliteClient:
             content_type=response.headers.get("content-type"),
             content_sha256=digest,
             override=override,
+            last_modified=response.headers.get("last-modified"),
         )
         self._write_cache(
             url,
@@ -802,6 +806,7 @@ def _from_cache(url: str, meta: dict, body: bytes | None, *, detail: str) -> Fet
         from_cache=True,
         detail=detail,
         override=meta.get("override"),
+        last_modified=meta.get("last_modified"),
     )
 
 

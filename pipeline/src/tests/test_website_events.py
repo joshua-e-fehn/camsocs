@@ -246,7 +246,9 @@ def test_a_site_yields_its_upcoming_dated_events(tmp_path: Path, net: respx.Mock
     assert [o.identity.known_key for o in quiz.organisers] == [KEY]
     assert values(quiz)["startsAt"] == ms(2026, 10, 15, 19, 30)
     starts = next(f for f in quiz.fields if f.field == "startsAt")
-    assert starts.quote_check == "exact"
+    # "Thursday 15 October" states no year: the year is our inference, so
+    # the start is inferred (its words stay in valueRaw).
+    assert starts.status == "inferred" and starts.value_raw == "Thursday 15 October, 7:30pm"
     assert values(by_title["Burrow building"])["startsAt"] == ms(2026, 11, 11, 14, 0)
     # robots.txt disallows /events and blocks GPTBot: the society's own page
     # is read (D3) and the sources row says so; contacts never reach the model.
@@ -325,6 +327,30 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
 def test_a_dates_year_must_be_stated_or_checkable(event: dict, problem: str | None) -> None:
     found = website.year_problem(LlmEvent(title="x", **event), TODAY)
     assert (found is None) if problem is None else (found is not None and problem in found)
+
+
+def test_last_seasons_pages_give_no_yearless_dates() -> None:
+    from datetime import date
+
+    read_on = date(2026, 10, 10)
+    # A 2020-21 archive whose weekdays fall on this year's dates as well.
+    archive = website.page_dating("Events 2021 · Sat, 19 Dec · Zoom", read_on)
+    assert archive.stale is not None
+    # A fixtures table scored "2025-26", and a post about the 2025/2026 season.
+    assert website.page_dating("Fixtures · Score 2025-26 · 26th October", read_on).stale
+    assert website.page_dating("The upcoming 2025/2026 season … 2026", read_on).stale
+    # This year's page, or a page naming no year at all.
+    assert website.page_dating("Michaelmas 2026 events", read_on).current
+    nothing = website.page_dating("Thursday 15 October, 7:30pm", read_on)
+    assert nothing.stale is None and not nothing.current
+    event = {"date": "2026-12-19", "when_quote": "Sat, 19 Dec"}
+    assert website.year_problem(LlmEvent(title="x", **event), read_on, archive)
+    # A weekday alone is one signal; with this year or the term named it is two.
+    assert "only its weekday" in (
+        website.year_problem(LlmEvent(title="x", **event), read_on, nothing) or ""
+    )
+    with_term = website.PageDating(term=True)
+    assert website.year_problem(LlmEvent(title="x", **event), read_on, with_term) is None
 
 
 def test_a_page_that_says_noai_on_a_general_host_never_reaches_the_model(

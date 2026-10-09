@@ -18,7 +18,10 @@ them for free.
 - **A room booking is not an event** (`is_booking`): a calendar entry that
   books a room ("MCR room booking (<booker>)", "Booked by …", the booker's
   CRSid) names a private person and announces nothing; it is left out. The
-  Newnham MCR's public Google Calendar was one (2026-10-09).
+  Newnham MCR's public Google Calendar was one (2026-10-09). So is a row of a
+  venue's booking calendar ("Small Bore – Lounge"), and every row of a page
+  that invites groups to book its rooms (`is_venue_booking_page`: the Hawks'
+  Club's events page lists other clubs' functions).
 """
 
 from __future__ import annotations
@@ -48,6 +51,20 @@ _BOOKING_TITLE = re.compile(
     r"|\bprivate[ \t]+(?:booking|hire|function)\b",
     re.IGNORECASE,
 )
+#: A row of a venue's booking calendar: "<group> – <room>" ("Small Bore –
+#: Lounge", "'96 Reunion – Dining Room").
+_ROOM_ROW = re.compile(
+    r"\s[–—-]\s+(?:the\s+)?(?:lounge|dining room|function room|club ?room|"
+    r"conference room|meeting room|committee room)\s*$",
+    re.IGNORECASE,
+)
+#: A page that invites groups to book its rooms: its calendar lists bookings.
+_VENUE_BOOKING_PAGE = re.compile(
+    r"\b(?:wish|like|want)\s+to\s+(?:initiate|hold|host|hire|book)\s+an?\s+"
+    r"(?:event|function|room|space|private)\b|\broom\s+hire\b|\bhire\s+(?:our|the)\s+"
+    r"(?:rooms?|lounge|space|venue|hall|function)\b",
+    re.IGNORECASE,
+)
 _BOOKING_TEXT = re.compile(
     r"\bbooked[ \t]+by\b|\bcrsid\b[\s:–-]*[a-z]{2,5}[0-9]{1,5}\b", re.IGNORECASE
 )
@@ -56,9 +73,16 @@ _BOOKING_TEXT = re.compile(
 def is_booking(title: str | None, description: str | None = None) -> bool:
     """A calendar entry that books a room rather than announcing an event."""
     return bool(
-        (title and _BOOKING_TITLE.search(title))
+        (title and (_BOOKING_TITLE.search(title) or _ROOM_ROW.search(title)))
         or (description and _BOOKING_TEXT.search(description))
     )
+
+
+def is_venue_booking_page(text: str) -> bool:
+    """A page whose calendar lists a venue's bookings (the Hawks' Club's: "If
+    you wish to initiate an event, please contact the steward"): other
+    groups' private functions, not the organisation's events."""
+    return bool(_VENUE_BOOKING_PAGE.search(text))
 
 
 @dataclass(frozen=True)
@@ -100,4 +124,10 @@ def check_draft(
     return CheckResult(True)
 
 
-__all__ = ["CheckResult", "check_draft", "is_booking", "mentions_link_in_bio"]
+__all__ = [
+    "CheckResult",
+    "check_draft",
+    "is_booking",
+    "is_venue_booking_page",
+    "mentions_link_in_bio",
+]
