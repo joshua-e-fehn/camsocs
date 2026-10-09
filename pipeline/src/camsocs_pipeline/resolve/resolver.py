@@ -1006,6 +1006,11 @@ class Resolver:
         self._counterpart_keys.add(key)
         self._taken.setdefault(key, -1)
         level = hints.level or (default_level(org_type) if org_type else None)
+        if org_type == "college" and not identity.college:
+            # `college` is one of the 31 Cambridge colleges (`COLLEGES_BY_ID`),
+            # which the college filter lists. Another institution a page calls
+            # a college (the Royal Veterinary College) is an outside body.
+            org_type, level = "other", "external"
         # What another organisation's page says about this one: secondary.
         values: dict[str, Any] = {"name": name, "isCounterpart": True}
         if org_type:

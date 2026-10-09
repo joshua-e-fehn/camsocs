@@ -507,6 +507,42 @@ def test_a_counterpart_an_earlier_run_created_is_restated_each_run() -> None:
     assert [ref_of(r) for r in janes] == ["su_directory:9999"]
 
 
+def test_a_college_that_is_not_a_cambridge_college_is_an_outside_body() -> None:
+    """2026-10-09: a society's site named the Royal Veterinary College as a
+    partner, typed `college` by the model, and it showed up in the public
+    college filter beside the 31 Cambridge colleges."""
+    page = org(
+        "society_website",
+        "vets",
+        "Example Veterinary Society",
+        relationships=[
+            RelObs(
+                type="partner_of",
+                to_identity=IdentityHints(name="Royal Veterinary College", org_type="college"),
+                evidence_url="https://society-website.example/vets",
+            ),
+            RelObs(
+                type="partner_of",
+                to_identity=IdentityHints(name="Girton College", org_type="college"),
+                evidence_url="https://society-website.example/vets",
+            ),
+        ],
+    )
+    resolution = resolve_records([page], run_key="20261009T000000Z-aaaaaa")
+    created = {
+        r.entity_key: {obs.field: obs.value for obs in r.fields}
+        for r in resolution.records
+        if r.entity_key in ("org-royal-veterinary-college", "org-girton-college")
+    }
+    assert created["org-royal-veterinary-college"] == {
+        "name": "Royal Veterinary College",
+        "isCounterpart": True,
+        "orgType": "other",
+        "level": "external",
+    }
+    assert created["org-girton-college"]["orgType"] == "college"
+
+
 def test_an_organisations_parent_is_keyed_or_dropped() -> None:
     college = org("college_list", "christs", "Christ's College", org_type="college")
     mcr = org("society_website", "christs/mcr", "Christ's College MCR", org_type="mcr")
