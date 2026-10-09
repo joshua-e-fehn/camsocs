@@ -62,6 +62,7 @@ from camsocs_pipeline.sources.links import (
     chat_platform,
     classify_email,
     email_domain,
+    email_type,
     host_of,
     instagram_handle,
     is_email,
@@ -246,25 +247,6 @@ class Profile:
 #: The profile's fixed social slots (MSL icon classes) → our platforms.
 _SOCIAL_SLOTS = ("socinstagram", "socfacebook", "soctwitter")
 
-#: Local-part words that name a committee role (``treasurer.cbms@…``).
-_ROLE_WORDS = {
-    "president": "president",
-    "pres": "president",
-    "presidents": "president",
-    "secretary": "secretary",
-    "sec": "secretary",
-    "treasurer": "treasurer",
-    "sponsorship": "sponsorship",
-    "sponsorships": "sponsorship",
-    "sponsors": "sponsorship",
-    "events": "events",
-    "ents": "events",
-    "publicity": "publicity",
-    "socialmedia": "publicity",
-    "welfare": "welfare",
-    "captain": "captain",
-}
-
 _ADDRESS = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 _YEAR = re.compile(r"\b(20\d{2})\b")
 _TALKS_LIST = re.compile(r"^/show/(?:index|xml|ics|rss|archive)/(\d+)")
@@ -385,16 +367,19 @@ def _read_links(node: LexborNode, base_url: str, profile: Profile) -> None:
 
 
 def _read_address(address: str, profile: Profile) -> None:
-    if not is_email(address) or classify_email(address) == "personal_crsid":
+    """An address in a description: a Sympa list is the mailing list; an
+    address naming a committee post (``treasurer.cbms@…``) is a role email.
+    Nothing else is taken from free text — a general-looking address there
+    may be anyone's."""
+    if not is_email(address) or email_type(address) == "personal_crsid":
         return
-    if classify_email(address) == "lists_cam" and profile.mailing_list is None:
+    if email_type(address) == "lists_cam" and profile.mailing_list is None:
         profile.mailing_list = {"platform": "sympa", "address": address}
         return
-    local = address.rpartition("@")[0].lower()
-    roles = {_ROLE_WORDS[word] for word in re.split(r"[._+-]", local) if word in _ROLE_WORDS}
-    if len(roles) != 1:
+    reading = classify_email(address)
+    if reading.kind != "role" or reading.role in (None, "other"):
         return
-    entry = {"role": roles.pop(), "email": address}
+    entry = {"role": reading.role, "email": address}
     if all(
         (e["role"], e["email"].lower()) != (entry["role"], address.lower())
         for e in profile.role_emails
@@ -595,8 +580,8 @@ def profile_observation(entry: DirectoryEntry, profile: Profile, page: FetchResu
     if profile.name:
         fields.append(found("name", profile.name, "name"))
 
-    email_type = classify_email(profile.email) if profile.email else None
-    if profile.email and email_type != "personal_crsid":
+    kind = email_type(profile.email) if profile.email else None
+    if profile.email and kind != "personal_crsid":
         fields.append(found("email", profile.email, "email"))
     elif profile.email:
         # A CRSid names a person: never stored, shown as the projection would.
@@ -650,7 +635,7 @@ def profile_observation(entry: DirectoryEntry, profile: Profile, page: FetchResu
     )
     website_domain = host_of(profile.website) if profile.website else None
     own_domain = (
-        email_domain(profile.email) if profile.email and email_type == "role_own_domain" else None
+        email_domain(profile.email) if profile.email and kind == "role_own_domain" else None
     )
     sympa = sympa_list_name(profile.mailing_list)
     return Observation(

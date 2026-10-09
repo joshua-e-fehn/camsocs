@@ -82,7 +82,7 @@ class TestClubPage:
         )
         page = sport.parse_club_page(html, "https://x.example/")
         assert page.socials == []
-        assert sport.instagram_handle(page.socials) is None
+        assert sport.instagram_handle_of(page.socials) is None
         # Text written as a URL that agrees with the target is fine.
         agreeing = fixture("sport_club.html").replace(
             ">@cuac_example<", ">instagram.com/cuac_example<"

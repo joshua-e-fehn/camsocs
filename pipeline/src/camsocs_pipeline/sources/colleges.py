@@ -58,7 +58,7 @@ from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.extract.evidence import normalise_text
 from camsocs_pipeline.models.observation import IdentityHints, Observation, RelObs
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
     Contacts,
     classify_email,
     clean_url,
@@ -66,7 +66,7 @@ from camsocs_pipeline.sources.contact_links import (
     find_emails,
     has_obfuscated_emails,
     host_of,
-    instagram_handle,
+    instagram_handle_of,
     name_tokens,
     normalise_email,
     social_link,
@@ -682,7 +682,7 @@ def _observation(
     socials: list[dict[str, str]] | None = None,
 ) -> Observation:
     identity = body_identity(body, website)
-    identity.instagram_handle = instagram_handle(socials)
+    identity.instagram_handle = instagram_handle_of(socials)
     internal: dict[str, object] = {}
     if identity.instagram_handle:
         internal["instagram_handle"] = identity.instagram_handle

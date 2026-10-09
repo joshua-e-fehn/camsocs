@@ -56,11 +56,11 @@ from camsocs_pipeline.events.common import (
     write_staging,
 )
 from camsocs_pipeline.events.ics import IcsError, IcsEvent, parse_ics
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.events.seeds import FEED_SEEDS
 from camsocs_pipeline.media import probe_image
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.policy import SOCIETY
 
@@ -100,7 +100,7 @@ def feed_url(kind: str, value: str) -> str | None:
     return value if value.startswith(("http://", "https://")) else None
 
 
-def collect_feeds(index: OrganiserIndex) -> list[Feed]:
+def collect_feeds(index: OrgLookup) -> list[Feed]:
     feeds: dict[str, Feed] = {}
 
     def add(kind: str, value: str, owner: IdentityHints) -> None:
@@ -188,7 +188,7 @@ def run(
     ctx: StageContext, *, window: EventWindow | None = None, now: datetime | None = None
 ) -> None:
     window = window or default_window(now)
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     feeds = collect_feeds(index)
     if ctx.limit is not None:
         feeds = feeds[: ctx.limit]

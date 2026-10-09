@@ -1,6 +1,7 @@
-"""Classifying published links and addresses (sources/links.py): what becomes a
-social, a website, a chat platform or a mailing list, and which addresses are
-personal. Email kinds are asserted against the fixtures the server's
+"""Classifying published links and addresses (sources/links.py, the one module
+for it): what becomes a social, a website, a chat platform or a mailing list;
+which addresses are role, general or personal — personal CRSids never become
+values. Email kinds are asserted against the fixtures the server's
 `classifyEmail` uses (webapp/lib/email-types.fixtures.json)."""
 
 from __future__ import annotations
@@ -14,11 +15,26 @@ from camsocs_pipeline.sources.links import (
     INVITE_WITHHELD,
     WITHHELD,
     absolute_url,
+    account_of,
+    bare_urls,
     chat_platform,
     classify_email,
+    dedupe_socials,
+    email_type,
+    find_emails,
+    has_obfuscated_emails,
+    instagram_from_handle,
     instagram_handle,
+    instagram_handle_of,
     is_email,
+    is_personal_crsid,
+    label_role,
     mailing_list_link,
+    name_tokens,
+    read_contacts,
+    registrable,
+    role_of,
+    social_key,
     social_link,
     unwrap_redirect,
     withhold_private,
@@ -31,7 +47,7 @@ EMAIL_TYPES = json.loads(
 
 @pytest.mark.parametrize("case", EMAIL_TYPES["cases"], ids=lambda case: case["email"])
 def test_email_kinds_match_the_server(case: dict) -> None:
-    assert classify_email(case["email"]) == case["type"]
+    assert email_type(case["email"]) == case["type"]
 
 
 @pytest.mark.parametrize(
@@ -183,3 +199,246 @@ def test_email_syntax() -> None:
     assert is_email("hello@cuchess.org")
     assert not is_email("hello at cuchess.org")
     assert not is_email("hello@localhost")
+
+
+# --- reading addresses and social links on a page (formerly contact_links) -----------
+
+
+class TestEmails:
+    @pytest.mark.parametrize(
+        "address",
+        ["ab123@cam.ac.uk", "XY9@hermes.cam.ac.uk", "abc12@jesus.cam.ac.uk"],
+    )
+    def test_crsids_on_cam_ac_uk_and_subdomains_are_personal(self, address: str) -> None:
+        assert is_personal_crsid(address)
+        assert classify_email(address, labelled=True).kind == "personal"
+
+    def test_lists_and_role_addresses_are_not_crsids(self) -> None:
+        assert not is_personal_crsid("soc-abc1@lists.cam.ac.uk")
+        assert not is_personal_crsid("president@cuadc.org")
+
+    @pytest.mark.parametrize(
+        ("address", "role"),
+        [
+            ("president@cuadc.org", "president"),
+            ("vicepresident@cuadc.org", "other"),
+            ("womens.president.cuafc@gmail.com", "president"),
+            ("mcr_president@corpus.cam.ac.uk", "president"),
+            ("cuhwcpresident@gmail.com", "president"),
+            ("wcsa-juniortreasurer@wolfson.cam.ac.uk", "treasurer"),
+            ("publicist@gands.org.uk", "publicity"),
+            ("td@cuadc.org", "other"),
+            ("mcr.welfare@magd.cam.ac.uk", "welfare"),
+            ("captain@cubowmen.com", "captain"),
+            ("info@example.org", None),
+        ],
+    )
+    def test_role_of(self, address: str, role: str | None) -> None:
+        assert role_of(address) == role
+
+    def test_a_link_label_can_name_the_post(self) -> None:
+        assert label_role("Club Publicist") == "publicity"
+        assert label_role("Actors' Rep") == "other"
+        assert classify_email("actor@eadc.example", label="Actors' Rep").kind == "role"
+
+    def test_general_addresses_need_a_generic_local_part_or_the_name(self) -> None:
+        own = name_tokens("CU Dryden Society", "Dryden")
+        assert classify_email("drydensoc@gmail.com", own).kind == "general"
+        assert classify_email("enquiries@btb.example").kind == "general"
+        # On the organisation's own domain, but a person's mailbox.
+        assert classify_email("sam@blanktheatre.example", name_tokens("Blank Theatre")).kind == (
+            "unknown"
+        )
+
+    def test_another_domains_info_address_is_not_the_pages(self) -> None:
+        reading = classify_email(
+            "it.support@kings.cam.ac.uk", name_tokens("KCSU"), site_host="kcsu.org.uk"
+        )
+        assert reading.kind == "unknown"
+        same_site = classify_email(
+            "committee@mcr.jesus.cam.ac.uk", set(), site_host="mcr.jesus.cam.ac.uk"
+        )
+        assert same_site.kind == "general"
+
+    def test_short_name_plus_a_word_is_an_officers_post(self) -> None:
+        own = name_tokens("Clare Hall Graduate Student Body", "GSB")
+        assert classify_email("gsb.punt@clarehall.cam.ac.uk", own).role == "other"
+        assert classify_email("gsb.president@clarehall.cam.ac.uk", own).role == "president"
+
+    def test_a_labelled_contact_counts_and_typos_do_not(self) -> None:
+        assert classify_email("pythons.example@gmail.com", labelled=True).kind == "general"
+        assert classify_email("official.club@gmail.comm", labelled=True).kind == "unknown"
+
+    def test_read_contacts_keeps_the_first_general_and_dedupes_roles(self) -> None:
+        contacts = read_contacts(
+            [
+                "info@a.example",
+                "hello@a.example",
+                "president@a.example",
+                "PRESIDENT@a.example",
+                "ab12@cam.ac.uk",
+            ]
+        )
+        assert contacts.email == "info@a.example"
+        assert contacts.role_emails == [{"role": "president", "email": "president@a.example"}]
+
+    def test_find_emails_dedupes_and_trims(self) -> None:
+        assert find_emails("Mail us: info@x.example. Or INFO@x.example") == ["info@x.example"]
+
+    def test_obfuscation_is_detected_never_decoded(self) -> None:
+        assert has_obfuscated_emails('<a href="/cdn-cgi/l/email-protection#a1b2">[email]</a>')
+        assert has_obfuscated_emails("<td>jesus[at]cucbc.org</td>")
+        assert not has_obfuscated_emails('<a href="mailto:info@x.example">info</a>')
+
+
+class TestSocialLinks:
+    def test_instagram_profile_with_tracking_removed(self) -> None:
+        assert social_link("https://www.instagram.com/cuafc/?hl=en") == {
+            "platform": "instagram",
+            "url": "https://www.instagram.com/cuafc/",
+            "handle": "cuafc",
+        }
+
+    def test_bare_printed_links_gain_https(self) -> None:
+        assert social_link("instagram.com/camuniarchery/")["url"] == (
+            "https://instagram.com/camuniarchery/"
+        )
+
+    def test_facebook_groups_and_pages(self) -> None:
+        assert social_link("https://www.facebook.com/groups/CUJJC")["platform"] == "facebook_group"
+        assert social_link("facebook.com/CUAFC1")["platform"] == "facebook_page"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://www.facebook.com/sharer.php?u=x",
+            "https://www.instagram.com/p/abc123/",
+            "https://instagram.com",
+            "https://example.org/instagram",
+        ],
+    )
+    def test_not_an_account(self, url: str) -> None:
+        assert social_link(url) is None
+
+    def test_printed_handle(self) -> None:
+        assert instagram_from_handle("@cugac_") == {
+            "platform": "instagram",
+            "url": "https://www.instagram.com/cugac_/",
+            "handle": "cugac_",
+        }
+        assert instagram_from_handle("not a handle!") is None
+
+    def test_bare_urls_skip_email_domains(self) -> None:
+        text = "cuafc.org    instagram.com/cuafc contact: president@cuafc.org"
+        assert bare_urls(text.replace("president@cuafc.org", " ")) == [
+            "cuafc.org",
+            "instagram.com/cuafc",
+        ]
+
+
+def test_registrable_host() -> None:
+    assert registrable("mcr.jesus.cam.ac.uk") == "jesus.cam.ac.uk"
+    assert registrable("www.cuadc.org") == "cuadc.org"
+    assert registrable("www.blanktheatre.co.uk") == "blanktheatre.co.uk"
+
+
+# --- one classifier for every source (the consolidation's guarantees) ------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.linkedin.com/in/jane-smith-123",  # a person: never stored
+        "https://youtu.be/dQw4w9WgXcQ",  # a video, not a channel
+        "https://twitter.com/cuchess/status/1234",  # a post
+        "https://www.facebook.com/people/Jane-Smith/1000",  # a person
+        "https://www.facebook.com/groups",  # no group named
+    ],
+)
+def test_people_posts_and_videos_are_never_socials(url: str) -> None:
+    assert social_link(url) is None
+
+
+def test_one_account_however_it_is_written() -> None:
+    spellings = [
+        "https://www.instagram.com/CUChess/?hl=en",
+        "instagram.com/cuchess",
+        "http://instagram.com/cuchess/",
+    ]
+    items = [social_link(url) for url in spellings]
+    assert all(item is not None and item["platform"] == "instagram" for item in items)
+    assert len({social_key(item) for item in items if item}) == 1
+    assert dedupe_socials([item for item in items if item]) == [items[0]]
+    assert instagram_handle("@CUChess") == "CUChess"
+    assert instagram_handle_of([items[0]]) == "cuchess"
+
+
+def test_account_of_names_pages_without_a_handle() -> None:
+    page = social_link("https://m.facebook.com/CambridgeUniversity/")
+    assert page == {
+        "platform": "facebook_page",
+        "url": "https://m.facebook.com/CambridgeUniversity/",
+    }
+    assert account_of(page) == "cambridgeuniversity"
+
+
+@pytest.mark.parametrize(
+    ("address", "kind"),
+    [
+        ("ab123@srcf.net", "personal"),
+        ("ab123@cantab.ac.uk", "personal"),
+        ("abc12@cantab.net", "personal"),
+        ("chess@srcf.net", "general"),
+        ("cuchess@cambridgesu.co.uk", "general"),
+        ("jane.smith@cambridgesu.co.uk", "unknown"),
+    ],
+)
+def test_the_crsid_rule_covers_srcf_and_cantab(address: str, kind: str) -> None:
+    assert classify_email(address).kind == kind
+    assert is_personal_crsid(address) == (kind == "personal")
+
+
+@pytest.mark.parametrize(
+    ("address", "names", "site", "expected"),
+    [
+        # Initials of the name: "Cambridge University Blind Wine Tasting Society".
+        ("cubwts@gmail.com", ("Cambridge University Blind Wine Tasting Society",), None,
+         ("general", None)),
+        ("mscsec@phil.cam.ac.uk", ("Cambridge University Moral Sciences Club",),
+         "www.phil.cam.ac.uk", ("general", None)),
+        # The site's own name, on its domain or a sibling one.
+        ("cucss@cucss.uk", ("Czech and Slovak Society",), "cucss.uk", ("general", None)),
+        ("cucaadmin@gmail.com", ("Conservative Association",), "www.cuca.org.uk",
+         ("general", None)),
+        ("info@cambridgenightline.org", ("Cambridge Nightline",), "www.cambridgenightline.org.uk",
+         ("general", None)),
+        ("committee@cuhags.cam", ("Heraldic and Genealogical Society",), "cuhags.soc.srcf.net",
+         ("general", None)),
+        ("webmaster@ciccu.org.uk", ("CICCU",), "ciccu.org.uk", ("general", None)),
+        # Posts.
+        ("archim-external-secretary@srcf.net", ("The Archimedeans",), None, ("role", "other")),
+        ("jcr.bame@newn.cam.ac.uk", ("Newnham JCR",), "newn.cam.ac.uk", ("role", "other")),
+        ("membership@cupoloclub.com", ("Polo Club",), None, ("role", "other")),
+        ("cubb-chair@srcf.ucam.org", ("Brass Band Society",), None, ("role", "president")),
+        # The name in pieces is no post.
+        ("foundation.medtech@gmail.com", ("MedTech Foundation (Cambridge)",), None,
+         ("general", None)),
+        # Still never a person's.
+        ("alice.smith@gmail.com", ("Ice Hockey Club",), None, ("unknown", None)),
+        ("support@sport.cam.ac.uk", ("Fencing Club",), "fencing.example", ("unknown", None)),
+    ],
+)  # fmt: skip
+def test_one_reading_of_addresses_for_seeds_and_sites(address, names, site, expected) -> None:
+    reading = classify_email(address, name_tokens(*names), site_host=site)
+    assert (reading.kind, reading.role) == expected
+
+
+def test_a_webmaster_named_on_a_committee_list_is_a_post() -> None:
+    reading = classify_email("webmaster@cuadc.org", name_tokens("CUADC"), label="Webmaster")
+    assert (reading.kind, reading.role) == ("role", "other")
+
+
+def test_facebook_people_pages_only_of_organisations() -> None:
+    page = "https://www.facebook.com/people/Cambridge-University-Immunology-Society/61554/"
+    assert social_link(page) == {"platform": "facebook_page", "url": page}
+    assert social_link("https://www.facebook.com/people/Jane-Smith/1000123/") is None

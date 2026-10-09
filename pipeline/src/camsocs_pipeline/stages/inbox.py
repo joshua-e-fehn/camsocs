@@ -7,7 +7,7 @@ For each `pending` mail in Convex (`ConvexLoader.inbound_pending`):
 2. **Identify the sender** deterministically (`sources.inbox.identify_sender`:
    recorded org; then, only for a mail whose sender a trusted receiver
    verified, List-Id → Sympa list on record, sender address / own domain),
-   against the organisations in staging (`known_orgs.KnownOrgs`). An
+   against the organisations in staging (`resolve.lookup.OrgLookup`). An
    unverified mail is never attributed and claims no activity.
 3. **Extract events** with the bulk model (`extract/prompts/email_events_v1.md`)
    from the subject and text, with e-mail addresses and phone numbers redacted
@@ -61,11 +61,11 @@ from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.extract.when import TermCalendar, london_date
 from camsocs_pipeline.keys import event_key, sha1_hex
-from camsocs_pipeline.known_orgs import KnownOrgs
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, Observation
 from camsocs_pipeline.models.wire import InboundMark, PendingMail
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.inbox import (
     header_list_name,
     identify_sender,
@@ -100,7 +100,7 @@ class MailOutcome:
 class InboxTools:
     llm: LLMClient
     memo: LLMMemo | None
-    known: KnownOrgs
+    known: OrgLookup
     index: EventIndex
     calendar: TermCalendar
     loader: ConvexLoader
@@ -116,7 +116,7 @@ def run(ctx: StageContext) -> None:
     tools = InboxTools(
         llm=LLMClient(ctx.settings.require_llm()),
         memo=LLMMemo(ctx.settings.cache_dir / "llm"),
-        known=KnownOrgs.from_staging(ctx.staging),
+        known=OrgLookup.for_stage(ctx),
         index=EventIndex.from_staging(ctx.staging, exclude=[SOURCE_TYPE]),
         calendar=TermCalendar.default(),
         loader=ctx.loader,

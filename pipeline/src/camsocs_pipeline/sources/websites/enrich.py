@@ -73,6 +73,7 @@ from camsocs_pipeline.resolve.families import COUNTERPART_TYPES
 from camsocs_pipeline.resolve.names import site_identity, tokens
 from camsocs_pipeline.resolve.resolver import priority_of
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
+from camsocs_pipeline.sources.links import account_of, classify_email, social_key, social_link
 from camsocs_pipeline.sources.policy import (
     AI_OVERRIDE_NOTE,
     SOCIETY,
@@ -83,13 +84,10 @@ from camsocs_pipeline.sources.policy import (
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.links import (
     NOT_SOCIETY_HANDLES,
-    Social,
-    classify_email,
     feed_of,
     is_join_link,
     is_termcard_link,
     mailing_list_of,
-    social_of,
 )
 from camsocs_pipeline.sources.websites.linktree import linktree_links
 from camsocs_pipeline.sources.websites.mapping import ExtractionMapper
@@ -477,39 +475,42 @@ class Enricher:
         sub_page = urlsplit(fetched[0].url).path.strip("/") != ""
 
         # Socials: links and JSON-LD sameAs, one choice per platform.
+        # Candidates are counted per account however a page wrote the link
+        # (`social_key`); the first spelling seen is the one stored.
         candidates: dict[str, Counter] = defaultdict(Counter)
         first_seen: dict[str, str] = {}
-        socials: dict[str, Social] = {}
+        socials: dict[str, dict[str, str]] = {}
         for item in pages:
             assert item.page is not None
             urls = [link.url for link in item.page.links if not sub_page or link.region == "main"]
             urls += _same_as(item.page.structured)
             for url in urls:
-                social = social_of(url)
-                if social is None or (social.handle or "").lower() in NOT_SOCIETY_HANDLES:
+                social = social_link(url)
+                if social is None or account_of(social) in NOT_SOCIETY_HANDLES:
                     continue
-                candidates[social.platform][social.url] += (
+                key = social_key(social)
+                candidates[social["platform"]][key] += (
                     2 if url in _same_as(item.page.structured) else 1
                 )
-                socials.setdefault(social.url, social)
-                first_seen.setdefault(social.url, item.url)
-        chosen: list[Social] = []
+                socials.setdefault(key, social)
+                first_seen.setdefault(key, item.url)
+        chosen: list[dict[str, str]] = []
         for platform, counts in candidates.items():
             pick = _pick_social(platform, counts, socials, target)
             if pick is not None:
                 chosen.append(pick)
         by_page: dict[str, list[dict[str, str]]] = defaultdict(list)
-        for social in sorted(chosen, key=lambda s: (s.platform, s.url)):
-            by_page[first_seen[social.url]].append(social.value())
+        for social in sorted(chosen, key=lambda s: (s["platform"], s["url"])):
+            by_page[first_seen[social_key(social)]].append(social)
         for url, values in by_page.items():
             buckets.add(
                 url,
                 parser_field("socials", values, extractor=f"{PARSER}.socials", evidence=EVIDENCE),
             )
             found.add("socials")
-        instagram = next((s for s in chosen if s.platform == "instagram"), None)
+        instagram = next((s for s in chosen if s["platform"] == "instagram"), None)
         if instagram and not target.instagram:
-            home_record.internal["instagram_handle"] = instagram.handle
+            home_record.internal["instagram_handle"] = instagram["handle"].lower()
 
         # Emails: role addresses per page, one general address per site.
         site_host = host_of(fetched[0].url)
@@ -521,17 +522,16 @@ class Enricher:
             emails = list(item.page.main_emails if sub_page else item.page.emails)
             emails += [e for e in _structured_emails(item.page.structured) if e not in emails]
             for email in emails:
-                reading = classify_email(email, org_words=target.words, site_host=site_host)
+                reading = classify_email(email, target.words, site_host=site_host)
+                address = reading.address.lower()
                 if reading.kind == "role" and reading.role:
-                    if (reading.role, reading.email) not in seen_roles:
-                        seen_roles.add((reading.role, reading.email))
-                        roles_by_page[item.url].append(
-                            {"role": reading.role, "email": reading.email}
-                        )
+                    if (reading.role, address) not in seen_roles:
+                        seen_roles.add((reading.role, address))
+                        roles_by_page[item.url].append({"role": reading.role, "email": address})
                 elif reading.kind == "general":
-                    domain = reading.email.split("@", 1)[1]
+                    domain = address.split("@", 1)[1]
                     rank = 0 if domain.endswith(site_host) or site_host.endswith(domain) else 1
-                    general.append((rank, reading.email, item.url))
+                    general.append((rank, address, item.url))
         for url, values in roles_by_page.items():
             buckets.add(
                 url,
@@ -698,9 +698,9 @@ class Enricher:
         links = linktree_links(fetched.result.text)
         socials = {}
         for link in links:
-            social = social_of(link.url)
-            if social and social.platform != "linktree":
-                socials.setdefault(social.url, social.value())
+            social = social_link(link.url)
+            if social and social["platform"] != "linktree":
+                socials.setdefault(social_key(social), social)
         if socials:
             buckets.add(
                 fetched.url,
@@ -728,7 +728,7 @@ class Enricher:
                         "joinUrl", link.url, extractor="linktree.links", evidence=EVIDENCE
                     ),
                 )
-            if re.search(r"\b(website|homepage|our site)\b", link.text, re.I) and not social_of(
+            if re.search(r"\b(website|homepage|our site)\b", link.text, re.I) and not social_link(
                 link.url
             ):
                 buckets.add(
@@ -813,18 +813,19 @@ def _structured_emails(structured: dict[str, list[dict[str, Any]]]) -> list[str]
 
 
 def _pick_social(
-    platform: str, counts: Counter, socials: dict[str, Social], target: Target
-) -> Social | None:
+    platform: str, counts: Counter, socials: dict[str, dict[str, str]], target: Target
+) -> dict[str, str] | None:
     """One profile per platform: the only one, or the one named after the
-    group, or the clearly most-linked one. Ambiguity means none."""
+    group, or the clearly most-linked one. Ambiguity means none. `counts` and
+    `socials` are keyed by `social_key`."""
     if len(counts) == 1:
         return socials[next(iter(counts))]
     words = target.words
     if platform == "instagram" and target.instagram:
-        for url in counts:
-            if socials[url].handle == target.instagram.lower().lstrip("@"):
-                return socials[url]
-    named = [url for url in counts if any(word in url.lower() for word in words if len(word) >= 4)]
+        for key in counts:
+            if account_of(socials[key]) == target.instagram.lower().lstrip("@"):
+                return socials[key]
+    named = [key for key in counts if any(word in key for word in words if len(word) >= 4)]
     if len(named) == 1:
         return socials[named[0]]
     ranked = counts.most_common(2)
@@ -842,7 +843,7 @@ def _prompt_links(pages: list[Fetched]) -> list[Link]:
     for item in pages:
         assert item.page is not None
         for link in item.page.links:
-            if link.url in seen or social_of(link.url):
+            if link.url in seen or social_link(link.url):
                 continue
             if pattern.search(f"{link.text} {link.url}") and (
                 not in_scope(link.url, item.url) or pattern.search(link.text)

@@ -30,7 +30,7 @@ from datetime import timedelta
 from camsocs_pipeline.models.observation import Observation
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.links import classify_email
+from camsocs_pipeline.sources.links import email_type
 from camsocs_pipeline.sources.policy import ROBOTS_OVERRIDE_NOTE, SOCIETY
 from camsocs_pipeline.sources.su import (
     DIRECTORY_URL,
@@ -165,7 +165,7 @@ def coverage_notes(
         return f"{count} ({100 * count / total:.1f}%)"
 
     emails = [p.email for p in profiles if p.email]
-    kinds = Counter(classify_email(email) for email in emails)
+    kinds = Counter(email_type(email) for email in emails)
     instagram = sum(any(s["platform"] == "instagram" for s in p.socials) for p in profiles)
     facebook = sum(any(s["platform"].startswith("facebook") for s in p.socials) for p in profiles)
     x = sum(any(s["platform"] == "x" for s in p.socials) for p in profiles)

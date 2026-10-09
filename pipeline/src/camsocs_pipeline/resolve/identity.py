@@ -8,8 +8,9 @@ crosswalk and later stages (enrichment's counterparts) all use it, so a group
 is recognised the same way everywhere.
 
 `conflict` is the one place that says whether two identities *may* be the
-same group: never across levels, type families or colleges, never when a
-source lists them as two entries (two SU ids, two Sport slugs).
+same group: never across levels, type families or colleges, never a JCR and
+an MCR, never when a source lists them as two entries (two SU ids, two Sport
+slugs).
 """
 
 from __future__ import annotations
@@ -43,6 +44,10 @@ KNOWN_ALIASES: dict[str, str] = {
     "cuadc": "amateur dramatic",
     "cubc": "boat",
 }
+
+#: Student bodies of a college: a JCR and an MCR are never one body, though
+#: both are student groups (a page naming both identifies neither).
+BODY_TYPES = frozenset({"jcr", "mcr"})
 
 #: Levels at which a college named inside a group's name is not a college.
 #: University-level groups keep theirs: the SU lists ~20 college groups
@@ -118,6 +123,8 @@ class Identity:
     core_signature: str | None = None
     known_key: str | None = None
     acronyms: frozenset[str] = field(default_factory=frozenset)
+    #: ``jcr`` / ``mcr`` when a source says the group is one (`BODY_TYPES`).
+    body: str | None = None
 
     @property
     def ids(self) -> frozenset[str]:
@@ -211,6 +218,7 @@ def identity_of(
         core_signature=parts.core_signature,
         known_key=hints.known_key,
         acronyms=frozenset(acronyms),
+        body=hints.org_type if hints.org_type in BODY_TYPES else None,
     )
 
 
@@ -223,6 +231,8 @@ class Profile:
     #: Distinct non-empty college sets among the members.
     college_sets: frozenset[frozenset[str]] = frozenset()
     explicit: frozenset[str] = frozenset()
+    #: `BODY_TYPES` the members are said to be.
+    bodies: frozenset[str] = frozenset()
 
     @classmethod
     def of(cls, identity: Identity) -> Profile:
@@ -231,6 +241,7 @@ class Profile:
             families=frozenset({identity.family} if identity.family else ()),
             college_sets=frozenset({identity.colleges} if identity.colleges else ()),
             explicit=identity.explicit,
+            bodies=frozenset({identity.body} if identity.body else ()),
         )
 
     def merged(self, other: Profile) -> Profile:
@@ -239,15 +250,19 @@ class Profile:
             self.families | other.families,
             self.college_sets | other.college_sets,
             self.explicit | other.explicit,
+            self.bodies | other.bodies,
         )
 
 
 def conflict(a: Profile, b: Profile) -> tuple[str, str] | None:
     """Why two groups must not be merged automatically, as ``(category,
-    reason)``, or None. Categories: ``family`` (different kinds of thing),
-    ``level``, ``college``, ``distinct`` (a source lists them separately)."""
+    reason)``, or None. Categories: ``family`` (different kinds of thing,
+    a JCR and an MCR included), ``level``, ``college``, ``distinct`` (a
+    source lists them separately)."""
     if a.families and b.families and not a.families & b.families:
         return "family", f"types differ ({'/'.join(sorted(a.families | b.families))})"
+    if a.bodies and b.bodies and not a.bodies & b.bodies:
+        return "family", "a JCR and an MCR are two bodies"
     if a.levels and b.levels and not a.levels & b.levels:
         return "level", f"levels differ ({' vs '.join(sorted(a.levels | b.levels))})"
     sets = a.college_sets | b.college_sets
@@ -265,6 +280,7 @@ def conflict(a: Profile, b: Profile) -> tuple[str, str] | None:
 
 
 __all__ = [
+    "BODY_TYPES",
     "DISTINCT_KINDS",
     "KNOWN_ALIASES",
     "Identity",

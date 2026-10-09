@@ -18,12 +18,12 @@ from PIL import Image
 import camsocs_pipeline.pipeline.load as load
 from camsocs_pipeline.extract.dedupe import EventIndex
 from camsocs_pipeline.extract.when import TermCalendar
-from camsocs_pipeline.known_orgs import KnownOrgs
 from camsocs_pipeline.models.observation import EventObservation
 from camsocs_pipeline.models.wire import InboundAttachment, PendingMail
 from camsocs_pipeline.pipeline.load import ConvexLoader
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import run_sync
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.inbox import (
     forwarded_headers,
     identify_sender,
@@ -73,7 +73,7 @@ def tools(llm: FakeLLM | None = None, loader=None, index: EventIndex | None = No
     return inbox.InboxTools(
         llm=llm or FakeLLM(replies),
         memo=None,
-        known=KnownOrgs.from_records(known_orgs_records()),
+        known=OrgLookup.from_records(known_orgs_records()),
         index=index or EventIndex(),
         calendar=TermCalendar.default(),
         loader=loader,
@@ -107,7 +107,7 @@ def test_sender_helpers() -> None:
 
 
 def test_identify_sender_by_list_and_address_of_a_verified_sender() -> None:
-    known = KnownOrgs.from_records(known_orgs_records())
+    known = OrgLookup.from_records(known_orgs_records())
     assert identify_sender(WEEKLY, known).org_key == QUOKKA_KEY
     assert identify_sender(NOT_LIST, known).org_key is None
     direct = WEEKLY.model_copy(
@@ -119,7 +119,7 @@ def test_identify_sender_by_list_and_address_of_a_verified_sender() -> None:
 
 
 def test_what_a_sender_writes_never_attributes_a_mail() -> None:
-    known = KnownOrgs.from_records(known_orgs_records())
+    known = OrgLookup.from_records(known_orgs_records())
     # Unverified: a forged List-Id or sender address speaks for nobody.
     forged = WEEKLY.model_copy(update={"sender_verified": False})
     assert identify_sender(forged, known).org_key is None
@@ -341,6 +341,10 @@ def mock_convex(net: respx.MockRouter, pending: list[PendingMail]) -> dict[str, 
     for name in ("sources", "claims", "orgInternal", "relationships", "eventOrganisers"):
         routes[name] = net.post(f"{SITE}/api/pipeline/{name}").mock(side_effect=ok)
     routes["broker"] = net.post(f"{SITE}/api/pipeline/brokerInferences").mock(side_effect=ok)
+    # The organisation lookup reads Convex's crosswalk (resolve/lookup.py).
+    routes["crosswalk"] = net.post(f"{SITE}/api/pipeline/crosswalk").mock(
+        return_value=httpx.Response(200, json={"rows": [], "isDone": True})
+    )
     return routes
 
 

@@ -1,7 +1,7 @@
 """Stage `termcards`: a term's events from societies' termcards (source-research §21).
 
 1. **Inputs**: every `termcardUrl` an organisation has in staging
-   (`KnownOrgs.termcards`; the SU, website and enrichment harvesters claim it).
+   (`OrgLookup.termcards`; the SU, website and enrichment harvesters claim it).
 2. **Fetch** politely (`sources.termcards.fetch_termcard`) with the society
    purpose (`sources/policy.py`, D3; ``society_website`` when the card is on
    the society's own domain): the file, or the first termcard file a page
@@ -47,9 +47,9 @@ from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
-from camsocs_pipeline.known_orgs import KnownOrgs, domain_of
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup, domain_of
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.policy import (
     AI_OVERRIDE_NOTE,
@@ -67,7 +67,7 @@ MAX_TERMCARDS_PER_RUN = 60
 
 
 def run(ctx: StageContext) -> None:
-    known = KnownOrgs.from_staging(ctx.staging)
+    known = OrgLookup.for_stage(ctx)
     cards = known.termcards()
     if not cards:
         ctx.report.notes.append("no organisation in staging has a termcard URL yet")
@@ -142,7 +142,7 @@ def run(ctx: StageContext) -> None:
         ctx.report.notes.append(f"  skipped {count}: {reason}")
 
 
-def _purpose(known: KnownOrgs, org_key: str, url: str) -> FetchPurpose:
+def _purpose(known: OrgLookup, org_key: str, url: str) -> FetchPurpose:
     """The society purpose for a card: on the society's own domain it is its
     website (D3 ``society_website``); elsewhere only the URL classes the
     policy recognises by shape (an SU ``/asset/`` file) may be overridden."""

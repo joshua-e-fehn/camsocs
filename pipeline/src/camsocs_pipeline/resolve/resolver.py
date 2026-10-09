@@ -61,14 +61,26 @@ with every identifier of its members, which is what keeps it stable.
 - ``categories: ["sport"]`` for an observation stating a Sports Service
   registration (data-model §5: "a deterministic rule assigns `sport` to
   sportsService-registered clubs").
+
+## Operator claims
+
+``pipeline/resolve-decisions.json`` ``claims`` are posted as ``manual``
+claims (source ``manual:pipeline/resolve-decisions.json``, internal) on the
+organisation each claim's ref is keyed to — e.g. the SU's "Test Soc" marked
+``defunct`` so it is not listed.
+
+A page observed for several groups this run (a college page naming its JCR
+and its MCR) is no group's identifier: its ref is neither looked up in the
+crosswalk nor recorded there; a JCR and an MCR are never one body
+(`identity.conflict`).
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -82,7 +94,12 @@ from camsocs_pipeline.models.observation import (
     Observation,
 )
 from camsocs_pipeline.resolve.colleges import BY_ID as COLLEGES_BY_ID
-from camsocs_pipeline.resolve.crosswalk import Crosswalk, CrosswalkEntry, Decisions
+from camsocs_pipeline.resolve.crosswalk import (
+    DECISIONS_PATH,
+    Crosswalk,
+    CrosswalkEntry,
+    Decisions,
+)
 from camsocs_pipeline.resolve.families import COUNTERPART_TYPES, default_level
 from camsocs_pipeline.resolve.identity import (
     DISTINCT_KINDS,
@@ -117,6 +134,11 @@ DEFAULT_PRIORITY = 20
 
 #: At most this many review items of the "similar name" kind per run.
 MAX_SIMILAR = 200
+
+#: The internal source of operator claims (never shown: data-model §7).
+MANUAL_SOURCE_URL = "manual:pipeline/resolve-decisions.json"
+#: Longest reason kept as a manual claim's ``valueRaw``.
+MAX_REASON = 1_000
 
 #: Tokens that say what a group does, not which one it is: a name made only of
 #: these on several college lists is that college's own club, not a shared one.
@@ -271,6 +293,9 @@ class Resolver:
         self._venues: dict[str, str] = {}
         self._held_roots: dict[int, QuarantineItem] = {}
         self._by_signature: dict[str, list[int]] = {}
+        self._shared_refs: set[str] = set()
+        #: Keys an operator's `same` decision merged into another this run.
+        self._retired: set[str] = set()
         self.report = QuarantineReport(run_key=run_key, generated_at=datetime.now(UTC).isoformat())
         self.counts: dict[str, int] = defaultdict(int)
         distinct = {frozenset(pair) for pair in self.decisions.distinct if len(pair) == 2}
@@ -316,12 +341,13 @@ class Resolver:
             self._key_relationships(record)
             self._key_parent(record)
 
+        manual = self._manual_claims()
         self._review_shared_clubs()
         self._review_similar_names()
         self._finish_counts()
         held_refs = {ref for item in self.report.held for ref in item.refs}
         return Resolution(
-            records=[*self.take_counterparts(), *keyed_orgs, *venues, *others],
+            records=[*self.take_counterparts(), *keyed_orgs, *manual, *venues, *others],
             crosswalk=self.crosswalk,
             report=self.report,
             held_refs=held_refs,
@@ -355,9 +381,16 @@ class Resolver:
             for ref_b in b.refs:
                 if frozenset((ref_a, ref_b)) in self._distinct_pairs:
                     return "decision", "operator decided these are distinct"
-        if a.keys and b.keys and a.keys != b.keys:
+        found = conflict(a.profile, b.profile)
+        if found is not None and found[0] == "family":
+            # Different kinds of thing (a college and its boat club, a JCR and
+            # an MCR) are never one group: nothing to review.
+            return found
+        # Disjoint, not merely different: a group an operator's decision gave
+        # several keys still takes a member that carries one of them.
+        if a.keys and b.keys and not a.keys & b.keys:
             return "keys", f"already loaded as {', '.join(sorted(a.keys | b.keys))}"
-        return conflict(a.profile, b.profile)
+        return found
 
     def _union(self, a: int, b: int, tier: str, value: str, *, override: bool = False) -> bool:
         root_a, root_b = self._find(a), self._find(b)
@@ -457,12 +490,17 @@ class Resolver:
 
     def _link(self) -> None:
         by_ref = {anchor.ref: anchor.index for anchor in self.anchors}
+        # A page observed for several groups (a college page naming its JCR
+        # and its MCR) is no group's identifier.
+        seen_refs = Counter(anchor.ref for anchor in self.anchors)
+        self._shared_refs = {ref for ref, count in seen_refs.items() if count > 1}
         #: name signature → anchors, for the ambiguity check of shared handles.
         self._by_signature: dict[str, list[int]] = defaultdict(list)
         for anchor in self.anchors:
             for signature in self._name_signatures(anchor):
                 self._by_signature[signature].append(anchor.index)
         # 0. Operator decisions.
+        decided = {ref for group in self.decisions.same for ref in group}
         for group in self.decisions.same:
             members = [by_ref[ref] for ref in group if ref in by_ref]
             for other in members[1:]:
@@ -476,11 +514,24 @@ class Resolver:
                 keys.add(identity.known_key)
             if identity.college:
                 keys.add(COLLEGES_BY_ID[identity.college].key)
-            # An unlinked guide row's own ref is not trusted either: an earlier
-            # run may have keyed it by name before that tier skipped it.
-            refs = set() if _unlinked_guide_row(anchor) else {ident("ref", anchor.ref)}
-            keys |= self.crosswalk.keys_for(identity.explicit | refs)
-            if len(keys) > 1 and not identity.known_key and not identity.college:
+            keys |= self.crosswalk.keys_for(identity.explicit)
+            # The observation's own ref, when it identifies one group: not an
+            # unlinked guide row (an earlier run may have keyed it by name
+            # before that tier skipped it), not a page observed for several
+            # groups this run, and not one an earlier run recorded under
+            # several keys (the same shared page, seen before this rule).
+            if not _unlinked_guide_row(anchor) and anchor.ref not in self._shared_refs:
+                ref_keys = self.crosswalk.keys_for({ident("ref", anchor.ref)})
+                if len(ref_keys) == 1:
+                    keys |= ref_keys
+            if (
+                len(keys) > 1
+                and not identity.known_key
+                and not identity.college
+                # An operator merged these keys: the group keeps the first and
+                # the others are retired, until their rows leave Convex.
+                and anchor.ref not in decided
+            ):
                 self._held[anchor.index] = QuarantineItem(
                     kind="held",
                     reason="identifiers belong to different known organisations",
@@ -663,6 +714,7 @@ class Resolver:
             if group.keys:
                 key = sorted(group.keys)[0]
                 if len(group.keys) > 1:
+                    self._retired |= group.keys - {key}
                     self.report.review.append(
                         QuarantineItem(
                             kind="review",
@@ -670,7 +722,10 @@ class Resolver:
                             refs=sorted(group.refs),
                             names=self._group_names(group),
                             keys=sorted(group.keys),
-                            detail=f"kept {key}; remove the others with ingest/purge:removeEntity",
+                            detail=(
+                                f"kept {key}; remove the others with ingest/purge:removeEntity "
+                                "(the crosswalk forgets them)"
+                            ),
                         )
                     )
                 if key in self._taken:
@@ -737,6 +792,8 @@ class Resolver:
         self.report.held.append(item)
 
     def _record_crosswalk(self) -> None:
+        for key in sorted(self._retired - set(self._taken)):
+            self.crosswalk.retire(key)
         for key, root in self._taken.items():
             group = self._groups[root]
             members = [self.anchors[i] for i in group.members]
@@ -747,17 +804,23 @@ class Resolver:
                 colleges = set(colleges_set)
             levels = sorted(group.profile.levels)
             families = sorted(group.profile.families)
+            bodies = sorted(group.profile.bodies)
             self.crosswalk.upsert(
                 CrosswalkEntry(
                     key=key,
                     name=best.identity.name,
                     level=levels[0] if len(levels) == 1 else None,
                     family=families[0] if len(families) == 1 else None,
+                    body=bodies[0] if len(bodies) == 1 else None,
                     colleges=sorted(colleges),
                     ids=sorted(
                         {
                             *(v for a in members for v in a.identity.ids),
-                            *(ident("ref", a.ref) for a in members),
+                            *(
+                                ident("ref", a.ref)
+                                for a in members
+                                if a.ref not in self._shared_refs
+                            ),
                         }
                     ),
                     signatures=sorted({s for a in members for s in a.identity.signatures}),
@@ -828,6 +891,51 @@ class Resolver:
                     self.counts["sport_category_rule"] += 1
                     break
         return derived
+
+    # -- operator claims ------------------------------------------------------------
+
+    def _manual_claims(self) -> list[Observation]:
+        """`Decisions.claims` as ``manual`` claims on the organisation each
+        one's ref is keyed to this run (a test entry marked defunct, …). A
+        claim whose ref matches no keyed observation is reported, not lost."""
+        by_ref = {anchor.ref: anchor for anchor in self.anchors}
+        out: list[Observation] = []
+        for claim in self.decisions.claims:
+            anchor = by_ref.get(claim.ref)
+            key = self._key_of.get(anchor.index) if anchor is not None else None
+            if anchor is None or key is None:
+                self.report.review.append(
+                    QuarantineItem(
+                        kind="review",
+                        reason="a manual claim's ref matches no keyed observation",
+                        refs=[claim.ref],
+                        detail=f"{claim.field} = {claim.value!r}; see {DECISIONS_PATH.name}",
+                    )
+                )
+                continue
+            out.append(
+                Observation(
+                    source_type="manual",
+                    source_key=f"{claim.ref}#{claim.field}",
+                    source_url=MANUAL_SOURCE_URL,
+                    retrieved_at=datetime.combine(claim.decided, time(), tzinfo=UTC),
+                    entity_type="organisation",
+                    identity=anchor.record.identity.model_copy(update={"known_key": key}),
+                    entity_key=key,
+                    fields=[
+                        FieldObs(
+                            field=claim.field,
+                            value=claim.value,
+                            value_raw=claim.why[:MAX_REASON],
+                            method="manual",
+                            evidence="primary",
+                            extractor="resolve-decisions",
+                        )
+                    ],
+                )
+            )
+            self.counts["manual_claims"] += 1
+        return out
 
     # -- references ------------------------------------------------------------------
 
@@ -1039,6 +1147,8 @@ class Resolver:
         for anchor in self.anchors:
             if anchor.index not in self._key_of or not anchor.identity.hint_college:
                 continue
+            if anchor.identity.body is not None:
+                continue  # every college has its own JCR / MCR ("Student Union")
             core = anchor.identity.core_signature
             if core and set(core.split()) - GENERIC_TOKENS:
                 by_core[core][anchor.identity.hint_college].append(anchor)
@@ -1095,7 +1205,11 @@ class Resolver:
                     seen.add(pair)
                     a, b = groups[first], groups[second]
                     union = a[1] | b[1]
-                    if not union or conflict(a[2], b[2]) is not None:
+                    if (
+                        not union
+                        or conflict(a[2], b[2]) is not None
+                        or self._decided_distinct(a[3], b[3])
+                    ):
                         continue
                     similarity = len(a[1] & b[1]) / len(union)
                     smaller = min(a[1], b[1], key=len)
@@ -1125,7 +1239,12 @@ class Resolver:
         for key, _words, profile, refs, acronyms in groups:
             for initials in sorted(acronyms):
                 other = single_words.get(initials)
-                if other and other[0] != key and conflict(profile, other[2]) is None:
+                if (
+                    other
+                    and other[0] != key
+                    and conflict(profile, other[2]) is None
+                    and not self._decided_distinct(refs, other[3])
+                ):
                     self.report.review.append(
                         QuarantineItem(
                             kind="review",
@@ -1140,6 +1259,13 @@ class Resolver:
                             keys=[key, other[0]],
                         )
                     )
+
+    def _decided_distinct(self, refs_a: set[str], refs_b: set[str]) -> bool:
+        return any(
+            frozenset((ref_a, ref_b)) in self._distinct_pairs
+            for ref_a in refs_a
+            for ref_b in refs_b
+        )
 
     def _finish_counts(self) -> None:
         self.counts["anchors"] = len(self.anchors)

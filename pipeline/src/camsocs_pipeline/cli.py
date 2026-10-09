@@ -6,6 +6,7 @@
     camsocs derive                       re-derive statuses, term weeks, stale flags now
     camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
     camsocs worklist [--no-sympa]        rank societies for mailing-list sign-up (CSV)
+    camsocs coverage [--before DIR]      field coverage of staged organisations; offline
 
 Commands are thin: parsing and reporting only. Exit codes matter to the cron
 that runs `sync`: any failed stage exits non-zero even though the others
@@ -17,19 +18,28 @@ Nothing here prints a secret: keys are shown only as set/unset.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
+from pathlib import Path
 
 import click
 
 from camsocs_pipeline import __version__
 from camsocs_pipeline.config import ConfigError, Settings, get_settings
 from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
+from camsocs_pipeline.pipeline.coverage import (
+    format_coverage,
+    quarantine_counts,
+    staged_coverage,
+)
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, run_sync
+from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
+from camsocs_pipeline.staging.store import StagingStore
 from camsocs_pipeline.worklist import (
     SympaMatcher,
     rank_organisations,
@@ -258,6 +268,36 @@ def worklist(ctx: click.Context, no_sympa: bool) -> None:
     if lists:
         sympa_path = write_sympa_lists(matcher, settings.reports_dir)
         click.echo(f"{len(lists)} public soc- lists, {len(matcher.matched)} matched → {sympa_path}")
+
+
+@cli.command()
+@click.option(
+    "--before",
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    help="Another staging directory to compare with (a copy taken before a change).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print JSON instead of a table.")
+@click.pass_context
+def coverage(ctx: click.Context, before: Path | None, as_json: bool) -> None:
+    """How many listed organisations have each field in staging, and how many
+    of those values are found — offline: no Convex read, no network."""
+    settings = _settings(ctx)
+    current = staged_coverage(StagingStore(settings.staging_dir))
+    previous = staged_coverage(StagingStore(before)) if before is not None else None
+    quarantine = quarantine_counts(quarantine_path(settings.staging_dir))
+    if as_json:
+        payload = {"now": current.as_dict(), "quarantine": quarantine}
+        if previous is not None:
+            payload["before"] = previous.as_dict()
+        click.echo(json.dumps(payload, indent=1))
+        return
+    for line in format_coverage(current, previous):
+        click.echo(line)
+    click.echo(f"orgType: {', '.join(f'{k} {v}' for k, v in current.org_types.items())}")
+    if quarantine is not None:
+        click.echo(
+            "quarantine: " + ", ".join(f"{name} {count}" for name, count in quarantine.items())
+        )
 
 
 def main() -> None:

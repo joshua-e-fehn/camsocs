@@ -619,3 +619,183 @@ def test_an_unlinked_guide_row_never_joins_a_club_by_its_sport_word() -> None:
 def test_a_cucbc_directory_page_identifies_no_club() -> None:
     assert site_identity("https://www.cucbc.org/node/122") is None
     assert site_identity("http://www.cucbc.org") is None
+
+
+# --- pages shared by bodies, decisions and operator claims (R2) -------------------------------
+
+
+def _body(name: str, org_type: str, page: str, **hints: Any) -> Observation:
+    record = org(
+        "society_website", page, name, org_type=org_type, level="college",
+        college_hint="Churchill College", **hints,
+    )  # fmt: skip
+    record.source_url = page
+    return record
+
+
+def _keys_by_name(resolution: Resolution) -> dict[str, str]:
+    return {
+        record.identity.name: record.entity_key
+        for record in resolution.records
+        if isinstance(record, Observation) and record.entity_key
+    }
+
+
+def test_a_page_naming_a_jcr_and_an_mcr_identifies_neither() -> None:
+    """The college's "JCR and MCR" page is observed once per body (one ref
+    for two observations). A crosswalk that recorded that page under both
+    keys (as runs before this rule did) must not hold either: each keeps its
+    own key by name."""
+    page = "https://www.chu.cam.ac.uk/about/governance/jcr-and-mcr/"
+    jcr = _body("Churchill College JCR", "jcr", page)
+    mcr = _body("Churchill College MCR", "mcr", page)
+    crosswalk = Crosswalk()
+    first = resolve_records([jcr, mcr], crosswalk=crosswalk)
+    assert _keys_by_name(first) == {
+        "Churchill College JCR": "org-churchill-college-jcr",
+        "Churchill College MCR": "org-churchill-college-mcr",
+    }
+    assert not first.report.held
+    assert all(
+        f"ref:society_website:{page}" not in entry.ids for entry in crosswalk.entries.values()
+    )
+
+    # The old crosswalk: the shared ref under both keys.
+    for key in ("org-churchill-college-jcr", "org-churchill-college-mcr"):
+        crosswalk.upsert(CrosswalkEntry(key=key, name=key, ids=[f"ref:society_website:{page}"]))
+    again = resolve_records([jcr, mcr], crosswalk=crosswalk)
+    assert not again.report.held
+    assert _keys_by_name(again) == _keys_by_name(first)
+
+
+def test_a_jcr_and_an_mcr_are_never_one_body() -> None:
+    jcr = _body("Churchill Students", "jcr", "https://a.example/", website_domain="chu.example")
+    mcr = _body("Churchill Students", "mcr", "https://b.example/", website_domain="chu.example")
+    resolution = resolve_records([jcr, mcr])
+    assert len(set(keys(resolution).values())) == 2
+    assert not resolution.report.review  # different kinds of thing: nothing to review
+
+
+def test_a_college_and_its_boat_club_sharing_a_site_need_no_review() -> None:
+    college = org(
+        "college_list", "Selwyn College", "Selwyn College", org_type="college", level="college",
+        website_domain="https://www.sel.cam.ac.uk/",
+    )  # fmt: skip
+    boat = org(
+        "cucbc", "selwyn", "Selwyn College Boat Club", org_type="college_boat_club",
+        cucbc_club="Selwyn", college_hint="Selwyn", website_domain="https://www.sel.cam.ac.uk/",
+    )  # fmt: skip
+    crosswalk = Crosswalk()
+    resolve_records([college, boat], crosswalk=crosswalk)
+    again = resolve_records([college, boat], crosswalk=crosswalk)
+    assert len(set(keys(again).values())) == 2
+    assert not again.report.review
+
+
+def test_jcrs_named_student_union_are_not_a_shared_club() -> None:
+    caius = org(
+        "society_website", "caius", "Gonville & Caius Student Union", org_type="jcr",
+        level="college", college_hint="Caius",
+    )  # fmt: skip
+    jesus = org(
+        "society_website", "jesus", "Jesus College Student Union", org_type="jcr",
+        level="college", college_hint="Jesus",
+    )  # fmt: skip
+    resolution = resolve_records([caius, jesus])
+    assert not [item for item in resolution.report.review if "several colleges" in item.reason]
+
+
+def test_a_same_decision_merges_loaded_keys_and_retires_the_others() -> None:
+    """Footlights: the SU's entry and Camdram's were loaded under two keys.
+    Decided one: the first key is kept, the other is retired from the
+    crosswalk, and while Convex still returns it nothing is held."""
+    su = org("su_directory", "6661", "Footlights Dramatic Club (Cambridge)", su_id="6661")
+    camdram = org(
+        "camdram", "the-cambridge-footlights", "The Cambridge Footlights",
+        camdram_slug="the-cambridge-footlights", org_type="theatre_company",
+    )  # fmt: skip
+    crosswalk = Crosswalk()
+    before = keys(resolve_records([su, camdram], crosswalk=crosswalk))
+    assert len(set(before.values())) == 2
+
+    decisions = Decisions.model_validate(
+        {
+            "same": [
+                {
+                    "refs": ["camdram:the-cambridge-footlights", "su_directory:6661"],
+                    "why": "the same club",
+                }
+            ]
+        }
+    )
+    merged = resolve_records([su, camdram], crosswalk=crosswalk, decisions=decisions)
+    kept = sorted(set(before.values()))[0]
+    assert set(keys(merged).values()) == {kept}
+    (review,) = [item for item in merged.report.review if "merged by decision" in item.reason]
+    assert "removeEntity" in (review.detail or "")
+    retired = (set(before.values()) - {kept}).pop()
+    assert retired not in crosswalk
+
+    # Convex still lists the retired row (its slug included) until it is removed.
+    crosswalk.merge_remote(
+        [CrosswalkRow(org_key=retired, name="The Cambridge Footlights",
+                      camdram_slug="the-cambridge-footlights")]
+    )  # fmt: skip
+    again = resolve_records([su, camdram], crosswalk=crosswalk, decisions=decisions)
+    assert set(keys(again).values()) == {kept}
+    assert not again.report.held
+
+
+def test_operator_claims_become_manual_claims_on_their_organisation() -> None:
+    test_soc = org("su_directory", "16109", "Test Soc", su_id="16109")
+    decisions = Decisions.model_validate(
+        {
+            "claims": [
+                {
+                    "ref": "su_directory:16109",
+                    "field": "defunct",
+                    "value": True,
+                    "why": "The SU's own test entry.",
+                    "decided": "2026-10-09",
+                },
+                {
+                    "ref": "su_directory:99999",
+                    "field": "defunct",
+                    "value": True,
+                    "why": "Gone.",
+                    "decided": "2026-10-09",
+                },
+            ]
+        }
+    )
+    resolution = resolve_records([test_soc], decisions=decisions)
+    (manual,) = [r for r in resolution.records if r.source_type == "manual"]
+    assert manual.entity_key == keys(resolution)["su_directory:16109"]
+    (claim,) = manual.fields
+    assert (claim.field, claim.value, claim.method) == ("defunct", True, "manual")
+    assert claim.value_raw == "The SU's own test entry."
+    assert manual.source_url.startswith("manual:")
+    assert manual.retrieved_at == datetime(2026, 10, 9, tzinfo=UTC)
+    assert any(
+        "matches no keyed observation" in item.reason and item.refs == ["su_directory:99999"]
+        for item in resolution.report.review
+    )
+    with pytest.raises(ValueError):
+        Decisions.model_validate(
+            {"claims": [{"ref": "x:1", "field": "nope", "value": 1, "why": "-",
+                         "decided": "2026-10-09"}]}
+        )  # fmt: skip
+
+
+def test_a_decided_distinct_pair_is_not_flagged_as_similar() -> None:
+    a = org("proctors_register", "vet", "Cambridge University Veterinary Society")
+    b = org("su_directory", "27398", "International Veterinary Students Association", su_id="27398")
+    flagged = resolve_records([a, b])
+    assert any(item.reason == "similar names, not merged" for item in flagged.report.review)
+    decided = resolve_records(
+        [a, b],
+        decisions=Decisions.model_validate(
+            {"distinct": [{"refs": ["proctors_register:vet", "su_directory:27398"], "why": "-"}]}
+        ),
+    )
+    assert not [item for item in decided.report.review if item.reason.startswith("similar")]

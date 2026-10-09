@@ -26,9 +26,10 @@ from urllib.parse import urljoin
 
 from camsocs_pipeline.claims import missing_field, parser_field
 from camsocs_pipeline.models.observation import IdentityHints, Observation
+from camsocs_pipeline.resolve.families import COUNTERPART_TYPES
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.colleges import college_in_name, college_relationships
-from camsocs_pipeline.sources.contact_links import (
+from camsocs_pipeline.sources.links import (
     clean_url,
     has_obfuscated_emails,
     host_of,
@@ -168,7 +169,12 @@ def club_observation(
         parser_field("orgType", org_type, extractor=f"{extractor}.type", evidence=evidence),
         parser_field("level", level, extractor=f"{extractor}.type", evidence=evidence,
                      inferred=not stated),
-        parser_field("isCounterpart", False, extractor=f"{extractor}.type", evidence=evidence),
+        # Another university's club (Anglia Ruskin) is a counterpart, never
+        # listed (data-model §2; ARU is out of scope, PLAN §2.2).
+        parser_field(
+            "isCounterpart", org_type in COUNTERPART_TYPES, extractor=f"{extractor}.type",
+            evidence=evidence,
+        ),
         parser_field("sport.sport", "Rowing", extractor=f"{extractor}.sport", evidence=evidence),
         parser_field("categories", ["sport"], extractor=f"{extractor}.category_rule",
                      evidence=evidence, inferred=True),

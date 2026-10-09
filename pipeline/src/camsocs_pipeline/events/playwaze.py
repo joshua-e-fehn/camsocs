@@ -59,9 +59,9 @@ from camsocs_pipeline.events.common import (
     polite_client,
     write_staging,
 )
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 
 HOST = "cambridgeuniversityleagues.playwaze.com"
 BASE = f"https://{HOST}"
@@ -274,7 +274,7 @@ def run(
     ctx: StageContext, *, window: EventWindow | None = None, now: datetime | None = None
 ) -> None:
     window = window or default_window(now)
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     tally = Tally()
     season = current_season(london_today(now))
     pending: list[Sourced] = []

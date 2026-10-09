@@ -8,7 +8,7 @@ refuses a ``talks_list`` source anyway.
 
 **Which lists.** The talks.cam list ids organisations publish (`orgInternal`
 ``talksListIds``, found by website enrichment and read from staging through
-`OrganiserIndex.feeds`), plus `seeds.TALKS_SEEDS`. Each list is fetched once as
+`resolve.lookup.OrgLookup.feeds`), plus `seeds.TALKS_SEEDS`. Each list is fetched once as
 ``/show/xml/<id>`` with ``seconds_before_today`` / ``seconds_after_today`` set
 to the window, at least `CRAWL_DELAY` seconds apart.
 
@@ -45,11 +45,11 @@ from camsocs_pipeline.events.common import (
     polite_client,
     write_staging,
 )
-from camsocs_pipeline.events.organisers import OrganiserIndex
 from camsocs_pipeline.events.seeds import TALKS_SEEDS
 from camsocs_pipeline.keys import slugify
 from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ def talk_drafts(
     return drafts
 
 
-def _lists(index: OrganiserIndex) -> dict[str, IdentityHints]:
+def _lists(index: OrgLookup) -> dict[str, IdentityHints]:
     """List id → its owner, from staging first, then the seeds."""
     lists: dict[str, IdentityHints] = {}
     for feed in index.feeds("talks"):
@@ -231,7 +231,7 @@ def run(
 ) -> None:
     window = window or default_window(now)
     now = now or datetime.now(window.start.tzinfo)
-    index = OrganiserIndex.from_staging(ctx.staging)
+    index = OrgLookup.for_stage(ctx)
     lists = _lists(index)
     if ctx.limit is not None:
         lists = dict(list(lists.items())[: ctx.limit])

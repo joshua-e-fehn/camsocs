@@ -20,7 +20,7 @@ Decisions behind it: see PLAN.md §6 (Decisions log). Field research: `docs/rese
    | person | `per-<sha1(orgKey:slug(name))>` |
 
    `slug`: NFKD, a fixed transliteration (ß→ss, æ→ae, ø→o, …), combining marks dropped, `&`→`and`, apostrophes deleted, ASCII lowercase, runs of non-`[a-z0-9]` → `-`, at most 80 characters.
-2. **The pipeline is the source of truth.** Tables marked *pipeline-owned* are written only by internal mutations called through `/api/pipeline/*`. The two exceptions are manual or owner overrides, written as `fieldClaims` rows with `method: "manual" | "owner_submitted"`.
+2. **The pipeline is the source of truth.** Tables marked *pipeline-owned* are written only by internal mutations called through `/api/pipeline/*`. The two exceptions are manual or owner overrides, written as `fieldClaims` rows with `method: "manual" | "owner_submitted"`. An operator's decision in `pipeline/resolve-decisions.json` (`claims`: ref, field, value, why, decided) reaches the server as such a `manual` claim, from the internal source `manual:pipeline/resolve-decisions.json` (its `why` is the claim's `valueRaw`).
 3. **Provenance for every field.**
    - `fieldClaims` is an append-only log of every observed value.
    - Resolved current values are denormalised onto the entity as plain fields, plus a `meta` map: `field → FieldMeta`.
@@ -100,7 +100,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | name | string | Canonical display name. Required to create the row; never blanked once set |
 | aliases | string[] | e.g. "CU German Society", "German Soc", "CUGS" |
 | shortName | string? | Acronym |
-| orgType | vocab `ORG_TYPES`? | society, sports_club, college_club, jcr, mcr, college_boat_club, college, department, uni_office, student_union, company, ngo, public_body, other_university_society, media, theatre_company, other. Optional until a source says (meta says missing) |
+| orgType | vocab `ORG_TYPES`? | society, sports_club, college_club, jcr, mcr, college_boat_club, college, department, uni_office, student_union, company, ngo, public_body, other_university_society, media, theatre_company, other. Optional until a source says (meta says missing); a registered society gets one by rule (§5 "Assignment") |
 | level | vocab `ORG_LEVELS`? | university, college, department, intercollegiate, external. Optional until a source says |
 | collegeKeys | string[] | For college-level groups: the college(s), many-to-many (shared clubs) |
 | collegeBody | `jcr \| mcr \| college_run \| joint`? | For college-level groups |
@@ -453,7 +453,13 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
 | outdoors | Outdoors & Adventure | Sports & Activities |
 | hobbies_games | Hobbies, Games & Food | Hobbies & Interests |
 
-Assignment: the LLM assigns 1–3 categories, using the SU category as a hint plus the description. A deterministic rule assigns `sport` to sportsService-registered clubs.
+Assignment (pipeline stage `classify`, `pipeline/.../classify/`), per organisation and per field, in this order:
+
+1. **Sources.** A value a source claims is never overruled: the Sports Service's clubs are `sport` (a deterministic rule, data-model's own), CUCBC's clubs `sport`, Camdram's entries `theatre_film_dance` (with `music` or `media_publishing` where Camdram's entry is a music or film society or a station, source-research §5), and the website enrichment's model reads the rest of a site.
+2. **Rules** (`inferred`): a sport, a religion or chaplaincy, a country / nationality / language community, an ensemble, drama / film / dance or a publication / station in the name gives the category (at most three).
+3. **The bulk model** for organisations still without categories: 1–3 categories from the organisation's own texts (its SU profile, Camdram or Sport page, the registers' names), the SU category a hint only. A list is `found` only when every item's verbatim quote is on a text, otherwise `inferred`.
+
+`activityTypes`, `audiences`, `languages` and `tags` follow the same order (a sports club trains and competes, a theatre company or an ensemble performs; audiences only as a name or text states them; tags are always `inferred`). For a society the SU or the Proctors register, `orgType` and `level` default by rule to `society` at `university` level (`inferred`), or `college_club` at `college` level with the college's `collegeKeys` when its name names a college, or `department` level when it names a department or faculty; a name that says journal / magazine / review gives `media`. Names that may be another kind of thing (a trust, a corps, a chaplaincy, a hub) are asked of the model, whose quoted answer replaces the rule's. Every value the stage no longer claims is restated `missing` / `not_found` from the same record and method, so it never lingers or conflicts.
 
 ## 6. Derived fields
 

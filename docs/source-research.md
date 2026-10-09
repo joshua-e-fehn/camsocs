@@ -91,7 +91,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - sometimes officers' first names, which no rule can detect: the D1 redaction (LLM pass) replaces them with roles before publishing.
 - A few profiles embed the SU's own event list (`.soc-event-list`, dates without a year). Those events belong to the SU What's On harvester (§12), not here.
 - Some description links are wrapped in Outlook SafeLinks. They are unwrapped from their own query string, never followed.
-- A test entry ("Test Soc") is listed like any society.
+- A test entry ("Test Soc", SU id 16109) is listed like any society. An operator's `manual` claim (`pipeline/resolve-decisions.json`) marks it `defunct`, so it is not listed.
 - Resources (where termcards live) are served under `/asset/` and `/resourcehandler/`, both disallowed for every crawler, and the resource page itself errors for anonymous requests (checked 2026-10-07). Profiles link them as `/file/<id>/<name>/`, which redirects to the login page (seen 2026-10-08). Under D3 these cards are fetched with the society purpose; the login redirect is never followed, so they are recorded `access_restricted` (§21).
 
 ## §2 Proctors' register
@@ -214,6 +214,13 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 **Harvester:** stage `camdram_societies`, `sources/camdram.py`. One request; the image is the logo's source, and our own copy is made by a later image step.
 
+**Not everything on Camdram is a theatre company** (`camdram_type`, every entry's name and description re-read 2026-10-09):
+- Cam FM ("Cambridge's student radio station") → `media`, category media_publishing.
+- Film societies (Film Association, Trinity Filmmaking Society, Trolleydolly "a new Cambridge film-makers' society", Silver Street "a student-led film production company") → `society`, theatre_film_dance + media_publishing; Bread "Theatre & Film Company" stays a theatre company with both.
+- Trinity Hall Music Society → `society` (music); the Ballet Club → a dance `society`; Amnesty International's group → a campaigning `society` (causes_volunteering). Opera, musical theatre and G&S companies stay theatre companies with music added.
+- **Not student groups, so counterparts (never listed):** Camdram's own meta-page ("We don't fund any shows") and ADC Online (the ADC Theatre's online programme) as `other`; the community companies Pied Pipers ("an amateur community Musical Theatre Company"), Girton Musical Theatre ("based in the village of Girton", open to anyone over 16 — not Girton College's), The Festival Players ("for all ages") and WRiTEON ("not specifically a student organisation") at level `external` (city clubs are out of scope, PLAN §2.2); Cue.5, Anglia Ruskin's theatre society, as `other_university_society`.
+- A college comes only from Camdram's `college` field, never from a name.
+
 **Events harvester (T6, re-verified 2026-10-07)** — `pipeline/src/camsocs_pipeline/events/camdram.py`, stage `camdram_events`.
 - robots.txt: `User-agent: *` with nothing disallowed.
 - The API page (`/api/`) asks for an API key; unauthenticated calls get "very low rate limits and long response delays". `CAMDRAM_API_KEY` (optional, an OAuth access token) is sent as a Bearer header; without it requests are 2 s apart and show JSON is reused from the cache for 20 h.
@@ -267,7 +274,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - an officers table of named people, which is **never read**.
 - "Lady Margaret Boat Club" names no college. https://www.ladymargaretboatclub.org/ states "The Lady Margaret Boat Club is the rowing club of St John's College, Cambridge". The harvester re-checks that page on each run before claiming the college.
 
-**Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Details pages are reused from the cache for a week. What only a details page states (the full name, the hidden address) is that page's own observation, attributed to its URL; the club's college, when its own site names it, is claimed from that site (primary).
+**Harvester:** stage `cucbc_clubs`, `sources/cucbc.py`. Anglia Ruskin's boat club is another university's club: a counterpart, not listed. Details pages are reused from the cache for a week. What only a details page states (the full name, the hidden address) is that page's own observation, attributed to its URL; the club's college, when its own site names it, is claimed from that site (primary).
 
 **Events harvester (T6, re-verified 2026-10-07)** — `events/cucbc.py`, stage `cucbc_events`.
 - robots.txt: `Crawl-delay: 10`; disallows Drupal internals only (`/admin/`, `/user/…`, `/search/`, `/node/add/`, …).
@@ -309,6 +316,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
   - kcgs.org.uk, linked by KCSU as "King's Graduate Society", now serves an unrelated site about King's College, so no website is claimed.
   - Cloudflare email protection on Churchill's JCR/MCR page and on Queens' JCR → `email` and `roleEmails` missing / `access_restricted`, never decoded.
 - **Named officers:** none are read. The bodies' committee pages are left for a later broker-only extraction.
+- **A college page naming both bodies** (Churchill's "JCR and MCR", Fitzwilliam's `/jcr-mcr`, KCSU's site naming the King's Graduate Society, Lucy Cavendish, Murray Edwards, Peterhouse) is observed once per body; such a shared page identifies neither body to the resolver, and a JCR and an MCR are never merged.
 
 **Harvester:** stage `colleges`, `sources/colleges.py`. A body's own site (and an evidence page on that same host) is fetched with the society purpose; a college page that names the body keeps the general purpose.
 

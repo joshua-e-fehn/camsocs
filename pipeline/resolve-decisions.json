@@ -1,4 +1,82 @@
 {
-  "same": [],
-  "distinct": []
+  "same": [
+    {
+      "refs": [
+        "camdram:the-cambridge-footlights",
+        "su_directory:6661",
+        "proctors_register:footlights-dramatic-club"
+      ],
+      "why": "One club: the SU's and the Proctors' 'Footlights Dramatic Club (Cambridge)' (both linking cambridgefootlights.org) is Camdram's 'The Cambridge Footlights'. Decided 2026-10-09."
+    },
+    {
+      "refs": ["camdram:brickhouse-theatre-company", "su_directory:6351"],
+      "why": "The SU profile's website slot is this society's Camdram page (camdram.net/societies/brickhouse-theatre-company) and its description says it stages productions in Robinson, where Camdram places it. Decided 2026-10-09."
+    },
+    {
+      "refs": ["camdram:the-fletcher-players-society", "su_directory:26233"],
+      "why": "The SU profile: 'the theatre society of Corpus Christi college'; Camdram places The Fletcher Players Society at Corpus Christi. Decided 2026-10-09."
+    },
+    {
+      "refs": ["proctors_register:science-fiction-society-cu", "su_directory:9811"],
+      "why": "The SU entry's short description: 'CUSFS is the Cambridge University Science Fiction and Fantasy Society'; both registers link CUSFS's SRCF pages (cusfs.soc.srcf.net, srcf.ucam.org/cusfs) and the SU lists soc-cusfs. Decided 2026-10-09."
+    },
+    {
+      "refs": [
+        "cucbc:https://www.cucbc.org/node/85",
+        "su_directory:24937",
+        "proctors_register:addenbrookes-intercollegiate-boat-club-addies-boat-club-the"
+      ],
+      "why": "One club: CUCBC's only Addenbrooke's club ('Addenbrooke's Student Boat Club', short name 'Addenbrooke's') is the SU's 'Addenbrooke's Intercollegiate Boat Club (AIBC)' and the Proctors' 'Addenbrooke's Intercollegiate Boat Club (Addies Boat Club)', both linking the addiesforblades accounts. Decided 2026-10-09."
+    }
+  ],
+  "distinct": [
+    {
+      "refs": ["sport_az:rifle-association", "sport_az:small-bore-club"],
+      "why": "Two clubs the Sport A-Z lists separately; their pages share one Instagram account. Decided 2026-10-09."
+    },
+    {
+      "refs": ["proctors_register:clinsoc-volleyball-society", "su_directory:8131"],
+      "why": "ClinSoc (the Clinical Students' Society) and the Proctors' separate 'Clinsoc Volleyball Society' share the ClinSoc Instagram link. Decided 2026-10-09."
+    },
+    {
+      "refs": ["su_directory:21690", "su_directory:6531"],
+      "why": "'China Education Forum' and 'China Forum' are two SU entries (and two Proctors entries) that share a website. Decided 2026-10-09."
+    },
+    {
+      "refs": ["su_directory:6591", "su_directory:8241"],
+      "why": "The Dancers' Club and the Dancesport Team are two SU entries that share cambridgedancers.org. Decided 2026-10-09."
+    },
+    {
+      "refs": ["su_directory:12929", "su_directory:13094"],
+      "why": "The Officers' Training Corps and the Royal Naval Unit are two SU entries whose websites are both on mod.gov.uk. Decided 2026-10-09."
+    },
+    {
+      "refs": ["sport_az:canoe-club", "sport_az:cricket-club"],
+      "why": "The Canoe Club and the Cricket Club both go by 'CUCC'. Decided 2026-10-09."
+    },
+    {
+      "refs": ["sport_az:rackets-club", "sport_az:riding-club"],
+      "why": "The Rackets Club and the Riding Club both go by 'CURC'. Decided 2026-10-09."
+    },
+    {
+      "refs": [
+        "proctors_register:cambrain-the-cambridge-neuroscience-society",
+        "su_directory:6891"
+      ],
+      "why": "The Proctors' 'CamBRAIN (The Cambridge Neuroscience Society)' links CamBRAIN's page (neuroscience.cam.ac.uk/early-career-researchers/cambrain/) and is the SU's CamBRAIN (28539); the SU's 'Neuroscience Society' (6891) is a separate entry with its own Instagram. Decided 2026-10-09."
+    },
+    {
+      "refs": ["proctors_register:veterinary-society-cu", "su_directory:27398"],
+      "why": "The SU's 'International Veterinary Students Association' describes itself as the Cambridge branch of IVSA, not the Veterinary Society. Decided 2026-10-09."
+    }
+  ],
+  "claims": [
+    {
+      "ref": "su_directory:16109",
+      "field": "defunct",
+      "value": true,
+      "why": "Cambridge SU's own test entry ('Test Soc'), listed like a society (source-research §1 traps); not a society, so it is not listed.",
+      "decided": "2026-10-09"
+    }
+  ]
 }

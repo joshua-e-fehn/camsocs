@@ -36,8 +36,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from camsocs_pipeline.extract.evidence import normalise_text
-from camsocs_pipeline.known_orgs import sympa_list_name
 from camsocs_pipeline.models.wire import WorklistOrg
+from camsocs_pipeline.resolve.lookup import sympa_list_name
 from camsocs_pipeline.sources.sympa import SympaList, best_list, subscribe_instruction
 
 WORKLIST_FILE = "mailing-list-worklist.csv"
