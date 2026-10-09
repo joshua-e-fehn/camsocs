@@ -28,6 +28,21 @@ apply in this order:
    - Two are declared by the caller, which knows what it is reading: a
      society's, club's, JCR's or MCR's own website (``society_website``),
      and a college / JCR / MCR society-list page (``college_society_list``).
+     A declared class belongs to one site: `PoliteClient.fetch` binds it to
+     the registrable domain of the URL it was asked for
+     (`FetchPurpose.bound_to`), so a redirect to another domain, or a file a
+     page links on another host (a shop's CDN), is read under that host's
+     own robots.txt — the class never carries over.
+   - Never a society's own website, whatever the caller declares: the
+     University's and the colleges' and departments' own sites on cam.ac.uk
+     (``www.clare.cam.ac.uk``, ``www.educ.cam.ac.uk``,
+     ``neuroscience.cam.ac.uk``; `is_cam_main_site`) — a JCR's, an MCR's or
+     a society's site there is a sub-site of one (``mcr.clare.cam.ac.uk``,
+     ``www.jcr.corpus.cam.ac.uk``), and a college's society-list page stays
+     a ``college_society_list`` — and national or parent organisations a
+     Cambridge branch links (`NATIONAL_DOMAINS`, general hosts: the national
+     Christian Medical Fellowship's cmf.org.uk, seen in the 2026-10-09
+     harvest, and the like).
 4. **An override never changes** the honest User-Agent, the Crawl-delay and
    minimum interval, or the rule of one request in flight per host. Cookies
    and credentials are still never sent. Login walls, 401/403 and
@@ -136,6 +151,22 @@ GENERAL_DOMAINS = (
     "ow.ly",
 )
 
+#: National or parent organisations whose sites a Cambridge branch states as
+#: its website (checked 2026-10-10 against the 2026-10-09 harvest): their
+#: pages are the national body's, not the society's (§14 "Which site").
+NATIONAL_DOMAINS = (
+    "cmf.org.uk",
+    "uccf.org.uk",
+    "msf.org.uk",
+    "ewb-uk.org",
+    "communist.red",
+    "180dc.org",
+    "star-network.org.uk",
+    "93percent.club",
+    "amnesty.org.uk",
+    "unicef.org.uk",
+)
+
 _SU_HOSTS = frozenset({"www.cambridgesu.co.uk", "cambridgesu.co.uk"})
 _LINKTREE_HOSTS = frozenset({"linktr.ee", "www.linktr.ee"})
 _GOOGLE_CALENDAR_HOST = "calendar.google.com"
@@ -150,10 +181,12 @@ class FetchPurpose:
     """Why a URL is being fetched. ``general`` honours every robots.txt rule.
     ``society`` may override a robots disallow or an AI opt-out for the D3 URL
     classes; `url_class` declares a class the URL alone cannot show (a
-    society's own website, a college's society list)."""
+    society's own website, a college's society list), and `site` the
+    registrable domain it was declared for (`bound_to`; None: not yet bound)."""
 
     scope: Scope = "general"
     url_class: SocietyUrlClass | None = None
+    site: str | None = None
 
     def __post_init__(self) -> None:
         if self.scope not in ("general", "society"):
@@ -163,6 +196,15 @@ class FetchPurpose:
                 raise ValueError("only a society fetch declares a URL class")
             if self.url_class not in SOCIETY_URL_CLASSES:
                 raise ValueError(f"unknown society URL class {self.url_class!r}")
+        if self.site is not None and self.url_class not in DECLARED_CLASSES:
+            raise ValueError("only a declared URL class is bound to a site")
+
+    def bound_to(self, url: str) -> FetchPurpose:
+        """This purpose with a declared class bound to `url`'s site (its
+        registrable domain), unless it is bound already."""
+        if self.url_class not in DECLARED_CLASSES or self.site is not None:
+            return self
+        return FetchPurpose(self.scope, self.url_class, registrable_domain(url))
 
 
 GENERAL = FetchPurpose()
@@ -197,10 +239,37 @@ def never_overridden(url: str) -> bool:
     return any(_on(host, domain) for domain in NEVER_OVERRIDE_HOSTS)
 
 
-def is_general_host(url: str) -> bool:
-    """A host that is never a society's own page (`GENERAL_HOSTS`)."""
+def registrable_domain(url: str) -> str:
+    """The part of a URL's host an organisation registers: ``cmf.org.uk``
+    for www.cmf.org.uk, ``clare.cam.ac.uk`` for mcr.clare.cam.ac.uk,
+    ``srcf.net`` for cuchess.soc.srcf.net."""
+    labels = host_of(url).removeprefix("www.").split(".")
+    if len(labels) >= 4 and labels[-3:] == ["cam", "ac", "uk"]:
+        return ".".join(labels[-4:])
+    if len(labels) >= 3 and labels[-2] in ("ac", "co", "org", "gov", "net", "ltd", "me", "sch"):
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
+def is_cam_main_site(url: str) -> bool:
+    """The University's, a college's or a department's own site on cam.ac.uk
+    (``www.clare.cam.ac.uk``, ``neuroscience.cam.ac.uk``) — not a sub-site
+    of one (``mcr.clare.cam.ac.uk``, ``www.jcr.corpus.cam.ac.uk``,
+    ``www-mcr.sel.cam.ac.uk``), where JCRs, MCRs and societies live."""
     host = host_of(url)
-    return host in GENERAL_HOSTS or any(_on(host, domain) for domain in GENERAL_DOMAINS)
+    if not _on(host, "cam.ac.uk"):
+        return False
+    labels = host.removeprefix("www.").split(".")[:-3]
+    return len(labels) <= 1
+
+
+def is_general_host(url: str) -> bool:
+    """A host that is never a society's own page (`GENERAL_HOSTS`,
+    `GENERAL_DOMAINS`, a national organisation's site)."""
+    host = host_of(url)
+    return host in GENERAL_HOSTS or any(
+        _on(host, domain) for domain in (*GENERAL_DOMAINS, *NATIONAL_DOMAINS)
+    )
 
 
 def url_class_of(url: str) -> SocietyUrlClass | None:
@@ -227,7 +296,14 @@ def society_class(url: str, purpose: FetchPurpose) -> SocietyUrlClass | None:
     pattern = url_class_of(url)
     if pattern is not None:
         return pattern
-    if purpose.url_class in DECLARED_CLASSES and host_of(url) not in _PATTERN_HOSTS:
+    if (
+        purpose.url_class in DECLARED_CLASSES
+        and host_of(url) not in _PATTERN_HOSTS
+        and (purpose.site is None or registrable_domain(url) == purpose.site)
+        # A college's or department's own site is no society's website (its
+        # society-list page is a college society list, D3).
+        and not (purpose.url_class == "society_website" and is_cam_main_site(url))
+    ):
         return purpose.url_class
     return None
 
@@ -251,6 +327,7 @@ __all__ = [
     "GENERAL",
     "GENERAL_DOMAINS",
     "GENERAL_HOSTS",
+    "NATIONAL_DOMAINS",
     "NEVER_FETCH_HOSTS",
     "NEVER_OVERRIDE_HOSTS",
     "ROBOTS_OVERRIDE_NOTE",
@@ -262,9 +339,11 @@ __all__ = [
     "SocietyUrlClass",
     "ai_optout_override",
     "host_of",
+    "is_cam_main_site",
     "is_general_host",
     "never_fetched",
     "never_overridden",
+    "registrable_domain",
     "robots_override",
     "society_class",
     "url_class_of",

@@ -53,6 +53,7 @@ from camsocs_pipeline.classify.rules import (
     ambiguous_type,
     rule_claims,
 )
+from camsocs_pipeline.extract.ai_gate import AiGate
 from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.models.observation import FieldObs, Observation
@@ -141,10 +142,15 @@ class _Plan:
     request: OrgRequest | None
 
 
-def _request(profile: OrgProfile, wanted: set[str], ask_type: bool) -> OrgRequest:
+def _request(
+    profile: OrgProfile, wanted: set[str], ask_type: bool, gate: AiGate | None = None
+) -> OrgRequest:
     texts = [
         OrgText(record, _TEXT_LABELS.get(record.source_type, record.source_type), text)
         for record, text in profile.texts()
+        # A general source whose host or page keeps AI out is never sent
+        # (`extract.ai_gate`); a society's own content is (D3).
+        if gate is None or gate.allows(record.source_url, record.source_type)
     ]
     registers = [
         label for register, label in _REGISTER_LABELS.items() if profile.registered(register)
@@ -168,6 +174,7 @@ def classify_records(
     llm: LLMClient | None = None,
     memo: LLMMemo | None = None,
     workers: int = 1,
+    gate: AiGate | None = None,
 ) -> ClassifyResult:
     """Classify every listed organisation in `records` (module docstring).
     `records`: every keyed observation in staging but this stage's own;
@@ -195,7 +202,7 @@ def classify_records(
             if not profile.has("level"):
                 wanted.add("level")
         needs_model = ask_type or bool(wanted & set(TRIGGER_FIELDS))
-        request = _request(profile, wanted, ask_type) if needs_model else None
+        request = _request(profile, wanted, ask_type, gate) if needs_model else None
         if request is not None and not request.texts:
             request = None
         plans.append(_Plan(profile, rules, wanted, request))

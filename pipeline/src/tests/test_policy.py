@@ -51,7 +51,16 @@ COLLEGE_LIST = "https://www.chu.cam.ac.uk/student-life/clubs-and-societies/"
         # Declared by the caller: only that purpose overrides.
         (SOCIETY_SITE, None, None, "society_website", "college_society_list"),
         (JCR_SITE, None, None, "society_website", "college_society_list"),
-        (COLLEGE_LIST, None, None, "society_website", "college_society_list"),
+        # A college's own site is no society's website; its society list is
+        # a college society list (D3).
+        (COLLEGE_LIST, None, None, None, "college_society_list"),
+        ("https://www.educ.cam.ac.uk/events/", None, None, None, "college_society_list"),
+        ("https://neuroscience.cam.ac.uk/", None, None, None, "college_society_list"),
+        ("https://mcr.clare.cam.ac.uk/", None, None, "society_website", "college_society_list"),
+        ("https://www-mcr.sel.cam.ac.uk/", None, None, "society_website", "college_society_list"),
+        # National organisations a branch links are never its own site.
+        ("https://www.cmf.org.uk/events-at-cmf/", None, None, None, None),
+        ("https://communist.red/", None, None, None, None),
         # Other paths of the pattern hosts never stretch to a declared class.
         ("https://www.cambridgesu.co.uk/organisation/15759/", None, None, None, None),
         ("https://www.cambridgesu.co.uk/resourcehandler/1/", None, None, None, None),
@@ -352,3 +361,30 @@ def test_ai_opt_outs_are_lifted_for_society_pages_only(
 def test_override_notes_are_distinct() -> None:
     assert ROBOTS_OVERRIDE_NOTE == "robots_override:society"
     assert AI_OVERRIDE_NOTE == "ai_optout_override:society"
+
+
+def test_a_declared_class_belongs_to_the_site_it_was_declared_for() -> None:
+    from camsocs_pipeline.sources.policy import registrable_domain
+
+    bound = SOCIETY_WEBSITE.bound_to("https://www.cuchess.example/events/")
+    assert bound.site == "cuchess.example" == registrable_domain("https://cuchess.example/")
+    assert society_class("https://cuchess.example/about", bound) == "society_website"
+    # A redirect to, or a file on, another domain keeps that host's rules.
+    assert society_class("https://cdn.shop.example/card.png", bound) is None
+    assert society_class("https://www.bridal.example/", bound) is None
+    # Pattern classes stay recognised from the URL whatever the binding.
+    assert society_class(SU_LOGO, bound) == "su_asset"
+    assert registrable_domain("https://mcr.clare.cam.ac.uk/x") == "clare.cam.ac.uk"
+    assert registrable_domain("https://cuchess.soc.srcf.net/") == "srcf.net"
+
+
+def test_a_redirect_to_another_domain_loses_the_society_override(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://cuchess.example/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+    net.get("https://cuchess.example/").respond(301, headers={"location": "https://other.example/"})
+    net.get("https://other.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
+    other = net.get("https://other.example/").respond(200, text="<html>other</html>")
+    result = make_client(tmp_path).fetch("https://cuchess.example/", purpose=SOCIETY_WEBSITE)
+    assert result.outcome == "disallowed_by_robots"
+    assert result.override is None and other.call_count == 0

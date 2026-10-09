@@ -222,6 +222,8 @@ def _ai_check(
     opt-out (robots.txt, or `page_noai` on the page) is lifted where the D3
     society override applies; talks.cam and tbc.xyz never are."""
     override = False
+    # A declared class covers the first URL's site only, not a redirect's.
+    purpose = purpose.bound_to(urls[0]) if urls else purpose
     for url in urls:
         reason = never_fetched(url)
         if reason is not None:
@@ -269,16 +271,20 @@ def fetch_termcard(
     )
     if page.refusal is not None:
         return Skipped(url, page.refusal)
+    # A file the page links is the page's site's only on that site: a card
+    # on a shop's CDN keeps the CDN's robots.txt (the declared class does not
+    # carry over, `FetchPurpose.bound_to`).
+    linked_purpose = purpose.bound_to(result.final_url or url)
     for link in _file_links(result.text, result.final_url)[:2]:
         if never_fetched(link) is not None:
             continue
-        linked = client.fetch(link, fresh_for=FRESH_FOR, accept=ACCEPT, purpose=purpose)
+        linked = client.fetch(link, fresh_for=FRESH_FOR, accept=ACCEPT, purpose=linked_purpose)
         if not linked.ok or linked.content is None:
             continue
         linked_kind = _kind(linked.content)
         if linked_kind is None:
             continue
-        check = _ai_check(client, purpose, link, linked.final_url)
+        check = _ai_check(client, linked_purpose, link, linked.final_url)
         if check.refusal is not None:
             return Skipped(url, check.refusal)
         return TermcardFile(

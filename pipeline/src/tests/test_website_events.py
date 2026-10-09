@@ -252,6 +252,9 @@ def test_a_site_yields_its_upcoming_dated_events(tmp_path: Path, net: respx.Mock
     # is read (D3) and the sources row says so; contacts never reach the model.
     assert quiz.fetch is not None and quiz.fetch.robots_verdict == "disallowed"
     assert ROBOTS_OVERRIDE_NOTE in (quiz.fetch.access_note or "")
+    # GPTBot is blocked: the page reached the model only through the D3
+    # override of that AI opt-out, and its events say so too.
+    assert "ai_optout_override:society" in (quiz.fetch.access_note or "")
     assert "secretary@" not in llm.calls[0]["text"]
     assert llm.calls[0]["version"] == "website_events_v1" and llm.calls[0]["tier"] == "bulk"
 
@@ -322,3 +325,30 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
 def test_a_dates_year_must_be_stated_or_checkable(event: dict, problem: str | None) -> None:
     found = website.year_problem(LlmEvent(title="x", **event), TODAY)
     assert (found is None) if problem is None else (found is not None and problem in found)
+
+
+def test_a_page_that_says_noai_on_a_general_host_never_reaches_the_model(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    from camsocs_pipeline.models.observation import FetchInfo
+    from camsocs_pipeline.pipeline.load import _merged_notes
+    from camsocs_pipeline.sources.websites.page import parse_page
+    from camsocs_pipeline.sources.websites.site import ai_reading
+
+    with client(tmp_path) as polite:
+        net.get("https://www.cmf.org.uk/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+        page = parse_page(
+            "https://www.cmf.org.uk/events/",
+            '<meta name="robots" content="noai"><p>Events</p>',
+        )
+        assert ai_reading(polite, page) == "refused"
+        net.get(f"{SITE}/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+        own = parse_page(f"{SITE}/events", '<meta name="robots" content="noai"><p>Events</p>')
+        assert ai_reading(polite, own) == "override"
+    # Two records of one URL: the source row keeps both notes.
+    assert (
+        _merged_notes(
+            "robots_override:society", FetchInfo(access_note="ai_optout_override:society")
+        )
+        == "robots_override:society; ai_optout_override:society"
+    )

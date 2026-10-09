@@ -620,3 +620,61 @@ def test_the_stage_stages_pages_and_counterparts_for_load(
     assert source.org_key == "org-example-robotics-society"
     (enrich_report,) = report.stages
     assert any("1 unmatched" in note for note in enrich_report.notes)
+
+
+def test_a_national_bodys_or_another_hosts_site_is_not_the_societys_own() -> None:
+    from camsocs_pipeline.sources.websites.enrich import own_site
+    from camsocs_pipeline.sources.websites.page import parse_page
+
+    cmf = Target(key="org-christian-medical-fellowship", name="Christian Medical Fellowship")
+    national = parse_page(
+        "https://www.cmf.org.uk/",
+        "<title>CMF</title><p>CMF unites Christian doctors, nurses and midwives.</p>",
+    )
+    assert not own_site(cmf, national)
+    # A shared acronym is not enough; a bridal shop on a lapsed domain neither.
+    shop = parse_page("https://www.bridal.example/", "<title>Bridal</title><p>Gowns.</p>")
+    assert not own_site(Target(key="org-consulting-society", name="Consulting Society"), shop)
+    # The society's own: it names Cambridge, a college, or the host is its name.
+    for url, body, name in [
+        (
+            "https://cmf-cambridge.example/",
+            "<p>CMF in Cambridge</p>",
+            "Christian Medical Fellowship",
+        ),
+        ("https://www.clareboatclub.org.uk/", "<p>Rowing since 1831.</p>", "Clare Boat Club"),
+        (
+            "https://www.thephoenixmusicsociety.com/",
+            "<p>Concerts.</p>",
+            "The Phoenix Music Society",
+        ),
+        ("https://cudt.org/", "<p>Ballroom and Latin.</p>", "Dancesport Team"),
+        ("https://cuchess.soc.srcf.net/", "<p>Chess.</p>", "Chess Club"),
+    ]:
+        assert own_site(Target(key="org-x", name=name), parse_page(url, body)), url
+
+
+def test_on_another_hosts_page_only_accounts_named_after_the_society_count(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    page = (
+        "<html><head><title>Cambridge University Muay Thai Society | Gym</title></head><body>"
+        "<header><a href='https://instagram.com/the_gym'>gym</a></header><main>"
+        "<p>Cambridge University Muay Thai Society trains here on Tuesdays.</p>"
+        "<a href='https://instagram.com/ama.cambridge'>our Cambridge gym</a> "
+        "<a href='https://instagram.com/cumuaythai'>the society</a>"
+        "</main></body></html>"
+    )
+    net.get("https://gym.example/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+    net.get("https://gym.example/cambridge-university-muay-thai-society/").mock(
+        return_value=html(page)
+    )
+    target = Target(
+        key="org-muay-thai-society",
+        name="Cambridge University Muay Thai Society",
+        website="https://gym.example/cambridge-university-muay-thai-society/",
+    )
+    result = Enricher(polite(tmp_path), None).enrich(target)
+    socials = by_field(result).get("socials")
+    assert socials is not None
+    assert [s["handle"] for s in socials.value] == ["cumuaythai"]

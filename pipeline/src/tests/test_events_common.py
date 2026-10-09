@@ -442,3 +442,28 @@ def test_a_room_booking_is_no_event_and_a_bookers_contacts_never_reach_a_field()
     )
     dumped = observation.model_dump_json()
     assert "ann.example15" not in dumped and "ae123" not in dumped and "bo42" not in dumped
+
+
+def test_a_website_events_image_is_fetched_at_load_as_the_stage_probed_it() -> None:
+    from camsocs_pipeline.claims import build_claim
+    from camsocs_pipeline.pipeline.load import file_purpose
+    from camsocs_pipeline.sources.policy import SOCIETY, robots_override
+
+    def image(source_type: str, page: str):
+        return build_claim(
+            parser_field(
+                "image", {"sourceUrl": page + "poster.png"}, extractor="t", evidence="primary"
+            ),
+            entity_type="event",
+            entity_key="evt-1",
+            source_url=page,
+            source_type=source_type,
+            retrieved_at=AT,
+        )
+
+    own = file_purpose(image("society_website", "https://cuquokka.example/events/"))
+    # The society's own site's image may be read where robots.txt disallows
+    # (D3), as the stage's probe read it; a file on another domain may not.
+    assert robots_override("https://cuquokka.example/img/poster.png", own)
+    assert not robots_override("https://cdn.example.net/poster.png", own)
+    assert file_purpose(image("ics_feed", "https://calendar.google.com/x.ics")) == SOCIETY

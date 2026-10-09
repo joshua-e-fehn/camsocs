@@ -50,7 +50,8 @@ the original, which only internal tables hold (data-model §3).
    organisations, places, public figures, historical people and namesakes,
    published authors, visiting speakers and the event's speakers. Replies
    are cached by the sha256 of the input (`extract/memo.py`). talks.cam
-   content never goes to the model (§6); it takes step 4 only.
+   content never goes to the model (§6), nor text from a general source
+   whose host or page keeps AI out (`extract.ai_gate`); they take step 4.
 3. **Deterministic post-checks** (`accept_reply`). Every ``original`` must be
    in the input, and none may be a kept name. Every replacement must be made
    of role and neutral words (`REPLACEMENT_WORDS`). The text may introduce no
@@ -95,12 +96,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from camsocs_pipeline.claims import NO_LLM_SOURCE_TYPES
 from camsocs_pipeline.config import ConfigError, Settings
+from camsocs_pipeline.extract.ai_gate import AiGate
 from camsocs_pipeline.extract.events import SPEAKER_EVENT_TYPES
 from camsocs_pipeline.extract.llm import LLMClient, NoLLMHost, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo, memo_key
 from camsocs_pipeline.keys import canonical_json, event_key
 from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import ClaimInput
+from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.links import is_personal_profile
 
 logger = logging.getLogger(__name__)
@@ -909,9 +912,13 @@ class Redactor:
         memo: LLMMemo | None = None,
         *,
         workers: int = 8,
+        gate: AiGate | None = None,
     ) -> None:
         self.llm = llm
         self.memo = memo
+        #: Per-source AI opt-outs (`extract.ai_gate`): a text whose general
+        #: source keeps AI out is redacted by the rule, never by the model.
+        self.gate = gate
         self.workers = max(1, workers)
         self.prompt = PROMPT_PATH.read_text(encoding="utf-8")
         self.stats = RedactionStats()
@@ -1020,7 +1027,18 @@ def redactor_for(settings: Settings, *, dry_run: bool) -> tuple[Redactor, str | 
         llm = LLMClient(settings.require_llm())
     except ConfigError as error:
         return Redactor(None, memo), f"redaction: no LLM ({error}), cached replies and the rule"
-    return Redactor(llm, memo, workers=settings.llm_concurrency), None
+    note = None
+    try:
+        client: PoliteClient | None = PoliteClient(
+            user_agent=settings.require_user_agent(),
+            cache_dir=settings.cache_dir,
+            min_interval=settings.min_host_interval,
+        )
+    except ConfigError as error:
+        client = None
+        note = f"redaction: AI opt-outs cannot be checked ({error}); general sources use the rule"
+    redactor = Redactor(llm, memo, workers=settings.llm_concurrency, gate=AiGate(client))
+    return redactor, note
 
 
 # --- claims ---------------------------------------------------------------------------------------
@@ -1292,7 +1310,11 @@ def redact_claims(
                     keep=tuple(sorted(speakers.get(claim.entity_key, set()))),
                     private=(*own, *extra),
                     safe=_entity_words(claim.entity_key),
-                    llm=_llm_allowed(claim),
+                    llm=_llm_allowed(claim)
+                    and (
+                        redactor.gate is None
+                        or redactor.gate.allows(claim.source_url, claim.source_type)
+                    ),
                     title=kind == "title",
                 ),
             )

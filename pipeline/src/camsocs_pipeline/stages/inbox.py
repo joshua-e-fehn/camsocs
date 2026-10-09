@@ -42,6 +42,7 @@ Mail is personal data: nothing here logs a subject, sender or body.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -199,10 +200,30 @@ def process_mail(mail: PendingMail, tools: InboxTools) -> MailOutcome:
         return MailOutcome(mail, None, notes=[f"{type(error).__name__}"])
 
 
+_TALKS_CAM = re.compile(r"talks\.cam\.ac\.uk", re.IGNORECASE)
+_TALKS_CAM_TALK = re.compile(r"talks\.cam\.ac\.uk/(?:talk|show)/", re.IGNORECASE)
+
+
+def is_talks_cam_mail(mail: PendingMail) -> bool:
+    """A mail talks.cam sent, or a list relaying its announcement: its text
+    is talks.cam content, which never reaches the model (§6, D3) — the
+    talks themselves come from the talks.cam parser (stage `talks_cam`)."""
+    sender = mail.from_.rsplit("@", 1)[-1].strip(" >").lower()
+    if sender == "talks.cam.ac.uk" or sender.endswith(".talks.cam.ac.uk"):
+        return True
+    if mail.list_id and _TALKS_CAM.search(mail.list_id):
+        return True
+    return bool(_TALKS_CAM_TALK.search(mail.text or ""))
+
+
 def _process(mail: PendingMail, tools: InboxTools) -> MailOutcome:
     identified = identify_sender(mail, tools.known)
     if not is_list_mail(mail) and identified.org_key is None:
         return MailOutcome(mail, "skipped", notes=["not list mail"])
+    if is_talks_cam_mail(mail):
+        return MailOutcome(
+            mail, "skipped", notes=["talks.cam announcement: never read by the model (§6)"]
+        )
 
     # Never later than now: the claims API refuses a future retrieval time.
     received = min(datetime.fromtimestamp(mail.received_at / 1000, UTC), tools.now())

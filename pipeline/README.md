@@ -232,7 +232,10 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
   *disallow* and, in `ai_input_allowed`, an AI opt-out, for the D3 URL classes only: society
   websites, Linktree, Google Calendar public ICS feeds, SU `/asset/` files, college society
   lists. Never for talks.cam or tbc.xyz, a general host (the University's central sites,
-  search engines, other networks), or a robots.txt that could not be reached.
+  national bodies' sites, search engines, other networks), a college's or department's own
+  site as a society's website, or a robots.txt that could not be reached. A declared class
+  is bound to the site it was declared for (`FetchPurpose.bound_to`): a redirect or a
+  linked file on another domain keeps that host's rules.
   webservices.admin.cam.ac.uk, Instagram, Facebook and LinkedIn are never fetched. An
   overridden fetch carries `FetchResult.override` = `robots_override:society` (also in its
   cache entry and its `sources` row's `accessNote`); the cache never serves it to a general

@@ -332,6 +332,9 @@ class PoliteClient:
         refused = never_fetched(url)
         if refused is not None:
             return self._result(url, url, "disallowed_by_robots", None, detail=refused)
+        # A declared class (a society's own website) belongs to the site it
+        # was declared for: a redirect to another domain is re-classified.
+        purpose = purpose.bound_to(url)
         cached = self._usable_cache(url, purpose)
         if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
             return _from_cache(url, *cached, detail="fresh in cache")
@@ -409,7 +412,7 @@ class PoliteClient:
         network (a dry run replays from here), or None. A copy fetched under a
         society override is served only to a purpose that may override too."""
         _require_http(url)
-        cached = self._usable_cache(url, purpose)
+        cached = self._usable_cache(url, purpose.bound_to(url))
         return None if cached is None else _from_cache(url, *cached, detail="from cache")
 
     def robots_verdict(self, url: str) -> Literal["allowed", "disallowed", "crawl_delay"]:

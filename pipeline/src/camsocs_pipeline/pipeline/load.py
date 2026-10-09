@@ -73,7 +73,7 @@ from camsocs_pipeline.events.duplicates import (
 from camsocs_pipeline.events.duplicates import identity as event_identity
 from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
-from camsocs_pipeline.models.observation import EventObservation, Observation
+from camsocs_pipeline.models.observation import EventObservation, FetchInfo, Observation
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
     ClaimInput,
@@ -107,7 +107,7 @@ from camsocs_pipeline.models.wire import (
     WorklistOrg,
     WorklistPage,
 )
-from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, FetchPurpose
+from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, SOCIETY_WEBSITE, FetchPurpose
 from camsocs_pipeline.suppressions import SuppressionReport, Suppressions, apply_suppressions
 
 logger = logging.getLogger(__name__)
@@ -810,7 +810,7 @@ def attach_stored_files(
     as a bare URL — it would otherwise replace an earlier stored copy from the
     same source. Returns (claims, stored, dropped); one URL is read once per
     call."""
-    stored: dict[str, str | None] = {}
+    stored: dict[tuple[str, FetchPurpose], str | None] = {}
     kept: list[ClaimInput] = []
     uploaded = dropped = 0
     for claim in claims:
@@ -824,19 +824,31 @@ def attach_stored_files(
             kept.append(claim)
             continue
         url = value["sourceUrl"]
-        if url not in stored:
-            purpose = (
-                SOCIETY if (claim.entity_type, claim.field) in SOCIETY_FILE_FIELDS else GENERAL
-            )
+        purpose = file_purpose(claim)
+        if (url, purpose) not in stored:
             found = media(url, purpose)
-            stored[url] = _stored_id(loader, found) if found is not None else None
-        storage_id = stored[url]
+            stored[url, purpose] = _stored_id(loader, found) if found is not None else None
+        storage_id = stored[url, purpose]
         if storage_id is None:
             dropped += 1
             continue
         kept.append(claim.model_copy(update={"value": {**value, "storageId": storage_id}}))
         uploaded += 1
     return kept, uploaded, dropped
+
+
+def file_purpose(claim: ClaimInput) -> FetchPurpose:
+    """The fetch purpose for an image claim's file: the society purpose for
+    what an organisation publishes about itself (`SOCIETY_FILE_FIELDS`), and
+    the society's website class — bound to the page the image was read on, so
+    only a file on that site — when it came from the society's own website.
+    The same purpose the stage's probe used (`media.probe_image`), so an image
+    staged under a D3 override is not refused at load."""
+    if (claim.entity_type, claim.field) not in SOCIETY_FILE_FIELDS:
+        return GENERAL
+    if claim.source_type == "society_website" and _is_http(claim.source_url):
+        return SOCIETY_WEBSITE.bound_to(claim.source_url)
+    return SOCIETY
 
 
 def _stored_id(loader: ConvexLoader, found: tuple[bytes, str]) -> str:
@@ -1083,13 +1095,25 @@ def _source_row(
         source_type=record.source_type,
         org_key=org_key or (previous.org_key if previous else None),
         http_status=fetch.http_status if fetch else None,
-        access_note=fetch.access_note if fetch else None,
+        access_note=_merged_notes(previous.access_note if previous else None, fetch),
         content_sha256=record.content_sha256,
         last_fetched_at=max(fetched, previous.last_fetched_at if previous else 0),
         yielded=yielded,
         robots_verdict=fetch.robots_verdict if fetch else "allowed",
         robots_checked_at=robots_at,
     )
+
+
+def _merged_notes(previous: str | None, fetch: FetchInfo | None) -> str | None:
+    """The access note of a URL several records came from: every note any of
+    them carries, once each (an override one record noted is never lost to
+    the next record's note)."""
+    notes = [
+        *(previous or "").split("; "),
+        *((fetch.access_note if fetch else None) or "").split("; "),
+    ]
+    merged = list(dict.fromkeys(note for note in notes if note))
+    return "; ".join(merged) or None
 
 
 def _plan_organisation(plan: LoadPlan, record: Observation) -> None:

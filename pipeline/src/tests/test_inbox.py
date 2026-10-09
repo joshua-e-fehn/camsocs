@@ -194,6 +194,26 @@ def test_non_list_mail_is_skipped_before_any_llm_call() -> None:
     assert llm.calls == []
 
 
+def test_talks_cam_announcements_never_reach_the_model() -> None:
+    llm = FakeLLM(replies)
+    relayed = WEEKLY.model_copy(
+        update={
+            "message_id": "<relay@example>",
+            "text": WEEKLY.text + "\n\nFull details: https://talks.cam.ac.uk/talk/index/123456",
+        }
+    )
+    sent = WEEKLY.model_copy(
+        update={"message_id": "<talks@example>", "from_": "Talks <noreply@talks.cam.ac.uk>"}
+    )
+    for mail in (relayed, sent):
+        assert inbox.is_talks_cam_mail(mail)
+        outcome = inbox.process_mail(mail, tools(llm))
+        assert outcome.extraction == "skipped"
+        assert "talks.cam" in outcome.notes[0]
+    assert llm.calls == []
+    assert not inbox.is_talks_cam_mail(WEEKLY)
+
+
 def test_a_mail_without_events_is_skipped_but_still_counts_as_activity() -> None:
     outcome = inbox.process_mail(WELCOME, tools())
     assert outcome.extraction == "skipped" and "no events" in outcome.notes

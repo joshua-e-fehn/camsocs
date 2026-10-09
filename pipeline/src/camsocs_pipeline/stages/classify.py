@@ -13,13 +13,15 @@ restate what it no longer claims), and writes keyed observations to
 The model runs only when it is configured (`LLM_*`), in dry runs too, like
 enrichment (nothing is written to Convex; answers are cached under
 ``var/cache/llm/classify_v1/``). Without it, the rules still run and nothing
-the model said before is retracted.
+the model said before is retracted. A text from a general source whose host
+or page keeps AI out never reaches the model (`extract.ai_gate`).
 """
 
 from __future__ import annotations
 
 from camsocs_pipeline.classify import PART, classify_records
 from camsocs_pipeline.config import ConfigError
+from camsocs_pipeline.extract.ai_gate import AiGate
 from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.pipeline.context import StageContext
@@ -46,13 +48,19 @@ def run(ctx: StageContext) -> None:
     except ConfigError as error:
         ctx.report.notes.append(f"LLM not configured ({error}) — rules only")
 
-    result = classify_records(
-        records,
-        previous,
-        llm=llm,
-        memo=LLMMemo(ctx.settings.cache_dir / "llm"),
-        workers=ctx.settings.llm_concurrency,
-    )
+    with ctx.crawler() as client:
+        # General sources' AI opt-outs hold (`extract.ai_gate`); a dry run
+        # cannot read robots.txt, so it checks nothing and only replays the
+        # cache.
+        gate = None if ctx.dry_run else AiGate(client)
+        result = classify_records(
+            records,
+            previous,
+            llm=llm,
+            memo=LLMMemo(ctx.settings.cache_dir / "llm"),
+            workers=ctx.settings.llm_concurrency,
+            gate=gate,
+        )
     by_type: dict[str, list] = {}
     for record in result.records:
         by_type.setdefault(record.source_type, []).append(record)

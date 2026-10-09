@@ -16,7 +16,11 @@ website and/or a Linktree:
    committee, contact, events, sponsors (`discover.py`) — inside the site.
    ``noindex`` pages yield no content; ``nofollow`` stops the discovery; a
    site that does not mention the organisation (a parked domain) yields only
-   its health.
+   its health, and so does a site that is not shown to be the Cambridge
+   society's own (`own_site`: a national or parent body's, a shop's or a
+   repurposed domain — cmf.org.uk for the Cambridge Christian Medical
+   Fellowship): its pages are another organisation's, so nothing on them is
+   claimed for the society and no AI opt-out is overridden for them.
 3. **Deterministically**: JSON-LD ``sameAs`` and links → socials; ``mailto:``
    and written addresses → role emails / the general email (never personal
    addresses, never decoded obfuscation); ICS / Google Calendar / Luma /
@@ -60,7 +64,7 @@ from camsocs_pipeline.claims import (
     missing_field,
     parser_field,
 )
-from camsocs_pipeline.extract.llm import LLMClient, NoLLMHost, assert_llm_source_allowed
+from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.org import (
     PromptPage,
     extract_org,
@@ -76,10 +80,10 @@ from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.links import account_of, classify_email, social_key, social_link
 from camsocs_pipeline.sources.policy import (
     AI_OVERRIDE_NOTE,
+    NATIONAL_DOMAINS,
     SOCIETY,
     SOCIETY_WEBSITE,
     FetchPurpose,
-    ai_optout_override,
 )
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.links import (
@@ -100,6 +104,7 @@ from camsocs_pipeline.sources.websites.site import (
     Stats,
     Target,
     TargetResult,
+    ai_reading,
     count_field,
     host_of,
     when,
@@ -239,6 +244,89 @@ def targets_from(records: Iterable[Any]) -> tuple[list[Target], list[str]]:
     return [t for t in targets if t.website or t.linktree], notes
 
 
+# --- whose site -------------------------------------------------------------------------------
+
+#: A college named on a page or in a host ("downingjcr", "St John's").
+_COLLEGES = re.compile(
+    r"christ'?s|churchill|clare|corpus christi|darwin|downing|emmanuel|fitzwilliam|"
+    r"girton|gonville|caius|homerton|hughes hall|lucy cavendish|magdalene|murray edwards|"
+    r"newnham|pembroke|peterhouse|queens'?|robinson|catharine'?s|catz|edmund'?s|john'?s|"
+    r"selwyn|sidney sussex|trinity|wolfson",
+    re.IGNORECASE,
+)
+_CAMBRIDGE = re.compile(r"\bcambridge\b|\bcantab", re.IGNORECASE)
+#: Words of a name too common to show a host is the society's.
+_COMMON_WORDS = frozenset(
+    {
+        "cambridge",
+        "university",
+        "society",
+        "club",
+        "college",
+        "union",
+        "association",
+        "students",
+        "student",
+        "team",
+        "group",
+        "network",
+        "national",
+        "international",
+        "official",
+    }
+)
+#: Hosts where Cambridge societies themselves publish (SRCF, the University's
+#: own domain, a cam.ac.uk Google Site).
+_SOCIETY_HOSTS = ("srcf.net", "srcf.ucam.org", "cam.ac.uk")
+
+
+def _name_words(target: Target) -> set[str]:
+    """Distinctive whole words of the organisation's names (no acronyms,
+    which another organisation may share: "CMF")."""
+    words: set[str] = set()
+    for name in (target.name, *target.aliases):
+        words |= {w for w in re.findall(r"[a-z]+", name.lower()) if len(w) >= 4}
+    return words - _COMMON_WORDS
+
+
+def own_site(target: Target, page: Page) -> bool:
+    """Whether a stated website is shown to be the Cambridge society's own
+    (module docstring, step 2): never a national organisation's
+    (`policy.NATIONAL_DOMAINS`); a unit's page on a government site (the air
+    squadron on raf.mod.uk) can be, though its robots.txt always holds; yes
+    on a host Cambridge societies use (SRCF, cam.ac.uk, a cam.ac.uk Google
+    Site), when the page names
+    Cambridge or a college, when the host carries a distinctive word of the
+    society's name ("phoenixmusicsociety", "cusikhsociety"), or a
+    "CU…" acronym of it ("cudt"). A shared acronym alone (cmf.org.uk) is not
+    enough."""
+    url = page.url.lower()
+    host = host_of(page.url)
+    if any(host == d or host.endswith("." + d) for d in NATIONAL_DOMAINS):
+        return False
+    if any(host == d or host.endswith("." + d) for d in _SOCIETY_HOSTS) or "/cam.ac.uk/" in url:
+        return True
+    if _CAMBRIDGE.search(f"{page.title} {page.text[:20_000]}") or "cambridge" in host:
+        return True
+    if _COLLEGES.search(f"{page.title} {page.text[:20_000]} {host}"):
+        return True
+    label = host.removeprefix("www.").replace("-", "")
+    if any(word in label for word in _name_words(target)):
+        return True
+    initials = {t for t in target.words if t.startswith("cu") and 3 <= len(t) <= 8}
+    for name in (target.name, *target.aliases):
+        words = [
+            w
+            for w in re.findall(r"[a-z0-9]+", name.lower())
+            if w not in ("the", "of", "and", "cambridge", "university", "cu")
+        ]
+        if len(words) >= 2:
+            initials.add("cu" + "".join(w[0] for w in words))
+        if len(words) == 1 and len(words[0]) >= 3:
+            initials.add(words[0])  # a one-word name ("LLM+" on llmplus.ai)
+    return any(label.startswith(token) for token in initials if len(token) >= 3)
+
+
 # --- fetching ----------------------------------------------------------------------------------
 
 
@@ -350,15 +438,23 @@ class Enricher:
                     missing_field("website", dead, extractor=f"{PARSER}.health", evidence=EVIDENCE),
                 )
             return
-        home_record.internal["website_domain"] = host_of(home.url)
         page = home.page
         if "noindex" in page.robots or "none" in page.robots:
+            home_record.internal["website_domain"] = host_of(home.url)
             result.notes.append(f"{target.key}: home page says noindex — not read")
             return
         if not self._mentions(target, page):
             result.stats.not_about += 1
             result.notes.append(f"{target.key}: {home.url} does not mention the organisation")
             return
+        if not own_site(target, page):
+            result.stats.not_about += 1
+            result.notes.append(
+                f"{target.key}: {home.url} is not shown to be the society's own site "
+                "(no Cambridge, college or name of its own) — health only"
+            )
+            return
+        home_record.internal["website_domain"] = host_of(home.url)
 
         fetched = [home]
         unread: set[str] = set()  # kinds of page chosen but not read
@@ -389,8 +485,9 @@ class Enricher:
         # itself does not say `noai` — or the D3 society override lifts that
         # opt-out, which its `sources` row then records. Checked per page.
         ai_pages = []
+        site_purpose = SOCIETY_WEBSITE.bound_to(fetched[0].url)
         for item in fetched:
-            reading = self._ai_reading(item)
+            reading = ai_reading(self.client, item.page, site_purpose)
             if reading == "refused":
                 continue
             if reading == "override":
@@ -408,23 +505,6 @@ class Enricher:
                 "read without the LLM"
             )
         self._llm(target, ai_pages, buckets, found, result)
-
-    def _ai_reading(self, page: Fetched) -> str:
-        """Whether this page's text may reach the model (§14): ``allowed``
-        (no AI opt-out), ``override`` (an opt-out the D3 society override
-        lifts) or ``refused`` (talks.cam, tbc.xyz, or a page not read)."""
-        if page.page is None:
-            return "refused"
-        try:
-            assert_llm_source_allowed(page.url)
-        except NoLLMHost:
-            return "refused"
-        opted_out = bool({"noai", "noimageai"} & page.page.robots) or not (
-            self.client.ai_input_allowed(page.url)
-        )
-        if not opted_out:
-            return "allowed"
-        return "override" if ai_optout_override(page.url, SOCIETY_WEBSITE) else "refused"
 
     @staticmethod
     def _stated_url_record(target: Target, home: Fetched, buckets: SiteRecords) -> str:
@@ -480,6 +560,12 @@ class Enricher:
         candidates: dict[str, Counter] = defaultdict(Counter)
         first_seen: dict[str, str] = {}
         socials: dict[str, dict[str, str]] = {}
+        # On a host that is not named after the society (a gym's or a
+        # parent club's site), an account counts only when it is named after
+        # the society: the host's own accounts sit in its pages' content too.
+        foreign_host = sub_page and not any(
+            word in host_of(fetched[0].url) for word in _name_words(target)
+        )
         for item in pages:
             assert item.page is not None
             urls = [link.url for link in item.page.links if not sub_page or link.region == "main"]
@@ -487,6 +573,8 @@ class Enricher:
             for url in urls:
                 social = social_link(url)
                 if social is None or account_of(social) in NOT_SOCIETY_HANDLES:
+                    continue
+                if foreign_host and not _named_after(account_of(social), target):
                     continue
                 key = social_key(social)
                 candidates[social["platform"]][key] += (
@@ -834,6 +922,14 @@ def _pick_social(
     return None
 
 
+def _named_after(account: str, target: Target) -> bool:
+    """Whether a social account's name carries the society's own words or
+    acronym ("cumuaythai", not the gym's "ama.cambridge")."""
+    compact = re.sub(r"[^a-z0-9]", "", account.lower())
+    tokens = _name_words(target) | {t for t in target.words if len(t) >= 3}
+    return any(token in compact for token in tokens - _COMMON_WORDS)
+
+
 def _prompt_links(pages: list[Fetched]) -> list[Link]:
     """The links the model may choose join / termcard URLs from: forms, the
     SU shop, anything whose text says join / membership / termcard."""
@@ -915,5 +1011,6 @@ __all__ = [
     "TargetResult",
     "enrich_all",
     "host_group",
+    "own_site",
     "targets_from",
 ]

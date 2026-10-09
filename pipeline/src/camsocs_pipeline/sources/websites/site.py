@@ -8,6 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from camsocs_pipeline.extract.llm import NoLLMHost, assert_llm_source_allowed
 from camsocs_pipeline.models.observation import (
     FetchInfo,
     FieldObs,
@@ -15,8 +16,9 @@ from camsocs_pipeline.models.observation import (
     Observation,
     RelObs,
 )
-from camsocs_pipeline.sources.base import FetchResult
+from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.links import host_of, name_tokens
+from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE, FetchPurpose, ai_optout_override
 from camsocs_pipeline.sources.websites.page import Page
 
 #: An organisation's own website or Linktree is its own channel.
@@ -69,6 +71,37 @@ def fetch_info(result: FetchResult) -> FetchInfo:
         robots_verdict="disallowed" if result.override else "allowed",
         access_note="; ".join(notes) or None,
     )
+
+
+def ai_reading(
+    client: PoliteClient, page: Page | None, purpose: FetchPurpose = SOCIETY_WEBSITE
+) -> str:
+    """Whether a page's text may reach the model (§14), checked per page:
+    ``allowed`` (no AI opt-out), ``override`` (an opt-out — an AI crawler
+    blocked by name, ``Content-Signal: ai-input=no``, or the page's own
+    ``noai`` / ``noimageai`` — that the D3 society override lifts; the
+    caller records `policy.AI_OVERRIDE_NOTE`) or ``refused`` (talks.cam,
+    tbc.xyz, a general host, or a page not read)."""
+    if page is None:
+        return "refused"
+    try:
+        assert_llm_source_allowed(page.url)
+    except NoLLMHost:
+        return "refused"
+    opted_out = bool({"noai", "noimageai"} & page.robots) or not client.ai_input_allowed(page.url)
+    if not opted_out:
+        return "allowed"
+    return "override" if ai_optout_override(page.url, purpose) else "refused"
+
+
+def with_note(fetch: FetchInfo | None, note: str) -> FetchInfo | None:
+    """`fetch` with `note` added to its access note (once)."""
+    if fetch is None:
+        return None
+    current = fetch.access_note
+    if current and note in current.split("; "):
+        return fetch
+    return fetch.model_copy(update={"access_note": f"{current}; {note}" if current else note})
 
 
 def when(result: FetchResult) -> datetime:
@@ -184,8 +217,10 @@ __all__ = [
     "Stats",
     "Target",
     "TargetResult",
+    "ai_reading",
     "count_field",
     "fetch_info",
     "host_of",
     "when",
+    "with_note",
 ]

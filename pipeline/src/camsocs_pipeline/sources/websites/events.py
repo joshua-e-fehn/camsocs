@@ -14,6 +14,9 @@ pages may be read where robots.txt disallows, and their AI opt-outs do not
 keep them from the model — never talks.cam or tbc.xyz), from the cache the
 enrichment stage filled when it is younger than `FRESH_FOR`. ``noindex``
 pages are not read, and ``nofollow`` stops the discovery, as in enrichment.
+Each page's AI opt-outs (robots.txt, ``noai``) are checked as enrichment
+checks them (`site.ai_reading`); a page read only through the override says
+``ai_optout_override:society`` on its events' `sources` rows.
 
 **Structured data first.** A page's JSON-LD / microdata ``Event`` items
 (The Events Calendar, Squarespace, Wix and others publish them) are read by a
@@ -106,10 +109,11 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE, SOCIETY_WEBSITE
 from camsocs_pipeline.sources.termcards import term_hint
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.page import Page, parse_page
+from camsocs_pipeline.sources.websites.site import ai_reading, with_note
 from camsocs_pipeline.staging.store import events_directory
 
 logger = logging.getLogger(__name__)
@@ -463,10 +467,12 @@ def llm_events(
     out: SiteResult,
     source_type: str = SOURCE_TYPE,
     event_source: str = EVENT_SOURCE,
+    ai_override: bool = False,
 ) -> list[EventObservation]:
     """The model's reading of one page, filtered as the module docstring says
     (also a termcard that is an HTML page: `source_type` / `event_source`
-    ``termcard``)."""
+    ``termcard``). `ai_override`: the page reached the model only through the
+    D3 override of an AI opt-out, which its events' `sources` rows record."""
     assert_llm_source_allowed(page.url)
     text = page_text(page)
     if len(text.strip()) < 40:
@@ -510,7 +516,9 @@ def llm_events(
         scope=site.org_key,
         organiser_key=site.org_key,
         organiser_name=site.org_name,
-        fetch=fetch_info(result),
+        fetch=with_note(fetch_info(result), AI_OVERRIDE_NOTE)
+        if ai_override
+        else fetch_info(result),
     )
     events, dropped = build_events(LlmEvents(events=kept), context)
     for reason in dropped:
@@ -621,7 +629,9 @@ def read_site(
                 if draft.image_url and draft.image_url not in images:
                     images[draft.image_url] = (
                         draft.image_url
-                        if probe_image(client, draft.image_url, purpose=SOCIETY_WEBSITE)
+                        if probe_image(
+                            client, draft.image_url, purpose=SOCIETY_WEBSITE.bound_to(page.url)
+                        )
                         else None
                     )
                 draft.image_url = images.get(draft.image_url) if draft.image_url else None
@@ -629,12 +639,23 @@ def read_site(
             continue
         if llm is None:
             continue
-        if not client.ai_input_allowed(page.url, purpose=SOCIETY_WEBSITE):
+        # §14: per page, an AI opt-out (robots.txt or the page's own `noai`)
+        # holds unless the D3 society override lifts it — which the events'
+        # `sources` rows then say (`ai_optout_override:society`).
+        reading = ai_reading(client, page, SOCIETY_WEBSITE.bound_to(site.home_url))
+        if reading == "refused":
             out.notes.append(f"{site.org_key}: {page.url} keeps AI out — not read by the model")
             continue
         try:
             model_read += llm_events(
-                page, result, site, llm=llm, memo=memo, calendar=calendar, out=out
+                page,
+                result,
+                site,
+                llm=llm,
+                memo=memo,
+                calendar=calendar,
+                out=out,
+                ai_override=reading == "override",
             )
         except LLMValidationError:
             out.tally.drop("reply did not validate")
