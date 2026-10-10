@@ -187,7 +187,9 @@ meta and last-failure note go together, once all are older), LLM replies under
     prayer room closed, a deadline, a placeholder, a date marker, a cancellation of nothing —
     are not posted at all (the notes count each rule and show a few titles with their keys;
     one already on the deployment is withdrawn by its listing three days later, or removed at
-    once with `ingest/purge:removeEntity`), and every other reading gains a `hosting` claim:
+    once with `ingest/purge:removeEntity`; a notice on an event another listing keeps — one
+    calendar UID on two calendars — is restated `not_found` from its listing instead, so its
+    older readings stop competing), and every other reading gains a `hosting` claim:
     `takes_part` for someone else's event a society only takes part in (a CTF imported from
     CTFtime, a talk on another talks.cam list, a "[External]" entry), with its own page as
     `externalUrl`, else `hosts`. Rules are `inferred` parser claims (`event_noise.<rule>`);

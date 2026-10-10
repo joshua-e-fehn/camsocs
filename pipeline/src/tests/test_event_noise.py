@@ -449,6 +449,53 @@ def test_a_source_that_states_hosting_is_not_judged() -> None:
     assert llm.calls == []
 
 
+def test_a_notice_on_an_event_another_listing_keeps_is_retracted() -> None:
+    # One UID on two calendars (the Islamic Society's, 2026-10-10): the
+    # brothers' calendar lists the Quran circle, the sisters' calendar the
+    # same entry as a prayer-room closure. Posted before D6, the closure's
+    # title could win; now it is restated not_found from its own listing.
+    [circle] = [
+        r
+        for r in feed_records("islamic_society_brothers.ics", ISOC, ISOC_FEED)
+        if title_of(r) == "Brothers Quran Circle"
+    ]
+    sisters = "https://calendar.google.com/calendar/ical/isoc-sisters/public/basic.ics"
+    closure = circle.model_copy(
+        update={
+            "source_url": sisters,
+            "fields": [
+                parser_field(
+                    "title",
+                    "PR closed to sisters (Brothers Quran Circle)",
+                    extractor="ics.title",
+                    evidence="primary",
+                )
+                if obs.field == "title"
+                else obs
+                for obs in circle.fields
+            ],
+        }
+    )
+    lone = closure.model_copy(update={"external_id": "another-uid@google.com"})
+    classifier = NoiseClassifier()
+    kept = sift_events([circle, closure, lone], classifier)
+    assert len(kept) == 2  # the lone closure is dropped; the shared one retracted
+    by_url = {r.source_url: r for r in kept if isinstance(r, EventObservation)}
+    assert title_of(by_url[ISOC_FEED]) == "Brothers Quran Circle"
+    retracted = by_url[sisters]
+    assert event_key(retracted.event_source, retracted.external_id) == event_key(
+        circle.event_source, circle.external_id
+    )
+    assert retracted.venue is None
+    assert {obs.field for obs in retracted.fields} == {obs.field for obs in circle.fields}
+    for obs in retracted.fields:
+        assert (obs.value, obs.status, obs.missing_reason) == (None, "missing", "not_found")
+        assert obs.extractor == "event_noise.notice.room_closure"
+    assert classifier.stats.retracted == 1
+    assert classifier.stats.dropped == {"notice.room_closure": 2}
+    assert "1 of the notices restated not_found" in "\n".join(classifier.stats.notes())
+
+
 def test_a_rule_verdict_without_a_page_restates_it_missing() -> None:
     verdict = judge(text("[External] Energy conference"))
     fields = verdict_fields(KIRTAN, verdict)

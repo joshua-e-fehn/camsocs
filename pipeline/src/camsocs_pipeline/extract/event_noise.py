@@ -9,6 +9,12 @@ stage's own posts) — before duplicates are found, so a notice never becomes
 another reading's primary. Staging keeps every reading as its source listed
 it. A ``notice`` is **dropped**: none of its claims is posted, and the notes
 count each rule and show a few titles (addresses withheld) with their keys.
+When another listing's kept reading has the same key (one calendar UID on
+two calendars: the Islamic Society's sisters' calendar lists the brothers'
+Quran circle as "PR closed to sisters (Brothers Quran Circle)"), the notice
+is **retracted** instead (`retraction`): every field it gave is restated
+``missing`` / ``not_found`` from its listing and method, so its earlier
+readings — posted before D6 — stop competing with the event's own title.
 Every other keyed reading gains a ``hosting`` observation — ``takes_part``
 for an external event, with its page as ``externalUrl`` (``missing`` /
 ``not_found`` when the text gives none, so an earlier page does not linger) —
@@ -146,6 +152,8 @@ class NoiseStats:
     #: (rule, title, event key) of a few dropped notices per rule.
     examples: list[tuple[str, str, str]] = field(default_factory=list)
     dropped_keys: list[str] = field(default_factory=list)
+    #: Dropped notices whose event another listing keeps: restated `not_found`.
+    retracted: int = 0
     borderline: int = 0
     model_calls: int = 0
     model_cached: int = 0
@@ -173,6 +181,11 @@ class NoiseStats:
             f"{self.model_cached} cached, {self.model_failed} failed, "
             f"{self.unverified} without a verified quote, {self.undecided} left hosted (no model)"
         ]
+        if self.retracted:
+            notes.append(
+                f"  {self.retracted} of the notices restated not_found on an event another "
+                "listing keeps"
+            )
         notes.extend(f'  {rule}: "{title}" ({key})' for rule, title, key in self.examples)
         return notes
 
@@ -331,6 +344,30 @@ def verdict_fields(record: EventObservation, verdict: Verdict) -> list[FieldObs]
     return fields
 
 
+def retraction(record: EventObservation, verdict: Verdict) -> EventObservation:
+    """A notice's reading of an event another listing keeps (module
+    docstring): every field it gave restated ``missing`` / ``not_found`` from
+    the same listing and method, so the server supersedes its earlier values;
+    no venue, so no venue claim is derived from it."""
+    fields: list[FieldObs] = []
+    seen: set[tuple[str, str]] = set()
+    for obs in record.fields:
+        if (obs.field, obs.method) in seen:
+            continue
+        seen.add((obs.field, obs.method))
+        absent = missing_field(
+            obs.field,
+            "not_found",
+            extractor=f"{EXTRACTOR}.{verdict.rule}",
+            evidence=obs.evidence,
+            method=obs.method,
+        )
+        if obs.method == "llm":
+            absent = absent.model_copy(update={"prompt_version": obs.prompt_version})
+        fields.append(absent)
+    return record.model_copy(update={"fields": fields, "venue": None})
+
+
 def sift_events(
     records: Sequence[Observation | EventObservation], classifier: NoiseClassifier
 ) -> list[Observation | EventObservation]:
@@ -349,11 +386,20 @@ def sift_events(
     stats.readings += len(pending)
     replaced: dict[int, EventObservation | None] = {}
     shown: Counter = Counter()
+    kept_keys = {
+        event_key(record.event_source, record.external_id)
+        for (_index, record, _text), verdict in zip(pending, verdicts, strict=True)
+        if verdict.kind != "notice"
+    }
     for (index, record, text), verdict in zip(pending, verdicts, strict=True):
         if verdict.kind == "notice":
-            replaced[index] = None
-            stats.dropped[verdict.rule] += 1
             key = event_key(record.event_source, record.external_id)
+            if key in kept_keys:
+                replaced[index] = retraction(record, verdict)
+                stats.retracted += 1
+            else:
+                replaced[index] = None
+            stats.dropped[verdict.rule] += 1
             stats.dropped_keys.append(key)
             if shown[verdict.rule] < EXAMPLES_PER_RULE:
                 shown[verdict.rule] += 1
