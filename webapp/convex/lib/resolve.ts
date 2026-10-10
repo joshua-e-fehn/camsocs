@@ -66,6 +66,8 @@ export type ResolvableClaim = {
   sourceType: SourceType
   retrievedAt: number
   lastSeenAt?: number
+  /** When the claim was recorded: a tie-break between verdicts of one sighting. */
+  createdAt?: number
   reviewStatus: ReviewStatus
 }
 
@@ -163,12 +165,20 @@ export function liveClaims<C extends ResolvableClaim>(claims: readonly C[]): C[]
 
 /** Rule 1 for a verdict field (`oneReadingPerSource`): of the live claims,
  * only each source's newest, whatever its method. A rule's verdict this run
- * replaces the model's from an earlier run, and back. */
+ * replaces the model's from an earlier run, and back — also when both judge
+ * the same sighting of the page: then the one recorded later is the current
+ * verdict (a corrected rule, review 2026-10-10). */
 export function newestPerSource<C extends ResolvableClaim>(claims: readonly C[]): C[] {
   const latest = new Map<string, C>()
   for (const claim of claims) {
     const current = latest.get(claim.sourceKey)
-    if (!current || recency(claim) > recency(current)) latest.set(claim.sourceKey, claim)
+    if (
+      !current ||
+      recency(claim) > recency(current) ||
+      (recency(claim) === recency(current) && (claim.createdAt ?? 0) > (current.createdAt ?? 0))
+    ) {
+      latest.set(claim.sourceKey, claim)
+    }
   }
   return [...latest.values()]
 }

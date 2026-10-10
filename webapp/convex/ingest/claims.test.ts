@@ -301,6 +301,43 @@ describe("re-readings", () => {
     expect(await startsAt()).toBe(at1830)
   })
 
+  test("a corrected reader's restatement of the same sighting is believed", async () => {
+    // Review 2026-10-10: the D1 fix restates "I Kassandra" from the very
+    // read that an earlier redaction posted as "I someone".
+    const t = newTest()
+    const key = "evt-1123456789abcdef0123456789abcdef01234567"
+    const at = NOW - 3_600_000
+    const event = (field: string, value: unknown) =>
+      claim(field, value, {
+        entityType: "event",
+        entityKey: key,
+        sourceType: "camdram",
+        retrievedAt: at,
+      })
+    const base = [
+      event("visibility", "public"),
+      event("source", "camdram"),
+      event("externalId", "show-2"),
+      event("sourceUrl", "https://www.camdram.net/shows/kassandra"),
+      event("startsAt", NOW + 86_400_000),
+    ]
+    const title = async () =>
+      (
+        await t.run(
+          async (ctx) =>
+            await ctx.db
+              .query("events")
+              .withIndex("by_key", (q) => q.eq("key", key))
+              .unique(),
+        )
+      )?.title
+    await ingest(t, [...base, event("title", "I Kassandra")])
+    await ingest(t, [event("title", "I someone")], "run-2")
+    expect(await title()).toBe("I someone")
+    await ingest(t, [event("title", "I Kassandra")], "run-3")
+    expect(await title()).toBe("I Kassandra")
+  })
+
   test("the same reading of a page whose bytes changed is one claim", async () => {
     const t = newTest()
     await ingest(t, [claim("name", "CU Test Society", { contentSha256: "a".repeat(64) })])

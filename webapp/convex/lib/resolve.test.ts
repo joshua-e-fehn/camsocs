@@ -462,6 +462,15 @@ describe("resolveField — an event's hosting (decision D6: one verdict per sour
     expect(resolveField(hosting, [model, rule, again]).value).toBe("takes_part")
   })
 
+  test("verdicts of one sighting: the one recorded later is the current one", () => {
+    // A corrected rule judging the same read of a page as an earlier model
+    // verdict (review 2026-10-10: the Engineering Society's own careers fair).
+    const model = { ...verdict("takes_part", T0, "llm"), createdAt: T0 + DAY }
+    const rule = { ...verdict("hosts", T0, "parser"), createdAt: T0 + 2 * DAY }
+    expect(resolveField(hosting, [model, rule]).value).toBe("hosts")
+    expect(resolveField(hosting, [rule, model]).value).toBe("hosts")
+  })
+
   test("across sources, any current reading that shows it is external wins", () => {
     const own = verdict("hosts", T0 + DAY, "parser")
     const page = verdict("takes_part", T0, "parser", {

@@ -320,9 +320,10 @@ function prepare(input: ClaimInput, runKey: string | undefined, now: number) {
  * one already exists, the new claim is stored already superseded.
  *
  * A known claim that a later reading superseded is *revived* when the source
- * says it again (X → Y → X): it is the newest reading of that (source,
- * method) once more, so it is accepted again and supersedes Y (data-model §1
- * rule 1). A rejected claim stays rejected — that is the broker's verdict.
+ * says it again (X → Y → X), at that sighting or a later one: it is the newest
+ * reading of that (source, method) once more, so it is accepted again and
+ * supersedes Y (data-model §1 rule 1). A rejected claim stays rejected — that
+ * is the broker's verdict.
  */
 async function appendClaim(
   ctx: MutationCtx,
@@ -337,7 +338,10 @@ async function appendClaim(
     .withIndex("by_fingerprint", (q) => q.eq("fingerprint", row.fingerprint))
     .first()
   if (known && known.reviewStatus === "superseded") {
-    if (row.retrievedAt <= known.lastSeenAt) return "unchanged"
+    // Seen again at the same sighting it counts too: a corrected reader
+    // restating what an earlier version of it misread (review 2026-10-10:
+    // the D1 fix's "I Kassandra" over its own "I someone" of the same read).
+    if (row.retrievedAt < known.lastSeenAt) return "unchanged"
     if (await supersedeOthers(ctx, row, known._id)) return "unchanged"
     await ctx.db.patch("fieldClaims", known._id, {
       reviewStatus: "accepted",
