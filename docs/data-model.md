@@ -120,7 +120,7 @@ One row per group. This covers societies, clubs, JCRs/MCRs and boat clubs, and a
 | department | string? | |
 | logo | `{ storageId?: Id<"_storage">, sourceUrl?: string, credit?: string }`? | Always stored as our own copy. Never hotlinked. |
 | shortDescription | string? | ≤ 200 characters. Public free text: names of private individuals are replaced by roles before it is claimed (D1, §3 `valueRaw`) |
-| description | string? | Long description in markdown. Redacted like `shortDescription` (D1) |
+| description | string? | Long description in markdown (the subset `webapp/lib/rich-text.ts` reads: paragraphs, line breaks, headings, lists, bold, italic, http(s) and mailto links; never rendered as HTML). Redacted like `shortDescription` (D1) |
 | howToJoin | string? | Redacted (D1), as are `timeCommitment`, `accessibilityNote`, the labels and notes of `membership`, `trials.note`, a session's `note` and an event's `description` |
 | joinUrl | string? | |
 | membership | `{ tiers: { label, pricePence?, period?: "life"\|"year"\|"term"\|"one_off"\|"free", note? }[], bursaryNote?, collegeReimbursable?: boolean }`? | `period` only when the source states it, never assumed |
