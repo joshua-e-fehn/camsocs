@@ -64,7 +64,7 @@ convex/
                              PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
                              relationships + eventOrganisers, broker, files, inbound, termDates, purge,
-                             suppressions)
+                             suppressions, cleanup)
   derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
   retention.ts               the retention schedule as paginated walks (daily 04:15 UTC;
                              docs/compliance/retention.md)
@@ -415,6 +415,8 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `termDates` | Full Term dates by (academicYear, term); re-labels events |
 | `derive` | schedules the daily re-derivation now |
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
+| `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |
+| `events/remove` | `{keys, confirm: "REMOVE-EVENTS"}` (events only, ≤ 25 a call) → `{removed, missing}`: deletes events as `ingest/purge:removeEntity` does (docs/deploy.md §7) |
 | `runs/start`, `runs/finish` | the run log |
 
 ## Inbound mail webhook

@@ -124,3 +124,25 @@ Guards: a missing `pipeline/.env.prod` is an error, not a fall-back to dev. `CON
 
 - Site: Vercel → Deployments → the last good one → Promote to Production (instant; Convex is untouched).
 - Functions: redeploy the last good commit (Vercel → Redeploy, which runs `convex deploy` again). Schema changes that removed fields need a widen-migrate-narrow plan first; never roll a schema back past data written under the newer one.
+
+## 7. After the next deploy: cleaning what the review fixes left behind (operator)
+
+The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Not run yet; these are Joshua's steps.
+
+1. **Deploy** (§1–§2): the routes `events/scan` and `events/remove` ship with the functions, and the new `eventOrganisers.hosting` copy with the schema (optional, additive).
+2. **Harvest** production once with the new pipeline (`pixi run harvest -- --env prod`, or the VPS's full run), then re-derive: `pixi run pipeline -- --env prod derive`. Current events are restated by their readers (titles restored, notices withdrawn, hosting claimed); what is left is what no reader restates.
+3. **Dry run** — lists, removes nothing (keys, London dates, sources, reasons; `--titles` adds the stored titles, for your terminal only):
+
+   ```bash
+   pixi run pipeline -- --env prod clean-events
+   pixi run pipeline -- --env prod clean-events --titles   # to check the list by eye
+   ```
+
+   Reasons: `notice:<rule>` (the D6 rules judge it a notice), `external:<rule>` (a past event the rules decisively judge someone else's, stored as hosted), `stale-redaction` (a title reading "someone" the latest harvest did not see again), `stale-card` (a future term-card event no card has shown for three days). Anything that should stay: leave it out by fixing its reading instead, never by editing the list.
+4. **Apply** — only with `--env prod` (the command refuses any other environment; on dev, remove an event with `bunx convex run ingest/purge:removeEntity '{"entityType":"event","key":"evt-…"}'`):
+
+   ```bash
+   pixi run pipeline -- --env prod clean-events --apply
+   ```
+
+   It prints how many were removed and how many were already gone. Run the dry run again: it should list nothing. Once the VPS timers are on, run it on the host instead (`sudo -u camsocs -H bash -lc 'cd /opt/camsocs && flock -n /var/lib/camsocs/harvest.lock pixi run pipeline -- --env prod clean-events'`), never next to a harvest.
