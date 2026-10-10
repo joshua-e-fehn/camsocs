@@ -81,9 +81,13 @@ export function termWeekLabel(ms: number, terms: readonly TermDates[]): string |
 /**
  * Sources that list every current event each time they are read, by how far
  * one reading reaches: the whole source (one diary or listing) or one listing
- * URL (a feed, a talks list, a league). An event such a listing stops showing
- * was withdrawn — moved, renamed or dropped — even though nobody says so.
- * Mail, posts, termcards and manual entries are one-off readings: never.
+ * URL (a feed, a talks list, a league, a society's events page, a termcard).
+ * An event such a listing stops showing was withdrawn — moved, renamed or
+ * dropped — even though nobody says so. A society's events page and a
+ * termcard are re-read (from the reply cache) on every run, and their events'
+ * keys come from the model's wording and the date, so a renamed or moved
+ * event is a new key and the old one must fall behind its page (review
+ * 2026-10-10). Mail, posts and manual entries are one-off readings: never.
  */
 const WHOLE_SOURCE_LISTINGS = new Set(["camdram", "cucbc", "su_whatson"])
 const PER_URL_LISTINGS = new Set([
@@ -93,6 +97,8 @@ const PER_URL_LISTINGS = new Set([
   "google_calendar",
   "playwaze",
   "uni_events_api",
+  "website",
+  "termcard",
 ])
 
 /** How far a listed event's last sighting may lag its listing's newest

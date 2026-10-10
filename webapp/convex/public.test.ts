@@ -341,7 +341,7 @@ describe("multi-day events", () => {
 describe("withdrawn events", () => {
   async function listed(
     t: TestConvex,
-    source: "camdram" | "ics",
+    source: "camdram" | "ics" | "website" | "termcard",
     externalId: string,
     title: string,
     startsAt: number,
@@ -349,10 +349,16 @@ describe("withdrawn events", () => {
     listing: string,
   ) {
     const key = eventKey(source, externalId)
+    const sourceTypes = {
+      camdram: "camdram",
+      ics: "ics_feed",
+      website: "society_website",
+      termcard: "termcard",
+    } as const
     const field = (name: string, value: unknown) =>
       claim(key, name, value, {
         entityType: "event",
-        sourceType: source === "camdram" ? "camdram" : "ics_feed",
+        sourceType: sourceTypes[source],
         sourceKey: `src-${listing}`,
         sourceUrl: listing,
         retrievedAt: seenAt,
@@ -416,6 +422,31 @@ describe("withdrawn events", () => {
       ["Talk", NOW + 10 * DAY + 1_800_000],
       ["Quiz", NOW + 12 * DAY],
     ])
+  })
+
+  test("a society's page or card that stops listing an event withdraws it", async () => {
+    const t = newTest()
+    // The model's wording keys the event (`<org>:<date>:<title slug>`): a
+    // renamed or moved event is a new key, and the old one must not stay.
+    const page = "https://cuquokka.example/events"
+    await listed(t, "website", "org-q:2026-11-10:quiz", "Quiz", NOW + 10 * DAY, NOW - 5 * DAY, page)
+    await listed(t, "website", "org-q:2026-11-11:pub-quiz", "Pub quiz", NOW + 11 * DAY, NOW, page)
+    await listed(t, "website", "org-q:2026-11-12:social", "Social", NOW + 12 * DAY, NOW, page)
+    const card = "https://cuquokka.example/termcard.pdf"
+    await listed(
+      t,
+      "termcard",
+      "org-q:2026-11-13:talk",
+      "Talk",
+      NOW + 13 * DAY,
+      NOW - 5 * DAY,
+      card,
+    )
+    await listed(t, "termcard", "org-q:2026-11-14:talk-2", "Talk 2", NOW + 14 * DAY, NOW, card)
+    const titles = (await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })).map(
+      (e) => e.title,
+    )
+    expect(titles).toEqual(["Pub quiz", "Social", "Talk 2"])
   })
 })
 

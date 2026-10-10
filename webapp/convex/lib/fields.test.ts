@@ -10,6 +10,7 @@ import {
   normaliseUrl,
   ORGANISATION_SPECS,
   SESSION_SPECS,
+  socialKey,
   TEAM_SPECS,
   VENUE_SPECS,
 } from "./fields"
@@ -143,6 +144,16 @@ describe("field checks", () => {
 })
 
 describe("URL helpers", () => {
+  test("one social account however a source capitalised it", () => {
+    expect(socialKey({ platform: "instagram", url: "https://instagram.com/CamUniLiberals/" })).toBe(
+      socialKey({ platform: "instagram", url: "https://www.instagram.com/camuniliberals" }),
+    )
+    // Facebook page paths are not folded (a numeric id or a vanity name).
+    expect(socialKey({ platform: "facebook_page", url: "https://facebook.com/CUSoc" })).toBe(
+      "facebook.com/CUSoc",
+    )
+  })
+
   test("normaliseUrl and hostOf", () => {
     expect(normaliseUrl("HTTPS://WWW.Instagram.com/cugs/")).toBe("instagram.com/cugs")
     expect(normaliseUrl("http://instagram.com/cugs?hl=en#top")).toBe("instagram.com/cugs?hl=en")

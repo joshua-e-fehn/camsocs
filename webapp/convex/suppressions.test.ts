@@ -190,6 +190,13 @@ describe("accepting a removal", () => {
       expect(entry).toMatchObject({ scope: "organisation", requestKey: key, contact: false })
       await broker.mutation(api.broker.suppressions.lift, { key: entry.key })
       expect(await publicChess(t)).toBeNull()
+      // Outreach, which the suppression alone turned off, is back on.
+      const lifted = (
+        await broker.query(api.broker.orgs.page, {
+          paginationOpts: { numItems: 50, cursor: null },
+        })
+      ).page.find((row) => row.key === "org-chess")
+      expect(lifted).toMatchObject({ hidden: true, suppressed: false })
       await broker.mutation(api.broker.orgs.setHidden, { orgKey: "org-chess", hidden: false })
       expect((await publicChess(t))?.org.name).toBe("CU Chess Club")
     })

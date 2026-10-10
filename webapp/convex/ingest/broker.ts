@@ -20,7 +20,10 @@ import { literalUnion } from "../lib/validators"
  *  - **people**: named committee members *as published*, keyed
  *    `per-<sha1(orgKey:nameSlug)>`. A row whose `method` is `manual` belongs
  *    to the broker and is never overwritten. `staleAfter` defaults to the next
- *    30 June; `consentBasis` is `public_source`.
+ *    30 June after the person was first seen, and a later sighting never moves
+ *    it (nor `academicYear`) forward unless the source states a later academic
+ *    year; a person retention deleted (R5, `expiredPeople`) is not added back
+ *    on the same terms. `consentBasis` is `public_source`.
  *
  * Named people live only here — never in a public table (AGENTS.md). This
  * module is internal and reached only with the pipeline key; reading these
@@ -133,6 +136,8 @@ export const ingest = internalMutation({
       unchanged: v.number(),
       /** Rows the broker owns (`method: "manual"`) and the pipeline left alone. */
       protected: v.number(),
+      /** People retention deleted at handover, still on an unchanged page (R5). */
+      expired: v.number(),
     }),
     /** Rows of a listing or person removed on request (convex/lib/suppressions.ts), skipped. */
     suppressed: v.number(),
@@ -143,7 +148,7 @@ export const ingest = internalMutation({
     assertBatchSize(profiles.length + people.length, "broker inferences")
     const now = Date.now()
     const profileCounts = { inserted: 0, updated: 0, unchanged: 0 }
-    const peopleCounts = { inserted: 0, updated: 0, unchanged: 0, protected: 0 }
+    const peopleCounts = { inserted: 0, updated: 0, unchanged: 0, protected: 0, expired: 0 }
     const suppressions = await loadSuppressionIndex(ctx)
     let suppressed = 0
 
@@ -192,13 +197,32 @@ export const ingest = internalMutation({
         peopleCounts.protected++
         continue
       }
-      const staleAfter = person.staleAfter ?? nextHandoverDate(person.seenAt)
+      // R5: a re-sighting is no news. A row keeps the year and handover it was
+      // first listed for, and a person retention deleted is not added back,
+      // unless the source states a later academic year (a page that is never
+      // updated keeps listing last year's committee).
+      const stated = person.academicYear
+      const expired = await ctx.db
+        .query("expiredPeople")
+        .withIndex("by_key", (q) => q.eq("key", person.key))
+        .unique()
+      if (expired && !(stated && stated > expired.academicYear)) {
+        peopleCounts.expired++
+        continue
+      }
+      if (expired) await ctx.db.delete("expiredPeople", expired._id)
+      const renewed = !existing || (stated !== undefined && stated > existing.academicYear)
+      const staleAfter = renewed
+        ? (person.staleAfter ?? nextHandoverDate(person.seenAt))
+        : existing.staleAfter
       const fields = {
         key: person.key,
         name: person.name,
         orgKey: person.orgKey,
         role: person.role,
-        academicYear: person.academicYear ?? academicYearOf(person.seenAt),
+        academicYear: renewed
+          ? (stated ?? academicYearOf(person.seenAt))
+          : (existing?.academicYear ?? academicYearOf(person.seenAt)),
         startDate: person.startDate,
         staleAfter,
         stale: staleAfter < new Date(now).toISOString().slice(0, 10),

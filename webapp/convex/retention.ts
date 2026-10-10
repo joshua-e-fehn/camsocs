@@ -23,7 +23,9 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  *  - R5 `expirePeople`: once `staleAfter` (the handover) has passed, the
  *    broker's own rows are archived (out of the active lists) for a 30-day
  *    grace in which the broker may extend `staleAfter`; 30 days after it,
- *    every person row is deleted — from public sources or the broker's own.
+ *    every person row is deleted — from public sources or the broker's own —
+ *    and its key is remembered (`expiredPeople`: key and academic year only)
+ *    so a page that still lists last year's committee does not add it back.
  *    Rows held on consent stay.
  *  - R6 `purgeInteractions`: interactions three years old whose organisation
  *    has had none since, and introductions three years old.
@@ -82,11 +84,21 @@ export const purgeEvents = internalMutation({
       .withIndex("by_startsAt", (q) => q.lt("startsAt", cutoff))
       .paginate({ numItems: PAGE.events, cursor: args.cursor ?? null })
     let deleted = 0
+    let budget = CLAIMS_PER_CALL
+    let unfinished = false
     const organisers = new Set<string>()
     for (const event of page.page) {
       // Multi-day runs count from their end.
       if ((event.spanEndsAt ?? event.endsAt ?? event.startsAt) >= cutoff) continue
-      for (const orgKey of await deleteEvent(ctx, event)) organisers.add(orgKey)
+      const result = await deleteEvent(ctx, event, budget)
+      for (const orgKey of result.organisers) organisers.add(orgKey)
+      budget -= result.claims
+      if (!result.finished) {
+        // More claims than this call may delete: the event stays until a
+        // later call has deleted them all (R3: claims go with the event).
+        unfinished = true
+        break
+      }
       deleted++
     }
     if (organisers.size > 0) {
@@ -99,36 +111,49 @@ export const purgeEvents = internalMutation({
         if (org) await refreshOrganisation(ctx, org, { now, terms })
       }
     }
-    if (!page.isDone) {
+    if (unfinished || !page.isDone) {
+      // An unfinished event is read again from the same cursor.
       await ctx.scheduler.runAfter(0, internal.retention.purgeEvents, {
         now,
-        cursor: page.continueCursor,
+        cursor: unfinished ? (args.cursor ?? null) : page.continueCursor,
       })
     }
-    return { processed: page.page.length, deleted, done: page.isDone }
+    return { processed: page.page.length, deleted, done: page.isDone && !unfinished }
   },
 })
 
-/** Deletes an event, its claims, its organiser links and (when nothing else
- * shows it) its stored image. Returns its organisers. */
-async function deleteEvent(ctx: MutationCtx, event: Doc<"events">): Promise<string[]> {
+/** Claims one purge call deletes at most (under a mutation's write limits). */
+export const CLAIMS_PER_CALL = 2_000
+
+/** Deletes an event's claims (at most `budget`), and once none is left its
+ * organiser links, the event and (when nothing else shows it) its stored
+ * image. `finished`: the event is gone. */
+async function deleteEvent(
+  ctx: MutationCtx,
+  event: Doc<"events">,
+  budget: number,
+): Promise<{ organisers: string[]; claims: number; finished: boolean }> {
+  let claims = 0
+  for (const reviewStatus of REVIEW_STATUSES) {
+    const remaining = budget - claims
+    const page = await ctx.db
+      .query("fieldClaims")
+      .withIndex("by_entity_review", (q) =>
+        q.eq("entityType", "event").eq("entityKey", event.key).eq("reviewStatus", reviewStatus),
+      )
+      .take(remaining + 1)
+    for (const claim of page.slice(0, remaining)) await ctx.db.delete("fieldClaims", claim._id)
+    claims += Math.min(page.length, remaining)
+    if (page.length > remaining) return { organisers: [], claims, finished: false }
+  }
   const links = await ctx.db
     .query("eventOrganisers")
     .withIndex("by_event", (q) => q.eq("eventKey", event.key))
     .take(200)
   for (const link of links) await ctx.db.delete("eventOrganisers", link._id)
-  for (const reviewStatus of REVIEW_STATUSES) {
-    const claims = await ctx.db
-      .query("fieldClaims")
-      .withIndex("by_entity_review", (q) =>
-        q.eq("entityType", "event").eq("entityKey", event.key).eq("reviewStatus", reviewStatus),
-      )
-      .take(1_000)
-    for (const claim of claims) await ctx.db.delete("fieldClaims", claim._id)
-  }
   await ctx.db.delete("events", event._id)
   if (event.image?.storageId) await deleteFileIfUnused(ctx, event.image.storageId)
-  return links.map((link) => link.orgKey)
+  return { organisers: links.map((link) => link.orgKey), claims, finished: true }
 }
 
 /** Deletes a stored file (and its `storedFiles` row, so the files route never
@@ -254,6 +279,19 @@ export const expirePeople = internalMutation({
       if (person.staleAfter < cutoffDate) {
         await ctx.db.delete("people", person._id)
         deleted++
+        // So the next load does not add them back from a page that still
+        // lists last year's committee (ingest/broker.ts): the key only.
+        const known = await ctx.db
+          .query("expiredPeople")
+          .withIndex("by_key", (q) => q.eq("key", person.key))
+          .unique()
+        if (!known) {
+          await ctx.db.insert("expiredPeople", {
+            key: person.key,
+            academicYear: person.academicYear,
+            deletedAt: now,
+          })
+        }
       } else if (person.method === "manual" && !person.archived) {
         await ctx.db.patch("people", person._id, { archived: true, updatedAt: now })
       }

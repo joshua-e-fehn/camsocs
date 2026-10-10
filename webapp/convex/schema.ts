@@ -573,6 +573,9 @@ export const suppressionFields = {
   /** The request that asked for it, when one did. */
   requestKey: v.optional(v.string()),
   requestKind: v.optional(literalUnion(LISTING_REQUEST_KINDS)),
+  /** Scope organisation: enforcing it took the listing out of outreach (the
+   * broker profile's `suppressed`), so lifting it puts it back. */
+  outreachSuppressed: v.optional(v.boolean()),
   createdAt: v.number(),
 }
 
@@ -608,6 +611,18 @@ export const personFields = {
   notes: v.optional(v.string()),
   archived: v.boolean(),
   ...stamps,
+}
+
+/**
+ * A person retention deleted at handover (R5): only the person key (a hash
+ * of organisation and name) and the academic year they were listed for. The
+ * pipeline does not add them again from a page that still lists last year's
+ * committee — only a reading that states a later academic year does.
+ */
+export const expiredPersonFields = {
+  key: v.string(),
+  academicYear: v.string(),
+  deletedAt: v.number(),
 }
 
 export const needOfferValidator = v.object({
@@ -816,6 +831,7 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_orgKey", ["orgKey"])
     .index("by_stale_staleAfter", ["stale", "staleAfter"]),
+  expiredPeople: defineTable(expiredPersonFields).index("by_key", ["key"]),
   orgBrokerProfiles: defineTable(orgBrokerProfileFields).index("by_orgKey", ["orgKey"]),
   interactions: defineTable(interactionFields)
     .index("by_key", ["key"])

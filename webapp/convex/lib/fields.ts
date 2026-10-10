@@ -370,7 +370,7 @@ export const ORGANISATION_SPECS: Record<(typeof ORGANISATION_FIELDS)[number], Fi
     tracked: true,
     check: urlsIn((m) => [m.signupUrl]),
   }),
-  socials: union(socialValidator, (item) => normaliseUrl((item as { url: string }).url), {
+  socials: union(socialValidator, (item) => socialKey(item as { platform: string; url: string }), {
     tracked: true,
     check: urlsIn((s) => [s.url]),
   }),
@@ -503,6 +503,25 @@ export function normaliseUrl(raw: string): string {
   const host = match[1].toLowerCase().replace(/^www\./, "")
   const rest = match[2].replace(/\/+$/, "").replace(/\/(?=\?)/, "")
   return `${host}${rest}`
+}
+
+/** Platforms whose account names ignore case (instagram.com/CUEngSoc is
+ * instagram.com/cuengsoc): one account however a source capitalised it. */
+const CASE_INSENSITIVE_PLATFORMS = new Set([
+  "instagram",
+  "x",
+  "tiktok",
+  "linktree",
+  "threads",
+  "youtube",
+  "bluesky",
+])
+
+/** What two `socials` items are compared on: the normalised URL, the whole
+ * of it lower-cased on a platform whose account names ignore case. */
+export function socialKey(item: { platform: string; url: string }): string {
+  const url = normaliseUrl(item.url)
+  return CASE_INSENSITIVE_PLATFORMS.has(item.platform) ? url.toLowerCase() : url
 }
 
 /** The host a source URL belongs to, for counting independent sources. */

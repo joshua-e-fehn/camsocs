@@ -598,4 +598,86 @@ describe("purge", () => {
     const left = await t.run(async (ctx) => (await ctx.db.query("organisations").collect()).length)
     expect(left).toBe(1)
   })
+
+  test("removeEntity also takes the organisation off its events and drops its sources rows", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-a", "org-b")
+    const key = eventKey("ics", "uid-1")
+    const at = { entityType: "event" as const, entityKey: key, evidence: "primary" as const }
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        ["title", "Talk"],
+        ["startsAt", NOW + 86_400_000],
+        ["visibility", "public"],
+        ["source", "ics"],
+        ["externalId", "uid-1"],
+        ["sourceUrl", "https://a.org/cal.ics"],
+      ].map(([field, value]) => ({
+        ...at,
+        field: field as string,
+        value,
+        method: "parser" as const,
+        extractor: "t",
+        sourceKey: "src-a",
+        sourceUrl: "https://a.org/cal.ics",
+        sourceType: "ics_feed" as const,
+        retrievedAt: NOW,
+      })),
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [
+        {
+          eventKey: key,
+          organisers: [
+            { orgKey: "org-a", role: "organiser" },
+            { orgKey: "org-b", role: "co_host" },
+          ],
+        },
+      ],
+    })
+    const owned = "https://army.example/unit"
+    await t.mutation(internal.ingest.sources.upsert, {
+      sources: [
+        {
+          key: sourceKey(owned),
+          url: owned,
+          sourceType: "society_website",
+          orgKey: "org-a",
+          lastFetchedAt: NOW,
+          robotsVerdict: "disallowed",
+          accessNote: "robots_override:society",
+          robotsCheckedAt: NOW,
+        },
+      ],
+    })
+    await t.mutation(internal.ingest.purge.removeEntity, {
+      entityType: "organisation",
+      key: "org-a",
+    })
+    const state = await t.run(async (ctx) => ({
+      event: await ctx.db
+        .query("events")
+        .withIndex("by_key", (q) => q.eq("key", key))
+        .unique(),
+      sources: await ctx.db.query("sources").collect(),
+    }))
+    expect(state.event).toMatchObject({ organiserKeys: [], coHostKeys: ["org-b"] })
+    expect(state.sources).toEqual([])
+    // A host's rows by themselves (a fetch recorded under a corrected policy).
+    await t.mutation(internal.ingest.sources.upsert, {
+      sources: [
+        {
+          key: sourceKey(owned),
+          url: owned,
+          sourceType: "society_website",
+          lastFetchedAt: NOW,
+          robotsVerdict: "disallowed",
+          robotsCheckedAt: NOW,
+        },
+      ],
+    })
+    expect(await t.mutation(internal.ingest.purge.removeSources, { host: "army.example" })).toEqual(
+      { deleted: 1 },
+    )
+  })
 })

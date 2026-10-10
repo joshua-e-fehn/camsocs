@@ -35,7 +35,8 @@ import {
  * Lifting one deletes the row and undoes the claim side (set-aside claims are
  * accepted again unless another suppression still forbids them; the negative
  * claim is withdrawn). A lifted listing stays hidden until the broker shows it
- * again — showing a listing is a decision of its own.
+ * again — showing a listing is a decision of its own — but outreach, which
+ * the suppression turned off (`outreachSuppressed`), is turned back on.
  */
 
 /** Claims read per entity when looking for set-aside candidates. */
@@ -74,7 +75,13 @@ export async function createSuppression(
 
 async function enforce(ctx: MutationCtx, row: SuppressionTarget & { key: string }) {
   if (row.scope === "organisation" && row.orgKey) {
-    await hideListing(ctx, row.orgKey)
+    if (await hideListing(ctx, row.orgKey)) {
+      const stored = await ctx.db
+        .query("suppressions")
+        .withIndex("by_key", (q) => q.eq("key", row.key))
+        .unique()
+      if (stored) await ctx.db.patch("suppressions", stored._id, { outreachSuppressed: true })
+    }
     return
   }
   if (row.scope === "person" && row.personKey) {
@@ -130,7 +137,9 @@ async function enforce(ctx: MutationCtx, row: SuppressionTarget & { key: string 
   await reresolveEntity(ctx, "organisation", row.orgKey, [...affected])
 }
 
-async function hideListing(ctx: MutationCtx, orgKey: string) {
+/** Hides a listing and takes it out of outreach. Returns whether it turned
+ * outreach off (it was on), so lifting the suppression can turn it back on. */
+async function hideListing(ctx: MutationCtx, orgKey: string): Promise<boolean> {
   const org = await findOrganisation(ctx, orgKey)
   const now = Date.now()
   if (org && org.hidden !== true) {
@@ -145,13 +154,40 @@ async function hideListing(ctx: MutationCtx, orgKey: string) {
   if (profile) {
     if (!profile.suppressed) {
       await ctx.db.patch("orgBrokerProfiles", profile._id, { suppressed: true, updatedAt: now })
+      return true
     }
-  } else if (org) {
+    return false
+  }
+  if (org) {
     await ctx.db.insert("orgBrokerProfiles", {
       ...emptyProfile(orgKey),
       suppressed: true,
       createdAt: now,
       updatedAt: now,
+    })
+    return true
+  }
+  return false
+}
+
+/** Puts a listing back into outreach when its lifted suppression took it out
+ * and no other organisation suppression of it remains. */
+async function restoreOutreach(ctx: MutationCtx, row: Doc<"suppressions">): Promise<void> {
+  if (!row.outreachSuppressed || !row.orgKey) return
+  const orgKey = row.orgKey
+  const others = await ctx.db
+    .query("suppressions")
+    .withIndex("by_orgKey", (q) => q.eq("orgKey", orgKey))
+    .take(MAX_SUPPRESSIONS)
+  if (others.some((other) => other.scope === "organisation")) return
+  const profile = await ctx.db
+    .query("orgBrokerProfiles")
+    .withIndex("by_orgKey", (q) => q.eq("orgKey", orgKey))
+    .unique()
+  if (profile?.suppressed) {
+    await ctx.db.patch("orgBrokerProfiles", profile._id, {
+      suppressed: false,
+      updatedAt: Date.now(),
     })
   }
 }
@@ -182,6 +218,12 @@ export async function liftSuppression(ctx: MutationCtx, key: string): Promise<bo
     .unique()
   if (!row) return false
   await ctx.db.delete("suppressions", row._id)
+  if (row.scope === "organisation") {
+    // The listing stays hidden until the broker shows it again; outreach,
+    // which the suppression alone turned off, is back on.
+    await restoreOutreach(ctx, row)
+    return true
+  }
   if ((row.scope !== "field" && row.scope !== "contact") || !row.orgKey) return true
 
   const orgKey = row.orgKey

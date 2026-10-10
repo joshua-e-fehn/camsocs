@@ -16,8 +16,13 @@ import { literalUnion } from "../lib/validators"
  *    never match, whatever key or body reaches it. It deletes at most
  *    `PURGE_BUDGET` rows, and reads about `PURGE_READ_BYTES`, per call and
  *    reports `done: false` until nothing is left, so the caller loops.
- *  - `removeEntity` deletes one entity, its claims and what hangs off it. Not
- *    routed over HTTP: run it with `bunx convex run ingest/purge:removeEntity`.
+ *  - `removeEntity` deletes one entity, its claims and what hangs off it
+ *    (an organisation's card, edges, organiser links — and its key from those
+ *    events' organiser lists — `orgInternal` and the `sources` rows it owns).
+ *    Not routed over HTTP: run it with `bunx convex run ingest/purge:removeEntity`.
+ *  - `removeSources` deletes the `sources` rows of one host (optionally of
+ *    one listing): a fetch recorded under a policy since corrected (the
+ *    army.mod.uk pages once read as a society's, 2026-10-09).
  *
  * Kept: `harvestRuns` (the run log is evidence), `inboundEmails` and
  * `listingRequests` (written by people, not the pipeline), and every
@@ -194,6 +199,28 @@ export const removeEntity = internalMutation({
       for (const link of links) {
         await ctx.db.delete("eventOrganisers", link._id)
         count("eventOrganisers")
+        // The event no longer names it among its organisers either.
+        const event = await ctx.db
+          .query("events")
+          .withIndex("by_key", (q) => q.eq("key", link.eventKey))
+          .unique()
+        if (event) {
+          const without = (keys: string[]) => keys.filter((key) => key !== args.key)
+          await ctx.db.patch("events", event._id, {
+            organiserKeys: without(event.organiserKeys),
+            coHostKeys: without(event.coHostKeys),
+            sponsorKeys: without(event.sponsorKeys),
+            updatedAt: Date.now(),
+          })
+        }
+      }
+      const owned = await ctx.db
+        .query("sources")
+        .withIndex("by_orgKey", (q) => q.eq("orgKey", args.key))
+        .take(2_000)
+      for (const row of owned) {
+        await ctx.db.delete("sources", row._id)
+        count("sources")
       }
       const internal = await ctx.db
         .query("orgInternal")
@@ -224,6 +251,24 @@ export const removeEntity = internalMutation({
         .withIndex("by_key", (q) => q.eq("key", orgKey))
         .unique()
       if (org) await refreshOrganisation(ctx, org, { now, terms })
+    }
+    return { deleted }
+  },
+})
+
+export const removeSources = internalMutation({
+  args: { host: v.string(), orgKey: v.optional(v.string()) },
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("sources")
+      .withIndex("by_host", (q) => q.eq("host", args.host))
+      .take(2_000)
+    let deleted = 0
+    for (const row of rows) {
+      if (args.orgKey !== undefined && row.orgKey !== args.orgKey) continue
+      await ctx.db.delete("sources", row._id)
+      deleted++
     }
     return { deleted }
   },

@@ -3,7 +3,7 @@ import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import type { ClaimInput } from "./ingest/claims"
 import { newTest, type TestConvex } from "./lib/harness.testing"
-import { RETENTION } from "./retention"
+import { CLAIMS_PER_CALL, RETENTION } from "./retention"
 
 /**
  * The retention schedule (docs/compliance/retention.md), run as the daily
@@ -230,6 +230,96 @@ describe("retention", () => {
       "per-current": false,
       "per-consent": false,
     })
+  })
+
+  test("R3: an event with more claims than one call deletes goes only with all of them", async () => {
+    const t = newTest()
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: eventClaims("evt-busy", daysAgo(400)),
+    })
+    // A year of daily re-readings: superseded claims far past one call's budget.
+    const extra = CLAIMS_PER_CALL + 50
+    await t.run(async (ctx) => {
+      for (let n = 0; n < extra; n++) {
+        await ctx.db.insert("fieldClaims", {
+          entityType: "event",
+          entityKey: "evt-busy",
+          field: "description",
+          value: `reading ${n}`,
+          sourceKey: "src-evt-busy",
+          sourceUrl: "https://example.org/evt-busy",
+          sourceType: "ics_feed",
+          retrievedAt: daysAgo(500),
+          lastSeenAt: daysAgo(500),
+          method: "parser",
+          extractor: "test",
+          status: "found",
+          evidence: "primary",
+          confidence: 0.95,
+          reviewStatus: "superseded",
+          fingerprint: `f${n}`,
+          createdAt: daysAgo(500),
+        })
+      }
+    })
+    await runDaily(t)
+    const left = await t.run(async (ctx) => ({
+      event: await ctx.db
+        .query("events")
+        .withIndex("by_key", (q) => q.eq("key", "evt-busy"))
+        .unique(),
+      claims: await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_review", (q) =>
+          q.eq("entityType", "event").eq("entityKey", "evt-busy").eq("reviewStatus", "superseded"),
+        )
+        .take(5),
+    }))
+    expect(left.event).toBeNull()
+    expect(left.claims).toEqual([])
+  })
+
+  test("R5: a page that still lists last year's committee does not bring it back", async () => {
+    const t = newTest()
+    const key = `per-${"a".repeat(40)}`
+    const reading = (seenAt: number, academicYear?: string) => ({
+      people: [
+        {
+          key,
+          orgKey: "org-a",
+          name: "Ann Example",
+          role: "President",
+          sourceUrl: "https://a.example/committee",
+          seenAt,
+          method: "llm" as const,
+          ...(academicYear ? { academicYear } : {}),
+        },
+      ],
+    })
+    const row = () =>
+      t.run(async (ctx) =>
+        ctx.db
+          .query("people")
+          .withIndex("by_key", (q) => q.eq("key", key))
+          .unique(),
+      )
+    // First seen 500 days ago; the unchanged page is read again today.
+    await t.mutation(internal.ingest.broker.ingest, reading(daysAgo(500)))
+    const first = await row()
+    await t.mutation(internal.ingest.broker.ingest, reading(NOW))
+    const again = await row()
+    expect(again?.staleAfter).toBe(first?.staleAfter)
+    expect(again?.academicYear).toBe(first?.academicYear)
+    // Past its handover and the grace: deleted, and not re-added by the next
+    // load of the same page.
+    await runDaily(t)
+    expect(await row()).toBeNull()
+    const result = await t.mutation(internal.ingest.broker.ingest, reading(NOW))
+    expect(result.people.expired).toBe(1)
+    expect(await row()).toBeNull()
+    // A reading that states a later academic year is news.
+    await t.mutation(internal.ingest.broker.ingest, reading(NOW, "2099-00"))
+    expect(await row()).toMatchObject({ academicYear: "2099-00" })
   })
 
   test("R6, R8, R10: interactions, requests and runs by age", async () => {
