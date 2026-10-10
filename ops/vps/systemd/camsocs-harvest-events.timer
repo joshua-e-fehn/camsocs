@@ -1,0 +1,15 @@
+# The daily events run (`sync --group events`): every events source, the
+# inbox, Instagram and termcards, then load and the coverage report.
+# Decision D5; /opt/camsocs/docs/ops-vps.md.
+[Unit]
+Description=camsocs daily events harvest (04:30 Europe/London)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Europe/London
+# A tick missed while the host was down runs once at the next boot.
+Persistent=true
+Unit=camsocs-harvest@events.service
+
+[Install]
+WantedBy=timers.target

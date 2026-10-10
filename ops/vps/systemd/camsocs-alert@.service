@@ -1,0 +1,46 @@
+# The Slack DM for a failed camsocs harvest; %i is the group. Started by
+# camsocs-harvest@%i.service's OnFailure=, or by hand to test the alert path:
+# `systemctl start camsocs-alert@events.service` (sends a real DM).
+# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md "Alerts".
+[Unit]
+Description=camsocs harvest failure alert (%i group)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=camsocs
+Group=camsocs
+ExecStart=/usr/bin/python3 -I /opt/camsocs/ops/vps/camsocs-alert.py %i
+# Mya's Hermes env file stays root's: systemd reads it and hands this unit a
+# read-only copy only it can read, for as long as it runs. The script keeps
+# SLACK_BOT_TOKEN, SLACK_HOME_CHANNEL and SLACK_ALLOWED_USERS and ignores the rest.
+LoadCredential=slack-env:/docker/hermes-agent-vspa/data/.env
+Environment=CAMSOCS_ALERT_ENV=%d/slack-env
+Environment=CAMSOCS_STATE_DIR=/var/lib/camsocs CAMSOCS_LOG_DIR=/var/log/camsocs
+# Values of secret-looking keys in these files are masked out of the message.
+Environment=CAMSOCS_SECRET_FILES=/opt/camsocs/pipeline/.env:/opt/camsocs/pipeline/.env.prod
+TimeoutStartSec=2min
+
+# --- hardening: it only reads files and talks to slack.com ------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+CapabilityBoundingSet=

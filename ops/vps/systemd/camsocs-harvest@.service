@@ -1,0 +1,60 @@
+# One scheduled camsocs harvest; %i is the group: `events` (daily) or `full`
+# (weekly). Started by camsocs-harvest-events.timer / camsocs-harvest-full.timer,
+# or by hand: `systemctl start camsocs-harvest@full.service`.
+# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md.
+[Unit]
+Description=camsocs harvest (%i group)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+# A failed run (any non-zero exit, a timeout, a kill) DMs the operator.
+OnFailure=camsocs-alert@%i.service
+
+[Service]
+Type=oneshot
+User=camsocs
+Group=camsocs
+WorkingDirectory=/opt/camsocs
+ExecStart=/opt/camsocs/ops/vps/camsocs-harvest.sh %i
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=CAMSOCS_ROOT=/opt/camsocs CAMSOCS_STATE_DIR=/var/lib/camsocs CAMSOCS_LOG_DIR=/var/log/camsocs
+# The script's own limits end the pipeline first (events 2 h, full 6 h, plus
+# up to 3 h waiting for the lock and the update / install / prune around it).
+TimeoutStartSec=10h
+# /var/lib/camsocs (status, lock, the camsocs user's home with the deploy key
+# and pixi's cache) and /var/log/camsocs, created and owned for the user.
+StateDirectory=camsocs
+StateDirectoryMode=0750
+LogsDirectory=camsocs
+LogsDirectoryMode=0750
+UMask=0027
+# Mya's agent and the other containers keep their CPU and disk.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# --- hardening ---------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# The whole checkout, not only /opt/camsocs/var: the run's own `git pull` and
+# `pixi install` write the working tree, .git and .pixi, and the production
+# run state is /opt/camsocs/.camsocs-state.prod.json.
+ReadWritePaths=/opt/camsocs /var/lib/camsocs /var/log/camsocs
+ProtectHome=yes
+# Mya's data, Docker and root's files are out of reach of the harvest.
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+CapabilityBoundingSet=
