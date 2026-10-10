@@ -248,7 +248,13 @@ def test_the_model_classifies_the_rest_with_checked_quotes(tmp_path) -> None:
     quokka = values(result, "org-quokka")
     (categories,) = quokka["categories"]
     assert categories.value == ["hobbies_games", "science_tech"]
-    assert (categories.method, categories.status, categories.quote_check) == ("llm", None, "exact")
+    # The quotes are on the page, but neither names its category: our
+    # mapping of them is a judgement, so the list is inferred.
+    assert (categories.method, categories.status, categories.quote_check) == (
+        "llm",
+        "inferred",
+        "exact",
+    )
     (audiences,) = quokka["audiences"]
     assert audiences.status == "inferred"  # its quote is on no text
     (tags,) = quokka["tags"]
@@ -260,6 +266,12 @@ def test_the_model_classifies_the_rest_with_checked_quotes(tmp_path) -> None:
     review = values(result, "org-review")
     (org_type,) = review["orgType"]  # the model's quoted answer replaces the rule's
     assert (org_type.value, org_type.method, org_type.status) == ("media", "llm", None)
+    # A quote that names the category itself keeps a model's list found.
+    from camsocs_pipeline.classify.llm import names_category
+
+    assert names_category("media_publishing", "a termly magazine")
+    assert names_category("music", "our orchestra rehearses on Mondays")
+    assert not names_category("theatre_film_dance", "we practise public speaking")
 
     # Cached per organisation: the next run asks nothing.
     again = FakeLLM(lambda text, _tier: _reply(text, ANSWERS))
@@ -360,3 +372,14 @@ def test_a_college_student_body_is_a_community_and_welfare_body() -> None:
         ["identity_wellbeing"],
         "https://jcr.example/",
     )
+
+
+def test_a_society_whose_description_calls_it_a_newspaper_is_media() -> None:
+    records = su_society(
+        "org-the-quokka-student",
+        "The Quokka Student",
+        description="The Quokka Student is the university's independent student newspaper.",
+    )
+    claims = values(classify_records(records), "org-the-quokka-student")
+    (org_type,) = claims["orgType"]
+    assert (org_type.value, org_type.status) == ("media", "inferred")

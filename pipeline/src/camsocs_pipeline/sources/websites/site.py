@@ -40,6 +40,9 @@ class Target:
     instagram: str | None = None
     website: str | None = None
     linktree: str | None = None
+    #: Other websites the registers state, in their order: read when the
+    #: first answers dead, so a fallback is never shown unchecked.
+    fallbacks: list[str] = field(default_factory=list)
 
     @property
     def words(self) -> set[str]:
@@ -153,6 +156,8 @@ class Stats:
 class TargetResult:
     target: Target
     website: list[Observation] = field(default_factory=list)
+    #: The website just read answered dead (404/410, a login wall, nothing).
+    website_dead: bool = False
     linktree: list[Observation] = field(default_factory=list)
     partners: list[PartnerMention] = field(default_factory=list)
     stats: Stats = field(default_factory=Stats)

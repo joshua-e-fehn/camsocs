@@ -397,6 +397,45 @@ def email_site(domain: str | None) -> str | None:
     return site_identity(host)
 
 
+#: A company's legal form: everything from it on is not its name
+#: ("McKinsey & Company, Inc. Prague", "BCG s.r.o. Prague Office").
+_LEGAL_FORM = re.compile(
+    r",?\s+(?:(?:&|and)\s+(?:company|co\.?)|inc\.?|incorporated|ltd\.?|limited|llp|llc|plc|"
+    r"gmbh|ag|se|s\.a\.?|b\.v\.?|n\.v\.?|s\.r\.o\.?|sarl|pte|pty|corp\.?|corporation)"
+    r"(?=[\s,.)]|$)",
+    re.IGNORECASE,
+)
+_OFFICE = re.compile(r"\s*[-–—,]?\s*(?:[A-Z][a-z]+\s+)?office$", re.IGNORECASE)
+#: Brand names a company is known by besides its name.
+_COMPANY_BRANDS = {
+    "boston consulting group": "BCG",
+    "pricewaterhousecoopers": "PwC",
+    "kearney": "A.T. Kearney",
+}
+
+
+def company_name(name: str) -> tuple[str, list[str]]:
+    """``(name, aliases)`` of a company as one name, whatever legal form or
+    office a page wrote ("McKinsey & Company, Inc. Prague" → "McKinsey";
+    "The Boston Consulting Group s.r.o. Prague Office" → "Boston Consulting
+    Group", also "BCG"; "A.T. Kearney GmbH Prague office" → "Kearney"), so
+    one sponsor is one counterpart. The name as written is an alias."""
+    written = " ".join(name.split())
+    current = written
+    legal = _LEGAL_FORM.search(current)
+    if legal is not None and legal.start() > 0:
+        current = current[: legal.start()]
+    current = re.sub(r"\s*\([^)]*\)", "", current)
+    current = _OFFICE.sub("", current)
+    current = re.sub(r"^(?:the|a\.\s?t\.)\s+", "", current, flags=re.IGNORECASE)
+    canonical = current.strip(" ,-–—") or written
+    aliases = [written] if written != canonical else []
+    brand = _COMPANY_BRANDS.get(canonical.lower())
+    if brand and brand.lower() != canonical.lower():
+        aliases.append(brand)
+    return canonical, aliases
+
+
 __all__ = [
     "COLLEGE_PREFIX",
     "NO_IDENTITY_HOSTS",
@@ -404,6 +443,7 @@ __all__ = [
     "SHARED_HOSTS",
     "NameParts",
     "acronym",
+    "company_name",
     "email_site",
     "fold",
     "instagram_handle",

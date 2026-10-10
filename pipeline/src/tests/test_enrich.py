@@ -586,16 +586,18 @@ def test_the_stage_stages_pages_and_counterparts_for_load(
     counterparts = [
         r
         for r in staged
-        if r.source_key.endswith(("org-acme-robotics-ltd", "org-department-of-engineering"))
+        if r.source_key.endswith(("org-acme-robotics", "org-department-of-engineering"))
     ]
     assert [r.entity_key for r in staged[: len(counterparts)]] == [
         r.entity_key for r in counterparts
     ]
+    # A company is one counterpart whatever legal form the page wrote:
+    # "Acme Robotics Ltd" is Acme Robotics (the page's spelling an alias).
     assert {r.entity_key for r in counterparts} == {
-        "org-acme-robotics-ltd",
+        "org-acme-robotics",
         "org-department-of-engineering",
     }
-    acme = next(r for r in counterparts if r.entity_key == "org-acme-robotics-ltd")
+    acme = next(r for r in counterparts if r.entity_key == "org-acme-robotics")
     values = {obs.field: obs for obs in acme.fields}
     assert values["name"].method == "llm" and values["name"].quote_check == "exact"
     assert values["isCounterpart"].value is True
@@ -607,12 +609,12 @@ def test_the_stage_stages_pages_and_counterparts_for_load(
         for rel in page.relationships
     }
     assert edges == {
-        ("sponsors", "incoming", "org-acme-robotics-ltd", "public"),
+        ("sponsors", "incoming", "org-acme-robotics", "public"),
         ("sponsors", "incoming", "org-department-of-engineering", "public"),
     }
     plan = plan_observations(staged)
     assert {(r.from_key, r.to_key) for r in plan.relationships} == {
-        ("org-acme-robotics-ltd", "org-example-robotics-society"),
+        ("org-acme-robotics", "org-example-robotics-society"),
         ("org-department-of-engineering", "org-example-robotics-society"),
     }
     # The page's organisation owns the page's sources row, not a counterpart.
@@ -705,3 +707,49 @@ def test_a_college_bodys_contacts_are_only_its_own() -> None:
     # On a JCR's sub-site the college's office is not the JCR's address.
     office = classify_email("conference.office@quokka.cam.ac.uk", site_host=site)
     assert office.kind != "general"
+
+
+def test_a_dead_stated_website_makes_the_next_one_a_register_states_read(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://dead.example/robots.txt").respond(404)
+    net.get("https://dead.example/2023/09/").respond(404)
+    net.get("https://alive.example/robots.txt").respond(500)  # the host is down
+    net.get("https://alive.example/").respond(500)
+    target = Target(
+        key="org-handball",
+        name="Handball Club",
+        website="https://dead.example/2023/09/",
+        fallbacks=["https://alive.example/"],
+    )
+    result = Enricher(polite(tmp_path), None).enrich(target)
+    by_url = {record.source_url: record for record in result.website}
+    # Each stated website gets its own reading: neither is shown unchecked.
+    dead = [(o.field, o.missing_reason) for o in by_url["https://dead.example/2023/09/"].fields]
+    assert dead == [("website", "not_found")]
+    down = [(o.field, o.missing_reason) for o in by_url["https://alive.example/"].fields]
+    assert down == [("website", "unreachable")]
+
+
+def test_every_distinct_stated_website_is_a_fallback() -> None:
+    def stated(source_type: str, url: str) -> Observation:
+        return Observation(
+            source_type=source_type,
+            source_key=url,
+            source_url=f"https://{source_type}.example/",
+            retrieved_at=datetime(2026, 10, 8, tzinfo=UTC),
+            entity_type="organisation",
+            identity=IdentityHints(name="Handball Club"),
+            entity_key="org-handball",
+            fields=[parser_field("website", url, extractor="t", evidence="primary")],
+        )
+
+    (target,), _ = targets_from(
+        [
+            stated("su_profile", "https://handball.example/2023/09/"),
+            stated("sport_guide_pdf", "https://handball.example/2023/09"),
+            stated("proctors_register", "https://cuhandball.example/"),
+        ]
+    )
+    assert target.website == "https://handball.example/2023/09/"
+    assert target.fallbacks == ["https://cuhandball.example/"]

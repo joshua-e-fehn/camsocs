@@ -198,6 +198,41 @@ class OrgRequest:
         return memo_key(model, PROMPT_VERSION, self.block("-"))
 
 
+#: Words that name a category (`models.vocab.CATEGORIES`) in a quote.
+CATEGORY_WORDS: dict[str, tuple[str, ...]] = {
+    "academic": ("academic", "subject", "study", "studies", "research", "scholar"),
+    "science_tech": (
+        "science", "scientific", "technology", "tech", "engineering", "computing", "physics",
+        "chemistry", "biology", "mathematic", "robot", "ai ", "artificial intelligence",
+    ),
+    "careers_professional": ("career", "professional", "industry", "employ", "recruit"),
+    "entrepreneurship": ("entrepreneur", "startup", "start-up", "innovation", "founder"),
+    "arts_creative": ("art", "design", "creative", "writing", "poetry", "craft", "painting"),
+    "music": ("music", "musical", "orchestra", "choir", "band", "sing", "concert", "jazz"),
+    "theatre_film_dance": ("theatre", "drama", "film", "cinema", "dance", "acting", "musical"),
+    "media_publishing": (
+        "media", "publish", "journal", "magazine", "newspaper", "radio", "podcast",
+    ),
+    "cultural_international": ("cultur", "international", "heritage", "national", "language"),
+    "faith": ("faith", "christian", "muslim", "islam", "jewish", "hindu", "sikh", "buddhis",
+              "church", "worship", "prayer", "religio", "bible", "god"),
+    "politics_debate": ("politic", "debate", "law", "policy", "public speaking", "diplomacy"),
+    "causes_volunteering": ("charity", "campaign", "volunteer", "fundrais", "activism", "cause"),
+    "identity_wellbeing": ("wellbeing", "well-being", "mental health", "community", "identity",
+                           "lgbt", "queer", "women", "support"),
+    "sport": ("sport", "athlet", "fitness", "training", "match", "league", "club", "team"),
+    "outdoors": ("outdoor", "hiking", "climbing", "mountain", "walking", "expedition", "nature"),
+    "hobbies_games": ("game", "hobby", "hobbies", "chess", "puzzle", "food", "cooking", "board"),
+}  # fmt: skip
+
+
+def names_category(category: str, quote: str | None) -> bool:
+    """Whether a quote names the category it is offered for."""
+    words = CATEGORY_WORDS.get(category, ())
+    lowered = f" {(quote or '').lower()} "
+    return any(word in lowered for word in words)
+
+
 def render_prompt(requests: Sequence[tuple[str, OrgRequest]]) -> str:
     template = Template(PROMPT_PATH.read_text(encoding="utf-8"))
     blocks = [request.block(ident) for ident, request in requests]
@@ -353,10 +388,13 @@ def claims_for(answer: Answer, request: OrgRequest, wanted: set[str]) -> ClaimsF
             if votes
             else primary
         )
-        out.add(
-            target.record,
-            llm_items_field(name, pairs, source_texts=every_text, **common(target.record)),
-        )
+        claimed = llm_items_field(name, pairs, source_texts=every_text, **common(target.record))
+        if name == "categories" and not all(names_category(value, quote) for value, quote in pairs):
+            # A quote shows the words are on the page, not that our category
+            # fits them (public speaking is not "theatre"): a judgement, so
+            # inferred unless the quote names the category itself.
+            claimed.status = "inferred"
+        out.add(target.record, claimed)
     if "tags" in wanted and item.tags:
         out.add(
             primary.record,

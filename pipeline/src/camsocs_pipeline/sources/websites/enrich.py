@@ -115,6 +115,8 @@ logger = logging.getLogger(__name__)
 
 #: A cached page younger than this is not fetched again.
 FRESH_FOR = timedelta(days=3)
+#: Further stated websites read when the first answers dead.
+MAX_FALLBACKS = 2
 PARSER = "website"
 #: Hosts never fetched as a society's website: networks (links only, AGENTS.md),
 #: directories with their own harvesters, and talks.cam (§6).
@@ -224,6 +226,10 @@ def targets_from(records: Iterable[Any]) -> tuple[list[Target], list[str]]:
                 target.linktree = target.linktree or url
             elif target.website is None and not _skipped_host(url):
                 target.website = url
+            elif not _skipped_host(url) and _same_site_url(url) not in {
+                _same_site_url(known) for known in [target.website or "", *target.fallbacks]
+            }:
+                target.fallbacks.append(url)
         for url in socials:
             if isinstance(url, str) and target.linktree is None:
                 target.linktree = url
@@ -377,6 +383,16 @@ class Enricher:
         if target.website:
             try:
                 self._website(target, result)
+                # The stated website is dead: read the next one a register
+                # states, so it is shown only once it answers (it gets its own
+                # health, and its own negative claim if it is dead too).
+                for fallback in target.fallbacks[:MAX_FALLBACKS]:
+                    if not result.website_dead:
+                        break
+                    read = result.website
+                    result.website_dead = False
+                    self._website(replace(target, website=fallback, fallbacks=[]), result)
+                    result.website = [*read, *result.website]
             except Exception as error:  # one broken site must not end the stage
                 logger.exception("enriching %s failed", target.key)
                 result.notes.append(f"{target.key}: website failed ({type(error).__name__})")
@@ -429,6 +445,7 @@ class Enricher:
             status = home.result.status or ""
             result.notes.append(f"{target.key}: {target.website} → {what} {status}".rstrip())
             dead = _dead_reason(home.result)
+            result.website_dead = dead is not None
             if dead is not None:
                 # The stated website itself answered dead: say so from that
                 # URL (primary), so a register's stale link is not shown as a
@@ -883,6 +900,12 @@ def _note_access(record: Observation, note: str) -> None:
     if current and note in current.split("; "):
         return
     record.fetch.access_note = f"{current}; {note}" if current else note
+
+
+def _same_site_url(url: str) -> str:
+    """A stated website compared as the server compares URLs (no scheme,
+    ``www.`` or trailing slash)."""
+    return re.sub(r"^https?://(www\.)?", "", url.strip().lower()).rstrip("/")
 
 
 def _canonical(url: str) -> str:

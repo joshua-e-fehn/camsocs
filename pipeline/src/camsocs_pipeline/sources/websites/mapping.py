@@ -34,6 +34,7 @@ from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote
 from camsocs_pipeline.extract.org import DAYS, OrgCall, OrgExtraction
 from camsocs_pipeline.keys import session_key
 from camsocs_pipeline.models.observation import IdentityHints, Observation, RelObs
+from camsocs_pipeline.resolve.names import company_name
 from camsocs_pipeline.sources.websites.page import Link
 from camsocs_pipeline.sources.websites.site import (
     EVIDENCE,
@@ -445,9 +446,13 @@ class ExtractionMapper:
                 continue
             seen.add(name.lower())
             sponsor = partner.relation == "sponsor"
+            org_type = _PARTNER_TYPES.get(partner.kind)
+            # One company is one counterpart, whatever legal form or office
+            # the page wrote ("McKinsey & Company, Inc. Prague" → McKinsey).
+            canonical, aliases = company_name(name) if org_type == "company" else (name, [])
             relationship = RelObs(
                 type="sponsors" if sponsor else "partner_of",
-                to_identity=IdentityHints(name=name, org_type=_PARTNER_TYPES.get(partner.kind)),
+                to_identity=IdentityHints(name=canonical, aliases=aliases, org_type=org_type),
                 evidence_url=url,
                 note=partner.evidence_quote[:300],
                 direction="incoming" if sponsor else "outgoing",

@@ -87,6 +87,11 @@ _DEPARTMENT = _pattern(
     "judge business school",
 )
 _MEDIA = _pattern("journal", "review", "magazine", "newspaper", "gazette", "radio", "podcast")
+#: A society whose own description opens by calling it a newspaper ("The
+#: Cambridge Student is …'s independent student newspaper"; Varsity).
+_NEWSPAPER_LEAD = _pattern("student newspaper", "newspaper", "news publication", "news outlet")
+#: How much of a description's start is its lead.
+_LEAD = 300
 #: Names that may be something other than a student society: asked of the model.
 _AMBIGUOUS = _pattern(
     "journal",
@@ -146,6 +151,17 @@ def _register_names(profile: OrgProfile) -> list[str]:
     return list(dict.fromkeys([record.identity.name, *record.identity.aliases]))
 
 
+def _newspaper_lead(profile: OrgProfile) -> str | None:
+    """The opening words of a description that calls the society a
+    newspaper, or None."""
+    for _record, text in profile.texts():
+        lines = text.split("\n", 1)
+        lead = (lines[1] if len(lines) > 1 else "")[:_LEAD]
+        if _NEWSPAPER_LEAD.search(_folded(lead)):
+            return lead[:120]
+    return None
+
+
 def type_and_level(profile: OrgProfile, *, college_keys: set[str]) -> list[RuleClaim]:
     """orgType, level and collegeKeys of a registered society (module
     docstring). `college_keys`: colleges that exist as organisations."""
@@ -174,6 +190,9 @@ def type_and_level(profile: OrgProfile, *, college_keys: set[str]) -> list[RuleC
     if _MEDIA.search(folded) and college is None:
         org_type = "media"
         raw = f"a publication or station: {name}"
+    elif college is None and (lead := _newspaper_lead(profile)) is not None:
+        org_type = "media"
+        raw = f"its description calls it a newspaper: {lead}"
     if not profile.has("orgType"):
         claims.append(RuleClaim("orgType", org_type, record, "classify.registered_society", raw))
     if not profile.has("level"):

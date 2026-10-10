@@ -885,3 +885,21 @@ def test_a_decided_distinct_pair_is_not_flagged_as_similar() -> None:
         ),
     )
     assert not [item for item in decided.report.review if item.reason.startswith("similar")]
+
+
+def test_one_company_is_one_counterpart_whatever_its_legal_form() -> None:
+    from camsocs_pipeline.resolve.names import company_name
+
+    assert company_name("McKinsey & Company, Inc. Prague") == (
+        "McKinsey",
+        ["McKinsey & Company, Inc. Prague"],
+    )
+    assert company_name("The Boston Consulting Group s.r.o. Prague Office") == (
+        "Boston Consulting Group",
+        ["The Boston Consulting Group s.r.o. Prague Office", "BCG"],
+    )
+    assert company_name("A.T. Kearney GmbH Prague office")[0] == "Kearney"
+    assert company_name("Deloitte LLP") == ("Deloitte", ["Deloitte LLP"])
+    # Names that merely contain such words stay whole.
+    assert company_name("Ernst & Young") == ("Ernst & Young", [])
+    assert company_name("AG Barr") == ("AG Barr", [])
