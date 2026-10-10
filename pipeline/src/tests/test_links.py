@@ -484,3 +484,20 @@ def test_addresses_broken_against_spam_are_never_stored_or_repaired() -> None:
         "or <a href='mailto:secretary@round.example'>us</a>.</p>",
     )
     assert page.emails == ["secretary@round.example"] and page.obfuscated_emails == 1
+
+
+def test_an_escaped_address_is_checked_as_the_reader_sees_it() -> None:
+    """Review 2026-10-10: the renderer unescapes markdown after every check."""
+    from camsocs_pipeline.events.common import withhold_personal_contacts
+    from camsocs_pipeline.sources.links import unescape_addresses, withhold_personal_emails
+    from camsocs_pipeline.suppressions import REDACTED, Suppressions, contact_hash
+
+    assert unescape_addresses("write to jane\\_doe@gmail.com") == "write to jane_doe@gmail.com"
+    assert unescape_addresses("a\\_b and \\*x\\*") == "a\\_b and \\*x\\*"
+    assert "ab123" not in withhold_personal_emails("ab\\_123@cam.ac.uk".replace("\\_", ""))
+    suppressed = Suppressions(contact_hashes=frozenset({contact_hash("jane_doe@gmail.com")}))
+    assert suppressed.redact("mail jane\\_doe@gmail.com") == f"mail {REDACTED}"
+    # A feed's personal address is withheld however the converter escaped it.
+    assert "jane" not in (withhold_personal_contacts("RSVP jane\\.smith@cantab.net") or "")
+    # Entities are never decoded (AGENTS.md): the renderer shows them as written.
+    assert unescape_addresses("ab123&#64;cam.ac.uk") == "ab123&#64;cam.ac.uk"

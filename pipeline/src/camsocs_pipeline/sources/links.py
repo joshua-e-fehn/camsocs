@@ -693,10 +693,31 @@ _ADDRESS_IN_TEXT = re.compile(
 WITHHELD = "[personal email withheld]"
 
 
+#: An address whose local part markdown escaped (``jane\\_doe@gmail.com``):
+#: the page renders it as the address itself.
+_ESCAPED_ADDRESS = re.compile(
+    r"(?<![A-Za-z0-9._%+\\-])(?:[A-Za-z0-9._%+-]|\\[_.+-])*\\[_.+-](?:[A-Za-z0-9._%+-]|\\[_.+-])*"
+    r"@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+)
+
+
+def unescape_addresses(text: str) -> str:
+    r"""`text` with markdown's backslash escapes taken out of addresses
+    (``jane\_doe@gmail.com`` → ``jane_doe@gmail.com``), so every address
+    check sees the address a reader is shown (review 2026-10-10: the
+    renderer unescapes after the checks). Entity-encoded characters are not
+    decoded (AGENTS.md: obfuscated addresses are never decoded); the renderer
+    leaves them encoded too (webapp/lib/rich-text.ts)."""
+    if "\\" not in text:
+        return text
+    return _ESCAPED_ADDRESS.sub(lambda match: match.group(0).replace("\\", ""), text)
+
+
 def withhold_personal_emails(text: str) -> str:
     """`text` with every personal CRSid address replaced by a marker. Free text
     (descriptions) is public; a CRSid names a person and never is. Uses
     `email_type`, so it hides exactly what the server would."""
+    text = unescape_addresses(text)
     return _ADDRESS_IN_TEXT.sub(
         lambda match: (
             WITHHELD

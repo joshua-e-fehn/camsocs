@@ -11,6 +11,8 @@
     camsocs worklist [--no-sympa]        rank societies for mailing-list sign-up (CSV)
     camsocs coverage [--before DIR]      field coverage of staged organisations; offline
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
+    camsocs clean-events [--titles] [--apply]   stored events no reader restates; --apply
+                                         only with --env prod (docs/deploy.md §7)
 
 `sync` and `harvest` also take `--env NAME` after the command, as `pixi run
 harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
@@ -30,6 +32,7 @@ import json
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -451,6 +454,44 @@ def purge_dev(ctx: click.Context, yes: bool) -> None:
     total = sum(deleted.values())
     detail = ", ".join(f"{table} {count}" for table, count in sorted(deleted.items()))
     click.echo(f"ok — deleted {total} rows" + (f" ({detail})" if detail else ""))
+
+
+@cli.command("clean-events")
+@click.option(
+    "--apply",
+    is_flag=True,
+    help="Remove the candidates (only with --env prod). Without it: list them only.",
+)
+@click.option("--titles", is_flag=True, help="Also print each candidate's stored title.")
+@_env_option
+@click.pass_context
+def clean_events(ctx: click.Context, apply: bool, titles: bool) -> None:
+    """Stored events a corrected reader never restates (pre-D6 notices,
+    pre-fix D1 titles, unmarked external events, cards no longer read):
+    list them, or with `--env prod --apply` remove them (docs/deploy.md §7)."""
+    from camsocs_pipeline.cleanup import candidates
+
+    env = _env(ctx)
+    if apply and env.name != "prod":
+        raise click.ClickException(
+            f"Refusing: --apply removes events on production only (--env prod), not {env.name}. "
+            "On dev, remove an event with `bunx convex run ingest/purge:removeEntity`."
+        )
+    try:
+        with _loader(_settings(ctx)) as loader:
+            events = loader.scan_events()
+            found = candidates(events, now=datetime.now(UTC))
+            click.echo(f"{len(events)} events on {env.describe()}; {len(found)} to remove:")
+            for candidate in found:
+                click.echo(f"  {candidate.line(titles=titles)}")
+            if not apply:
+                if found:
+                    click.echo("dry run: nothing removed (add --apply with --env prod to remove)")
+                return
+            result = loader.remove_events([candidate.key for candidate in found])
+    except ConvexError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"removed {len(result['removed'])}; already gone {len(result['missing'])}")
 
 
 @cli.command()

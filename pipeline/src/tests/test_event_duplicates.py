@@ -270,3 +270,34 @@ def test_two_entries_of_one_listing_stay_two_events() -> None:
         "google_calendar", "uid-2", "Chess club beginners", ms(2026, 10, 15, 19, 0), url=feed
     )
     assert find_duplicates([first, second]).primary_of == {}
+
+
+def test_a_duplicate_titled_unlike_its_primary_adds_no_title() -> None:
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    from camsocs_pipeline.events.common import EventDraft, build_event_observation
+    from camsocs_pipeline.events.duplicates import Duplicates, as_duplicate
+
+    draft = EventDraft(
+        event_source="termcard",
+        external_id="org-it:2026-10-14:cinema-itasoc",
+        title="Cinema ItaSoc",
+        starts_at=_dt(2026, 10, 14, tzinfo=UTC),
+        all_day=True,
+        description="The Last One for the Road",
+    )
+    row = build_event_observation(
+        draft,
+        source_type="termcard",
+        source_url="https://it.example/c.jpeg",
+        retrieved_at=_dt(2026, 10, 10, tzinfo=UTC),
+        evidence="primary",
+    )
+    found = Duplicates(
+        primary_of={("termcard", row.external_id): ("termcard", "poster")},
+        coarser={("termcard", row.external_id)},
+        untitled={("termcard", row.external_id)},
+    )
+    fields = {f.field for f in as_duplicate(row, found).fields}
+    assert "title" not in fields and "startsAt" not in fields and "description" in fields

@@ -301,3 +301,54 @@ def test_events_and_names_removed_on_request_are_never_posted() -> None:
     assert by[("evt-kept", "speakers")] == [{"name": "Bo Ex"}]
     assert ("evt-solo", "speakers") not in by
     assert report.counts["events"] == 1
+
+
+def test_no_model_reads_a_suppressed_event_name_or_address(net: respx.MockRouter) -> None:
+    """Privacy ordering (review 2026-10-10): the suppression list is applied
+    before the calendar-noise model (D6) reads any reading, and quotes lose
+    suppressed names too."""
+    from camsocs_pipeline.extract.event_noise import NoiseClassifier
+    from camsocs_pipeline.keys import event_key
+    from camsocs_pipeline.suppressions import name_hash
+    from tests.fakes import FakeLLM
+
+    gone = event("gone", "org-chess")
+    kept = event("kept", "org-chess")
+    for record, title in ((gone, "Hackathon at Example Labs"), (kept, "Anna Example's hackathon")):
+        record.fields[0] = parser_field("title", title, extractor="ics", evidence="primary")
+        record.fields.append(
+            parser_field(
+                "description",
+                f"Write to {ANNA}; Anna Example hosts it.",
+                extractor="ics",
+                evidence="primary",
+            ).model_copy(update={"evidence_quote": "Anna Example hosts it"})
+        )
+    net.post(f"{SITE}/api/pipeline/suppressions").respond(
+        200,
+        json={
+            "events": [event_key("ics", "gone")],
+            "contactHashes": [contact_hash(ANNA)],
+            "nameHashes": [name_hash("Anna Example")],
+            "truncated": False,
+        },
+    )
+    claims = net.post(f"{SITE}/api/pipeline/claims").respond(
+        200, json={"inserted": 1, "rejected": []}
+    )
+    net.post(f"{SITE}/api/pipeline/sources").respond(200, json={"inserted": 1})
+    net.post(f"{SITE}/api/pipeline/eventOrganisers").respond(200, json={"inserted": 1})
+    llm = FakeLLM(lambda _t, _tier: {"kind": "event", "evidence_quote": "hackathon"})
+
+    report = ConvexLoader(SITE, "test-key", max_retries=1).post_observations(
+        [gone, kept],
+        noise=NoiseClassifier(llm),  # type: ignore[arg-type]
+    )
+
+    seen = "\n".join(call["text"] for call in llm.calls)
+    assert "Example Labs" not in seen, "the suppressed event never reached the model"
+    assert "Anna Example" not in seen and ANNA not in seen
+    assert "[name removed]" in seen and REDACTED in seen
+    posted = json.dumps(json.loads(claims.calls[0].request.content))
+    assert "Anna Example" not in posted and ANNA not in posted
+    assert report.suppressed.counts["events"] == 1

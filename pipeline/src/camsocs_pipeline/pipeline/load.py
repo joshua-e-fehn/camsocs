@@ -95,6 +95,8 @@ from camsocs_pipeline.models.wire import (
     EventOrganiserSet,
     EventsCoveragePage,
     EventsCoverageRequest,
+    EventsScanPage,
+    EventsScanRequest,
     FileResult,
     FileUpload,
     InboundFile,
@@ -109,6 +111,8 @@ from camsocs_pipeline.models.wire import (
     PurgeRequest,
     RelationshipEvidence,
     RelationshipInput,
+    RemoveEventsRequest,
+    ScannedEvent,
     SourceInput,
     SuppressionList,
     TermDate,
@@ -118,7 +122,12 @@ from camsocs_pipeline.models.wire import (
 )
 from camsocs_pipeline.sources.links import social_key
 from camsocs_pipeline.sources.policy import GENERAL, SOCIETY, SOCIETY_WEBSITE, FetchPurpose
-from camsocs_pipeline.suppressions import SuppressionReport, Suppressions, apply_suppressions
+from camsocs_pipeline.suppressions import (
+    SuppressionReport,
+    Suppressions,
+    apply_suppressions,
+    suppress_records,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -618,6 +627,31 @@ class ConvexLoader:
         """Re-derive every organisation, event label and stale flag now."""
         return self.post("derive", {})
 
+    def scan_events(self, *, page_size: int = 200, max_pages: int = 500) -> list[ScannedEvent]:
+        """Every stored event, any visibility, as `clean-events` judges it
+        (`events/scan`, read-only)."""
+        events: list[ScannedEvent] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body = EventsScanRequest(cursor=cursor, limit=page_size).to_wire()
+            page = EventsScanPage.model_validate(self.post("events/scan", body))
+            events.extend(page.page)
+            if page.is_done:
+                return events
+            cursor = page.continue_cursor
+        raise ConvexError(f"events/scan did not finish in {max_pages} pages")
+
+    def remove_events(self, keys: Sequence[str], *, size: int = 25) -> dict[str, list[str]]:
+        """Deletes events by key (`events/remove`, confirmed; at most 25 a
+        call). Returns the keys removed and those already gone."""
+        removed: list[str] = []
+        missing: list[str] = []
+        for chunk in chunked(list(keys), size):
+            response = self.post("events/remove", RemoveEventsRequest(keys=list(chunk)).to_wire())
+            removed += list(response.get("removed") or [])
+            missing += list(response.get("missing") or [])
+        return {"removed": removed, "missing": missing}
+
     def purge_dev(self, *, max_rounds: int = 200) -> dict[str, int]:
         """Empties every pipeline-owned table on the **dev** deployment (the
         server refuses anywhere else), calling until it reports done."""
@@ -649,11 +683,16 @@ class ConvexLoader:
         (they wait for the resolve stage) and counted. With `media`, image
         values that name only a ``sourceUrl`` are uploaded first. Public free
         text is redacted (D1, `extract.redact`) with `redactor`, or with the
-        deterministic rule alone when none is given, after the suppression
-        list has cut out what it forbids (so a suppressed address never
-        reaches `valueRaw`)."""
+        deterministic rule alone when none is given.
+
+        The suppression list comes first of all (`suppress_records`): no
+        model — the calendar-noise one, the redaction's — ever reads a
+        suppressed event, or a suppressed address or name, and a suppressed
+        address never reaches `valueRaw` or an evidence quote."""
         classifier = noise or NoiseClassifier()
-        records = sift_events(list(records), classifier)
+        suppressions = self.suppressions()
+        records, held = suppress_records(list(records), suppressions)
+        records = sift_events(records, classifier)
         plan = plan_observations(records)
         report = LoadReport(
             skipped=plan.skipped,
@@ -661,7 +700,8 @@ class ConvexLoader:
             merged=plan.duplicates.notes(),
             noise=classifier.stats,
         )
-        report.suppressed = apply_suppressions(plan, self.suppressions())
+        report.suppressed = apply_suppressions(plan, suppressions)
+        report.suppressed.counts.update(held)
         plan.claims, report.redaction = redact_claims(
             plan.claims,
             redactor or Redactor(),

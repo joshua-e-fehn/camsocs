@@ -36,8 +36,9 @@ events — a prayer room closed, a deadline, a placeholder — are not posted,
 and someone else's event a society only takes part in (a CTF on its
 calendar) is posted ``hosting: takes_part``. Rules first, the bulk model
 for borderline readings (replies cached by the input's sha256; a dry run
-uses cached replies and the rules only). The notes count each rule, show a
-few dropped titles with their keys, and the metrics carry the totals.
+uses cached replies and the rules only). The notes count each rule and give
+a few dropped notices' keys — never their titles — and the metrics carry
+the totals.
 """
 
 from __future__ import annotations
@@ -121,6 +122,12 @@ def run(ctx: StageContext) -> None:
         # until it is withdrawn or removed (`ingest/purge:removeEntity`).
         for key in report.redaction.dropped[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  title unsafe, not posted: {key}")
+        # For review: a name redacted inside a title ("A chat with someone").
+        someone = report.redaction.someone_titles
+        if someone:
+            ctx.report.notes.append(f"  {len(someone)} posted titles read 'someone' (review):")
+            for key in someone[:MAX_REJECTION_NOTES]:
+                ctx.report.notes.append(f"    {key}")
     ctx.report.notes.extend(report.noise.notes())
     if report.noise.readings:
         ctx.report.metrics["eventNoticesDropped"] = sum(report.noise.dropped.values())

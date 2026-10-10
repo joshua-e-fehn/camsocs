@@ -38,8 +38,12 @@ LLM_DIR = "llm"
 #: How long anything quoting list mail is kept (retention.md R4).
 MAIL_AGE = timedelta(days=30)
 #: Replies that may quote list mail or its attachments (`stages/inbox.py`;
-#: termcards share the image prompt, whose replies are re-asked weekly anyway).
-MAIL_PROMPTS = frozenset({"email_events_v1", "image_events_v1"})
+#: termcards share the image prompt, whose replies are re-asked weekly anyway),
+#: and the calendar-noise verdicts and name redactions of mail-derived readings,
+#: which the D6 and D1 steps cache apart (``<prompt>.mail``).
+MAIL_PROMPTS = frozenset(
+    {"email_events_v1", "image_events_v1", "event_noise_v2.mail", "redact_names_v2.mail"}
+)
 #: Staging that holds what was read from list mail.
 MAIL_STAGING = frozenset({"mailing_list_email", "mailing_list_email.events"})
 

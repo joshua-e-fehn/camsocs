@@ -30,6 +30,8 @@ coverage/events        `EventsCoverageRequest`         coverage:eventsPage
 termDates              `TermDatesBatch`                ingest/termDates:upsert
 derive                 ``{}``                          derive:daily
 purge                  `PurgeRequest`                  ingest/purge:purge (dev only)
+events/scan            `EventsScanRequest`             ingest/cleanup:eventsPage
+events/remove          `RemoveEventsRequest`           ingest/cleanup:removeEvents
 runs/start, finish     see pipeline/load.py            runs:start / runs:finish
 =====================  ==============================  ===========================
 
@@ -473,6 +475,41 @@ class PurgeRequest(WireModel):
     confirm: Literal["PURGE-DEV"] = "PURGE-DEV"
 
 
+class EventsScanRequest(WireModel):
+    cursor: str | None = None
+    limit: int | None = None
+
+
+class ScannedEvent(WireModel):
+    """One stored event as `camsocs clean-events` judges it (read-only)."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    key: str
+    title: str
+    description: str | None = None
+    venue_text: str | None = None
+    starts_at: int
+    source: str
+    source_url: str
+    visibility: str
+    hosting: str | None = None
+    organiser_keys: list[str] = Field(default_factory=list)
+    sweep_group: str | None = None
+    last_seen_at: int
+
+
+class EventsScanPage(WireModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    page: list[ScannedEvent]
+    is_done: bool
+    continue_cursor: str
+
+
+class RemoveEventsRequest(WireModel):
+    keys: list[str]
+    confirm: Literal["REMOVE-EVENTS"] = "REMOVE-EVENTS"
+
+
 # --- suppressions, coverage ------------------------------------------------------------
 
 
@@ -560,6 +597,8 @@ __all__ = [
     "EventOrganisersBatch",
     "EventsCoveragePage",
     "EventsCoverageRequest",
+    "EventsScanPage",
+    "EventsScanRequest",
     "FileResult",
     "FileUpload",
     "InboundFile",
@@ -578,6 +617,8 @@ __all__ = [
     "RelationshipEvidence",
     "RelationshipInput",
     "RelationshipsBatch",
+    "RemoveEventsRequest",
+    "ScannedEvent",
     "SourceInput",
     "SourcesBatch",
     "SuppressedField",

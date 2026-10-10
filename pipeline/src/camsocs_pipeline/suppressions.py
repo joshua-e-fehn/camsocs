@@ -3,10 +3,14 @@ site (webapp/convex/lib/suppressions.ts; docs/compliance/retention.md R8).
 
 The broker accepts a removal or objection in the dashboard; Convex stores it
 and serves the list at ``POST /api/pipeline/suppressions``. Every
-`ConvexLoader.post_observations` reads it once per run and calls
-`apply_suppressions` on the load plan **before anything is posted**, so a run
-never re-publishes what was removed. (Convex refuses what slips through; this
-is the first layer, not the only one.)
+`ConvexLoader.post_observations` reads it once per run. Before any reading's
+text reaches a model — the calendar-noise sifting (D6) and the name
+redaction (D1) — `suppress_records` drops the event readings the list removes
+and cuts suppressed addresses and names out of the rest; then
+`apply_suppressions` filters the load plan **before anything is posted**, so a
+run never re-publishes what was removed. Evidence quotes are cut like values:
+a quote is stored with its claim. (Convex refuses what slips through; this is
+the first layer, not the only one.)
 
 Six scopes:
 
@@ -37,7 +41,10 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from camsocs_pipeline.keys import event_key
+from camsocs_pipeline.models.observation import EventObservation, Observation
 from camsocs_pipeline.models.wire import SuppressionList
+from camsocs_pipeline.sources.links import unescape_addresses
 
 if TYPE_CHECKING:
     from camsocs_pipeline.pipeline.load import LoadPlan
@@ -147,8 +154,10 @@ class Suppressions:
         return bool(name_spans(text, self.name_hashes))
 
     def redact(self, text: str) -> str:
-        """`text` with every suppressed address and name cut out."""
+        """`text` with every suppressed address and name cut out (an address
+        markdown escaped, ``jane\\_doe@…``, as the reader sees it)."""
         if self.contact_hashes:
+            text = unescape_addresses(text)
             text = ADDRESS.sub(
                 lambda match: (
                     REDACTED if self.suppressed_address(match.group(0)) else match.group(0)
@@ -220,6 +229,57 @@ def _redact_deep(value: Any, suppressions: Suppressions) -> Any:
     if isinstance(value, dict):
         return {key: _redact_deep(item, suppressions) for key, item in value.items()}
     return value
+
+
+def suppress_records(
+    records: list[Observation | EventObservation], suppressions: Suppressions
+) -> tuple[list[Observation | EventObservation], Counter[str]]:
+    """`records` as a model may read them: keyed event readings of a
+    suppressed event, or whose every organiser is a suppressed listing, are
+    left out, and every event reading's values, quotes and venue lose
+    suppressed addresses and names. Returns them with what was held back."""
+    counts: Counter[str] = Counter()
+    if suppressions.empty:
+        return records, counts
+    out: list[Observation | EventObservation] = []
+    for record in records:
+        if not isinstance(record, EventObservation):
+            out.append(record)
+            continue
+        if record.is_keyed:
+            if event_key(record.event_source, record.external_id) in suppressions.events:
+                counts["events"] += 1
+                continue
+            organisers = [o.identity.known_key for o in record.organisers]
+            if (
+                organisers
+                and not record.unresolved_organisers
+                and all(key in suppressions.organisations for key in organisers if key)
+                and all(organisers)
+            ):
+                counts["events"] += 1
+                continue
+        fields = []
+        changed = False
+        for obs in record.fields:
+            value = strip_addresses(obs.field, obs.value, suppressions)
+            if value is _DROP:
+                changed = True
+                continue
+            quote = suppressions.redact(obs.evidence_quote) if obs.evidence_quote else None
+            if value != obs.value or quote != obs.evidence_quote:
+                changed = True
+                obs = obs.model_copy(update={"value": value, "evidence_quote": quote})
+            fields.append(obs)
+        venue = record.venue
+        if venue is not None and suppressions.redact(venue.name) != venue.name:
+            changed = True
+            venue = venue.model_copy(update={"name": suppressions.redact(venue.name)})
+        if changed:
+            counts["readings redacted"] += 1
+            record = record.model_copy(update={"fields": fields, "venue": venue})
+        out.append(record)
+    return out, counts
 
 
 @dataclass
@@ -300,6 +360,11 @@ def apply_suppressions(plan: LoadPlan, suppressions: Suppressions) -> Suppressio
             if stripped != claim.value:
                 report.counts["values redacted"] += 1
                 claim = claim.model_copy(update={"value": stripped})
+        if claim.evidence_quote and (suppressions.contact_hashes or suppressions.name_hashes):
+            quote = suppressions.redact(claim.evidence_quote)
+            if quote != claim.evidence_quote:
+                report.counts["quotes redacted"] += 1
+                claim = claim.model_copy(update={"evidence_quote": quote})
         claims.append(claim)
     plan.claims = claims
 
@@ -344,4 +409,5 @@ __all__ = [
     "name_hash",
     "name_spans",
     "strip_addresses",
+    "suppress_records",
 ]

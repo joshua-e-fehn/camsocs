@@ -739,3 +739,252 @@ def test_an_organisations_committee_is_applied_to_its_events() -> None:
 
     names = private_names([org, event])
     assert names[event_key("google_calendar", "uid-1")] == ("Anna Smith",)
+
+
+# --- review 2026-10-10: titles in context, capitals, URLs ---------------------------------
+
+
+def _model_never(text: str, _tier: str) -> dict[str, Any]:
+    raise AssertionError(f"the model was asked about {text!r}")
+
+
+def _echo(text: str, _tier: str) -> dict[str, Any]:
+    """A model that finds no private names: the text back unchanged."""
+    return reply(text.split("--- TEXT ---\n", 1)[1])
+
+
+def test_a_work_titles_from_a_structured_listing_is_never_name_redacted() -> None:
+    show = "https://www.camdram.net/shows/2026-lola"
+    claims = [
+        event_claim("title", "Lola", key="evt-lola", url=show, source_type="camdram"),
+        event_claim("eventType", "performance", key="evt-lola", url=show, source_type="camdram"),
+        event_claim(
+            "title", "I Kassandra", key="evt-kass", url=show + "-kass", source_type="camdram"
+        ),
+        event_claim(
+            "title",
+            "Prof Jane Doe: Quokka ecology",
+            key="evt-talk",
+            url="https://talks.cam.ac.uk/talk/index/123",
+            source_type="talks_list",
+        ),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(_model_never)))  # type: ignore[arg-type]
+    titles = {c.entity_key: c.value for c in posted if c.field == "title"}
+    assert titles == {
+        "evt-lola": "Lola",
+        "evt-kass": "I Kassandra",
+        "evt-talk": "Prof Jane Doe: Quokka ecology",
+    }
+    assert stats.dropped == [] and stats.work_titles == 3
+
+
+def test_a_talks_title_on_a_programme_names_its_public_speaker() -> None:
+    card = "https://german-society.example/wp-content/uploads/2026/10/term-27-07.png"
+
+    def card_claim(field: str, value: Any, key: str) -> ClaimInput:
+        return event_claim(field, value, key=key, url=card, source_type="termcard")
+
+    claims = [
+        card_claim("title", "Sophie von der Tann", "evt-tann"),
+        card_claim("eventType", "talk", "evt-tann"),
+        card_claim("title", "A chat with Luca Ravenna", "evt-chat"),
+        card_claim("eventType", "talk", "evt-chat"),
+        card_claim("title", "IAN WALMSLEY", "evt-caps"),
+        card_claim("eventType", "talk", "evt-caps"),
+    ]
+    llm = FakeLLM(_echo)
+    posted, stats = redact_claims(claims, Redactor(llm))  # type: ignore[arg-type]
+    titles = {c.entity_key: c.value for c in posted if c.field == "title"}
+    # "chat with" is a contact phrase to the gate, so that one is read, with
+    # its speaker in the keep list; the others need no model at all.
+    assert [call["text"].rsplit("\n", 1)[-1] for call in llm.calls] == ["A chat with Luca Ravenna"]
+    assert "- Luca Ravenna" in llm.calls[0]["text"]
+    assert titles == {
+        "evt-tann": "Sophie von der Tann",
+        "evt-chat": "A chat with Luca Ravenna",
+        "evt-caps": "IAN WALMSLEY",
+    }
+    assert stats.speaker_titles == 3 and stats.someone_titles == []
+
+
+def test_a_speaker_title_still_loses_a_known_committee_member_and_feeds_stay_strict() -> None:
+    card = "https://quokka.example.org/uploads/card.png"
+    committee = [
+        event_claim(
+            "title", "A chat with Ann Example", key="evt-c", url=card, source_type="termcard"
+        ),
+        event_claim("eventType", "talk", key="evt-c", url=card, source_type="termcard"),
+    ]
+    posted, _ = redact_claims(committee, Redactor(), private={"evt-c": ("Ann Example",)})
+    assert "Ann Example" not in next(c.value for c in posted if c.field == "title")
+    # A calendar feed's "talk" is read like any title: the model decides.
+    asked: list[str] = []
+
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        asked.append(text)
+        return reply("Talk with someone", ("Bo Quokkason", "someone"))
+
+    feed = [
+        event_claim("title", "Talk with Bo Quokkason", key="evt-f"),
+        event_claim("eventType", "talk", key="evt-f"),
+    ]
+    posted, stats = redact_claims(feed, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    assert next(c.value for c in posted if c.field == "title") == "Talk with someone"
+    assert stats.someone_titles == ["evt-f"], "listed for review"
+    assert "Field: the title of an event" in asked[0] and "Event type: talk" in asked[0]
+
+
+def test_a_venue_is_read_as_a_venue_with_its_events_context() -> None:
+    asked: list[str] = []
+
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        asked.append(text)
+        return _echo(text, _tier)
+
+    claims = [
+        event_claim("title", "Fiesta Latina", key="evt-k"),
+        event_claim("venueText", "Kiki’s", key="evt-k"),
+        event_claim("description", "Dancing all night at the club.", key="evt-k"),
+    ]
+    posted, _ = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    assert next(c.value for c in posted if c.field == "venueText") == "Kiki’s"
+    [venue] = [text for text in asked if "--- TEXT ---\nKiki’s" in text]
+    assert "Field: the venue of an event (a place, never a person)" in venue
+    assert "The event's description: Dancing all night at the club." in venue
+
+
+def test_names_in_capitals_reach_the_redaction() -> None:
+    from camsocs_pipeline.extract.redact import needs_model
+
+    assert needs_model("BIRTHDAY DRINKS FOR ANNA SMITH")
+    assert needs_model("IAN WALMSLEY")
+    assert needs_model("DRINKS WITH ANNA SMITH")
+    # Acronyms and known words in capitals are no names.
+    assert not needs_model("CU CTF")
+    assert not needs_model("THE MCR")
+    # Without a model a title in capitals with a candidate name is withheld.
+    claims = [event_claim("title", "DRINKS WITH ANNA SMITH", key="evt-d")]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(lambda _t, _r: RuntimeError("x"))))  # type: ignore[arg-type]
+    assert posted == [] and stats.dropped == ["evt-d"]
+
+
+def test_an_events_urls_never_spell_a_redacted_name() -> None:
+    card = "https://quokka.example.org/uploads/2026/10/anna-example.png"
+
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        if "Fireside" in text:
+            return reply("Fireside chat with someone", ("Anna Example", "someone"))
+        if "Bo Quokkason" in text:
+            return reply("Drinks with someone", ("Bo Quokkason", "someone"))
+        return _echo(text, _tier)
+
+    claims = [
+        event_claim("title", "Fireside chat with Anna Example", key="evt-a", url=card),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-a", url=card),
+        event_claim("title", "Drinks with Bo Quokkason", key="evt-b"),
+        event_claim("externalUrl", "https://bo-quokkason.example.org/party", key="evt-b"),
+        event_claim("externalUrl", "https://hackathon.example.org/", key="evt-c"),
+        event_claim("title", "Hackathon", key="evt-c"),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    by = {(c.entity_key, c.field): c for c in posted}
+    assert "evt-a" in stats.dropped and not any(c.entity_key == "evt-a" for c in posted)
+    assert by[("evt-b", "externalUrl")].missing_reason == "not_published"
+    assert by[("evt-c", "externalUrl")].value == "https://hackathon.example.org/"
+    assert stats.urls_withheld == 1
+
+
+def test_mail_replies_are_cached_apart_for_r4(tmp_path: Path) -> None:
+    memo = LLMMemo(tmp_path)
+    llm = FakeLLM(lambda _t, _r: reply("Drinks with someone", ("Bo Quokkason", "someone")))
+    mail = event_claim(
+        "title",
+        "Drinks with Bo Quokkason",
+        key="evt-m",
+        url="inbound:<m@x>",
+        source_type="mailing_list_email",
+    )
+    redact_claims([mail], Redactor(llm, memo))  # type: ignore[arg-type]
+    assert [p.name for p in tmp_path.iterdir()] == ["redact_names_v2.mail"]
+
+
+def test_another_sources_reading_of_a_show_names_the_work_and_never_drops_the_event() -> None:
+    """The Footlights' own page lists Camdram's "Tom Sweeney: Ribbing For Your
+    Pleasure"; merged into the Camdram event, its title is the work's too."""
+    show = "https://www.camdram.net/shows/2026-tom-sweeney-ribbing-for-your-pleasure.json"
+    page = "https://footlights.example.org/whats-on"
+    claims = [
+        event_claim(
+            "title",
+            "Tom Sweeney: Ribbing For Your Pleasure",
+            key="evt-s",
+            url=show,
+            source_type="camdram",
+        ),
+        event_claim(
+            "sourceUrl", show.removesuffix(".json"), key="evt-s", url=show, source_type="camdram"
+        ),
+        event_claim(
+            "title",
+            "Tom Sweeney: Ribbing for Your Pleasure",
+            key="evt-s",
+            url=page,
+            source_type="society_website",
+        ),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(_model_never)))  # type: ignore[arg-type]
+    assert stats.dropped == []
+    assert [c.value for c in posted if c.field == "title"] == [
+        "Tom Sweeney: Ribbing For Your Pleasure",
+        "Tom Sweeney: Ribbing for Your Pleasure",
+    ]
+    # An unsafe title of another source's reading withholds that title only.
+    feed = "https://calendar.google.com/calendar/ical/x/public/basic.ics"
+    merged = [
+        event_claim("title", "Pub quiz", key="evt-q", url=feed),
+        event_claim("sourceUrl", feed, key="evt-q", url=feed),
+        event_claim(
+            "title",
+            "Pub quiz with Ann Example",
+            key="evt-q",
+            url=page,
+            source_type="society_website",
+        ),
+    ]
+    posted, stats = redact_claims(merged, Redactor(), private={"evt-q": ("Ann Example",)})
+    assert stats.dropped == []
+    by_url = {c.source_url: c for c in posted if c.field == "title"}
+    assert by_url[feed].value == "Pub quiz"
+    assert "Ann Example" not in str(by_url[page].value)
+
+
+def test_a_url_spelling_the_name_a_shows_title_keeps_reveals_nothing() -> None:
+    show = "https://www.camdram.net/shows/2026-tom-sweeney-ribbing-for-your-pleasure.json"
+
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        source = text.split("--- TEXT ---\n", 1)[1]
+        return reply(source.replace("Tom Sweeney", "a performer"), ("Tom Sweeney", "a performer"))
+
+    claims = [
+        event_claim(
+            "title",
+            "Tom Sweeney: Ribbing For Your Pleasure",
+            key="evt-s",
+            url=show,
+            source_type="camdram",
+        ),
+        event_claim(
+            "sourceUrl", show.removesuffix(".json"), key="evt-s", url=show, source_type="camdram"
+        ),
+        event_claim(
+            "description",
+            "When Footlight Tom Sweeney enters a room, all is well.",
+            key="evt-s",
+            url=show,
+            source_type="camdram",
+        ),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    assert stats.dropped == []
+    assert {c.field for c in posted} == {"title", "sourceUrl", "description"}

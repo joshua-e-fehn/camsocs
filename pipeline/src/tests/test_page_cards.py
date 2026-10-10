@@ -535,6 +535,8 @@ def test_a_site_whose_programme_is_only_images_gets_its_events(
     pub = by_title["Pub Night"]
     assert pub.event_source == "termcard"
     assert pub.source_url == f"{UPLOADS}/2026/10/quokka-mich-03.png"
+    # Swept by the page that shows the card (review 2026-10-10).
+    assert pub.listing_url == f"{SITE}/our-events"
     assert values(pub)["startsAt"] == ms(2026, 10, 15, 19, 30)
     assert values(by_title["Oktoberfest"])["allDay"] is True
     # The PDF's week row in the term its card names, its quote on the text layer.
@@ -592,3 +594,90 @@ def test_a_page_about_an_earlier_season_shows_no_cards_to_read(
     assert sorted(llm.calls) == ["blue", "green", "red", "white"]
     assert photo.call_count == 0
     assert result.tally.dropped["an old card or poster"] == 3
+
+
+# --- review 2026-10-10: slides labelled "MT - 2", termcard pages, one evening twice --------
+
+
+def test_a_slide_labelled_with_a_term_and_its_number_is_a_card() -> None:
+    html = """<html><head><title>Termcard — Quokka Society</title></head><body><main>
+    <img src="https://cdn.example/logo.png" alt="Cambridge University Quokka Society">
+    <img src="https://cdn.example/Michaelmas+-+1.PNG" alt="Michaelmas - 1.PNG">
+    <img src="https://cdn.example/MT+-+2.PNG" alt="MT - 2.PNG">
+    <img src="https://cdn.example/1791303914638-KC64.png" alt="">
+    <img src="https://cdn.example/DSC02797.jpg" alt="">
+    </main></body></html>"""
+    found = [item.url for item in card_images(html, "https://quokka.example/termcard-1")]
+    assert "https://cdn.example/MT+-+2.PNG" in found
+    # On a term card page an unlabelled image is a slide; its logo and a
+    # camera's photo are not.
+    assert "https://cdn.example/1791303914638-KC64.png" in found
+    assert not any("logo" in url or "DSC" in url for url in found)
+    # The same unlabelled image on another page is no card.
+    elsewhere = card_images(html.replace("Termcard", "Gallery"), "https://quokka.example/gallery")
+    assert "https://cdn.example/1791303914638-KC64.png" not in [item.url for item in elsewhere]
+
+
+def test_a_poster_and_the_term_card_naming_one_evening_differently_are_one_reading() -> None:
+    from camsocs_pipeline.events.common import EventDraft, build_event_observation
+    from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
+
+    organiser = OrganiserObs(identity=IdentityHints(name="Quokka Society", known_key=KEY))
+
+    def reading(title: str, *, timed: bool, description: str | None, url: str) -> EventObservation:
+        start = (
+            datetime(2026, 10, 14, 20, 15, tzinfo=LONDON)
+            if timed
+            else datetime(2026, 10, 14, tzinfo=LONDON)
+        )
+        draft = EventDraft(
+            event_source="termcard",
+            external_id=f"{KEY}:2026-10-14:{title.lower().replace(' ', '-')}",
+            title=title,
+            starts_at=start,
+            all_day=not timed,
+            description=description,
+            organisers=[organiser],
+        )
+        return build_event_observation(
+            draft, source_type="termcard", source_url=url, retrieved_at=NOW, evidence="primary"
+        )
+
+    row = reading(
+        "Cinema QuokSoc",
+        timed=False,
+        description="The Last One for the Road",
+        url=f"{UPLOADS}/c.png",
+    )
+    poster = reading(
+        "THE LAST ONE FOR THE ROAD", timed=True, description=None, url=f"{UPLOADS}/p.png"
+    )
+    other = reading("Pub Quiz", timed=False, description=None, url=f"{UPLOADS}/c.png")
+    tally = Tally()
+    kept = website.unseen_card_events([row, poster, other], [], tally)
+    assert [website._title(r) for r in kept] == ["THE LAST ONE FOR THE ROAD", "Pub Quiz"]
+
+
+def test_a_cards_events_are_swept_by_the_page_that_shows_it() -> None:
+    """Review 2026-10-10: each card file was a listing of its own, so the
+    events of a card a page stopped showing were never withdrawn. The
+    identity claims now come from the page."""
+    from camsocs_pipeline.claims import claims_for_event
+    from camsocs_pipeline.events.common import EventDraft, build_event_observation
+
+    draft = EventDraft(
+        event_source="termcard",
+        external_id=f"{KEY}:2026-11-25:opening-reception",
+        title="Opening Reception",
+        starts_at=datetime(2026, 11, 25, tzinfo=LONDON),
+        all_day=True,
+    )
+    card = f"{UPLOADS}/2026/10/card.png"
+    record = build_event_observation(
+        draft, source_type="termcard", source_url=card, retrieved_at=NOW, evidence="primary"
+    ).model_copy(update={"listing_url": f"{SITE}/our-events/"})
+    by_field = {claim.field: claim for claim in claims_for_event(record)}
+    assert by_field["externalId"].source_url == f"{SITE}/our-events/"
+    assert by_field["source"].source_url == f"{SITE}/our-events/"
+    # Every other claim keeps the card as its source; the event's page is the card.
+    assert by_field["title"].source_url == card and by_field["sourceUrl"].value == card

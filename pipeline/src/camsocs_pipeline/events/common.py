@@ -73,6 +73,7 @@ from camsocs_pipeline.sources.links import (
     classify_email,
     is_crsid_address,
     name_tokens,
+    unescape_addresses,
 )
 from camsocs_pipeline.staging.store import Record, events_directory
 
@@ -241,6 +242,7 @@ def withhold_personal_contacts(text: str | None, own_tokens: set[str] | None = N
     and every written-out CRSid withheld (module docstring)."""
     if not text:
         return text
+    text = unescape_addresses(text)
 
     def address(match: re.Match[str]) -> str:
         reading = classify_email(match.group(0), own_tokens or set())

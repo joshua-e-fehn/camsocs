@@ -19,6 +19,7 @@ pixi run pipeline -- derive              # re-derive statuses / term weeks / sta
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
 pixi run pipeline -- coverage [--before DIR]  # field coverage of staged organisations, offline
+pixi run pipeline -- --env prod clean-events [--titles] [--apply]  # stored events no reader restates (docs/deploy.md §7)
 pixi run harvest                         # the full harvest + coverage report (below)
 pixi run harvest-events                  # the daily events run (below)
 pixi run prune-cache                     # retention R7: var/cache + old staging, 90 days
@@ -84,7 +85,7 @@ report. (`scripts/daily-sync.sh` is the generic cron wrapper for another host.)
 docs/compliance/retention.md R7 allows to keep for 90 days: cached pages (a page's body,
 meta and last-failure note go together, once all are older), LLM replies under
 `var/cache/llm/`, and superseded staging files (never the latest file of each part, which
-`load` still reads). The VPS runner runs it after each weekly full run (`docs/ops-vps.md`).
+`load` still reads). The VPS runner runs it after every scheduled run, daily and weekly (`docs/ops-vps.md`).
 
 ## Stages, staging and loading
 
@@ -170,7 +171,9 @@ meta and last-failure note go together, once all are older), LLM replies under
   event organisers → broker inferences. Convex resolves values and computes confidence.
   On the way, public free text is redacted (decision D1, `extract/redact.py`, prompt
   `redact_names_v2`; titles, venues and price notes included, a title that cannot be made
-  safe keeps its event out): names of private individuals become roles, the original travels as the
+  safe keeps its event out; a Camdram show's or talks.cam talk's title is never redacted, a
+  talk's title on a society's programme keeps its speaker, other titles and venues reach the
+  model with their context; the notes list titles that still read "someone" by key): names of private individuals become roles, the original travels as the
   claim's internal `valueRaw`, and a text that cannot be made safe is posted `not_published`.
   The bulk model's replies are cached by the input's sha256; a dry run uses the cache and the
   deterministic rule only.
@@ -185,7 +188,7 @@ meta and last-failure note go together, once all are older), LLM replies under
   - **Calendar noise (decision D6).** Before anything else, every keyed event reading is
     judged (`events/noise.py` rules, `extract/event_noise.py` for the model): notices — a
     prayer room closed, a deadline, a placeholder, a date marker, a cancellation of nothing —
-    are not posted at all (the notes count each rule and show a few titles with their keys;
+    are not posted at all (the notes count each rule and give a few keys, never titles;
     one already on the deployment is withdrawn by its listing three days later, or removed at
     once with `ingest/purge:removeEntity`; a notice on an event another listing keeps — one
     calendar UID on two calendars — is restated `not_found` from its listing instead, so its
@@ -193,8 +196,10 @@ meta and last-failure note go together, once all are older), LLM replies under
     `takes_part` for someone else's event a society only takes part in (a CTF imported from
     CTFtime, a talk on another talks.cam list, a "[External]" entry), with its own page as
     `externalUrl`, else `hosts`. Rules are `inferred` parser claims (`event_noise.<rule>`);
-    borderline readings go to the bulk model (prompt `event_noise_v1`, replies cached under
-    `var/cache/llm/event_noise_v1/`, quotes checked), never with talks.cam text. The stage
+    borderline readings go to the bulk model (prompt `event_noise_v2`, replies cached under
+    `var/cache/llm/event_noise_v2/`, a mail-derived reading's under `event_noise_v2.mail/`,
+    quotes checked; a verdict quoting only the title is `inferred`), never with talks.cam
+    text, and only after the suppression list has been applied to what it reads. The stage
     metrics carry `eventNoticesDropped` and `eventsTakingPart`. The inbox's posts take the
     same path.
   - **The suppression list first.** Before anything is posted, the plan is filtered by what
@@ -280,6 +285,12 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
   fetch.
 - One request in flight per host, at least `CAMSOCS_MIN_HOST_INTERVAL` apart; different hosts
   may run concurrently.
+- **Public addresses only.** A host is resolved before every request (robots.txt and each
+  redirect hop too); a local name, or any address that is loopback, private, link-local,
+  CGNAT, multicast or reserved, refuses the fetch (`disallowed_by_robots`), and the
+  connection is made only to an address checked again then (`PublicOnlyBackend`): the VPS
+  host's cliproxy, Docker containers and Tailscale peers are never reachable from a scraped
+  URL. Tests resolve every name to a public address (`conftest.py`).
 - 429/503/transport errors back off 20 s → 300 s with jitter and honour `Retry-After`.
 - 401/403 are recorded as `access_restricted` and never retried with credentials. The only
   credential ever sent is an API key a source asks for (Camdram), via `fetch(headers=…)`.
@@ -307,7 +318,9 @@ and the crosswalk (`resolve.lookup.OrgLookup`). They share `extract/events.py`:
   numbers redacted. The mail's extraction note counts what was cut, never what it said.
 - `extract/dedupe.py` drops events another staged source already has.
 - `extract/memo.py` caches validated replies under `var/cache/llm/` (the D1 redaction's too,
-  under `redact_names_v2/`, and the D6 calendar-noise verdicts under `event_noise_v1/`).
+  under `redact_names_v2/`, and the D6 calendar-noise verdicts under `event_noise_v2/`; those
+  about mail-derived readings under `<prompt>.mail/`, which `prune-cache` deletes after 30
+  days, retention R4).
   Website pages give the model the Thursday that starts the week as the reference date
   (`extract.when.week_anchor`), so an unchanged page is asked about once a week; a card
   (`extract/cards.py`) gets the week it was published (its dated path or `Last-Modified`),

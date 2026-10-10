@@ -18,6 +18,9 @@ Never change these
 
 Names listed under "Committee members" below are private and must always be replaced if they appear in the text.
 
+What the text is
+- Before the text you may be told what it is: an event's title or venue, the event's type, where it is listed, and the start of the event's description. Use this only to recognise what is not a private person — a venue ("Kiki's" where people meet is a place), a film, play or book the description names, a talk's or workshop's speaker named in its title ("A chat with Luca Ravenna", a journalist's name as a talk's title) — and change only the text after "--- TEXT ---", never the context.
+
 Your answer
 - "text": the whole text with only those replacements made. If the text names no private individual, return it exactly unchanged.
 - "redactions": one entry per name you replaced. "original" is the name exactly as it appears in the text, copied character for character (for example "Anna Smith"). "replacement" is the words you put in its place, or "" if you only removed it. If you replaced nothing, return an empty list.

@@ -7,8 +7,11 @@ live in `events.noise`.
 the one path every event takes to Convex (the load stage, and the inbox
 stage's own posts) — before duplicates are found, so a notice never becomes
 another reading's primary. Staging keeps every reading as its source listed
-it. A ``notice`` is **dropped**: none of its claims is posted, and the notes
-count each rule and show a few titles (addresses withheld) with their keys.
+it. The suppression list has already been applied to what it reads
+(`suppressions.suppress_records`), so no suppressed event, address or name
+reaches the model. A ``notice`` is **dropped**: none of its claims is posted,
+and the notes count each rule and give a few event keys — never a title: run
+notes are kept a year (harvestRuns) and a notice's title can name its booker.
 When another listing's kept reading has the same key (one calendar UID on
 two calendars: the Islamic Society's sisters' calendar lists the brothers'
 Quran circle as "PR closed to sisters (Brothers Quran Circle)"), the notice
@@ -24,13 +27,15 @@ unless its source states ``hosting`` itself.
 ``inferred`` (a rule judges what a text means; the source does not state
 it), extractor ``event_noise.<rule>``, the words it matched as the evidence
 quote. A model's verdict is an LLM claim, extractor the model id, prompt
-version ``event_noise_v1``, its quote checked against the text it was shown:
-``found`` with a verified quote, ``inferred`` without. Server-side, of each
+version ``event_noise_v2``, its quote checked against the text it was shown:
+``found`` with a verified quote that says more than the title (the title is
+no evidence of who runs an event: a verdict quoting only it is ``inferred``,
+as a rule's is), ``inferred`` without. Server-side, of each
 source's ``hosting`` claims only the newest counts, whatever its method, and
 across sources ``takes_part`` wins (convex/lib/fields.ts).
 
 **The model for what stays borderline** (`NoiseClassifier`): the bulk model
-reads the entry with the prompt ``extract/prompts/event_noise_v1.md`` and
+reads the entry with the prompt ``extract/prompts/event_noise_v2.md`` and
 returns ``{kind, evidence_quote, external_link}``. A ``notice`` without a
 verified quote is kept as an event (a wrong notice would hide a real event);
 an ``external`` verdict without one is still claimed, ``inferred``. The link
@@ -41,7 +46,9 @@ cached by the input's sha256 (`extract.memo`). talks.cam content never
 reaches the model (§6), nor text that relays it (a talks.cam link), nor a
 general source whose host or page keeps AI out (`extract.ai_gate`); such
 borderline readings — and, in a dry run, those without a cached reply —
-stay ``hosts`` (``event.default``) and the notes count them.
+stay ``hosts`` (``event.default``) and the notes count them. A reading from
+list mail is cached apart (``event_noise_v2.mail``), so its reply goes after
+the 30 days of retention R4 with the mail (`prune.MAIL_PROMPTS`).
 """
 
 from __future__ import annotations
@@ -68,29 +75,20 @@ from camsocs_pipeline.extract.memo import LLMMemo, memo_key
 from camsocs_pipeline.keys import event_key
 from camsocs_pipeline.models.observation import EventObservation, FieldObs, Observation
 from camsocs_pipeline.sources.base import PoliteClient
-from camsocs_pipeline.sources.links import CRSID_PATTERN, EMAIL_PATTERN
 
 logger = logging.getLogger(__name__)
 
-PROMPT_NAME = "event_noise_v1"
+PROMPT_NAME = "event_noise_v2"
 PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_NAME}.md"
 #: The extractor prefix of a rule's verdict: ``event_noise.<rule>``.
 EXTRACTOR = "event_noise"
 
 #: Longest description the model is shown (the CTFtime imports run to pages).
 MAX_DESCRIPTION = 3_000
-#: Titles shown per notice rule in the load notes.
+#: Event keys shown per notice rule in the load notes (never their titles).
 EXAMPLES_PER_RULE = 3
-
-
-_CRSID = re.compile(rf"\b{CRSID_PATTERN}\b")  # CRSids are lower case: "MT26" is none
-
-
-def _example(title: str) -> str:
-    """A dropped notice's title as the run notes show it: one line, no
-    address, no CRSid."""
-    title = _CRSID.sub("[withheld]", EMAIL_PATTERN.sub("[address withheld]", title))
-    return " ".join(title.split())[:80]
+#: The memo folder of replies about list mail (pruned after 30 days, R4).
+MAIL_SPACE = f"{PROMPT_NAME}.mail"
 
 
 # --- the model ------------------------------------------------------------------------------
@@ -138,6 +136,13 @@ def render_entry(text: EventText, signals: Sequence[str]) -> str:
     return "\n".join(lines)
 
 
+def _only_the_title(quote: str, title: str) -> bool:
+    """Whether a quote says nothing the title does not: the title is no
+    evidence of who runs an event (module docstring)."""
+    words = re.findall(r"[^\W_]+", quote.lower())
+    return not words or " ".join(words) in " ".join(re.findall(r"[^\W_]+", title.lower()))
+
+
 def _relays_talks_cam(text: EventText) -> bool:
     return any("talks.cam.ac.uk" in part.lower() for part in (text.text(), *text.urls))
 
@@ -149,8 +154,8 @@ class NoiseStats:
     readings: int = 0
     dropped: Counter = field(default_factory=Counter)
     external: Counter = field(default_factory=Counter)
-    #: (rule, title, event key) of a few dropped notices per rule.
-    examples: list[tuple[str, str, str]] = field(default_factory=list)
+    #: (rule, event key) of a few dropped notices per rule: keys only, never titles.
+    examples: list[tuple[str, str]] = field(default_factory=list)
     dropped_keys: list[str] = field(default_factory=list)
     #: Dropped notices whose event another listing keeps: restated `not_found`.
     retracted: int = 0
@@ -186,7 +191,7 @@ class NoiseStats:
                 f"  {self.retracted} of the notices restated not_found on an event another "
                 "listing keeps"
             )
-        notes.extend(f'  {rule}: "{title}" ({key})' for rule, title, key in self.examples)
+        notes.extend(f"  {rule}: {key}" for rule, key in self.examples)
         return notes
 
 
@@ -223,7 +228,8 @@ class NoiseClassifier:
         if not self._may_read(record, text):
             self._count("undecided")
             return verdict
-        reply = self._reply(text, verdict.borderline)
+        space = MAIL_SPACE if record.source_type == "mailing_list_email" else PROMPT_NAME
+        reply = self._reply(text, verdict.borderline, space)
         if reply is None:
             self._count("undecided")
             return verdict
@@ -246,6 +252,7 @@ class NoiseClassifier:
             borderline=verdict.borderline,
             model=model,
             quote_check=match.value,
+            title_only=verified and _only_the_title(answer.evidence_quote, text.title),
         )
 
     def _may_read(self, record: EventObservation, text: EventText) -> bool:
@@ -257,11 +264,13 @@ class NoiseClassifier:
             return False
         return self.gate is None or self.gate.allows(record.source_url, record.source_type)
 
-    def _reply(self, text: EventText, signals: Sequence[str]) -> tuple[NoiseReply, str] | None:
+    def _reply(
+        self, text: EventText, signals: Sequence[str], space: str = PROMPT_NAME
+    ) -> tuple[NoiseReply, str] | None:
         entry = render_entry(text, signals)
         key = memo_key(PROMPT_NAME, entry)
         if self.memo is not None:
-            cached = self.memo.get(PROMPT_NAME, key, NoiseReply)
+            cached = self.memo.get(space, key, NoiseReply)
             if cached is not None:
                 self._count("model_cached")
                 return cached
@@ -279,7 +288,7 @@ class NoiseClassifier:
             return None
         self._count("model_calls")
         if self.memo is not None:
-            self.memo.put(PROMPT_NAME, key, call.value, call.model)
+            self.memo.put(space, key, call.value, call.model)
         return call.value, call.model
 
     def classify_many(self, items: Sequence[tuple[EventObservation, EventText]]) -> list[Verdict]:
@@ -310,7 +319,9 @@ def verdict_fields(record: EventObservation, verdict: Verdict) -> list[FieldObs]
             prompt_version=PROMPT_NAME,
             evidence_quote=quote,
             quote_check=verdict.quote_check,
-            status=None if verdict.quote_check in ("exact", "normalised") else "inferred",
+            status=None
+            if verdict.quote_check in ("exact", "normalised") and not verdict.title_only
+            else "inferred",
         )
     else:
         extractor = f"{EXTRACTOR}.{verdict.rule}"
@@ -391,7 +402,7 @@ def sift_events(
         for (_index, record, _text), verdict in zip(pending, verdicts, strict=True)
         if verdict.kind != "notice"
     }
-    for (index, record, text), verdict in zip(pending, verdicts, strict=True):
+    for (index, record, _text), verdict in zip(pending, verdicts, strict=True):
         if verdict.kind == "notice":
             key = event_key(record.event_source, record.external_id)
             if key in kept_keys:
@@ -403,7 +414,7 @@ def sift_events(
             stats.dropped_keys.append(key)
             if shown[verdict.rule] < EXAMPLES_PER_RULE:
                 shown[verdict.rule] += 1
-                stats.examples.append((verdict.rule, _example(text.title), key))
+                stats.examples.append((verdict.rule, key))
             continue
         if verdict.kind == "external":
             stats.external[verdict.rule] += 1

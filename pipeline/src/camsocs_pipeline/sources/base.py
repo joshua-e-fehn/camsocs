@@ -67,7 +67,9 @@ Properties enforced here rather than left to each caller's discipline:
     The connection itself is made only to an address checked again at that
     moment (`PublicOnlyBackend`), so a name that resolves differently the
     second time (DNS rebinding) still cannot reach the host's own services.
-    The LLM client and the Convex loader do not use this client.
+    No HTTP proxy is used (an environment's or the system's): a proxy would
+    resolve and connect for us, past both checks. The LLM client and the
+    Convex loader do not use this client.
 """
 
 from __future__ import annotations

@@ -362,20 +362,28 @@ def claims_for_event(
     already lists (`events.duplicates`). The reading's claims then go to that
     event, with their own provenance, and without the identity claims
     (`source`, `externalId`, `sourceUrl`): the event keeps its own listing.
-    `visibility` is still claimed — the strictest reading wins."""
+    `visibility` is still claimed — the strictest reading wins. A reading
+    with a `listing_url` (a card an events page shows) claims `source` and
+    `externalId` from that listing, which the server sweeps it by."""
     key = event_key(*(duplicate_of or (obs.event_source, obs.external_id)))
     evidence = evidence_of(obs.fields)
     extra: list[FieldObs] = [
         parser_field("visibility", obs.visibility, extractor="event.identity", evidence=evidence),
     ]
     fields = list(obs.fields)
+    listed: list[ClaimInput] = []
     if duplicate_of is None:
-        extra[:0] = [
+        identity = [
             parser_field("source", obs.event_source, extractor="event.identity", evidence=evidence),
             parser_field(
                 "externalId", obs.external_id, extractor="event.identity", evidence=evidence
             ),
         ]
+        if obs.listing_url and obs.listing_url != obs.source_url:
+            listing = obs.model_copy(update={"source_url": obs.listing_url})
+            listed = _claims(identity, listing, "event", key)
+        else:
+            extra[:0] = identity
         if "sourceUrl" not in {f.field for f in fields}:
             extra.append(
                 parser_field(
@@ -398,7 +406,7 @@ def claims_for_event(
                     "venueText", obs.venue.name, extractor="event.venue", evidence=evidence
                 )
             )
-    return _claims([*fields, *extra], obs, "event", key)
+    return [*listed, *_claims([*fields, *extra], obs, "event", key)]
 
 
 def evidence_of(fields: Iterable[FieldObs]) -> str:

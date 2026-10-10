@@ -138,7 +138,8 @@ MAX_CARD_ASPECT = 4.0
 #: Words in a file's label that say it is a term card or an event poster.
 _CARD_WORDS = re.compile(
     r"(?<![a-z])(?:term[\s_-]?cards?|termcard|term|michaelmas|lent|easter|"
-    r"(?:mt|lt|et)[\s_-]?\d\d|posters?|flyers?|programmes?|program|schedule|calendar|"
+    # A term and a slide's number or year: "MT26", "MT - 2" (review 2026-10-10).
+    r"(?:mt|lt|et)\s*[_-]?\s*\d{1,2}(?!\d)|posters?|flyers?|programmes?|program|schedule|calendar|"
     r"what'?s[\s_-]?on|events?|line[\s_-]?up)(?![a-z])",
     re.I,
 )
@@ -173,6 +174,16 @@ _NOT_A_CARD = re.compile(
     r"divider|pixel|spacer|blank|forms?|insurance|constitution|minutes|policy|privacy|"
     r"risk[\s_-]?assessment)(?![a-z])",
     re.I,
+)
+#: A page that is itself a term card (its URL or title): the images in its
+#: main content are its slides, labelled or not (the Scandinavian Society's
+#: "termcard" page: a gallery without a heading). Not "programme" or "what's
+#: on": such pages show photos and show posters as often as cards (survey of
+#: the cached pages, 2026-10-10).
+_CARD_PAGE = re.compile(r"(?<![a-z])(?:term[\s_-]?cards?|termcards?)(?![a-z])", re.I)
+#: Alt text that names an organisation and nothing a card would: its logo.
+_ORGANISATION_ALT = re.compile(
+    r"(?<![a-z])(?:society|club|association|union|college|university|soc)(?![a-z])", re.I
 )
 #: A heading over sponsors' logos or the committee's photos.
 _NOT_A_CARD_HEADING = re.compile(r"sponsor|partner|supporter|committee|our team|meet the", re.I)
@@ -495,27 +506,41 @@ def _file_links(html: str, base: str) -> list[str]:
     return [item.url for item in _newest_first(files)]
 
 
+def card_page(html: str, base: str) -> bool:
+    """Whether a page is itself a term card, by its URL's path or its title
+    (`_CARD_PAGE`)."""
+    title = LexborHTMLParser(html).css_first("title")
+    words = " ".join(
+        [_readable(urlsplit(base).path), title.text(strip=True) if title is not None else ""]
+    )
+    return _CARD_PAGE.search(words) is not None
+
+
 def card_images(html: str, base: str) -> list[PageFile]:
     """The files a society's events page shows that look like term cards or
     event posters (module docstring), newest-named first, each file once
-    however many resized copies the page shows."""
+    however many resized copies the page shows. On a page that is itself a
+    term card (`card_page`), its main content's images are its slides."""
     chosen: list[PageFile] = []
     seen: set[str] = set()
+    on_card_page = card_page(html, base)
     for item in page_files(html, base):
         if item.region != "main" or never_fetched(item.url) or item.key in seen:
             continue
-        if _is_card(item):
+        if _is_card(item, on_card_page=on_card_page):
             seen.add(item.key)
             chosen.append(item)
     return _newest_first(chosen)
 
 
-def _is_card(item: PageFile) -> bool:
+def _is_card(item: PageFile, *, on_card_page: bool = False) -> bool:
     """Whether a file a page shows looks like a term card or an event poster:
     a word for one (or a date) in what the page calls it, else the heading
-    right above it announces a programme and it is no camera's photo — never
-    a logo, an icon, a sponsor's or a social network's image, nothing under a
-    heading of past events or photos, nothing shown as an icon or a strip."""
+    right above it announces a programme, else the page is a term card itself
+    (and its alt text is no organisation's name: its logo) — and it is no
+    camera's photo — never a logo, an icon, a sponsor's or a social network's
+    image, nothing under a heading of past events or photos, nothing shown as
+    an icon or a strip."""
     parts = urlsplit(item.url)
     name = _readable(parts.path.rsplit("/", 1)[-1])
     if _NOT_A_CARD.search(f"{item.words} {parts.hostname or ''} {_readable(parts.path)}"):
@@ -526,6 +551,8 @@ def _is_card(item: PageFile) -> bool:
         return False
     nearest = item.headings[-1] if item.headings else ""
     named = bool(_CARD_WORDS.search(item.words) or _DATE_WORDS.search(item.words))
+    if not named and on_card_page and not _ORGANISATION_ALT.search(item.alt):
+        named = True
     if _PHOTO_NAME.search(name):
         return False
     if not named and not _CARD_HEADING.search(nearest):

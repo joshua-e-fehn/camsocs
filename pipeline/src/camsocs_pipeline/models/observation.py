@@ -265,6 +265,12 @@ class EventObservation(_ObservationBase):
     #: Where it happens, when the source names a venue. With a resolved key it
     #: becomes `venueKey`; without one, its name becomes `venueText`.
     venue: IdentityHints | None = None
+    #: The listing a reading was read from when that is not `source_url`: the
+    #: events page (or termcard page) that shows a card. Its identity claims
+    #: (`source`, `externalId`) carry it as their source URL, so the server
+    #: sweeps the card's events by the page (data-model §2 `sweepGroup`): an
+    #: event of a card the page no longer shows falls behind and is withdrawn.
+    listing_url: str | None = None
 
     @model_validator(mode="after")
     def _fields_belong_to_events(self) -> Self:

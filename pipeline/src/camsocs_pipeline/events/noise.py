@@ -20,20 +20,28 @@ to. Each staged event reading is one of three kinds (`Verdict.kind`):
 the claim's extractor ``event_noise.<rule>``) and the words it matched are
 its evidence:
 
-1. Notices, by title: a room booking (`events.checks.is_booking`), a room or
-   prayer room closed or open and opening hours (``notice.room_closure``), a
+1. Notices, by title — never on a listing that states its events itself
+   (Camdram, talks.cam, CUCBC, Playwaze, SU What's On): a room booking
+   (`events.checks.is_booking`), a room or prayer room closed or open and
+   opening hours (``notice.room_closure``; with an event of its own beside it
+   — "Library closed — study social at the Buttery", "Freshers Squash: Bar is
+   open" — it is only borderline, while an event named in brackets as the
+   reason, "PR closed to sisters (Brothers Social)", stays a notice), a
    cancellation of nothing ("No Archery at Churchill", a bare "Cancelled";
    ``notice.nothing``), a booking or admin notice (a deadline, nominations or
-   sign-ups opening or closing, an office's office hours; ``notice.admin`` —
-   with an event word beside it, "Beat the Deadline workshop", it is only
+   sign-ups, a competition or its questions opening, closing or released, an
+   office's office hours; ``notice.admin`` — with an event word beside it,
+   "Beat the Deadline workshop", "Applications Open Evening", it is only
    borderline), a date marker ("Full Term starts", a bank holiday, "MSt
    students in residence"; ``notice.date_marker``), and a placeholder title
    ("TBC", "Busy", "Hold") with no description and no speakers, on a listing
    that does not state its events itself (``notice.placeholder``).
 2. External, decisively: a title the society marks itself ("[External] CUEN
-   conference"; ``external.marked``), an entry a CTFtime import wrote ("CTF
-   Event from CTFTime", a ctftime.org link; ``external.ctftime``) unless its
-   title names its own organiser, and a talk linked on talks.cam that is not
+   conference"; ``external.marked``), an entry a CTFtime import wrote (its
+   marker "CTF Event from CTFTime", or a link to a ctftime.org/event/ page;
+   ``external.ctftime``) unless its title names its own organiser — a mere
+   mention of CTFtime ("practice on ctftime.org challenges") is only
+   borderline — and a talk linked on talks.cam that is not
    on one of the listing society's own talks lists (``external.talks_cam``;
    the talks.cam stage's staged talks say whose list a talk is on — one of
    the society's own is ``event.own_talks_list``).
@@ -42,14 +50,16 @@ its evidence:
    "Hosted by" and people's names into every description: a person is no
    signal), "we're attending", "taking part in", a link to an outside events
    platform (Devpost, MLH, Kaggle, …), a hackathon, conference, tournament,
-   championship, fair or "X Open" in the title, another university, a
+   championship, cup, challenger, doubles, fair or "X Open" in the title, a
+   mention of CTFtime, a closure beside an event, another university, a
    placeholder title with a description, a deadline-like word. A listing that
    states its organiser itself (Camdram, talks.cam, CUCBC, Playwaze, SU What's
    On) settles it as the society's own (``event.listing``), as does a fixture
    ("vs", "Varsity"; ``event.fixture``) or a title that names its own
-   organiser by name, alias, short name or acronym (`own_names`;
-   ``event.own_name``) — never by a topic word of its name ("engineering"),
-   which an outside event's title may share. What stays borderline is
+   organiser by name, alias, short name, acronym or its own site's name
+   ("CUES" for www.cues.org.uk; `own_names`, `host_label`; ``event.own_name``)
+   — never by a topic word of its name ("engineering"), which an outside
+   event's title may share. What stays borderline is
    ``event.default`` until the model says otherwise.
 
 `NoiseContext` reads what the staged records say about the listing
@@ -151,14 +161,18 @@ _ADMIN = re.compile(
     r"(?:open|opens|opening|close|closes|closing|closed|due|released?|go(?:es)?\s+live"
     r"|launch(?:es)?)\b"
     r"|\b(?:last|final)\s+day\s+(?:to|for)\s+(?:apply|sign|book|register|submit|vote|nominate)\b"
+    r"|\b(?:competition|essay|prize|questions?|results?)\s+(?:now\s+|are\s+|is\s+)?"
+    r"(?:opens?|close[sd]?|closing|released?|announced|out)\b"
     r"|\b(?:admin(?:istrative|istration)?|porters'?|accommodation|tutorial|bursary|bursar's"
     r"|finance|it)\s+office\s+hours\b",
     re.IGNORECASE,
 )
 #: Words that make an admin-looking title an event after all.
 _EVENT_WORDS = re.compile(
-    r"\b(?:workshop|talk|social|session|party|night|lecture|seminar|dinner|drinks|meeting|"
-    r"lunch|brunch|formal|q&a|panel|meet|launch\s+event|celebration)\b",
+    r"\b(?:workshop|talk|social|session|party|night|evening|lecture|seminar|dinner|drinks|"
+    r"meeting|lunch|brunch|breakfast|formal|q&a|panel|meet|launch\s+event|celebration|hustings"
+    r"|squash|quiz|screening|concert|recital|service|training|practice|rehearsal|tour|trip"
+    r"|reception|mixer|welcome|ceilidh|games|study|tea|coffee|picnic|bbq|barbecue|crawl)\b",
     re.IGNORECASE,
 )
 _TERM_SUFFIX = r"(?:\s+(?:michaelmas|lent|easter|mt|lt|et|\d{2,4}(?:[/-]\d{2,4})?))*"
@@ -188,9 +202,11 @@ _PLACEHOLDER = re.compile(
     r"|unavailable|untitled(?:\s+event)?|new\s+event|event|no\s+title|test(?:\s+event)?"
 )
 
-_CTFTIME = re.compile(
-    r"\bctf\s+event\s+from\s+ctf\s*time\b|\bctf\s*time\b|ctftime\.org", re.IGNORECASE
-)
+#: What a CTFtime import writes: its marker, or a link to an event's page there.
+_CTFTIME = re.compile(r"\bctf\s+event\s+from\s+ctf\s*time\b|ctftime\.org/event/\d", re.IGNORECASE)
+#: Any mention of CTFtime: only a borderline signal (a practice night on its
+#: challenges is the society's own event).
+_CTFTIME_MENTION = re.compile(r"\bctf\s*time\b|ctftime\.org", re.IGNORECASE)
 #: A title the society itself marks as someone else's: "[External] CUEN conference".
 _MARKED_EXTERNAL = re.compile(
     r"^\W*[\[(]?\s*external\s*(?:event)?\s*[\])]|^\W*external\s*(?:event)?\s*:", re.IGNORECASE
@@ -214,7 +230,8 @@ _ATTENDING = re.compile(
 )
 _GATHERING = re.compile(
     r"(?i:\b(?:hackathons?|conferences?|summit|congress|convention|expo|olympiad|championships?"
-    r"|nationals|tournament|fair|festival|symposium|competitions?|qualifiers?|quals)\b)"
+    r"|nationals|tournaments?|fair|festival|symposium|competitions?|qualifiers?|quals|cup"
+    r"|trophy|challenger|doubles|singles|invitational)\b)"
     r"|\b[A-Z][\w']+\s+Open\b(?!\s+(?:Mic|Day|Evening|Night|Session|Training|House|Meeting|Shoot))",
 )
 _OTHER_UNIVERSITY = re.compile(
@@ -266,6 +283,27 @@ _NOT_A_PAGE_HOSTS = (
     "cambridgesu.co.uk",
     "camdram.net",
     "talks.cam.ac.uk",
+    # Forms: a sign-up is never the event's own page (data-model §2 `externalUrl`).
+    "forms.office.com",
+    "forms.microsoft.com",
+    "typeform.com",
+    "tally.so",
+    "jotform.com",
+    "surveymonkey.com",
+    "airtable.com",
+    # Link shorteners: they can lead to an invite or a form (review 2026-10-10).
+    "bit.ly",
+    "tinyurl.com",
+    "t.co",
+    "ow.ly",
+    "lnkd.in",
+    "buff.ly",
+    "rebrand.ly",
+    "cutt.ly",
+    "shorturl.at",
+    "is.gd",
+    "tiny.cc",
+    "linktr.ee",
 )
 _IMAGE_PATH = re.compile(r"\.(?:png|jpe?g|gif|webp|avif|svg|pdf)(?:$|\?)", re.IGNORECASE)
 
@@ -276,9 +314,9 @@ def _host_in(host: str, domains: Iterable[str]) -> bool:
 
 def candidate_links(urls: Iterable[str], own_hosts: Iterable[str]) -> list[str]:
     """Links that may be an external event's own page, in order, each once:
-    never a chat invite, a form, a meeting or map link, a social or personal
-    profile, a file, a listing we read as the society's own (the SU, Camdram,
-    talks.cam) or the organiser's own site."""
+    never a chat invite, a form, a meeting or map link, a link shortener, a
+    social or personal profile, a file, a listing we read as the society's own
+    (the SU, Camdram, talks.cam) or the organiser's own site."""
     own = {registrable(host) for host in own_hosts if host}
     out: list[str] = []
     for url in urls:
@@ -356,6 +394,8 @@ class Verdict:
     #: Set for a model verdict.
     model: str | None = None
     quote_check: str | None = None
+    #: A model verdict whose verified quote is only (part of) the title.
+    title_only: bool = False
 
 
 def _match_text(match: re.Match[str] | None) -> str | None:
@@ -374,21 +414,57 @@ def own_names(names: Iterable[str]) -> frozenset[str]:
     return frozenset(out)
 
 
+#: Labels of a host that name no organisation: subdomains and platforms.
+_GENERIC_LABELS = frozenset(
+    {
+        "www", "sites", "site", "en", "docs", "blog", "home", "web", "app", "events", "m", "my",
+        "google", "cam", "srcf", "soc", "wix", "wixsite", "notion", "github", "wordpress",
+    }
+)  # fmt: skip
+
+
+def host_label(host: str) -> str | None:
+    """The name an organisation's own site gives it: its host's first label
+    ("cues" for www.cues.org.uk, "cuadc" for cuadc.org) — a title naming it
+    names its own organiser (the Engineering Society's "CUES Engineering
+    Careers Fair", review 2026-10-10)."""
+    labels = [label for label in host.lower().split(".") if label]
+    while labels and labels[0] in _GENERIC_LABELS:
+        labels = labels[1:]
+    if len(labels) < 2 or len(labels[0]) < 3:
+        return None
+    return labels[0]
+
+
 def _names_own(text: EventText) -> bool:
     title = _plain(text.title)
     return any(re.search(rf"(?<![\w']){re.escape(name)}(?![\w])", title) for name in text.own_names)
 
 
+_BRACKETED = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")
+
+
+def _event_beside(title: str, found: re.Match[str]) -> bool:
+    """Whether a title names an event of its own beside a closure: an event
+    word outside the closure's words and outside brackets (a reason in
+    brackets, "PR closed to sisters (Brothers Social)", is no event of the
+    listing's)."""
+    rest = title[: found.start()] + " " + title[found.end() :]
+    return _EVENT_WORDS.search(_BRACKETED.sub(" ", rest)) is not None
+
+
 def _notice(text: EventText) -> Verdict | None:
     title = _one_line(text.title)
     plain = _plain(title)
+    if text.event_source in SELF_DESCRIBING_SOURCES:
+        return None  # a listing that states its events lists no notices
     if is_booking(title):
         return Verdict("notice", "notice.booking", title)
     found = _CLOSURE.search(title)
-    if found and not (_OPENING.search(found.group(0)) and _EVENT_WORDS.search(title)):
-        # An opening with an event word is a party ("Bar Reopening Night"); a
-        # closure is a notice whatever its reason names ("PR closed to
-        # sisters (Brothers Social)").
+    if found and not _event_beside(title, found):
+        # An opening with an event word is a party ("Bar Reopening Night")
+        # and a closure beside an event is borderline (`_signals`); a closure
+        # is a notice whatever the reason in brackets names.
         return Verdict("notice", "notice.room_closure", found.group(0))
     if found := _NOTHING.search(title):
         return Verdict("notice", "notice.nothing", found.group(0))
@@ -440,6 +516,12 @@ def _external(text: EventText) -> Verdict | None:
 def _signals(text: EventText) -> list[str]:
     body = f"{text.title}\n{text.description}"
     signals: list[str] = []
+    title = _one_line(text.title)
+    closure = _CLOSURE.search(title)
+    if closure and _event_beside(title, closure) and not _OPENING.search(closure.group(0)):
+        signals.append("closure beside an event")
+    if _CTFTIME_MENTION.search(body) or any(_CTFTIME_MENTION.search(url) for url in text.urls):
+        signals.append("mentions CTFtime")
     for hosted in _HOSTED_BY.finditer(body):
         who = hosted.group("who").strip()
         who_tokens = name_tokens(who) | set(_plain(who).split())
@@ -560,6 +642,10 @@ class NoiseContext:
                 own_hosts.extend(self.hosts.get(key, ()))
                 own_talks |= self.talks.get(key, frozenset())
         shown = tuple(dict.fromkeys(name for name in organiser_names if name))
+        if record.source_type == "society_website":
+            # The organisation's own site (enrichment checked it is its own).
+            own_hosts.append(host_of(record.source_url))
+        labels = {label for host in own_hosts if host and (label := host_label(host))}
         return EventText(
             title=text("title"),
             description=description,
@@ -567,8 +653,8 @@ class NoiseContext:
             urls=tuple(dict.fromkeys(urls)),
             organisers=shown,
             own_tokens=frozenset(name_tokens(*shown)),
-            own_names=own_names(shown),
-            own_hosts=frozenset(own_hosts),
+            own_names=own_names(shown) | frozenset(labels),
+            own_hosts=frozenset(h for h in own_hosts if h),
             source_type=record.source_type,
             event_source=record.event_source,
             own_talks=frozenset(own_talks),

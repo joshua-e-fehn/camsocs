@@ -279,6 +279,11 @@ def card_events(
             f"  {len(left_out)} event(s) left out of a card of {org_key}: "
             + ", ".join(f"{n} {why}" for why, n in sorted(counts.items()))
         )
+    # The listing the card was read from (an events page, a termcard page that
+    # links the file): its events are swept by it, so a card it stops showing
+    # is withdrawn (data-model §2 `sweepGroup`).
+    if listed_url != card.url:
+        events = [event.model_copy(update={"listing_url": listed_url}) for event in events]
     return events
 
 

@@ -48,6 +48,17 @@ def similar_titles(a: str, b: str) -> bool:
     return len(left & right) / len(left | right) >= 0.5
 
 
+def named_in(title: str, other_title: str, other_description: str) -> bool:
+    """Whether `title` (two words or more, stop words aside) is in another
+    reading's title or description: a term card's "Cinema ItaSoc" row,
+    described "The Last One for the Road", and the film's own poster "THE
+    LAST ONE FOR THE ROAD" (review 2026-10-10)."""
+    words = title_tokens(title)
+    if len(words) < 2:
+        return False
+    return words <= title_tokens(other_title) or words <= title_tokens(other_description)
+
+
 def _value(record: EventObservation, name: str) -> object:
     for obs_field in record.fields:
         if obs_field.field == name and obs_field.value is not None:
@@ -112,4 +123,9 @@ class EventIndex:
         return any(self.is_duplicate(org, starts_at, title) for org in (orgs or [None]))
 
 
-__all__ = ["EventIndex", "similar_titles", "title_tokens"]
+__all__ = [
+    "EventIndex",
+    "named_in",
+    "similar_titles",
+    "title_tokens",
+]

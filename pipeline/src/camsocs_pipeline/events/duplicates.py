@@ -23,7 +23,11 @@ describe one event.
   the other's, or they share at least half) — or, with an organiser in common
   and the very same start, one distinctive word in common ("Seminar 2:
   Ethics in Modelling" on a termcard is "Seminar: Financial Mathematics and
-  Modelling" on the events page, Tuesday 16:00);
+  Modelling" on the events page, Tuesday 16:00) — or, for a card's or post's
+  one-day all-day row and a timed reading of a card or post, one naming the
+  other in its title or description (the term card's "Cinema ItaSoc",
+  described "The Last One for the Road", and the film's poster at 20:15;
+  `extract.dedupe.named_in`, review 2026-10-10);
 - when both are timed, starts at most `MAX_START_GAP` (30 minutes) apart; an
   all-day reading matches any time that day. A feed's time and a page's time
   exactly one hour apart in British Summer Time are one event too: the
@@ -45,8 +49,10 @@ method, quote) on the primary's key, without the identity claims (`source`,
 `externalId`, `sourceUrl`), so the event keeps its listing and sweep group
 (data-model §2). A reading whose timing is coarser or finer than the
 primary's (all-day vs timed) adds no `startsAt` / `endsAt` / `allDay`: midnight
-is a representation of "no time given", not a competing start. Their
-organisers are added (`merge`), never replacing the primary's set.
+is a representation of "no time given", not a competing start, and a reading
+whose title is unlike the primary's (matched by its start or by naming it)
+adds no `title` to compete with the primary's. Their organisers are added
+(`merge`), never replacing the primary's set.
 """
 
 from __future__ import annotations
@@ -57,7 +63,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from camsocs_pipeline.extract.dedupe import similar_titles, title_tokens
+from camsocs_pipeline.extract.dedupe import named_in, similar_titles, title_tokens
 from camsocs_pipeline.keys import event_key
 from camsocs_pipeline.models.observation import EventObservation, FieldObs
 
@@ -214,6 +220,33 @@ def _distinctive(title: str) -> frozenset[str]:
     )
 
 
+#: Sources whose readings are rows of a card or a post, read by a model.
+_CARD_SOURCES = frozenset({"termcard", "instagram_api"})
+
+
+def _description(record: EventObservation) -> str:
+    obs = _field(record, "description")
+    return obs.value if obs is not None and isinstance(obs.value, str) else ""
+
+
+def _one_evening(a: _Reading, b: _Reading) -> bool:
+    """A card's one-day all-day row and a timed card or poster reading that
+    name one thing differently (module docstring)."""
+    if a.all_day == b.all_day:
+        return False
+    if not {a.record.event_source, b.record.event_source} <= _CARD_SOURCES:
+        return False
+    whole_day = a if a.all_day else b
+    ends = _field(whole_day.record, "endsAt")
+    if ends is not None and isinstance(ends.value, int):
+        last = datetime.fromtimestamp(ends.value / 1000 - 1, tz=UTC).astimezone(LONDON).date()
+        if last != whole_day.day:
+            return False  # a run of days, not one evening
+    return named_in(a.title, b.title, _description(b.record)) or named_in(
+        b.title, a.title, _description(a.record)
+    )
+
+
 def same_event(primary: _Reading, other: _Reading) -> bool:
     """The match rules in the module docstring (`other` against a primary)."""
     if primary.record.visibility != other.record.visibility:
@@ -233,6 +266,8 @@ def same_event(primary: _Reading, other: _Reading) -> bool:
     same_start = timed and (gap < timedelta(minutes=1) or slip)
     if primary.organisers & other.organisers:
         if similar_titles(primary.title, other.title):
+            return True
+        if _one_evening(primary, other):
             return True
         return same_start and bool(_distinctive(primary.title) & _distinctive(other.title))
     if primary.organisers and other.organisers:
@@ -258,6 +293,10 @@ class Duplicates:
     #: Readings whose timing does not join their primary's: another
     #: granularity (all-day vs timed), or an hour's BST slip.
     coarser: set[EventId] = field(default_factory=set)
+    #: Readings whose title is not like their primary's (the term card's row
+    #: "Cinema ItaSoc" of the film's poster): the primary's title stands, they
+    #: add none to compete with it.
+    untitled: set[EventId] = field(default_factory=set)
 
     def __len__(self) -> int:
         return len(self.primary_of)
@@ -299,6 +338,8 @@ def find_duplicates(records: Iterable[object]) -> Duplicates:
                 primaries.append(reading)
                 continue
             result.primary_of[reading.id] = match.id
+            if not similar_titles(match.title, reading.title):
+                result.untitled.add(reading.id)
             if match.all_day != reading.all_day or bst_slip(match, reading):
                 # A start of another granularity, or an hour's slip: the
                 # primary's timing stands, this reading adds none.
@@ -307,11 +348,17 @@ def find_duplicates(records: Iterable[object]) -> Duplicates:
 
 
 def as_duplicate(record: EventObservation, duplicates: Duplicates) -> EventObservation:
-    """The fields a duplicate reading contributes to its primary's event."""
-    if identity(record) not in duplicates.coarser:
+    """The fields a duplicate reading contributes to its primary's event:
+    no timing of another granularity, no title unlike the primary's."""
+    dropped: set[str] = set()
+    if identity(record) in duplicates.coarser:
+        dropped |= _TIMING
+    if identity(record) in duplicates.untitled:
+        dropped.add("title")
+    if not dropped:
         return record
     return record.model_copy(
-        update={"fields": [f for f in record.fields if f.field not in _TIMING]}
+        update={"fields": [f for f in record.fields if f.field not in dropped]}
     )
 
 

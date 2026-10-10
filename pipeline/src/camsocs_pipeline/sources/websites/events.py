@@ -131,7 +131,7 @@ from camsocs_pipeline.extract.dating import (
     weekdays_agree,
     year_problem,
 )
-from camsocs_pipeline.extract.dedupe import similar_titles
+from camsocs_pipeline.extract.dedupe import named_in, similar_titles
 from camsocs_pipeline.extract.events import (
     CallBudget,
     EventContext,
@@ -810,13 +810,34 @@ def _title(record: EventObservation) -> str:
     return next((str(f.value) for f in record.fields if f.field == "title" and f.value), "")
 
 
+def _description(record: EventObservation) -> str:
+    return next((str(f.value) for f in record.fields if f.field == "description" and f.value), "")
+
+
+def _one_evening(a: EventObservation, b: EventObservation) -> bool:
+    """A timed and an all-day card reading of one organiser on one London
+    day that name the same thing: the term card's "Cinema ItaSoc" row (its
+    description "The Last One for the Road") and the film's own poster, "THE
+    LAST ONE FOR THE ROAD" at 20:15 (review 2026-10-10)."""
+    if _timed(a) == _timed(b) or _organiser(a) != _organiser(b):
+        return False
+    if _london_day(a) is None or _london_day(a) != _london_day(b):
+        return False
+    return (
+        similar_titles(_title(a), _title(b))
+        or named_in(_title(a), _title(b), _description(b))
+        or named_in(_title(b), _title(a), _description(a))
+    )
+
+
 def unseen_card_events(
     cards: Sequence[EventObservation], listed: Sequence[EventObservation], tally: Tally
 ) -> list[EventObservation]:
     """The cards' events the site's own text does not already list: one
     reading per event (a poster and the term card both show the evening; a
     timed reading before an all-day one, then the fuller one, then page
-    order), and none that the page's text or structured data lists on the
+    order — also when the two name it differently, `_one_evening`), and none
+    that the page's text or structured data lists on the
     same London day under a similar title — the page's words, its quotes
     checked, beat a reading off an image (a card's "4:30" read as 04:30 is
     the page's 16:30). Other sources' readings merge at load
@@ -828,6 +849,13 @@ def unseen_card_events(
             best[record.external_id] = record
     if len(cards) > len(best):
         tally.drop("one event on several cards", len(cards) - len(best))
+    # A poster and the term card under different titles: the timed reading
+    # stands, the all-day row adds nothing.
+    timed = [record for record in best.values() if _timed(record)]
+    for key, record in list(best.items()):
+        if not _timed(record) and any(_one_evening(record, other) for other in timed):
+            del best[key]
+            tally.drop("one event on a poster and the term card")
     by_day: dict[date, list[str]] = {}
     for record in listed:
         if (day := _london_day(record)) is not None:

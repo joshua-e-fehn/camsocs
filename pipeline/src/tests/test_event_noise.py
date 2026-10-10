@@ -115,7 +115,9 @@ class TestIslamicSocietyFeed:
         assert len(classifier.stats.dropped_keys) == 3
         notes = "\n".join(classifier.stats.notes())
         assert "3 notices dropped (notice.room_closure 3)" in notes
-        assert '"PR CLOSED for cleaning"' in notes
+        # Keys only: run notes are kept a year, and a notice's title can name
+        # its booker.
+        assert "PR CLOSED" not in notes and "notice.room_closure: evt-" in notes
 
     def test_kept_events_are_the_societys_own(self) -> None:
         records = feed_records("islamic_society_brothers.ics", ISOC, ISOC_FEED)
@@ -366,7 +368,7 @@ class TestModel:
         assert isinstance(kept, EventObservation)
         hosting = field_of(kept, "hosting")
         assert (hosting.value, hosting.method, hosting.status) == ("takes_part", "llm", None)
-        assert (hosting.extractor, hosting.prompt_version) == ("bulk-model-1", "event_noise_v1")
+        assert (hosting.extractor, hosting.prompt_version) == ("bulk-model-1", "event_noise_v2")
         assert (hosting.evidence_quote, hosting.quote_check) == ("tonnes of sikh socs go", "exact")
         assert field_of(kept, "externalUrl").value == "https://kirtan.example.org/"
         assert classifier.stats.external == {"model": 1}
@@ -382,14 +384,14 @@ class TestModel:
         assert field_of(kept, "externalUrl").status == "missing"
 
     def test_a_notice_needs_its_quote(self) -> None:
-        essay = borderline_record("Essay Competition Opens", "Questions released; deadline later.")
+        essay = borderline_record("Applications Open Evening", "Come and hear about it.")
         unquoted = FakeLLM(lambda _t, _tier: {"kind": "notice", "evidence_quote": "made up"})
         classifier = NoiseClassifier(unquoted)  # type: ignore[arg-type]
         [kept] = sift_events([essay], classifier)
         assert field_of(kept, "hosting").value == "hosts"
         assert classifier.stats.unverified == 1
         quoted = FakeLLM(
-            lambda _t, _tier: {"kind": "notice", "evidence_quote": "Essay Competition Opens"}
+            lambda _t, _tier: {"kind": "notice", "evidence_quote": "Applications Open Evening"}
         )
         classifier = NoiseClassifier(quoted)  # type: ignore[arg-type]
         assert sift_events([essay], classifier) == []
@@ -556,3 +558,138 @@ def test_the_load_posts_no_notice_and_every_kept_events_verdict(net: respx.MockR
     external = [c for c in claims if c["field"] == "externalUrl" and "value" in c]
     assert {c["value"] for c in external} >= {"https://ctf.deadface.io/"}
     assert all(c["extractor"].startswith("event_noise.") for c in external)
+
+
+# --- review 2026-10-10: rules that decided alone, weak quotes, notes, mail ---------------
+
+
+class TestRulesLeaveRealEventsBorderline:
+    def test_an_admin_word_beside_an_event_word_is_only_borderline(self) -> None:
+        for title in ("Applications Open Evening", "Nominations Open — Elections Hustings"):
+            verdict = judge(text(title))
+            assert verdict.kind == "event" and "deadline-like" in verdict.borderline, title
+
+    def test_a_closure_beside_an_event_is_borderline_a_reason_in_brackets_is_not(self) -> None:
+        study = judge(text("Library closed — study social at the Buttery"))
+        assert study.kind == "event" and "closure beside an event" in study.borderline
+        squash = judge(text("Freshers Squash: Bar is open"))
+        assert squash.kind == "event"
+        reason = judge(text("PR closed to sisters (Brothers Social)"))
+        assert (reason.kind, reason.rule) == ("notice", "notice.room_closure")
+
+    def test_a_listing_that_states_its_events_lists_no_notices(self) -> None:
+        for source in ("camdram", "talks_cam"):
+            show = text("Closed", source_type=source, event_source=source)
+            assert judge(show).kind == "event", source
+
+    def test_only_a_ctftime_import_is_decisively_external(self) -> None:
+        practice = text(
+            "CTF Training Session", description="Practice on ctftime.org challenges with us"
+        )
+        verdict = judge(practice)
+        assert verdict.kind == "event" and "mentions CTFtime" in verdict.borderline
+        imported = text("Some CTF 2026", description="CTF Event from CTFTime")
+        assert judge(imported).rule == "external.ctftime"
+        linked = text("Some CTF 2026", urls=("https://ctftime.org/event/2871",))
+        assert judge(linked).rule == "external.ctftime"
+
+    def test_a_competition_opening_is_an_admin_notice(self) -> None:
+        verdict = judge(text("SOCH Essay Competition Opens + Questions Released"))
+        assert (verdict.kind, verdict.rule) == ("notice", "notice.admin")
+
+    def test_tournaments_on_a_fixtures_list_are_borderline(self) -> None:
+        for title in (
+            "The Scottish Open",
+            "Women’s National Championships",
+            "President’s Cup",
+            "Challenger",
+            "RFA 112 Mixed Doubles",
+        ):
+            verdict = judge(text(title, organisers=("Rugby Fives Club",)))
+            assert verdict.borderline, title
+        fixture = judge(text("v. RFA", organisers=("Rugby Fives Club",)))
+        assert fixture.kind == "event" and not fixture.borderline
+
+
+class TestWeakQuotes:
+    def test_a_model_verdict_quoting_only_the_title_is_inferred(self) -> None:
+        cup = borderline_record("President’s Cup", "")
+        for kind in ("event", "external"):
+            llm = FakeLLM(lambda _t, _tier, kind=kind: {"kind": kind, "evidence_quote": "Cup"})
+            [kept] = sift_events([cup], NoiseClassifier(llm))  # type: ignore[arg-type]
+            hosting = field_of(kept, "hosting")
+            assert (hosting.method, hosting.quote_check, hosting.status) == (
+                "llm",
+                "exact",
+                "inferred",
+            ), kind
+
+    def test_a_quote_beyond_the_title_is_found(self) -> None:
+        llm = FakeLLM(
+            lambda _t, _tier: {"kind": "external", "evidence_quote": "tonnes of sikh socs go"}
+        )
+        [kept] = sift_events([KIRTAN], NoiseClassifier(llm))  # type: ignore[arg-type]
+        assert field_of(kept, "hosting").status is None  # the server makes it found
+
+
+class TestMailReplies:
+    def test_a_mail_readings_verdict_is_cached_apart_for_r4(self, tmp_path: Path) -> None:
+        memo = LLMMemo(tmp_path)
+        mail = borderline_record(
+            "KCL Kirtan Darbar",
+            "Very beautiful venue, tonnes of sikh socs go",
+            source_type="mailing_list_email",
+        )
+        mail = mail.model_copy(update={"source_url": "inbound:<m1@example.org>"})
+        llm = FakeLLM(
+            lambda _t, _tier: {"kind": "external", "evidence_quote": "tonnes of sikh socs go"}
+        )
+        sift_events([mail], NoiseClassifier(llm, memo))  # type: ignore[arg-type]
+        assert [p.name for p in tmp_path.iterdir()] == ["event_noise_v2.mail"]
+
+        from datetime import timedelta
+
+        from camsocs_pipeline.prune import prune_cache
+
+        cache = tmp_path.parent / "cache"
+        (cache / "llm").mkdir(parents=True)
+        (tmp_path / "event_noise_v2.mail").rename(cache / "llm" / "event_noise_v2.mail")
+        later = datetime.now(UTC) + timedelta(days=31)
+        assert prune_cache(cache, timedelta(days=90), now=later).files == {"llm": 1}
+
+
+def test_shorteners_and_forms_are_never_an_external_events_page() -> None:
+    links = candidate_links(
+        [
+            "https://bit.ly/3abcDEF",
+            "https://forms.office.com/r/xyz",
+            "https://tally.so/r/abc",
+            "https://example-ctf.org/2026",
+        ],
+        own_hosts=[],
+    )
+    assert links == ["https://example-ctf.org/2026"]
+
+
+def test_a_title_naming_its_organisers_own_site_is_its_own() -> None:
+    """The Engineering Society's "CUES Engineering Careers Fair" on
+    www.cues.org.uk is its own fair, not one it takes part in."""
+    from camsocs_pipeline.events.noise import host_label
+
+    assert host_label("www.cues.org.uk") == "cues"
+    assert host_label("cues.soc.srcf.net") == "cues"
+    assert host_label("sites.google.com") is None
+    fair = text(
+        "CUES Engineering Careers Fair 2026",
+        organisers=("Engineering Society",),
+    )
+    assert judge(fair).borderline, "without the site it is a fair like any"
+    named = EventText(
+        title=fair.title,
+        organisers=fair.organisers,
+        own_tokens=fair.own_tokens,
+        own_names=fair.own_names | {"cues"},
+        source_type="society_website",
+        event_source="website",
+    )
+    assert judge(named).rule == "event.own_name"

@@ -15,10 +15,32 @@ Camdram, Sport, termcards, mail, SU What's On, calendar feeds, talks.cam):
 A **title** that cannot be made safe takes its event (or session) with it:
 none of its claims is posted (`RedactionStats.dropped`), because a title is
 required and a withheld one would leave the last published title standing.
-So does a title that was nothing but a person's name: redacted, it is only
-role and neutral words ("Sophie Example" → "someone") and says nothing. A
-venue that was only a name ("Sophie's" → "someone's") is withheld the same
-way (`_nameless`); the event keeps its other claims.
+So does a title that was nothing but a private person's name: redacted, it is
+only role and neutral words ("Sophie Example" → "someone") and says nothing.
+A venue that was only a name ("Sophie's" → "someone's") is withheld the same
+way (`_nameless`); the event keeps its other claims. The posted titles that
+still read "someone" are listed by key in the load notes (`someone_titles`).
+
+**Titles in context** (review 2026-10-10). D1 is about *incidental* private
+individuals, so a title is read for what it is:
+
+- the title of a **work** from a structured listing is never name-redacted:
+  a Camdram show ("Lola", "I Kassandra"), a talks.cam talk, a performance a
+  society's own structured data lists (`_work_title`);
+- a **talk's or workshop's title** on a society's own programme (a term card,
+  its website, its Instagram, SU What's On) that names a person names its
+  public speaker ("Sophie von der Tann" under a card's "Speakers", "A chat
+  with Luca Ravenna"): those names stay (`_speaker_names_in`), unless they
+  are a known committee member's, or a role word stands in the title (then
+  the model reads it, with the context below). Calendar feeds,
+  which can look like room bookings, and free text stay strict;
+- every other title and every venue the model reads with its context: what
+  the text is (an event's title or venue), the event's type, where it is
+  listed and the start of the event's description (`RedactRequest.context`),
+  so a venue ("Kiki’s") or a film's name is not read as a person.
+
+**Names in capitals** ("IAN WALMSLEY", "DRINKS WITH ANNA SMITH") are
+candidates like capitalised ones (`caps_names`): cards set rows in capitals.
 
 The speakers an event publishes (`events.speakers`) are public and stay
 named, both in that field and in its description — but never a name that is
@@ -30,7 +52,10 @@ texts, its sessions' and the events it organises.
 source-research §14) is reduced to its text before anything else, and once
 the names are known, a link or URL that spells a redacted name
 ("linkedin.com/in/anna-smith", "annasmith.com") is reduced to its (already
-redacted) text too: a name must not survive in a URL.
+redacted) text too: a name must not survive in a URL. That holds for an
+event's URLs as well: an ``externalUrl`` that spells a name redacted from
+the event's texts is posted ``not_published``, and an event whose source URL
+spells one (a card uploaded as ``…/<guest-name>.png``) is not posted at all.
 
 **Where it runs.** `redact_claims`, called from
 `ConvexLoader.post_observations`, the one path every claim takes to Convex
@@ -371,17 +396,40 @@ def _word_is_safe(text: str, start: int, end: int, safe: set[str]) -> bool:
     return _not_a_name(text[start:end], safe) or _safe_in_context(text, start, end)
 
 
+#: Two or more words in capitals in a row ("IAN WALMSLEY", "DRINKS WITH ANNA").
+_CAPS_RUN = re.compile(rf"{_ALL_CAPS.pattern}(?:[ \t]+{_ALL_CAPS.pattern})+")
+#: A word in capitals that is an acronym rather than a name: no vowel ("CTF",
+#: "BCG"), or three letters or fewer ("AFD", "MCR").
+_ACRONYM = re.compile(r"^(?:[^AEIOUYÀ-ÖØ-Þ]+|.{1,3})$")
+
+
+def caps_names(text: str, safe: Iterable[str] = ()) -> set[str]:
+    """Words in capitals that could be part of a personal name: in a run of
+    two or more words in capitals, each that is no known non-name, no word
+    of `safe` and no acronym (review 2026-10-10: card rows in capitals never
+    reached the redaction)."""
+    extra = {_norm_word(word) for word in safe}
+    found: set[str] = set()
+    for run in _CAPS_RUN.finditer(text):
+        for match in _ALL_CAPS.finditer(run.group(0)):
+            word = match.group(0)
+            if _ACRONYM.match(word.replace("'", "").replace("’", "")) or _not_a_name(word, extra):
+                continue
+            found.add(word)
+    return found
+
+
 def candidate_names(text: str, safe: Iterable[str] = ()) -> set[str]:
     """Capitalised words in `text` that could be a personal name: not in
     `SAFE_WORDS`, not a role word, not a college word in its college's name,
     and not in `safe` (words of the entity's own name or of names that are
-    kept)."""
+    kept) — and the same words written in capitals (`caps_names`)."""
     extra = {_norm_word(word) for word in safe}
     return {
         match.group(0)
         for match in _CAPITALISED.finditer(text)
         if not _word_is_safe(text, match.start(), match.end(), extra)
-    }
+    } | caps_names(text, extra)
 
 
 def needs_model(text: str, safe: Iterable[str] = ()) -> bool:
@@ -441,7 +489,10 @@ class RedactRequest:
     speakers). `private`: names that must go (known committee members).
     `safe`: words of the entity's own name. `llm`: whether the text may be
     sent to the model (never for talks.cam). `title`: the text is a title,
-    which the fallback withholds when any candidate name is left (`strict`)."""
+    which the fallback withholds when any candidate name is left (`strict`).
+    `context`: what the text is, for the model only (a title's or venue's
+    field, event type, listing and description; never changed). `space`:
+    the reply cache's folder (mail's apart, retention R4)."""
 
     text: str
     keep: tuple[str, ...] = ()
@@ -449,6 +500,8 @@ class RedactRequest:
     safe: tuple[str, ...] = ()
     llm: bool = True
     title: bool = False
+    context: str = ""
+    space: str = PROMPT_NAME
 
 
 def _apply(text: str, pairs: Sequence[tuple[str, str]]) -> str:
@@ -891,6 +944,15 @@ class RedactionStats:
     #: Speaker lists not published (not a talk's, unquoted, or naming a
     #: known committee member).
     speakers_withheld: int = 0
+    #: Keys of events and sessions whose posted title reads "someone" where
+    #: the source's did not: a name redacted inside a title (listed for review).
+    someone_titles: list[str] = field(default_factory=list)
+    #: Titles of works (Camdram shows, talks.cam talks) left as written.
+    work_titles: int = 0
+    #: Talk titles whose names were kept as their speakers'.
+    speaker_titles: int = 0
+    #: External links not published because their URL spells a redacted name.
+    urls_withheld: int = 0
 
     def __str__(self) -> str:
         methods = ", ".join(f"{name} {count}" for name, count in sorted(self.by_method.items()))
@@ -898,11 +960,22 @@ class RedactionStats:
         speakers = (
             f"; {self.speakers_withheld} speaker lists withheld" if self.speakers_withheld else ""
         )
+        titles = (
+            f"; titles left as written: {self.work_titles} works, "
+            f"{self.speaker_titles} naming their speakers"
+            if self.work_titles or self.speaker_titles
+            else ""
+        )
+        urls = (
+            f"; {self.urls_withheld} links withheld (a name in the URL)"
+            if self.urls_withheld
+            else ""
+        )
         return (
             f"redaction (D1): {self.texts} texts, {self.changed} redacted, "
             f"{self.withheld} withheld, {self.unchanged} unchanged ({methods}); "
             f"LLM {self.llm_calls} calls, {self.llm_cached} cached, {self.llm_failed} failed, "
-            f"{self.rejected_replies} replies failed the checks{dropped}{speakers}"
+            f"{self.rejected_replies} replies failed the checks{dropped}{speakers}{titles}{urls}"
         )
 
 
@@ -981,11 +1054,12 @@ class Redactor:
             return list(pool.map(self.redact, requests))
 
     def _reply(self, request: RedactRequest) -> RedactReply | None:
-        key = memo_key(
-            PROMPT_NAME, request.text, "\n".join(sorted(request.keep)), "\n".join(request.private)
-        )
+        parts = [request.text, "\n".join(sorted(request.keep)), "\n".join(request.private)]
+        if request.context:
+            parts.append(request.context)  # a text without context keeps its old key
+        key = memo_key(PROMPT_NAME, *parts)
         if self.memo is not None:
-            cached = self.memo.get(PROMPT_NAME, key, RedactReply)
+            cached = self.memo.get(request.space, key, RedactReply)
             if cached is not None:
                 self._count("llm_cached")
                 return cached[0]
@@ -1006,17 +1080,19 @@ class Redactor:
             return None
         self._count("llm_calls")
         if self.memo is not None:
-            self.memo.put(PROMPT_NAME, key, call.value, call.model)
+            self.memo.put(request.space, key, call.value, call.model)
         return call.value
 
 
 def _user_message(request: RedactRequest) -> str:
     keep = "\n".join(f"- {name}" for name in request.keep) or "(none)"
     private = "\n".join(f"- {name}" for name in request.private) or "(none)"
+    context = f"What the text is (context only, never change it):\n{request.context}\n\n"
     return (
         f"Keep these names (published speakers):\n{keep}\n\n"
         f"Committee members (private, always replace):\n{private}\n\n"
-        f"--- TEXT ---\n{request.text}"
+        + (context if request.context else "")
+        + f"--- TEXT ---\n{request.text}"
     )
 
 
@@ -1273,6 +1349,96 @@ def _tagged(extractor: str, tag: str) -> str:
     return extractor[: MAX_EXTRACTOR - len(suffix)] + suffix
 
 
+#: Listings whose event titles name works (a show, a talk): never name-redacted.
+_WORK_TITLE_SOURCES = frozenset({"talks_list"})
+#: A society's own programme: a talk's title there that names a person names
+#: its speaker. Calendar feeds (which can be room bookings) and mail are not.
+_PROGRAMME_SOURCES = frozenset(
+    {"termcard", "society_website", "instagram_api", "su_profile", "su_whatson"}
+)
+_SOURCE_LABELS = {
+    "camdram": "Camdram (the theatre listings)",
+    "talks_list": "talks.cam",
+    "termcard": "a society's term card or poster",
+    "society_website": "a society's own website",
+    "instagram_api": "a society's Instagram post",
+    "ics_feed": "a calendar feed",
+    "luma": "a Luma calendar",
+    "mailing_list_email": "a society's mailing-list mail",
+    "su_whatson": "the SU's What's On",
+}
+#: How much of an event's description a title's or venue's context shows.
+CONTEXT_DESCRIPTION = 600
+_SOMEONE = re.compile(r"(?i)(?<![\w'’])someone(?![\w'’])")
+
+
+def _work_title(claim: ClaimInput, types: set[str]) -> bool:
+    """A title naming a work, from a listing that states it (module
+    docstring): a Camdram show, a talks.cam talk, a performance a society's
+    own structured data lists."""
+    if claim.entity_type != "event" or claim.field != "title":
+        return False
+    if claim.source_type == "camdram":
+        return "/shows/" in claim.source_url
+    if claim.source_type in _WORK_TITLE_SOURCES:
+        return True
+    return (
+        claim.method == "parser"
+        and claim.source_type == "society_website"
+        and "performance" in types
+    )
+
+
+def _speaker_names_in(title: str, safe: Iterable[str], known: Sequence[str]) -> tuple[str, ...]:
+    """The names a talk's title gives its speakers: its runs of capitalised
+    (or all-capital) words that are no known non-names — none when a role
+    word stands in the title ("Talk by our President Anna Smith"), and never
+    a known committee member. "A chat with …", "In conversation with …" is
+    how a talk is titled, not a contact."""
+    if re.search(_ROLE, title):
+        return ()
+    extra = {_norm_word(word) for word in safe}
+    names: list[str] = []
+    for match in re.finditer(_NAME, title):
+        _prefix, person, _suffix = _split_name(match.group(0), extra)
+        if person and not _known(person, known):
+            names.append(person)
+    for run in _CAPS_RUN.finditer(title):
+        words = [w for w in run.group(0).split() if not _not_a_name(w, extra)]
+        if words and not _known(" ".join(words), known):
+            names.append(" ".join(words))
+    return tuple(dict.fromkeys(names))
+
+
+def _context(claim: ClaimInput, kind: str, types: set[str], description: str | None) -> str:
+    """What a title or venue is, for the model (`RedactRequest.context`)."""
+    what = {
+        ("event", "title"): "the title of an event",
+        ("event", "venueText"): "the venue of an event (a place, never a person)",
+        ("session", "title"): "the title of a society's regular session",
+        ("session", "venueText"): "the venue of a society's regular session",
+    }.get((claim.entity_type, claim.field))
+    if what is None:
+        return ""
+    lines = [f"Field: {what}"]
+    if types:
+        lines.append(f"Event type: {', '.join(sorted(types))}")
+    lines.append(f"Listed on: {_SOURCE_LABELS.get(claim.source_type, claim.source_type)}")
+    if description:
+        excerpt = " ".join(description.split())[:CONTEXT_DESCRIPTION]
+        lines.append(f"The event's description: {excerpt}")
+    return "\n".join(lines)
+
+
+def _descriptions(claims: Sequence[ClaimInput]) -> dict[tuple[str, str], str]:
+    """Each (entity, source URL)'s description, as the source wrote it."""
+    out: dict[tuple[str, str], str] = {}
+    for claim in claims:
+        if claim.field == "description" and isinstance(claim.value, str):
+            out.setdefault((claim.entity_key, claim.source_url), claim.value)
+    return out
+
+
 def redact_claims(
     claims: Sequence[ClaimInput],
     redactor: Redactor,
@@ -1285,10 +1451,13 @@ def redact_claims(
     title takes every claim of its event or session with it
     (`RedactionStats.dropped`). A speaker list that may not be published
     (`published_speakers`) becomes ``missing`` / ``not_published`` too, so an
-    earlier reading of it is retracted. Other claims pass through untouched."""
+    earlier reading of it is retracted. A work's title is left as written,
+    and a talk's title on a society's programme keeps its speakers' names.
+    Other claims pass through untouched."""
     private = private or {}
     known = sorted({name for names in private.values() for name in names})
     types = _event_types(claims)
+    descriptions = _descriptions(claims)
     out = list(claims)
     speakers: dict[str, set[str]] = {}
     unpublished: dict[str, set[str]] = {}
@@ -1309,27 +1478,68 @@ def redact_claims(
         unpublished.setdefault(claim.entity_key, set()).update(
             name for name in listed if name not in names and _known(name, known)
         )
+    primary_url = _primary_urls(claims)
+    # An event that is a work (a Camdram show): every reading's title of it
+    # names the work, the society's own page's too.
+    works = {
+        claim.entity_key
+        for claim in claims
+        if claim.field == "title" and _work_title(claim, types.get(claim.entity_key, set()))
+    }
     targets: list[tuple[int, str, list[tuple[str, RedactRequest]]]] = []
     for index, claim in enumerate(out):
         kind = PUBLIC_TEXT_FIELDS.get((claim.entity_type, claim.field))
         if kind is None or claim.value is None:
             continue
+        entity_types = types.get(claim.entity_key, set())
+        if kind == "title" and claim.entity_type == "event" and claim.entity_key in works:
+            # A show's or a talk's name is no private person's: as written.
+            redactor.stats.work_titles += 1
+            redactor.stats.texts += 1
+            redactor.stats.unchanged += 1
+            out[index] = claim.model_copy(update={"extractor": _tagged(claim.extractor, TAG)})
+            continue
         own = private.get(claim.entity_key, ())
         extra = tuple(sorted(unpublished.get(claim.entity_key, set()) - set(own)))
+        keep = set(speakers.get(claim.entity_key, set()))
+        safe = _entity_words(claim.entity_key)
+        if (
+            kind == "title"
+            and claim.entity_type == "event"
+            and entity_types & SPEAKER_EVENT_TYPES
+            and claim.source_type in _PROGRAMME_SOURCES
+            and isinstance(claim.value, str)
+            and (named := _speaker_names_in(claim.value, safe, [*known, *own, *extra]))
+        ):
+            redactor.stats.speaker_titles += 1
+            keep.update(named)
+        context = (
+            _context(
+                claim,
+                kind,
+                entity_types,
+                descriptions.get((claim.entity_key, claim.source_url)),
+            )
+            if claim.field in ("title", "venueText")
+            else ""
+        )
+        space = f"{PROMPT_NAME}.mail" if claim.source_type == "mailing_list_email" else PROMPT_NAME
         texts = [
             (
                 text,
                 RedactRequest(
                     text=text,
-                    keep=tuple(sorted(speakers.get(claim.entity_key, set()))),
+                    keep=tuple(sorted(keep)),
                     private=(*own, *extra),
-                    safe=_entity_words(claim.entity_key),
+                    safe=safe,
                     llm=_llm_allowed(claim)
                     and (
                         redactor.gate is None
                         or redactor.gate.allows(claim.source_url, claim.source_type)
                     ),
                     title=kind == "title",
+                    context=context,
+                    space=space,
                 ),
             )
             for text in _texts(kind, claim.value)
@@ -1338,17 +1548,109 @@ def redact_claims(
     unique = list(dict.fromkeys(request for _i, _k, texts in targets for _t, request in texts))
     results = dict(zip(unique, redactor.redact_many(unique), strict=True))
     dropped: set[tuple[str, str]] = set()
+    redacted_names: dict[str, set[str]] = {}
     for index, kind, texts in targets:
         done = {text: results[request] for text, request in texts}
         if kind == "title" or out[index].field == "venueText":
             done = {text: _nameless(redaction) for text, redaction in done.items()}
-        out[index] = _redacted_claim(out[index], kind, done, redactor.stats)
+        claim = out[index]
+        out[index] = _redacted_claim(claim, kind, done, redactor.stats)
+        redacted_names.setdefault(claim.entity_key, set()).update(
+            name for redaction in done.values() for name, _replacement in redaction.redactions
+        )
         if kind == "title" and any(r.text is None for r in done.values()):
-            dropped.add((out[index].entity_type, out[index].entity_key))
-    if dropped:
+            if _is_primary(claim, primary_url):
+                dropped.add((claim.entity_type, claim.entity_key))
+            # Another source's reading of an event (`events.duplicates`): its
+            # title is withheld (not_published), the event keeps its own.
+        elif kind == "title" and any(
+            r.text and _SOMEONE.search(r.text) and not _SOMEONE.search(r.original)
+            for r in done.values()
+        ):
+            redactor.stats.someone_titles.append(claim.entity_key)
+    out, unsafe_urls = _withhold_named_urls(out, redacted_names, private, redactor.stats)
+    for entity_key, url in unsafe_urls:
+        if primary_url.get(entity_key) in (None, url):
+            dropped.add(("event", entity_key))
+    readings_out = {
+        (key, url) for key, url in unsafe_urls if primary_url.get(key) not in (None, url)
+    }
+    if dropped or readings_out:
         redactor.stats.dropped.extend(sorted(key for _type, key in dropped))
-        out = [c for c in out if (c.entity_type, c.entity_key) not in dropped]
+        out = [
+            c
+            for c in out
+            if (c.entity_type, c.entity_key) not in dropped
+            and (c.entity_type != "event" or (c.entity_key, c.source_url) not in readings_out)
+        ]
     return out, redactor.stats
+
+
+def _primary_urls(claims: Sequence[ClaimInput]) -> dict[str, str]:
+    """Each event's own reading's source URL: the one its `sourceUrl` claim
+    comes from (another source's reading of it carries none,
+    `claims.claims_for_event`)."""
+    return {
+        claim.entity_key: claim.source_url
+        for claim in claims
+        if claim.entity_type == "event" and claim.field == "sourceUrl"
+    }
+
+
+def _is_primary(claim: ClaimInput, primary_url: Mapping[str, str]) -> bool:
+    """Whether a claim is its entity's own reading's (a session's always is;
+    an event's when it is not another source's reading of it)."""
+    if claim.entity_type != "event":
+        return True
+    return primary_url.get(claim.entity_key, claim.source_url) == claim.source_url
+
+
+def _withhold_named_urls(
+    claims: list[ClaimInput],
+    names: Mapping[str, set[str]],
+    private: Mapping[str, tuple[str, ...]],
+    stats: RedactionStats,
+) -> tuple[list[ClaimInput], set[tuple[str, str]]]:
+    """An event's URLs must not spell a name its texts lost (module
+    docstring): its ``externalUrl`` is posted ``not_published``, and the
+    readings whose source URL spells one are returned as (event key, source
+    URL): the event's own takes the event with it, another source's only
+    itself."""
+    unsafe: set[tuple[str, str]] = set()
+    out: list[ClaimInput] = []
+    # A name the event's published title keeps (a show's: "Tom Sweeney:
+    # Ribbing For Your Pleasure") reveals nothing when its URL spells it too.
+    titles: dict[str, list[str]] = {}
+    for claim in claims:
+        if claim.entity_type == "event" and claim.field == "title" and isinstance(claim.value, str):
+            titles.setdefault(claim.entity_key, []).append(claim.value)
+    for claim in claims:
+        if claim.entity_type != "event":
+            out.append(claim)
+            continue
+        spelled = [
+            name
+            for name in (*names.get(claim.entity_key, ()), *private.get(claim.entity_key, ()))
+            if not any(contains_name(title, name) for title in titles.get(claim.entity_key, ()))
+        ]
+        if not spelled:
+            out.append(claim)
+            continue
+        if url_names(claim.source_url, spelled) or (
+            claim.field == "sourceUrl"
+            and isinstance(claim.value, str)
+            and url_names(claim.value, spelled)
+        ):
+            unsafe.add((claim.entity_key, claim.source_url))
+        if (
+            claim.field == "externalUrl"
+            and isinstance(claim.value, str)
+            and url_names(claim.value, spelled)
+        ):
+            stats.urls_withheld += 1
+            claim = _not_published(claim)
+        out.append(claim)
+    return out, unsafe
 
 
 def _nameless(redaction: Redaction) -> Redaction:
@@ -1434,6 +1736,7 @@ __all__ = [
     "accept_reply",
     "allowed_replacement",
     "candidate_names",
+    "caps_names",
     "contains_name",
     "needs_model",
     "private_names",
