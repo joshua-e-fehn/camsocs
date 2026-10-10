@@ -649,6 +649,11 @@ def test_speakers_only_for_talks_and_never_a_known_committee_member() -> None:
     # … and a talk's list loses the known committee member (of any society).
     assert by[("evt-t", "speakers")].value == [{"name": "Professor Jane Doe"}]
     assert stats.speakers_withheld == 1
+    # A first name alone on some committee (D2) does not unname a speaker.
+    from camsocs_pipeline.extract.redact import _known
+
+    assert not _known("Professor Jane Doe", ["Jane"])
+    assert _known("Jane", ["Jane"]) and _known("Prof Jane Doe", ["Jane Doe"])
 
 
 def test_an_organisations_committee_is_applied_to_its_events() -> None:

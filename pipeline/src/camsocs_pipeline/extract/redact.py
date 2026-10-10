@@ -1108,8 +1108,18 @@ def _speaker_names(value: Any) -> list[str]:
 
 
 def _known(name: str, known: Iterable[str]) -> bool:
-    """Whether `name` is a known committee member (or one is part of it)."""
-    return any(_kept(name, (member,)) for member in known if member.strip())
+    """Whether `name` is a known committee member: the same words, or a
+    member's full name (two words or more) within it ("Prof Anna Smith").
+    A first name alone (D2 keeps those) matches only itself, so a public
+    speaker who shares a first name with someone's committee stays named."""
+    words = set(_words(name))
+    for member in known:
+        member_words = set(_words(member))
+        if not member_words:
+            continue
+        if member_words == words or (len(member_words) >= 2 and member_words <= words):
+            return True
+    return False
 
 
 def published_speakers(
