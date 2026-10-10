@@ -14,11 +14,13 @@ pixi run pipeline -- health              # GET /api/pipeline/health with the Bea
 pixi run pipeline -- sync --dry-run      # every stage, no credentials needed, nothing written
 pixi run pipeline -- sync                # health → runs/start → stages → runs/finish
 pixi run pipeline -- sync --stages term_dates,load --limit 20
+pixi run pipeline -- sync --group events # the daily run (below); --group full = harvest
 pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
 pixi run pipeline -- coverage [--before DIR]  # field coverage of staged organisations, offline
 pixi run harvest                         # the full harvest + coverage report (below)
+pixi run harvest-events                  # the daily events run (below)
 pixi run prune-cache                     # retention R7: var/cache + old staging, 90 days
 pixi run pipeline -- --env prod status   # any command against production (below)
 ```
@@ -33,11 +35,27 @@ environment but dev. `status` prints the environment. Setup: `docs/deploy.md` §
 
 `sync` exits non-zero if any stage failed, even though the stages that succeeded kept their
 work — a cron that sees success because most of it worked is how a broken source stays broken.
+`sync` and `harvest` also take `--env NAME` after the command (`pixi run harvest -- --env prod`)
+and `--summary-json PATH`, which writes the run's outcome for a scheduler: per-stage counts, one
+line per stage, warnings, and the `report` stage's coverage numbers.
+
+### Scheduled runs: `--group events` and `--group full`
+
+`sync --group <name>` runs one entry of `GROUPS` (`stages/__init__.py`, which lists what each
+daily stage reads). The VPS host runs both under systemd timers (decision D5,
+`docs/ops-vps.md`):
+
+- **events**, daily (`pixi run harvest-events`): `term_dates`, every events stage but the
+  University's, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
+  organisation, so it reads what the last full run staged — `_resolved`, `society_website`,
+  `su_profile` — and stops before any request when one was never staged ("run the full group
+  first"); older than eight days, they still serve and the run carries a warning.
+- **full**, weekly (`pixi run harvest`): every stage, then the re-derivation.
 
 ### The full harvest: `pixi run harvest`
 
-One command for a full run (`camsocs harvest`; `pixi run harvest -- --dry-run` reads but writes
-nothing, `-- --limit N` for a trial):
+One command for a full run (`camsocs harvest`, the same as `sync --group full`; `pixi run
+harvest -- --dry-run` reads but writes nothing, `-- --limit N` for a trial):
 
 1. every stage in registry order — `term_dates` → the seed harvesters → `resolve` → `enrich`
    → the events stages → `inbox` / `instagram` / `termcards` → `load` → `report` — inside one
@@ -56,9 +74,9 @@ laptop, keep it awake** (`caffeinate -i pixi run harvest …` on macOS): a full 
 two hours, and a sleeping machine stalls it. In the 2026-10-09 harvest the SU stage took 96
 minutes instead of about 11 — its requests were 1.1 s apart (median), but two requests hung for
 26 and 58 minutes while the machine slept (a 24 s back-off took 12.5 minutes of wall time), and
-the load stage later stalled the same way. Pacing was not at fault. The daily cron
-(`scripts/daily-sync.sh`) runs `sync` over the same registry, so it writes the day's coverage
-report too.
+the load stage later stalled the same way. Pacing was not at fault. The scheduled runs on the
+VPS (`docs/ops-vps.md`) end with the `report` stage too, so each writes the day's coverage
+report. (`scripts/daily-sync.sh` is the generic cron wrapper for another host.)
 
 ### Retention on the pipeline host: `pixi run prune-cache`
 
@@ -66,7 +84,7 @@ report too.
 docs/compliance/retention.md R7 allows to keep for 90 days: cached pages (a page's body,
 meta and last-failure note go together, once all are older), LLM replies under
 `var/cache/llm/`, and superseded staging files (never the latest file of each part, which
-`load` still reads). Add it to the host's cron next to the daily sync.
+`load` still reads). The VPS runner runs it after each weekly full run (`docs/ops-vps.md`).
 
 ## Stages, staging and loading
 

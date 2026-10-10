@@ -8,7 +8,8 @@
 ##
 ##   pixi run dev / build / pipeline / lint / format / typecheck / test / check-codegen
 ##   pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
-##   pixi run harvest [-- --dry-run]          full sync + coverage report (var/reports/)
+##   pixi run harvest [-- --env prod --dry-run]   full sync + coverage report (var/reports/)
+##   pixi run harvest-events [-- --env prod]      the daily events run (sync --group events)
 ##   pixi run prune-cache [-- --dry-run]      retention R7 for var/cache and staging
 
 [workspace]
@@ -49,10 +50,21 @@ description = "Run the Python pipeline, e.g. `pixi run pipeline -- sync --dry-ru
 [tasks.harvest]
 cmd = "python -m camsocs_pipeline.cli harvest"
 cwd = "pipeline"
-# Every stage in registry order (seed → harvest → resolve → enrich → events →
-# inbox / Instagram / termcards → load → report), then a re-derivation; writes
-# var/reports/coverage-<date>.md. `pixi run harvest -- --dry-run` reads, writes nothing.
+# `sync --group full`: every stage in registry order (seed → harvest → resolve
+# → enrich → events → inbox / Instagram / termcards → load → report), then a
+# re-derivation; writes var/reports/coverage-<date>.md. Arguments follow the
+# command: `pixi run harvest -- --env prod`, `-- --dry-run`. The VPS runs it
+# weekly (docs/ops-vps.md).
 description = "Full harvest: every stage in order, re-derive, coverage report (var/reports/)."
+
+[tasks.harvest-events]
+cmd = "python -m camsocs_pipeline.cli sync --group events"
+cwd = "pipeline"
+# The daily run: every events source, inbox, Instagram and termcards, then load
+# and the coverage report, over what the last full harvest staged (it stops
+# with "run the full group first" when that is missing; stages/__init__.py
+# "Groups"). `pixi run harvest-events -- --env prod`.
+description = "Daily events run: events sources, inbox, Instagram, termcards, load, report."
 
 [tasks.prune-cache]
 cmd = "python -m camsocs_pipeline.cli prune-cache"

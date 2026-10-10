@@ -221,7 +221,7 @@ def test_the_stage_reads_the_deployment_and_writes_the_report(make_settings, net
     written = list(settings.reports_dir.glob("coverage-*.md"))
     assert len(written) == 1
     assert "| Listed organisations | 800 |" in written[0].read_text()
-    assert ctx.report.metrics == {"listed": 800, "upcomingEvents": 234}
+    assert ctx.report.metrics == {"listed": 800, "counterparts": 320, "upcomingEvents": 234}
 
 
 def test_a_dry_run_harvest_runs_every_stage_in_order_and_writes_no_report(

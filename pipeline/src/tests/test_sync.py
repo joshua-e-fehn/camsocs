@@ -13,11 +13,16 @@ from camsocs_pipeline.pipeline.context import Stage
 from camsocs_pipeline.pipeline.load import ConvexAuthError
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import (
+    GROUPS,
     STAGE_ORDER,
     STAGES,
     StageContext,
+    StageGroup,
+    group_inputs,
+    resolve_group,
     resolve_stages,
     run_sync,
+    staged_at,
 )
 
 SITE = "https://happy-otter-123.convex.site"
@@ -285,3 +290,157 @@ def test_stage_metrics_travel_only_when_there_are_some() -> None:
     resolve = StageReport("resolve")
     resolve.metrics.update(quarantineHeld=8, quarantineReview=18)
     assert resolve.to_payload()["metrics"] == {"quarantineHeld": 8, "quarantineReview": 18}
+
+
+# --- groups (decision D5: the VPS runs `sync --group events` daily, `full` weekly) ----------
+
+
+def stage_all(store, *directories: str, run_key: str = "20261003T020000Z-aaaaaa") -> None:
+    from datetime import UTC, datetime
+
+    from camsocs_pipeline.models.observation import IdentityHints, Observation
+
+    for directory in directories:
+        record = Observation(
+            source_type="su_profile" if directory.startswith("_") else directory,
+            source_key="1",
+            source_url="https://example.org/",
+            retrieved_at=datetime(2026, 10, 3, tzinfo=UTC),
+            entity_type="organisation",
+            identity=IdentityHints(name="CU Chess Club"),
+        )
+        store.write(directory, run_key, [record])
+
+
+def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_load() -> None:
+    from camsocs_pipeline.staging.store import RESOLVED
+
+    for group in GROUPS.values():
+        resolve_stages(group.stages or None)  # every name is a registry stage
+    assert set(GROUPS) == {"events", "full"}
+    assert GROUPS["full"].stages == () and GROUPS["full"].derive
+    events = [stage.name for stage in resolve_stages(GROUPS["events"].stages)]
+    assert events[0] == "term_dates" and events[-2:] == ["load", "report"]
+    # Every events source but the University's (which fetches nothing, §10)
+    # runs daily; no harvest, resolve, enrich or classify stage does.
+    fetching = {s.name for s in STAGES if s.fetches} - {"enrich", "uni_events"}
+    assert fetching <= set(events)
+    assert {"inbox", "instagram", "termcards"} <= set(events)
+    assert not {"su_directory", "resolve", "enrich", "classify"} & set(events)
+    assert set(GROUPS["events"].needs) == {RESOLVED, "society_website", "su_profile"}
+
+
+def test_an_unknown_group_is_an_error() -> None:
+    with pytest.raises(ValueError, match="Known: events, full"):
+        resolve_group("daily")
+
+
+def test_a_group_runs_its_stages_in_registry_order(make_settings) -> None:
+    group = StageGroup("pair", stages=("load", "fetch"))
+    report = run_sync(settings=make_settings(), dry_run=True, group=group, registry=registry())
+    assert [stage.name for stage in report.stages] == ["fetch", "load"]
+    assert report.command == "sync --group pair"
+
+
+def test_stages_and_a_group_together_are_refused(make_settings) -> None:
+    with pytest.raises(ValueError, match="not both"):
+        run_sync(
+            settings=make_settings(),
+            dry_run=True,
+            stages=["fetch"],
+            group=StageGroup("pair", stages=("fetch",)),
+            registry=registry(),
+        )
+
+
+def test_a_group_stops_before_any_stage_when_its_inputs_were_never_staged(
+    make_settings, net
+) -> None:
+    from camsocs_pipeline.staging.store import RESOLVED, StagingStore
+
+    routes = mock_convex(net)
+    settings = make_settings(convex_http_url=SITE, pipeline_api_key="test-key")
+    stage_all(StagingStore(settings.staging_dir), "society_website")
+    called: list[str] = []
+    group = StageGroup("daily", stages=("fetch",), needs=(RESOLVED, "society_website", "termcard"))
+
+    with pytest.raises(ValueError, match="holds no _resolved, termcard yet") as raised:
+        run_sync(
+            settings=settings,
+            group=group,
+            registry=registry(fetch=lambda ctx: called.append("fetch")),
+        )
+    assert "--group full" in str(raised.value)
+    assert called == []
+    assert not routes["health"].called, "no request before the inputs are checked"
+
+
+def test_stale_inputs_still_serve_with_a_warning(make_settings, net) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from camsocs_pipeline.staging.store import RESOLVED, StagingStore
+
+    routes = mock_convex(net)
+    settings = make_settings(convex_http_url=SITE, pipeline_api_key="test-key")
+    store = StagingStore(settings.staging_dir)
+    stage_all(store, RESOLVED, run_key="20260920T020000Z-aaaaaa")
+    stage_all(store, "society_website", run_key="20261004T020000Z-bbbbbb")
+    group = StageGroup(
+        "daily",
+        stages=("fetch",),
+        needs=(RESOLVED, "society_website"),
+        stale_after=timedelta(days=8),
+    )
+
+    report = run_sync(
+        settings=settings,
+        group=group,
+        registry=registry(),
+        now=datetime(2026, 10, 10, 4, 30, tzinfo=UTC),
+    )
+
+    assert report.ok
+    assert report.warnings == [
+        "_resolved was last staged 20 days ago (2026-09-20); "
+        "the full group has not refreshed it since"
+    ]
+    finish = json.loads(routes["finish"].calls[0].request.content)
+    assert finish["warnings"] == report.warnings
+    start = json.loads(routes["start"].calls[0].request.content)
+    assert start["command"] == "sync --group daily"
+
+
+def test_a_staging_file_is_dated_by_its_run_key(tmp_path) -> None:
+    from datetime import UTC, datetime
+
+    path = tmp_path / "20261009T165718Z-71904a--enrich.jsonl"
+    path.write_text("")
+    assert staged_at(path) == datetime(2026, 10, 9, 16, 57, 18, tzinfo=UTC)
+    other = tmp_path / "manual.jsonl"
+    other.write_text("")
+    assert staged_at(other).year >= 2026
+
+
+def test_the_full_group_needs_nothing_staged(make_settings) -> None:
+    from camsocs_pipeline.staging.store import StagingStore
+
+    assert group_inputs(GROUPS["full"], StagingStore(make_settings().staging_dir)) == []
+
+
+def test_the_summary_payload_has_one_line_per_stage_and_the_coverage(make_settings) -> None:
+    def measured(ctx: StageContext) -> None:
+        ctx.report.metrics.update(listed=793, counterparts=168, upcomingEvents=533)
+        ctx.report.notes.append("a long note that stays in the log")
+
+    stages = [Stage("fetch", ok_stage), Stage("report", measured)]
+    report = run_sync(settings=make_settings(), dry_run=True, registry=stages)
+    payload = report.summary_payload()
+
+    assert payload["ok"] is True and payload["dryRun"] is True
+    assert payload["summary"] == [
+        "fetch: 1 new, 0 updated, 0 unchanged, 0 skipped",
+        "report: nothing to do",
+    ]
+    assert payload["coverage"] == {"listed": 793, "counterparts": 168, "upcomingEvents": 533}
+    assert all("notes" not in stage for stage in payload["stages"])
+    json.dumps(payload)  # serialisable as it is

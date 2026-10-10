@@ -4,13 +4,17 @@
                                          pipeline/.env, or CAMSOCS_ENV_FILE); docs/deploy.md
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
-    camsocs sync [--stages a,b] [--dry-run] [--limit N]
-    camsocs harvest [--dry-run] [--limit N]   every stage in order, re-derive, coverage report
+    camsocs sync [--stages a,b | --group events|full] [--dry-run] [--limit N]
+    camsocs harvest [--dry-run] [--limit N]   = sync --group full: every stage, re-derive, report
     camsocs derive                       re-derive statuses, term weeks, stale flags now
     camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
     camsocs worklist [--no-sympa]        rank societies for mailing-list sign-up (CSV)
     camsocs coverage [--before DIR]      field coverage of staged organisations; offline
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
+
+`sync` and `harvest` also take `--env NAME` after the command, as `pixi run
+harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
+(the VPS runner, docs/ops-vps.md).
 
 Commands are thin: parsing and reporting only. Exit codes matter to the cron
 that runs `sync`: any failed stage exits non-zero even though the others
@@ -24,6 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -54,8 +59,9 @@ from camsocs_pipeline.pipeline.load import (
     StoredFileCache,
     stored_files_path,
 )
+from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
-from camsocs_pipeline.pipeline.sync import STAGE_ORDER, run_sync
+from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
@@ -104,21 +110,70 @@ def cli(ctx: click.Context, verbose: bool, env_name: str | None) -> None:
         # Injected (tests): the environment is whatever the caller says.
         ctx.obj.setdefault("env", EnvChoice(DEFAULT_ENV, ENV_FILE))
         return
-    try:
-        choice = choose_env(env_name)
-        settings = get_settings() if env_name is None else load_settings(choice)
-    except ConfigError as error:
-        raise click.ClickException(str(error)) from error
-    ctx.obj["env"] = choice
-    ctx.obj["settings"] = settings
+    # Read when the command first needs it (`_loaded`), so that `--env` may
+    # also follow the command.
+    ctx.obj["env_name"] = env_name
+
+
+def _loaded(ctx: click.Context) -> dict:
+    """The command's settings and environment, read once: `--env` before or
+    after the command, else `CAMSOCS_ENV_FILE`, else `pipeline/.env`."""
+    obj = ctx.find_object(dict)
+    if "settings" not in obj:
+        env_name = obj.get("env_name")
+        try:
+            choice = choose_env(env_name)
+            settings = get_settings() if env_name is None else load_settings(choice)
+        except ConfigError as error:
+            raise click.ClickException(str(error)) from error
+        obj["env"] = choice
+        obj["settings"] = settings
+    return obj
 
 
 def _settings(ctx: click.Context) -> Settings:
-    return ctx.obj["settings"]
+    return _loaded(ctx)["settings"]
 
 
 def _env(ctx: click.Context) -> EnvChoice:
-    return ctx.obj["env"]
+    return _loaded(ctx)["env"]
+
+
+def _env_after_command(ctx: click.Context, _param: click.Parameter, value: str | None):
+    """`--env NAME` after the command (`camsocs sync --group events --env prod`):
+    what `pixi run harvest -- --env prod` produces. The same as `--env` before
+    the command; two different names are refused."""
+    if value is None:
+        return None
+    obj = ctx.find_object(dict)
+    before = obj.get("env_name")
+    if before is not None and before != value:
+        raise click.BadParameter(f"--env {before} was already given before the command.")
+    if "settings" in obj and before is None:
+        raise click.BadParameter("the settings were read before --env was given.")
+    obj["env_name"] = value
+    return value
+
+
+def _env_option(command):
+    return click.option(
+        "--env",
+        "env_after",
+        metavar="NAME",
+        expose_value=False,
+        is_eager=True,
+        callback=_env_after_command,
+        help="Target environment, as `camsocs --env NAME` (pipeline/.env.NAME).",
+    )(command)
+
+
+def _summary_option(command):
+    return click.option(
+        "--summary-json",
+        type=click.Path(path_type=Path, dir_okay=False),
+        metavar="PATH",
+        help="Also write the run's outcome as JSON (stages, warnings, coverage) to PATH.",
+    )(command)
 
 
 @cli.command()
@@ -217,40 +272,67 @@ def _parse_stages(_ctx: click.Context, _param: click.Parameter, value: str | Non
     metavar="A,B",
     help=f"Comma-separated subset of: {', '.join(STAGE_ORDER)}. Default: all.",
 )
+@click.option(
+    "--group",
+    metavar="NAME",
+    help="A scheduled run's stages instead (stages.GROUPS): events (daily) or full (weekly).",
+)
 @click.option("--dry-run", is_flag=True, help="No credentials needed; nothing is written.")
 @click.option("--limit", type=click.IntRange(min=1), help="Process at most N items per stage.")
+@_summary_option
+@_env_option
 @click.pass_context
-def sync(ctx: click.Context, stages: list[str] | None, dry_run: bool, limit: int | None) -> None:
+def sync(
+    ctx: click.Context,
+    stages: list[str] | None,
+    group: str | None,
+    dry_run: bool,
+    limit: int | None,
+    summary_json: Path | None,
+) -> None:
     """Run the pipeline stages. This is what the cron runs."""
-    settings = _settings(ctx)
-    try:
-        report = run_sync(settings=settings, stages=stages, dry_run=dry_run, limit=limit)
-    except (ConfigError, ConvexError, ValueError) as error:
-        raise click.ClickException(str(error)) from error
-    click.echo(report.summary())
-    if not report.ok:
-        raise click.ClickException(
-            "One or more stages failed — see the report above. Every write is an upsert, "
-            "so the next run repairs what this one missed."
-        )
+    _run(ctx, stages=stages, group=group, dry_run=dry_run, limit=limit, summary=summary_json)
 
 
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="No credentials needed; nothing is written.")
 @click.option("--limit", type=click.IntRange(min=1), help="Process at most N items per stage.")
+@_summary_option
+@_env_option
 @click.pass_context
-def harvest(ctx: click.Context, dry_run: bool, limit: int | None) -> None:
-    """The full harvest: every stage in registry order (seed → harvest →
-    resolve → enrich → events → inbox / Instagram / termcards → load →
-    report), then a re-derivation, and the coverage report
+def harvest(
+    ctx: click.Context, dry_run: bool, limit: int | None, summary_json: Path | None
+) -> None:
+    """The full harvest, `sync --group full`: every stage in registry order
+    (seed → harvest → resolve → enrich → events → inbox / Instagram /
+    termcards → load → report), then a re-derivation, and the coverage report
     var/reports/coverage-<date>.md. What `pixi run harvest` runs."""
+    _run(ctx, stages=None, group="full", dry_run=dry_run, limit=limit, summary=summary_json)
+
+
+def _run(
+    ctx: click.Context,
+    *,
+    stages: list[str] | None,
+    group: str | None,
+    dry_run: bool,
+    limit: int | None,
+    summary: Path | None,
+) -> None:
+    """`sync` and `harvest`: run, print the report, re-derive when the group
+    asks for it, write the JSON summary, and exit non-zero on any failure."""
     settings = _settings(ctx)
+    extra = {"group": group, "environment": _env(ctx).name}
     try:
-        report = run_sync(settings=settings, stages=None, dry_run=dry_run, limit=limit)
+        chosen = resolve_group(group) if group is not None else None
+        report = run_sync(
+            settings=settings, stages=stages, group=chosen, dry_run=dry_run, limit=limit
+        )
     except (ConfigError, ConvexError, ValueError) as error:
+        _write_summary(summary, {**extra, "ok": False, "error": str(error), "stages": []})
         raise click.ClickException(str(error)) from error
     click.echo(report.summary())
-    if not dry_run:
+    if chosen is not None and chosen.derive and not dry_run:
         # Statuses and term weeks were derived on ingest; this catches what
         # the clock alone changes, and refreshes the overview's coverage.
         try:
@@ -259,14 +341,35 @@ def harvest(ctx: click.Context, dry_run: bool, limit: int | None) -> None:
             click.echo("derive: scheduled")
         except ConvexError as error:
             click.echo(f"warning: derive not scheduled ({error})", err=True)
-        path = report_path(settings.reports_dir, london_today())
-        if any(s.name == "report" and s.ok for s in report.stages) and path.exists():
-            click.echo(f"coverage report: {path}")
+            report.warnings.append(f"derive not scheduled ({error})")
+    path = report_path(settings.reports_dir, london_today())
+    written = not dry_run and any(s.name == "report" and s.ok for s in report.stages)
+    if written and path.exists():
+        click.echo(f"coverage report: {path}")
+    _write_summary(summary, _summary(report, extra, path if written else None))
     if not report.ok:
         raise click.ClickException(
             "One or more stages failed — see the report above. Every write is an upsert, "
             "so the next run repairs what this one missed."
         )
+
+
+def _summary(report: RunReport, extra: dict, coverage_report: Path | None) -> dict:
+    payload = {**extra, **report.summary_payload()}
+    if payload["coverage"] is not None and coverage_report is not None:
+        payload["coverage"]["report"] = str(coverage_report)
+    return payload
+
+
+def _write_summary(path: Path | None, payload: dict) -> None:
+    """Write `payload` to `path` whole or not at all (temp file + rename), so a
+    reader never sees half a file."""
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", "utf-8")
+    temporary.replace(path)
 
 
 @cli.command("prune-cache")

@@ -30,11 +30,48 @@
 
 A stage that is commented out does not exist for `sync` (not even as "not
 run"), so a half-built stage never fails a cron run.
+
+## Groups: what a scheduled run executes (decision D5, docs/ops-vps.md)
+
+`camsocs sync --group <name>` runs one entry of `GROUPS` (the registry order
+still holds):
+
+- ``full`` — every stage, then the server's re-derivation; weekly
+  (`pixi run harvest`, the VPS's Sunday timer).
+- ``events`` — the day's events; daily (`pixi run harvest-events`, the VPS's
+  04:30 timer). It harvests no organisation itself, so it reads what the
+  last full run left in `var/staging` and `var/cache`:
+
+  - term_dates, report: nothing earlier runs left;
+  - camdram_events, cucbc_events, playwaze: the organisations to name as
+    organisers — resolve (``_resolved``) and the crosswalk;
+  - talks_cam, calendar_feeds: talks.cam lists and ICS / Google / Luma
+    feeds — the SU profiles (keyed in ``_resolved``), enrichment
+    (``society_website``, ``linktree``) and `events/seeds.py`;
+  - su_whatson: the SU profiles' own event lists — su_directory
+    (``su_profile`` and its cached pages);
+  - website_events: the sites enrichment read (``society_website`` and its
+    cached pages);
+  - termcards, instagram, inbox: termcard URLs, Instagram handles, lists,
+    addresses and domains — su_directory, resolve and enrich;
+  - load: the latest file of every staging directory.
+
+  So it ``needs`` ``_resolved``, ``society_website`` and ``su_profile``: a
+  host where they were never staged stops before any request, with "run the
+  full group first", instead of staging nothing and succeeding
+  (website_events would only note "run enrich first"). Older than eight days
+  (the weekly run failed), they still serve, with a run warning. Re-posting
+  the full run's observations is a no-op on the server — each claim's
+  sighting is the `retrievedAt` it carries, so nothing looks fresher than
+  it is.
 """
 
 from __future__ import annotations
 
-from camsocs_pipeline.pipeline.context import Stage
+from datetime import timedelta
+
+from camsocs_pipeline.pipeline.context import Stage, StageGroup
+from camsocs_pipeline.staging.store import RESOLVED
 
 STAGES: list[Stage] = [
     # ── seed ─────────────────────────────────────────────────────────────────
@@ -127,8 +164,39 @@ STAGES: list[Stage] = [
 ]
 
 
+#: The scheduled runs (docs/ops-vps.md): `camsocs sync --group <name>`.
+GROUPS: dict[str, StageGroup] = {
+    "events": StageGroup(
+        "events",
+        stages=(
+            "term_dates",
+            "camdram_events",
+            "talks_cam",
+            "cucbc_events",
+            "playwaze",
+            "calendar_feeds",
+            "su_whatson",
+            "website_events",
+            "inbox",
+            "instagram",
+            "termcards",
+            "load",
+            "report",
+        ),
+        needs=(RESOLVED, "society_website", "su_profile"),
+        stale_after=timedelta(days=8),
+        description="daily: every events source, then load and the coverage report",
+    ),
+    "full": StageGroup(
+        "full",
+        derive=True,
+        description="weekly: every stage in registry order, then the re-derivation",
+    ),
+}
+
+
 def stage_names() -> list[str]:
     return [stage.name for stage in STAGES]
 
 
-__all__ = ["STAGES", "stage_names"]
+__all__ = ["GROUPS", "STAGES", "stage_names"]

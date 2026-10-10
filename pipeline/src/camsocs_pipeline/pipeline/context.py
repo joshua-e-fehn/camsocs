@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
 from camsocs_pipeline.config import Settings
 from camsocs_pipeline.pipeline.load import ConvexLoader
@@ -96,4 +97,38 @@ class Stage:
         return module.run
 
 
-__all__ = ["Stage", "StageContext", "StageFn"]
+@dataclass(frozen=True)
+class StageGroup:
+    """A named set of registry stages that one scheduled run executes
+    (`camsocs sync --group <name>`; `camsocs_pipeline.stages.GROUPS`).
+
+    `stages`: the registry stages it runs, always in registry order; empty
+    means every stage.
+
+    `needs`: staging directories the group reads but no stage of it writes —
+    what an earlier run of the full group left on disk (the resolver's
+    ``_resolved``, enrichment's ``society_website``, the SU profiles). When one
+    is missing the run stops before any request: a daily run with no known
+    organisations would stage nothing and still report success.
+
+    `stale_after`: when the newest file of a needed directory is older than
+    this, the run goes ahead but carries a warning (the weekly full run has
+    not refreshed what it reads).
+
+    `derive`: after a real run, ask the deployment to re-derive statuses,
+    term weeks and stale flags (what the clock alone changes).
+    """
+
+    name: str
+    stages: tuple[str, ...] = ()
+    needs: tuple[str, ...] = ()
+    stale_after: timedelta | None = None
+    derive: bool = False
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name.isidentifier():
+            raise ValueError(f"Group names are identifiers: {self.name!r}")
+
+
+__all__ = ["Stage", "StageContext", "StageFn", "StageGroup"]
