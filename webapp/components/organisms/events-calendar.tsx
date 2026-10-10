@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { EventDetails } from "@/components/molecules/event-details"
 import { EventChip, EventItem } from "@/components/molecules/event-item"
 import { FacetPopover } from "@/components/molecules/facet-popover"
@@ -20,6 +20,7 @@ import { OrgPicker } from "@/components/molecules/org-picker"
 import { SearchField } from "@/components/molecules/search-field"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Empty,
   EmptyContent,
@@ -42,15 +43,13 @@ import type { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
 import {
   type CalendarView,
-  eventDays,
   formatDayShort,
   formatRange,
-  londonIsoDate,
   shiftAnchor,
   viewWindow,
   WEEKDAYS,
 } from "@/lib/calendar"
-import { splitOngoing } from "@/lib/event-runs"
+import { eventsByDay, lastDayOf, splitOngoing } from "@/lib/event-runs"
 import type { EventListItem, OrgRef } from "@/lib/public-api"
 import { camSignInHref } from "@/lib/site"
 import { type EventsState, serializeEventsState } from "@/lib/url-state"
@@ -64,30 +63,6 @@ const VIEWS: { value: CalendarView; label: string; icon: typeof ListIcon }[] = [
 ]
 
 const MONTH_CELL_CHIPS = 3
-
-/**
- * The view's events by London day. A multi-day event that starts in view (a
- * weekend festival, the Bumps) sits on every day it covers in the grids
- * (`everyDay`), and once — on its first day — in the list. One that began
- * before the view is not here at all: it is shown once, as ongoing.
- */
-function groupByDay(
-  events: EventListItem[],
-  viewDays: readonly string[],
-  everyDay: boolean,
-): Map<string, EventListItem[]> {
-  const first = viewDays[0]
-  const last = viewDays[viewDays.length - 1]
-  const days = new Map<string, EventListItem[]>()
-  const add = (day: string, event: EventListItem) =>
-    days.set(day, [...(days.get(day) ?? []), event])
-  for (const event of events) {
-    const covered = eventDays(event).filter((day) => day >= first && day <= last)
-    if (covered.length === 0) covered.push(londonIsoDate(event.startsAt))
-    for (const day of everyDay ? covered : covered.slice(0, 1)) add(day, event)
-  }
-  return new Map([...days.entries()].sort(([a], [b]) => a.localeCompare(b)))
-}
 
 /** "N Cambridge-only events in these weeks — sign in": rendered only when the
  * server could count them; the count itself stays live. The server counts
@@ -118,7 +93,9 @@ function CamOnlyNote({
 }
 
 /** Events that began before the dates on screen and are still on (a film
- * listed for months): listed once above the days instead of on each. */
+ * listed for months, a month-long competition, lib/event-runs.ts): one folded
+ * row, "N ongoing", above the days instead of a card on each. Opened, it lists
+ * them as chips, soonest to end first. */
 function Ongoing({
   events,
   hrefFor,
@@ -128,28 +105,49 @@ function Ongoing({
   hrefFor: (event: EventListItem) => string
   onSelect: (event: EventListItem) => void
 }) {
+  const [open, setOpen] = useState(false)
   if (events.length === 0) return null
   return (
-    <section aria-labelledby="ongoing" className="flex flex-col gap-2">
-      <h3
-        id="ongoing"
-        className="font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
-      >
-        Ongoing
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border bg-card">
+      <h3 className="text-sm">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:rounded-b-none">
+          <ChevronRightIcon
+            aria-hidden
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-90",
+            )}
+          />
+          <span className="shrink-0 font-medium">
+            <span className="font-mono tabular-nums">{events.length}</span> ongoing
+            <span className="sr-only"> {events.length === 1 ? "event" : "events"}</span>
+          </span>
+          {!open && (
+            <span aria-hidden className="min-w-0 truncate text-muted-foreground">
+              {events.map((event) => event.title).join(" · ")}
+            </span>
+          )}
+          <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
+            {open ? "Hide" : "Show"}
+          </span>
+        </CollapsibleTrigger>
       </h3>
-      <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-        {events.map((event) => (
-          <li key={event.key} className="min-w-0">
-            <EventItem
-              event={event}
-              href={hrefFor(event)}
-              onSelect={() => onSelect(event)}
-              className="h-full"
-            />
-          </li>
-        ))}
-      </ul>
-    </section>
+      <CollapsibleContent>
+        <ul className="grid grid-cols-1 gap-1.5 border-t p-2 sm:grid-cols-2 lg:grid-cols-3">
+          {events.map((event) => (
+            <li key={event.key} className="min-w-0">
+              <EventChip
+                event={event}
+                href={hrefFor(event)}
+                onSelect={() => onSelect(event)}
+                when={`until ${formatDayShort(lastDayOf(event))}`}
+                className="px-2 py-3 text-sm sm:py-1.5"
+              />
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -276,7 +274,7 @@ export function EventsCalendar({
       (state.q ? 1 : 0) >
     0
   const { ongoing, starting } = splitOngoing(events, range.from)
-  const byDay = groupByDay(starting, range.days, state.view !== "list")
+  const byDay = eventsByDay(starting, range.days, state.view !== "list")
   const ongoingSection = (
     <Ongoing events={ongoing} hrefFor={eventHref} onSelect={(event) => select(event.key)} />
   )
