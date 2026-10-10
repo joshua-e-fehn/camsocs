@@ -1,5 +1,6 @@
 /**
- * Small display formatters for the public pages (money, languages, prose).
+ * Small display formatters for the public pages (money, languages). Prose is
+ * lib/rich-text.ts.
  * Pure; the date and time formatters live in lib/calendar.ts.
  */
 
@@ -37,16 +38,6 @@ export function languageName(code: string): string {
   } catch {
     return code
   }
-}
-
-/** Free text as paragraphs: split on blank lines, trimmed, empties dropped.
- * Descriptions are stored as plain text or light markdown; rendering them as
- * text (never HTML) means a scraped page cannot inject markup. */
-export function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n/)
-    .map((part) => part.trim())
-    .filter(Boolean)
 }
 
 /** "A", "A and B", "A, B and C". */

@@ -107,6 +107,19 @@ test("an event opens in a sheet @dark", async ({ page }, testInfo) => {
   await checkAndCapture(page, testInfo, "events-sheet", { fullPage: false, skipSettle: true })
 })
 
+test("events already running fold into one row that opens @dark", async ({ page }, testInfo) => {
+  await page.goto("/events")
+  const toggle = page.getByRole("button", { name: /^\d+ ongoing events?\b/ })
+  test.skip((await toggle.count()) === 0, "nothing in the data began before today and is still on")
+  await expect(toggle).toHaveAttribute("aria-expanded", "false")
+  await toggle.click()
+  await expect(toggle).toHaveAttribute("aria-expanded", "true")
+  const chips = page.locator("[data-slot=collapsible-content] a")
+  await expect(chips.first()).toBeVisible()
+  await expect(chips.first()).toContainText(/^until /)
+  await checkAndCapture(page, testInfo, "events-ongoing", { fullPage: false })
+})
+
 test("the request form submits (mocked, nothing is written)", async ({ page, guard }, testInfo) => {
   guard.mock("listingRequests:submit", { key: "req-e2e-mocked" })
   await page.goto(`/request?kind=claim&org=${PROFILES["profile-jcr"]}`)

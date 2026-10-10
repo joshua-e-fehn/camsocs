@@ -105,9 +105,13 @@ lib/                         Pure logic + *.test.ts (no server imports)
   owner-corrections.ts       Accepting a correction: which fields, how each is edited and parsed
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
-  format.ts                  Money, language names, paragraphs
-  rich-text.ts               Description markdown subset → a tree (never HTML); molecules/rich-text renders it
-  event-runs.ts              A show's nights as one run; events already running at a view's start ("Ongoing")
+  format.ts                  Money, language names
+  rich-text.ts               Free-text markdown → a tree (never HTML; tags dropped; links http(s) or one
+                             mailto address only), rendered by molecules/rich-text; `plainLine` / `summary`
+                             give the plain text for cards, short-description lines and meta descriptions
+  event-runs.ts              A show's nights as one run; events already running at a view's start (the
+                             folded "N ongoing" strip, soonest to end first); events by day, where a run
+                             of more than 14 days sits on its first day only, never on each day it covers
   monogram.ts                Initials for an organisation without a logo
   pagination.ts              The page numbers a pager shows
   page-metadata.ts           A page's title, description, share card (with the share image) and canonical
@@ -131,7 +135,8 @@ scripts/
 test/setup.ts                happy-dom preload (keeps native fetch/Headers/Request/Response)
 e2e/                         Playwright smoke suite (not part of `bun test`; bunfig ignores it)
   fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
-  smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, form
+  smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, the
+                             ongoing strip, form
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 ```
 
@@ -174,7 +179,9 @@ and loads every public page at desktop (1440×900) and phone (390×844) size —
 `@dark` again in dark mode — checking one `<h1>`, no horizontal overflow, a title, a description and a share image, no axe-core
 violation (WCAG 2.1 A/AA, in the page's theme), no uncaught error or console error, then saving a full-page screenshot to
 `<repo>/var/screenshots/<London date>/<E2E_LABEL or "latest">/<project>/` (gitignored). It also
-opens the mobile filter sheet, an event's details and submits the request form.
+opens the mobile filter sheet, an event's details and the calendar's "N ongoing" strip (skipped
+when nothing began before today), and submits the request form. `E2E_PORT` picks another port
+(another worktree's server on 3100 would otherwise be reused).
 
 **Read-only by construction** (`e2e/fixtures.ts`): the Convex WebSocket is routed through
 Playwright and every `Mutation` / `Action` message is answered by the guard instead of the server

@@ -4,6 +4,7 @@ import { CATEGORY_ICONS } from "@/components/molecules/category-icon"
 import { Badge } from "@/components/ui/badge"
 import { monogram } from "@/lib/monogram"
 import type { OrgCard as OrgCardData } from "@/lib/public-api"
+import { plainLine } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import {
   CATEGORY_LABELS,
@@ -140,7 +141,9 @@ export function OrgCard({
         </div>
       </div>
       {card.shortDescription && (
-        <p className="line-clamp-3 text-sm text-muted-foreground">{card.shortDescription}</p>
+        <p className="line-clamp-3 text-sm text-muted-foreground">
+          {plainLine(card.shortDescription)}
+        </p>
       )}
       {card.categories.length > 0 && (
         <div className="mt-auto flex flex-wrap gap-1">

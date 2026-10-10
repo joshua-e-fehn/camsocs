@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
+import { plainLine, summary } from "@/lib/rich-text"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
 import { isOrgSlug } from "@/lib/url-state"
 
@@ -20,6 +21,16 @@ const loadOrg = cache(async (slug: string) => {
   return await fetchQuery(api.orgs.getBySlug, { slug }, { token: await getToken() })
 })
 
+/** A listing in one plain sentence or two, for search results, share cards
+ * and JSON-LD: its short description, else the start of its description
+ * (markdown stripped, lib/rich-text.ts), else undefined. */
+function plainDescription(org: { shortDescription?: string; description?: string }) {
+  const short = org.shortDescription ? plainLine(org.shortDescription) : ""
+  if (short) return short
+  const long = org.description ? summary(org.description, 160) : ""
+  return long || undefined
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const page = await loadOrg((await params).slug)
   // An unknown slug renders the not-found page. The status stays 200 once
@@ -28,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!page) notFound()
   const { org } = page
   const description =
-    org.shortDescription ?? `${org.name}: what it does, how to join and how to get in touch.`
+    plainDescription(org) ?? `${org.name}: what it does, how to join and how to get in touch.`
   return pageMetadata({ title: org.name, description, path: `/societies/${org.slug}` })
 }
 
@@ -65,7 +76,7 @@ export default async function SocietyPage({ params }: Props) {
     "@type": "Organization",
     name: org.name,
     alternateName: org.aliases.length > 0 ? org.aliases : undefined,
-    description: org.shortDescription,
+    description: plainDescription(org),
     url: org.website,
     logo: org.logo?.url,
     sameAs: org.socials.map((social) => social.url),

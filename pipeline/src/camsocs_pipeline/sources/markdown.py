@@ -66,6 +66,9 @@ class _Writer:
     def __init__(self, base_url: str | None) -> None:
         self.base_url = base_url
         self.parts: list[str] = []
+        # The marker and part index of the last emphasis written, so a run
+        # that follows it directly joins it (`wrap`).
+        self._emphasis: tuple[str, int] | None = None
 
     # -- output ----------------------------------------------------------------
 
@@ -146,9 +149,27 @@ class _Writer:
             self.children(node, list_depth=list_depth)
 
     def wrap(self, node: LexborNode, marker: str) -> None:
+        """Emphasis around a node's text. Spaces at its edges go outside the
+        markers (`<b>Label: </b>Text` → `**Label:** Text`, not `**Label:**Text`,
+        which markdown reads as no emphasis at all), and a run that directly
+        follows one of the same kind joins it (`<b>A</b><b>B</b>` → `**AB**`,
+        not `**A****B**`)."""
         inner = self.inline(node)
-        if inner:
+        words = node.text(deep=True)
+        if not inner:
+            if words[:1].isspace():
+                self.text(" ")
+            return
+        if words[:1].isspace():
+            self.text(" ")
+        last = len(self.parts) - 1
+        if self._emphasis == (marker, last) and self.parts[last].endswith(marker):
+            self.parts[last] = f"{self.parts[last][: -len(marker)]}{inner}{marker}"
+        else:
             self.parts.append(f"{marker}{inner}{marker}")
+            self._emphasis = (marker, len(self.parts) - 1)
+        if words[-1:].isspace():
+            self.text(" ")
 
     def link(self, node: LexborNode) -> None:
         label = self.inline(node)

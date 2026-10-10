@@ -150,15 +150,20 @@ export function EventItem({
 }
 
 /** A compact event for the week and month grids: time and title; someone
- * else's event (D6) dashed, with an arrow off-site. */
+ * else's event (D6) dashed, with an arrow off-site. `when` replaces the time
+ * ("until Fri 18 Dec" for an event already running). */
 export function EventChip({
   event,
   href,
   onSelect,
+  when,
+  className,
 }: {
   event: EventListItem
   href: string
   onSelect?: () => void
+  when?: string
+  className?: string
 }) {
   return (
     <Link
@@ -169,13 +174,14 @@ export function EventChip({
         "block truncate rounded-md border bg-card px-1.5 py-1 text-xs transition-colors hover:border-primary/30 focus-visible:outline-2 focus-visible:outline-ring",
         event.hosting === "takes_part" && "border-dashed",
         event.cancelled && "line-through opacity-70",
+        className,
       )}
       title={[formatEventWhen(event), event.title, organiserLine(event)]
         .filter(Boolean)
         .join(" — ")}
     >
       <span className="mr-1 font-mono text-muted-foreground">
-        {event.allDay ? "All day" : londonTime(event.startsAt)}
+        {when ?? (event.allDay ? "All day" : londonTime(event.startsAt))}
       </span>
       {event.visibility === "cam_only" && (
         <LockIcon aria-label="Cambridge only" className="mr-0.5 inline size-3 align-[-2px]" />

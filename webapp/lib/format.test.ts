@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  formatEventPrice,
-  formatPence,
-  joinNames,
-  languageName,
-  paragraphs,
-  takesPart,
-} from "./format"
+import { formatEventPrice, formatPence, joinNames, languageName, takesPart } from "./format"
 
 describe("format", () => {
   test("pence", () => {
@@ -32,8 +25,7 @@ describe("format", () => {
     expect(takesPart(["A", "B"])).toBe("A and B take part")
   })
 
-  test("languages and paragraphs", () => {
+  test("languages", () => {
     expect(languageName("de")).toBe("German")
-    expect(paragraphs("One.\n\n  Two.\n \n\nThree.")).toEqual(["One.", "Two.", "Three."])
   })
 })
