@@ -305,9 +305,11 @@ and the crosswalk (`resolve.lookup.OrgLookup`). They share `extract/events.py`:
   numbers redacted. The mail's extraction note counts what was cut, never what it said.
 - `extract/dedupe.py` drops events another staged source already has.
 - `extract/memo.py` caches validated replies under `var/cache/llm/` (the D1 redaction's too,
-  under `redact_names_v2/`, and the D6 calendar-noise verdicts under `event_noise_v1/`). Termcards and website pages give the model the Thursday that
-  starts the week as the reference date (`extract.when.week_anchor`), so an unchanged card or
-  page is asked about once a week.
+  under `redact_names_v2/`, and the D6 calendar-noise verdicts under `event_noise_v1/`).
+  Website pages give the model the Thursday that starts the week as the reference date
+  (`extract.when.week_anchor`), so an unchanged page is asked about once a week; a card
+  (`extract/cards.py`) gets the week it was published (its dated path or `Last-Modified`),
+  else this week's Thursday, so an unchanged card is asked about once, whichever stage reads it.
 
 The four stages:
 
