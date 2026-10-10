@@ -112,9 +112,9 @@ export default function PrivacyPage() {
           Apart from what you send us, the data comes from publicly accessible sources: the
           Cambridge SU society directory, the Proctors&apos; register, Sport Cambridge, Camdram,
           CUCBC, college and JCR/MCR websites, societies&apos; own websites, Linktree pages and
-          public calendars, talks.cam, Playwaze and the University&apos;s events listing; and from
-          society mailing lists as described above. The full list and our collection rules are on
-          the <Link href="/about#data">About page</Link>.
+          public calendars, talks.cam and Playwaze; and from society mailing lists as described
+          above. The full list and our collection rules are on the{" "}
+          <Link href="/about#data">About page</Link>.
         </p>
       </ProseSection>
 

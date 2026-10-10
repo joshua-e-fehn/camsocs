@@ -27,7 +27,7 @@ const SOURCES = [
   ["Societies' own websites and Linktree pages", "how to join, membership, contacts, socials"],
   ["Public calendar feeds (Google Calendar, Luma, iCal)", "events societies publish"],
   ["talks.cam", "talks, read by a parser only, never by an AI model"],
-  ["Playwaze, SU What's On, the University events listing", "leagues and events"],
+  ["Playwaze and SU What's On", "leagues and events"],
   ["The University's term-dates page", "Full Term dates, for week numbers"],
 ] as const
 

@@ -97,6 +97,34 @@ def test_a_claims_batch_too_heavy_for_one_mutation_is_halved(net: respx.MockRout
     assert result.inserted == 5
 
 
+def test_any_batch_too_heavy_for_one_mutation_is_halved(net: respx.MockRouter) -> None:
+    sizes: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        rows = json.loads(request.content)["sources"]
+        sizes.append(len(rows))
+        if len(rows) > 2:
+            message = "Your request timed out performing too many system operations."
+            return httpx.Response(400, text=message)
+        return httpx.Response(200, json={"inserted": len(rows), "updated": 0, "unchanged": 0})
+
+    net.post(f"{SITE}/api/pipeline/sources").mock(side_effect=answer)
+    result = loader().post_batches("sources", "sources", [{"k": i} for i in range(5)])
+
+    assert sizes == [5, 3, 2, 1, 2]
+    assert (result.inserted, result.requests) == (5, 3)
+
+
+def test_a_content_400_on_a_batch_is_not_halved(net: respx.MockRouter) -> None:
+    route = net.post(f"{SITE}/api/pipeline/sources").respond(
+        400, json={"error": "Object contains extra field `unexpected`"}
+    )
+
+    with pytest.raises(ConvexError):
+        loader().post_batches("sources", "sources", [{"k": i} for i in range(4)])
+    assert route.call_count == 1
+
+
 def test_large_inputs_are_split_and_counted(net: respx.MockRouter) -> None:
     route = net.post(f"{SITE}/api/pipeline/societies").mock(
         return_value=httpx.Response(200, json={"inserted": 1, "updated": 2, "unchanged": 3})

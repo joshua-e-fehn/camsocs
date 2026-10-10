@@ -385,10 +385,32 @@ class ConvexLoader:
         result = BatchResult(unit or key)
         rows = [record.to_wire() if isinstance(record, WireModel) else record for record in records]
         for batch in chunked(rows, batch_size):
-            result.record(self.post(path, {**(extra or {}), key: list(batch)}))
+            self._post_halving(path, key, list(batch), extra, result)
         if result.requests:
             logger.info("%s → %s", path, result)
         return result
+
+    def _post_halving(
+        self,
+        path: str,
+        key: str,
+        batch: list[dict[str, Any]],
+        extra: dict[str, Any] | None,
+        result: BatchResult,
+    ) -> None:
+        """One request. A batch the server cannot finish inside one mutation's
+        limits (a fresh deployment has no rows to compare against, so every
+        row is an insert) fails as a whole — a mutation is atomic, so nothing
+        was written — and is posted again in halves."""
+        try:
+            result.record(self.post(path, {**(extra or {}), key: batch}))
+        except ConvexError as error:
+            if len(batch) < 2 or not _is_too_heavy(error):
+                raise
+            logger.warning("%s batch of %d too heavy for one mutation; halving", path, len(batch))
+            middle = (len(batch) + 1) // 2
+            self._post_halving(path, key, batch[:middle], extra, result)
+            self._post_halving(path, key, batch[middle:], extra, result)
 
     # -- one method per route (models/wire.py) -----------------------------------
 
