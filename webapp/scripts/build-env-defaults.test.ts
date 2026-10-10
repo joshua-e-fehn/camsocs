@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 import { requireConvexUrls } from "../lib/convex-url"
 
 /**
@@ -260,5 +261,27 @@ describe("build-env-defaults.sh — invariants", () => {
     })
     expect(result.status).toBe(1)
     expect(result.stdout).not.toMatch(/RAN_ANYWAY/)
+  })
+})
+
+describe("bun run build — the URL check runs before any deploy", () => {
+  test("a deploying build without the URL pair stops before convex-deploy-if-key.sh", () => {
+    // `package.json` wraps the deploy in this script: deploy-then-check pushed
+    // functions to production and then failed the build (review 2026-10-10).
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      scripts: { build: string }
+    }
+    expect(pkg.scripts.build.startsWith("bash scripts/build-env-defaults.sh ")).toBe(true)
+    const deployed = new URL("./build-env-defaults.sh", import.meta.url).pathname
+    const result = spawnSync("bash", [deployed, "sh", "-c", "echo DEPLOYED"], {
+      env: {
+        ...baseEnv(),
+        CONVEX_DEPLOY_KEY: "prod:example|secret",
+        CAMSOCS_ALLOW_LOCAL_CONVEX_DEPLOY: "1",
+      },
+      encoding: "utf8",
+    })
+    expect(result.status).toBe(1)
+    expect(result.stdout).not.toContain("DEPLOYED")
   })
 })

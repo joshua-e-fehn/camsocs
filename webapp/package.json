@@ -6,7 +6,7 @@
   "packageManager": "bun@1.3.11",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "bash scripts/convex-deploy-if-key.sh && bash scripts/build-env-defaults.sh next build",
+    "build": "bash scripts/build-env-defaults.sh bash -c 'bash scripts/convex-deploy-if-key.sh && next build'",
     "start": "next start",
     "lint": "biome lint .",
     "format": "biome format --write .",

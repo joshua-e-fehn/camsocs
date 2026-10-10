@@ -35,15 +35,17 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
 
 ### Deploying the functions
 
-- **Vercel-side (normal path).** With `CONVEX_DEPLOY_KEY` in Vercel's *Production* environment, every production build runs `scripts/convex-deploy-if-key.sh` → `bunx convex deploy` (typecheck, codegen, push of functions, indexes and schema) before `next build`. Preview builds have no key and deploy nothing.
+- **Vercel-side (normal path).** With `CONVEX_DEPLOY_KEY` in Vercel's *Production* environment, every production build first checks that both Convex URLs are set (`scripts/build-env-defaults.sh`; a deploying build without them stops here, before anything is pushed), then runs `scripts/convex-deploy-if-key.sh` → `bunx convex deploy` (typecheck, codegen, push of functions, indexes and schema), then `next build`. Preview builds have no key and deploy nothing.
 - **Local, deliberately (first deploy, or Vercel not set up yet).** The build script refuses an exported key outside Vercel. Put the key on the one command line instead, so it never enters the shell's environment:
 
   ```bash
   cd webapp && unset CONVEX_DEPLOY_KEY
+  NEXT_PUBLIC_CONVEX_URL=https://<prod>.convex.cloud \
+  NEXT_PUBLIC_CONVEX_SITE_URL=https://<prod>.convex.site \
   CONVEX_DEPLOY_KEY='<production deploy key>' CAMSOCS_ALLOW_LOCAL_CONVEX_DEPLOY=1 bun run build
   ```
 
-  This deploys the functions to production, then compiles the site (against whatever `NEXT_PUBLIC_CONVEX_*` the shell has: the local compile is a check, Vercel's build is what ships). In zsh, `setopt HIST_IGNORE_SPACE` and a leading space keep the line out of the history.
+  The URL check runs first: without the production pair on the line (`.env.local` names the dev deployment and is read only by `next` later) the build stops before deploying anything. Then it deploys the functions to production and compiles the site against that pair (the local compile is a check, Vercel's build is what ships). In zsh, `setopt HIST_IGNORE_SPACE` and a leading space keep the line out of the history.
 - `bunx convex deploy` alone (no key; `.env.local` names the dev deployment) also targets the project's default production deployment. It is the same push without the guard; prefer the two routes above.
 
 ## 2. The Vercel project

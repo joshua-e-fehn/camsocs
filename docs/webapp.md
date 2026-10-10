@@ -171,8 +171,8 @@ Opening an event only changes `?event=` with `window.history.pushState` (no serv
 `bun run e2e:install` once (Playwright's Chromium), then `bun run e2e`: it starts `next dev` on
 port 3100 against the deployment in `.env.local` (or tests `E2E_BASE_URL`, production included)
 and loads every public page at desktop (1440×900) and phone (390×844) size — the pages tagged
-`@dark` again in dark mode — checking one `<h1>`, no horizontal overflow, a title and description,
-no uncaught error or console error, then saving a full-page screenshot to
+`@dark` again in dark mode — checking one `<h1>`, no horizontal overflow, a title, a description and a share image, no axe-core
+violation (WCAG 2.1 A/AA, in the page's theme), no uncaught error or console error, then saving a full-page screenshot to
 `<repo>/var/screenshots/<London date>/<E2E_LABEL or "latest">/<project>/` (gitignored). It also
 opens the mobile filter sheet, an event's details and submits the request form.
 

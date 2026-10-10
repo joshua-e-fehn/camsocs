@@ -292,6 +292,8 @@ export async function checkAndCapture(
   expect.soft(await overflowingElements(page), "no horizontal overflow").toEqual([])
   expect.soft(await page.title(), "a page title").not.toBe("")
   await expect.soft(page.locator('meta[name="description"]'), "a meta description").toHaveCount(1)
+  await expect.soft(page.locator('meta[property="og:image"]'), "a share image").not.toHaveCount(0)
+  expect.soft(await accessibilityViolations(page), "no axe-core violation").toEqual([])
   const file = path.join(screenshotDir(testInfo), `${name}.png`)
   await page.screenshot({ path: file, fullPage: options.fullPage ?? true, animations: "disabled" })
   await testInfo.attach(name, { path: file, contentType: "image/png" })

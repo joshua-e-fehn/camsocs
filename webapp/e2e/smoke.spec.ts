@@ -4,8 +4,8 @@ import { checkAndCapture, expect, test } from "./fixtures"
  * Smoke over every public page at desktop (1440×900) and phone (390×844)
  * size; pages tagged @dark run again in dark mode. Each test loads a page,
  * checks the basics (fixtures.ts `checkAndCapture`: one h1, no horizontal
- * overflow, a title and description, no uncaught errors, no write) and saves
- * a full-page screenshot.
+ * overflow, a title, a description and a share image, no axe-core violation,
+ * no uncaught errors, no write) and saves a full-page screenshot.
  *
  * Profiles are representative listings of the dev data (2026-10-08 harvest),
  * picked by `scripts/measure-public-api.ts`-style scans for data richness:
@@ -14,8 +14,8 @@ const PROFILES = {
   /** University-level theatre company: logo, long description, ~37 Camdram
    * events, a conflicting field. */
   "profile-university": "amateur-dramatic-club",
-  /** An SU-registered society with no orgType / level (540 of 800 look like
-   * this), events and weekly sessions. */
+  /** An SU-registered society whose orgType / level come from the classify
+   * stage's rules (inferred), with events and weekly sessions. */
   "profile-su-society": "ethics-in-mathematics-society",
   /** A University sports club with sport facts and nine regular sessions (no
    * club has teams in the dev data yet). */

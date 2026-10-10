@@ -2,7 +2,7 @@
 # Runs its arguments with the two public Convex URLs `next build` needs, filling
 # in a placeholder pair *only* for a build that is going nowhere.
 #
-#   bash scripts/build-env-defaults.sh next build
+#   bash scripts/build-env-defaults.sh bash -c 'bash scripts/convex-deploy-if-key.sh && next build'
 #
 # Ported from Bundestracker (webapp/scripts/build-env-defaults.sh); the matrix
 # and the reasoning are unchanged.
@@ -62,10 +62,11 @@ site_set=false
 # enough — they are independent signals and a placeholder is wrong under all of
 # them, so the check is a disjunction rather than a guess at which is canonical.
 #
-#   CONVEX_DEPLOY_KEY  scripts/convex-deploy-if-key.sh has already deployed the
-#                      backend by the time this runs. A frontend compiled
-#                      against a placeholder would then be shipped *alongside* a
-#                      real deployment — the worst case in the matrix.
+#   CONVEX_DEPLOY_KEY  scripts/convex-deploy-if-key.sh runs right after this
+#                      check (`bun run build` wraps it), so a build that would
+#                      ship a placeholder frontend *alongside* a freshly deployed
+#                      backend — the worst case in the matrix — stops here,
+#                      before anything is deployed.
 #   VERCEL             set to "1" on every Vercel build, preview included. A
 #                      preview that silently serves no data is still a broken
 #                      preview, and previews are what reviewers look at.
