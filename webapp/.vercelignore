@@ -1,0 +1,9 @@
+# Never upload local env files: Vercel's own env vars configure builds
+.env
+.env.*
+!.env.example
+# Local build and test output
+node_modules
+.next
+test-results
+playwright-report
