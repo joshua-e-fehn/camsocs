@@ -6,6 +6,9 @@ Two safety properties hold for every test:
   `assert_all_mocked=True`, so any httpx request (including the OpenAI SDK's,
   which uses httpx) that a test did not mock raises instead of leaving the
   machine. Tests add routes to the `net` fixture.
+- **No DNS.** The polite client resolves every host before it fetches
+  (only public addresses, `sources/base.py`); here every name resolves to one
+  public documentation-free address, unless a test passes its own resolver.
 - **No real configuration.** Every variable the pipeline reads is removed from
   the environment, and `settings()` builds `Settings` with `_env_file=None`, so
   `pipeline/.env` (real keys) is never read by a test.
@@ -70,6 +73,17 @@ def _no_httpx2(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("Network access through httpx2 is disabled in tests")
 
     monkeypatch.setattr(httpx2.HTTPTransport, "handle_request", refuse)
+
+
+#: What every host name resolves to in tests: a public address.
+PUBLIC_TEST_ADDRESS = "93.184.215.14"
+
+
+@pytest.fixture(autouse=True)
+def _no_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    from camsocs_pipeline.sources import base
+
+    monkeypatch.setattr(base, "RESOLVE", lambda _host, _port: [PUBLIC_TEST_ADDRESS])
 
 
 @pytest.fixture(autouse=True)

@@ -56,6 +56,18 @@ Properties enforced here rather than left to each caller's discipline:
    Crawl-delay, the host slot, no cookies, login walls and 401/403 all
    still apply. A result fetched only thanks to an override carries
    `override` (``robots_override:society``), and so does its cache entry.
+10. **Public addresses only** (decision D5: the scheduled harvests run on the
+    VPS host, beside cliproxy on its loopback, Docker's containers and the
+    Tailscale network). URLs come from pages anyone can edit (a society's
+    website, its SU profile, an image on a page), so before any request —
+    every redirect hop, robots.txt included — the host is resolved and the
+    fetch is refused when any address it resolves to is not public: loopback,
+    private (RFC 1918, IPv6 ULA), link-local, CGNAT, multicast, reserved or
+    unspecified (`address_refusal`; a literal IP is checked as written).
+    The connection itself is made only to an address checked again at that
+    moment (`PublicOnlyBackend`), so a name that resolves differently the
+    second time (DNS rebinding) still cannot reach the host's own services.
+    The LLM client and the Convex loader do not use this client.
 """
 
 from __future__ import annotations
@@ -63,10 +75,12 @@ from __future__ import annotations
 import email.utils
 import hashlib
 import http.cookiejar
+import ipaddress
 import json
 import logging
 import random
 import re
+import socket
 import threading
 import time
 import urllib.robotparser
@@ -79,6 +93,7 @@ from types import TracebackType
 from typing import Literal, Self
 from urllib.parse import urljoin, urlsplit
 
+import httpcore
 import httpx
 
 from camsocs_pipeline.sources.policy import (
@@ -165,6 +180,141 @@ class FetchResult:
         if self.content is None:
             return ""
         return self.content.decode(_charset(self.content_type), errors="replace")
+
+
+# --- public addresses only ------------------------------------------------------
+
+#: Resolves a host to the addresses a connection would use (`getaddrinfo`).
+Resolver = Callable[[str, int], list[str]]
+
+
+def system_resolve(host: str, port: int) -> list[str]:
+    """Every address `host` resolves to (IPv4 and IPv6), in the system's order."""
+    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return list(dict.fromkeys(str(info[4][0]) for info in infos))
+
+
+#: The resolver new clients use; tests replace it (no DNS in the test suite).
+RESOLVE: Resolver = system_resolve
+
+_LOCAL_NAMES = re.compile(r"(?:^|\.)(?:localhost|local|internal|localdomain|home\.arpa)\.?$", re.I)
+
+
+def public_address(address: str) -> bool:
+    """Whether a connection to `address` leaves the host for the public
+    internet: not loopback, private (RFC 1918, ULA), link-local, CGNAT
+    (100.64/10, Tailscale), multicast, reserved or unspecified. An
+    IPv4-mapped IPv6 address is judged as its IPv4 address."""
+    try:
+        ip = ipaddress.ip_address(address.split("%", 1)[0])
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def address_refusal(url: str, resolve: Resolver) -> str | None:
+    """Why `url`'s host may not be fetched, or None: a local name, or a host
+    any of whose addresses is not public (`public_address`). A name that does
+    not resolve is left to the request, which then fails as unreachable."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").rstrip(".")
+    if not host:
+        return "no host in the URL"
+    try:
+        ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        literal = False
+    else:
+        literal = True
+    if literal:
+        return None if public_address(host) else f"refusing a non-public address ({host})"
+    if _LOCAL_NAMES.search(host):
+        return f"refusing a local host name ({host})"
+    try:
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+    except ValueError:
+        return "invalid port in the URL"
+    try:
+        addresses = resolve(host, port)
+    except OSError:
+        return None
+    refused = [address for address in addresses if not public_address(address)]
+    if refused:
+        return f"refusing {host}: it resolves to a non-public address ({refused[0]})"
+    return None
+
+
+class PublicOnlyBackend(httpcore.SyncBackend):
+    """httpcore's network backend, connecting only to public addresses: the
+    host is resolved here, every address checked (`public_address`), and the
+    socket opened to a checked address — never to a name the system would
+    resolve again (module docstring, point 10). TLS still verifies the
+    certificate against the host name."""
+
+    def __init__(self, resolve: Resolver | None = None) -> None:
+        self._resolve = resolve
+
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: object = None,
+    ) -> httpcore.NetworkStream:
+        resolve = self._resolve or RESOLVE
+        try:
+            addresses = [host] if _is_ip(host) else resolve(host, port)
+        except OSError as error:
+            raise httpcore.ConnectError(f"cannot resolve {host}: {error}") from None
+        if not addresses or not all(public_address(address) for address in addresses):
+            raise httpcore.ConnectError(f"refusing {host}: not a public address")
+        last: Exception | None = None
+        for address in addresses:
+            try:
+                return super().connect_tcp(
+                    address,
+                    port,
+                    timeout=timeout,
+                    local_address=local_address,
+                    socket_options=socket_options,  # type: ignore[arg-type]
+                )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout) as error:
+                last = error
+        assert last is not None
+        raise last
+
+
+def _is_ip(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]").split("%", 1)[0])
+    except ValueError:
+        return False
+    return True
+
+
+class PublicOnlyTransport(httpx.HTTPTransport):
+    """httpx's default transport over `PublicOnlyBackend`."""
+
+    def __init__(self, resolve: Resolver | None = None) -> None:
+        super().__init__()
+        limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        self._pool = httpcore.ConnectionPool(
+            ssl_context=httpx.create_ssl_context(),
+            max_connections=limits.max_connections,
+            max_keepalive_connections=limits.max_keepalive_connections,
+            keepalive_expiry=limits.keepalive_expiry,
+            network_backend=PublicOnlyBackend(resolve),
+        )
 
 
 # --- per-host gates -----------------------------------------------------------
@@ -272,6 +422,7 @@ class PoliteClient:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        resolve: Resolver | None = None,
     ) -> None:
         if not user_agent:
             raise ValueError("A User-Agent is required; see Settings.require_user_agent.")
@@ -285,11 +436,15 @@ class PoliteClient:
         self._now = now
         self._robots: dict[str, _RobotsPolicy] = {}
         self._robots_lock = threading.Lock()
+        self._resolve = resolve
+        self._refusals: dict[str, str | None] = {}
         self._owns_client = client is None
         # A cookie jar that refuses everything: no session state is ever kept
         # or sent back, so the crawler is the same anonymous visitor every time.
         self._client = client or httpx.Client(
-            timeout=timeout, cookies=http.cookiejar.CookieJar(policy=_RejectAllCookies())
+            timeout=timeout,
+            cookies=http.cookiejar.CookieJar(policy=_RejectAllCookies()),
+            transport=PublicOnlyTransport(resolve),
         )
         self._headers = {"User-Agent": user_agent}
 
@@ -331,7 +486,7 @@ class PoliteClient:
         a robots.txt disallow, and only for the D3 URL classes.
         """
         _require_http(url)
-        refused = never_fetched(url)
+        refused = never_fetched(url) or self._address_refusal(url)
         if refused is not None:
             return self._result(url, url, "disallowed_by_robots", None, detail=refused)
         # A declared class (a society's own website) belongs to the site it
@@ -344,7 +499,7 @@ class PoliteClient:
         current = url
         override: str | None = None
         for _hop in range(MAX_REDIRECTS + 1):
-            refused = never_fetched(current)
+            refused = never_fetched(current) or self._address_refusal(current)
             if refused is not None:
                 return self._result(url, current, "disallowed_by_robots", None, detail=refused)
             policy = self._robots_policy(current)
@@ -402,7 +557,7 @@ class PoliteClient:
         requests `url` itself — for deciding what to record about a resource
         before fetching it."""
         _require_http(url)
-        if never_fetched(url) is not None:
+        if never_fetched(url) is not None or self._address_refusal(url) is not None:
             return False
         policy = self._robots_policy(url)
         if self._robots_allows(policy, url):
@@ -461,6 +616,9 @@ class PoliteClient:
         form body. A redirect is not followed: it is reported as `http_error`
         (from a data endpoint it means a sign-in wall)."""
         _require_http(url)
+        refused = self._address_refusal(url)
+        if refused is not None:
+            return self._result(url, url, "disallowed_by_robots", None, detail=refused)
         cache_key = _form_cache_key(url, form)
         cached = self._read_cache(cache_key)
         if fresh_for is not None and cached is not None and self._is_fresh(cached[0], fresh_for):
@@ -484,6 +642,20 @@ class PoliteClient:
                 detail="refusing to follow a redirect from a form POST",
             )
         return replace(self._classify(cache_key, url, response, cached), url=url)
+
+    def _address_refusal(self, url: str) -> str | None:
+        """`address_refusal`, once per host and port per client."""
+        parts = urlsplit(url)
+        key = f"{parts.scheme}://{parts.netloc.lower()}"
+        with self._robots_lock:
+            if key in self._refusals:
+                return self._refusals[key]
+        refused = address_refusal(url, self._resolve or RESOLVE)
+        if refused is not None:
+            logger.warning("%s — not fetched", refused)
+        with self._robots_lock:
+            self._refusals[key] = refused
+        return refused
 
     # -- robots ----------------------------------------------------------------
 
@@ -565,6 +737,9 @@ class PoliteClient:
         Returns `(response, None)` for any HTTP answer worth classifying, or
         `(None, reason)` when transient failures outlasted the retries.
         """
+        refused = self._address_refusal(url)
+        if refused is not None:
+            return None, refused  # never retried: the address does not change by waiting
         headers = {**(extra_headers or {}), **self._headers, "Accept": accept}
         if cached is not None:
             meta = cached[0]

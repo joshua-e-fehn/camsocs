@@ -7,6 +7,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpcore
 import httpx
 import pytest
 import respx
@@ -15,6 +16,9 @@ from camsocs_pipeline.sources.base import (
     INITIAL_BACKOFF,
     HostGates,
     PoliteClient,
+    PublicOnlyBackend,
+    address_refusal,
+    public_address,
 )
 
 UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
@@ -455,3 +459,94 @@ def test_allows_checks_robots_without_requesting_the_url(tmp_path: Path, net) ->
     assert client.allows("https://su.example/asset/logo.png") is False
     assert client.allows("https://su.example/organisation/1/") is True
     assert not asset.called
+
+
+# --- public addresses only (SSRF) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "127.0.0.1",  # cliproxy's loopback
+        "10.1.2.3",
+        "172.17.0.2",  # Docker's bridge
+        "192.168.1.10",
+        "169.254.169.254",  # cloud metadata, link-local
+        "100.101.102.103",  # CGNAT: Tailscale
+        "0.0.0.0",
+        "224.0.0.1",
+        "::1",
+        "fd12:3456::1",  # IPv6 ULA
+        "fe80::1",
+        "::ffff:127.0.0.1",  # IPv4-mapped loopback
+    ],
+)
+def test_non_public_addresses_are_not_public(address: str) -> None:
+    assert not public_address(address)
+
+
+def test_public_addresses_are_public() -> None:
+    assert public_address("93.184.215.14") and public_address("2606:4700::6810:84e5")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:8317/v1/models",
+        "http://[::1]/",
+        "http://localhost/",
+        "http://cliproxy.internal/",
+        "https://soc.example/",  # resolves to the loopback (below)
+    ],
+)
+def test_a_url_of_a_non_public_host_is_refused_before_any_request(
+    tmp_path: Path, net: respx.MockRouter, url: str
+) -> None:
+    def resolve(host: str, _port: int) -> list[str]:
+        return ["127.0.0.1"] if host == "soc.example" else ["93.184.215.14"]
+
+    route = net.route(url__startswith=url.split("/", 3)[0] + "//" + url.split("/", 3)[2])
+    result = make_client(tmp_path, resolve=resolve).fetch(url)
+    assert result.outcome == "disallowed_by_robots"
+    assert "non-public" in (result.detail or "") or "local host" in (result.detail or "")
+    assert not route.called, "not even robots.txt"
+
+
+def test_a_host_with_any_private_address_is_refused() -> None:
+    def resolve(_host: str, _port: int) -> list[str]:
+        return ["93.184.215.14", "172.18.0.5"]
+
+    assert address_refusal("https://mixed.example/", resolve) is not None
+
+
+def test_a_redirect_to_a_private_address_is_not_followed(tmp_path: Path, net) -> None:
+    def resolve(host: str, _port: int) -> list[str]:
+        return ["172.17.0.3"] if host == "hermes.example" else ["93.184.215.14"]
+
+    allow_all(net, "https://soc.example")
+    net.get("https://soc.example/card.png").respond(
+        302, headers={"location": "http://hermes.example:8080/admin"}
+    )
+    inside = net.get("http://hermes.example:8080/admin").respond(200, text="secret")
+
+    result = make_client(tmp_path, resolve=resolve).fetch("https://soc.example/card.png")
+
+    assert result.outcome == "disallowed_by_robots"
+    assert result.final_url == "http://hermes.example:8080/admin"
+    assert not inside.called
+
+
+def test_a_form_post_to_a_private_address_is_refused(tmp_path: Path, net) -> None:
+    route = net.post("http://10.0.0.8/fixtures")
+    result = make_client(tmp_path).post_form("http://10.0.0.8/fixtures", {"page": "1"})
+    assert result.outcome == "disallowed_by_robots" and not route.called
+
+
+def test_the_connection_is_checked_again_when_it_is_made() -> None:
+    """DNS rebinding: a name that resolved publicly for the check and to the
+    loopback at connection time still never connects."""
+    backend = PublicOnlyBackend(lambda _host, _port: ["127.0.0.1"])
+    with pytest.raises(httpcore.ConnectError, match="not a public address"):
+        backend.connect_tcp("soc.example", 443)
+    with pytest.raises(httpcore.ConnectError):
+        PublicOnlyBackend().connect_tcp("127.0.0.1", 8317)
