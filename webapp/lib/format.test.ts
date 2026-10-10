@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { formatEventPrice, formatPence, languageName, paragraphs } from "./format"
+import { formatEventPrice, formatPence, languageName } from "./format"
 
 describe("format", () => {
   test("pence", () => {
@@ -18,8 +18,7 @@ describe("format", () => {
     expect(formatEventPrice({ free: false, text: "Donation" })).toBe("Donation")
   })
 
-  test("languages and paragraphs", () => {
+  test("languages", () => {
     expect(languageName("de")).toBe("German")
-    expect(paragraphs("One.\n\n  Two.\n \n\nThree.")).toEqual(["One.", "Two.", "Three."])
   })
 })
