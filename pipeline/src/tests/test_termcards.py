@@ -12,13 +12,13 @@ import pytest
 
 import camsocs_pipeline.pipeline.load as load
 from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.extract.cards import card_events
 from camsocs_pipeline.extract.llm import NoLLMHost
 from camsocs_pipeline.extract.when import TermCalendar
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.termcards import Skipped, TermcardFile, fetch_termcard, term_hint
-from camsocs_pipeline.stages.termcards import card_events
 from camsocs_pipeline.staging.store import StagingStore
 from tests.fakes import (
     ORRERY_KEY,
@@ -294,12 +294,20 @@ def test_a_card_takes_its_term_from_its_own_dated_rows() -> None:
     reply = {**TERMCARD_REPLY, "term": None, "term_year": None}
     reply["events"] = [
         *TERMCARD_REPLY["events"],
-        {"title": "Open evening", "date": "2026-10-30", "start_time": "18:00"},
+        {
+            "title": "Open evening",
+            "date": "2026-10-30",
+            "start_time": "18:00",
+            "when_quote": "Fri 30 Oct, 6pm",
+        },
+        # A row the model dated without the card's words for it is no row.
+        {"title": "Stargazing", "date": "2026-10-31", "start_time": "21:00"},
     ]
-    by_title, _notes = _read(reply)
+    by_title, notes = _read(reply)
     # 30 October falls in Michaelmas 2026, so its week rows are read in it —
     # as inferred dates: the card states the week, not the term.
     assert sorted(by_title) == ["Open evening", "Orrery building", "Planetarium trip"]
+    assert any("1 no dated quote on the card" in note for note in notes)
     trip = {f.field: f for f in by_title["Planetarium trip"].fields}
     assert trip["startsAt"].value == PLANETARIUM
     assert trip["startsAt"].status == "inferred" and trip["startsAt"].quote_check == "absent"

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pytest
 import respx
 
+from camsocs_pipeline.extract import dating
 from camsocs_pipeline.extract.events import LlmEvent
 from camsocs_pipeline.extract.when import TermCalendar
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, Observation
@@ -219,7 +220,7 @@ def test_every_event_needs_a_dated_quote_on_the_page(event: dict, kept: bool) ->
     text = website.page_text(parse_page(f"{SITE}/events", EVENTS_PAGE)) + (
         " Thursday 15 October, 7:30pm Oct 15th 15/10 Coming soon Week 5 Wednesday, 2pm"
     )
-    assert website.dated_quote(LlmEvent(title="x", **event), text) is kept
+    assert dating.dated_quote(LlmEvent(title="x", **event), text) is kept
 
 
 def test_a_site_yields_its_upcoming_dated_events(tmp_path: Path, net: respx.MockRouter) -> None:
@@ -325,7 +326,7 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     ],
 )
 def test_a_dates_year_must_be_stated_or_checkable(event: dict, problem: str | None) -> None:
-    found = website.year_problem(LlmEvent(title="x", **event), TODAY)
+    found = dating.year_problem(LlmEvent(title="x", **event), TODAY)
     assert (found is None) if problem is None else (found is not None and problem in found)
 
 
@@ -334,23 +335,23 @@ def test_last_seasons_pages_give_no_yearless_dates() -> None:
 
     read_on = date(2026, 10, 10)
     # A 2020-21 archive whose weekdays fall on this year's dates as well.
-    archive = website.page_dating("Events 2021 · Sat, 19 Dec · Zoom", read_on)
+    archive = dating.page_dating("Events 2021 · Sat, 19 Dec · Zoom", read_on)
     assert archive.stale is not None
     # A fixtures table scored "2025-26", and a post about the 2025/2026 season.
-    assert website.page_dating("Fixtures · Score 2025-26 · 26th October", read_on).stale
-    assert website.page_dating("The upcoming 2025/2026 season … 2026", read_on).stale
+    assert dating.page_dating("Fixtures · Score 2025-26 · 26th October", read_on).stale
+    assert dating.page_dating("The upcoming 2025/2026 season … 2026", read_on).stale
     # This year's page, or a page naming no year at all.
-    assert website.page_dating("Michaelmas 2026 events", read_on).current
-    nothing = website.page_dating("Thursday 15 October, 7:30pm", read_on)
+    assert dating.page_dating("Michaelmas 2026 events", read_on).current
+    nothing = dating.page_dating("Thursday 15 October, 7:30pm", read_on)
     assert nothing.stale is None and not nothing.current
     event = {"date": "2026-12-19", "when_quote": "Sat, 19 Dec"}
-    assert website.year_problem(LlmEvent(title="x", **event), read_on, archive)
+    assert dating.year_problem(LlmEvent(title="x", **event), read_on, archive)
     # A weekday alone is one signal; with this year or the term named it is two.
     assert "only its weekday" in (
-        website.year_problem(LlmEvent(title="x", **event), read_on, nothing) or ""
+        dating.year_problem(LlmEvent(title="x", **event), read_on, nothing) or ""
     )
-    with_term = website.PageDating(term=True)
-    assert website.year_problem(LlmEvent(title="x", **event), read_on, with_term) is None
+    with_term = dating.PageDating(term=True)
+    assert dating.year_problem(LlmEvent(title="x", **event), read_on, with_term) is None
 
 
 def test_a_page_whose_weekdays_agree_on_this_year_dates_its_events() -> None:
@@ -369,22 +370,22 @@ def test_a_page_whose_weekdays_agree_on_this_year_dates_its_events() -> None:
         read("2026-10-17", "Saturday, 17 October 20:00"),
         read("2026-10-29", "Thursday, 29 October 19:00"),
     ]
-    assert website.weekdays_agree(current)
-    dating = website.PageDating(weekdays=True)
-    assert website.year_problem(current[2], read_on, dating) is None
+    assert dating.weekdays_agree(current)
+    agreeing = dating.PageDating(weekdays=True)
+    assert dating.year_problem(current[2], read_on, agreeing) is None
     # The leftover still fails its own weekday.
-    assert "weekday" in (website.year_problem(current[0], read_on, dating) or "")
+    assert "weekday" in (dating.year_problem(current[0], read_on, agreeing) or "")
     # Two agreeing dates are not enough; nor three among many that disagree
     # (an old archive matches one weekday in seven by chance).
-    assert not website.weekdays_agree(current[1:3])
+    assert not dating.weekdays_agree(current[1:3])
     archive = [
         *current[1:],
         *(read(f"2026-11-{day:02d}", f"Monday {day} November") for day in (3, 10, 17, 24)),
     ]
-    assert not website.weekdays_agree(archive)
+    assert not dating.weekdays_agree(archive)
     # A stated year is no yearless date and counts neither way.
     stated = [read(f"2026-10-{d}", f"Saturday {d} October 2026") for d in (10, 17, 24)]
-    assert not website.weekdays_agree(stated)
+    assert not dating.weekdays_agree(stated)
 
 
 def test_a_page_that_says_noai_on_a_general_host_never_reaches_the_model(
