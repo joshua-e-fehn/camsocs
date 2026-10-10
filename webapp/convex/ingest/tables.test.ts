@@ -680,4 +680,40 @@ describe("purge", () => {
       { deleted: 1 },
     )
   })
+
+  test("rejectSourceClaims sets one host's readings of an entity aside", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-a")
+    const sourceUrl = "https://www.national.example/about"
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        {
+          entityType: "organisation",
+          entityKey: "org-a",
+          field: "shortDescription",
+          value: "The national body.",
+          evidence: "primary",
+          method: "parser",
+          extractor: "t",
+          sourceKey: sourceKey(sourceUrl),
+          sourceUrl,
+          sourceType: "society_website",
+          retrievedAt: NOW,
+        },
+      ],
+    })
+    const result = await t.mutation(internal.ingest.purge.rejectSourceClaims, {
+      entityType: "organisation",
+      key: "org-a",
+      host: "national.example",
+    })
+    expect(result).toEqual({ rejected: 1, fields: ["shortDescription"] })
+    const org = await t.run(async (ctx) =>
+      ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", "org-a"))
+        .unique(),
+    )
+    expect(org?.shortDescription).toBeUndefined()
+  })
 })

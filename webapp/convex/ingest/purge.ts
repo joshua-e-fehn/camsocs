@@ -3,8 +3,9 @@ import { ENTITY_TYPES } from "../../lib/vocab"
 import type { TableNames } from "../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../_generated/server"
 import { ENTITY_TABLES, findEntity, loadTerms, refreshOrganisation } from "../lib/entityStore"
-import { FIELD_SPECS } from "../lib/fields"
+import { FIELD_SPECS, hostOf } from "../lib/fields"
 import { literalUnion } from "../lib/validators"
+import { reresolveEntity } from "./claims"
 
 /**
  * Deleting pipeline data. Two tools, both internal:
@@ -23,6 +24,11 @@ import { literalUnion } from "../lib/validators"
  *  - `removeSources` deletes the `sources` rows of one host (optionally of
  *    one listing): a fetch recorded under a policy since corrected (the
  *    army.mod.uk pages once read as a society's, 2026-10-09).
+ *  - `rejectSourceClaims` sets aside (`reviewStatus: rejected`) every live
+ *    claim one entity has from one host and re-resolves the entity: readings
+ *    of a site the pipeline no longer reads as the organisation's own (the
+ *    national CMF's cmf.org.uk for the Cambridge branch, review 2026-10-10),
+ *    which no later run would ever supersede.
  *
  * Kept: `harvestRuns` (the run log is evidence), `inboundEmails` and
  * `listingRequests` (written by people, not the pipeline), and every
@@ -271,5 +277,34 @@ export const removeSources = internalMutation({
       deleted++
     }
     return { deleted }
+  },
+})
+
+export const rejectSourceClaims = internalMutation({
+  args: { entityType: literalUnion(ENTITY_TYPES), key: v.string(), host: v.string() },
+  returns: v.object({ rejected: v.number(), fields: v.array(v.string()) }),
+  handler: async (ctx, args) => {
+    const host = args.host.toLowerCase().replace(/^www\./, "")
+    const fields = new Set<string>()
+    let rejected = 0
+    for (const reviewStatus of ["accepted", "proposed"] as const) {
+      const claims = await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_review", (q) =>
+          q
+            .eq("entityType", args.entityType)
+            .eq("entityKey", args.key)
+            .eq("reviewStatus", reviewStatus),
+        )
+        .take(4_000)
+      for (const claim of claims) {
+        if (hostOf(claim.sourceUrl) !== host) continue
+        await ctx.db.patch("fieldClaims", claim._id, { reviewStatus: "rejected" })
+        fields.add(claim.field)
+        rejected++
+      }
+    }
+    if (fields.size > 0) await reresolveEntity(ctx, args.entityType, args.key, [...fields])
+    return { rejected, fields: [...fields].sort() }
   },
 })
