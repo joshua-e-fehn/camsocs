@@ -7,7 +7,9 @@ How the production site goes live: a **Convex production deployment** (separate 
 **Never export `CONVEX_DEPLOY_KEY`** in a shell (AGENTS.md). It overrides `.env.local`, and has deployed one project's functions onto another project's production before. A key belongs in Vercel's production environment, or on the one command line that uses it.
 
 ```
-browser ──► Vercel (camsocs.vercel.app, root dir webapp/) ──► Convex prod  ◄── pipeline --env prod (laptop)
+browser ──► Vercel (camsocs.vercel.app, root dir webapp/) ──► Convex prod  ◄── pipeline --env prod
+                                                                                 (VPS timers, docs/ops-vps.md;
+                                                                                  by hand from the laptop until then)
                  │ build: convex-deploy-if-key.sh → bunx convex deploy (prod functions + schema)
                  │        build-env-defaults.sh → next build
 ```
@@ -100,6 +102,8 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    pixi run pipeline -- --env prod health   # the key opens /api/pipeline/health on production
    pixi run pipeline -- --env prod sync     # the full harvest into production
    ```
+
+**Scheduled.** On the VPS host the runner does this daily (`sync --group events`) and weekly (`sync --group full`) under systemd timers, with its own `pipeline/.env.prod` (decision D5; install, status, alerts and key rotation: `docs/ops-vps.md`). Once its timers are on, do not also run `--env prod sync` from the laptop: the one-run-at-a-time lock is per host.
 
 Guards: a missing `pipeline/.env.prod` is an error, not a fall-back to dev. `CONVEX_URL`, `CONVEX_HTTP_URL` and `PIPELINE_API_KEY` must be the env file's own — inherited from `pipeline/.env`, or exported in the shell, the run stops before any request (write `NAME=` in `.env.prod` to unset one deliberately). `purge-dev` refuses any environment but dev (and the deployment refuses too). A non-dev environment keeps its own run state, `.camsocs-state.prod.json`. The web cache and `var/staging/` are shared, so a production sync right after a dev one re-reads pages from the cache rather than the network.
 
