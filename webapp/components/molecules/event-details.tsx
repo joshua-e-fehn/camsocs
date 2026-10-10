@@ -1,4 +1,11 @@
-import { CalendarClockIcon, LockIcon, MapPinIcon, TicketIcon, UsersIcon } from "lucide-react"
+import {
+  ArrowUpRightIcon,
+  CalendarClockIcon,
+  LockIcon,
+  MapPinIcon,
+  TicketIcon,
+  UsersIcon,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { EventFlags } from "@/components/molecules/event-item"
@@ -49,11 +56,51 @@ function Unknown({ what, meta }: { what: string; meta: EventPublic["meta"][strin
   )
 }
 
+/** Someone else's event (decision D6): who takes part — never "organised by"
+ * — with the reading's provenance, and the event's own page off-site. */
+function TakingPart({ event }: { event: EventPublic }) {
+  const externalHost = event.externalUrl ? displayHost(event.externalUrl) : null
+  return (
+    <>
+      <Row icon={UsersIcon} label="Taking part">
+        {event.organisers.length > 0 && (
+          <ul className="flex flex-col gap-0.5">
+            {event.organisers.map((organiser) => (
+              <li key={`${organiser.key}-${organiser.role}`}>
+                <Link
+                  href={`/societies/${organiser.slug}`}
+                  className="font-medium underline-offset-4 hover:underline"
+                >
+                  {organiser.name}
+                </Link>
+                <span className="text-muted-foreground"> · takes part</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <span className="text-muted-foreground">
+          Someone else’s event, on the society’s calendar because it takes part — not one it
+          organises.
+        </span>
+        <SourceLine meta={event.meta.hosting} />
+      </Row>
+      {event.externalUrl && externalHost && (
+        <Row icon={ArrowUpRightIcon} label="The event’s own page">
+          <ExternalLink href={event.externalUrl} className="font-medium">
+            {externalHost}
+          </ExternalLink>
+          <SourceLine meta={event.meta.externalUrl} />
+        </Row>
+      )}
+    </>
+  )
+}
+
 /**
  * Everything public about one event: when (London time, with the term week),
- * where, who organises it, price and booking, speakers, description — and
- * where the listing came from. A mailing-list event names no source URL: the
- * inbox is private.
+ * where, who organises it — or, for someone else's event, who takes part
+ * (D6) — price and booking, speakers, description, and where the listing came
+ * from. A mailing-list event names no source URL: the inbox is private.
  */
 export function EventDetails({ event, venueName }: { event: EventPublic; venueName?: string }) {
   const price = formatEventPrice(event.price)
@@ -104,7 +151,9 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
             <Unknown what="Venue" meta={event.meta.venueText} />
           )}
         </Row>
-        {event.organisers.length > 0 && (
+        {event.hosting === "takes_part" ? (
+          <TakingPart event={event} />
+        ) : event.organisers.length > 0 ? (
           <Row icon={UsersIcon} label="Organised by">
             <ul className="flex flex-col gap-0.5">
               {event.organisers.map((organiser) => (
@@ -122,7 +171,7 @@ export function EventDetails({ event, venueName }: { event: EventPublic; venueNa
               ))}
             </ul>
           </Row>
-        )}
+        ) : null}
         <Row icon={TicketIcon} label="Price and booking">
           {price && <span>{price}</span>}
           {event.signupRequired && <span>Sign-up required</span>}

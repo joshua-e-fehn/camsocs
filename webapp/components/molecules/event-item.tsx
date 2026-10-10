@@ -1,4 +1,4 @@
-import { LockIcon } from "lucide-react"
+import { ArrowUpRightIcon, LockIcon } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -9,18 +9,32 @@ import {
   monthShort,
   weekdayShort,
 } from "@/lib/calendar"
+import { takesPart } from "@/lib/format"
 import type { EventListItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
 import { EVENT_TYPE_LABELS } from "@/lib/vocab"
 
-/** "Cambridge only", "Cancelled", "Time TBC" — words, not colours. */
+/** Someone else's event the listed societies only take part in (decision
+ * D6): an arrow off-site and the words, never colour alone — and dashed, like
+ * the card that carries it. */
+export function TakingPartBadge() {
+  return (
+    <Badge variant="outline" className="gap-1 border-dashed font-normal">
+      <ArrowUpRightIcon aria-hidden />
+      Taking part
+    </Badge>
+  )
+}
+
+/** "Cambridge only", "Cancelled", "Time TBC", "Taking part" — words, not colours. */
 export function EventFlags({
   event,
 }: {
-  event: Pick<EventListItem, "visibility" | "cancelled" | "status">
+  event: Pick<EventListItem, "visibility" | "cancelled" | "status" | "hosting">
 }) {
   return (
     <>
+      {event.hosting === "takes_part" && <TakingPartBadge />}
       {event.visibility === "cam_only" && (
         <Badge variant="outline" className="gap-1 font-normal">
           <LockIcon aria-hidden />
@@ -54,8 +68,10 @@ function selectHandler(onSelect: (() => void) | undefined) {
   }
 }
 
+/** Who runs it — or, for someone else's event, who takes part (D6). */
 function organiserLine(event: EventListItem): string | undefined {
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
+  if (event.hosting === "takes_part") return takesPart(names)
   return names.length > 0 ? names.join(", ") : undefined
 }
 
@@ -88,6 +104,7 @@ export function EventItem({
       onClick={selectHandler(onSelect)}
       className={cn(
         "group flex gap-4 rounded-xl border bg-card p-3 text-card-foreground transition-colors duration-200 hover:border-primary/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:p-4",
+        event.hosting === "takes_part" && "border-dashed",
         event.cancelled && "opacity-70",
         className,
       )}
@@ -132,7 +149,8 @@ export function EventItem({
   )
 }
 
-/** A compact event for the week and month grids: time and title. */
+/** A compact event for the week and month grids: time and title; someone
+ * else's event (D6) dashed, with an arrow off-site. */
 export function EventChip({
   event,
   href,
@@ -149,15 +167,24 @@ export function EventChip({
       onClick={selectHandler(onSelect)}
       className={cn(
         "block truncate rounded-md border bg-card px-1.5 py-1 text-xs transition-colors hover:border-primary/30 focus-visible:outline-2 focus-visible:outline-ring",
+        event.hosting === "takes_part" && "border-dashed",
         event.cancelled && "line-through opacity-70",
       )}
-      title={`${formatEventWhen(event)} — ${event.title}`}
+      title={[formatEventWhen(event), event.title, organiserLine(event)]
+        .filter(Boolean)
+        .join(" — ")}
     >
       <span className="mr-1 font-mono text-muted-foreground">
         {event.allDay ? "All day" : londonTime(event.startsAt)}
       </span>
       {event.visibility === "cam_only" && (
         <LockIcon aria-label="Cambridge only" className="mr-0.5 inline size-3 align-[-2px]" />
+      )}
+      {event.hosting === "takes_part" && (
+        <ArrowUpRightIcon
+          aria-label="Taking part, someone else’s event"
+          className="mr-0.5 inline size-3 align-[-2px]"
+        />
       )}
       {event.title}
     </Link>
