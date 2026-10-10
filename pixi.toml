@@ -8,7 +8,8 @@
 ##
 ##   pixi run dev / build / pipeline / lint / format / typecheck / test / check-codegen
 ##   pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
-##   pixi run harvest [-- --dry-run]          full sync + coverage report (var/reports/)
+##   pixi run harvest [-- --env prod --dry-run]   full sync + coverage report (var/reports/)
+##   pixi run harvest-events [-- --env prod]      the daily events run (sync --group events)
 ##   pixi run prune-cache [-- --dry-run]      retention R7 for var/cache and staging
 
 [workspace]
@@ -23,6 +24,8 @@ python = ">=3.12,<3.14"
 # Bun is not on conda-forge, so it is not listed here. The JS tasks call the
 # `bun` on PATH (bun 1.3.11; see webapp/package.json "packageManager").
 nodejs = ">=20"
+# Lints the shell scripts (scripts/, ops/vps/; `pixi run lint-shell`).
+shellcheck = ">=0.11"
 
 [pypi-dependencies]
 # Editable install: `pixi run pipeline` imports the working tree, so an edit to
@@ -49,10 +52,21 @@ description = "Run the Python pipeline, e.g. `pixi run pipeline -- sync --dry-ru
 [tasks.harvest]
 cmd = "python -m camsocs_pipeline.cli harvest"
 cwd = "pipeline"
-# Every stage in registry order (seed → harvest → resolve → enrich → events →
-# inbox / Instagram / termcards → load → report), then a re-derivation; writes
-# var/reports/coverage-<date>.md. `pixi run harvest -- --dry-run` reads, writes nothing.
+# `sync --group full`: every stage in registry order (seed → harvest → resolve
+# → enrich → events → inbox / Instagram / termcards → load → report), then a
+# re-derivation; writes var/reports/coverage-<date>.md. Arguments follow the
+# command: `pixi run harvest -- --env prod`, `-- --dry-run`. The VPS runs it
+# weekly (docs/ops-vps.md).
 description = "Full harvest: every stage in order, re-derive, coverage report (var/reports/)."
+
+[tasks.harvest-events]
+cmd = "python -m camsocs_pipeline.cli sync --group events"
+cwd = "pipeline"
+# The daily run: every events source, inbox, Instagram and termcards, then load
+# and the coverage report, over what the last full harvest staged (it stops
+# with "run the full group first" when that is missing; stages/__init__.py
+# "Groups"). `pixi run harvest-events -- --env prod`.
+description = "Daily events run: events sources, inbox, Instagram, termcards, load, report."
 
 [tasks.prune-cache]
 cmd = "python -m camsocs_pipeline.cli prune-cache"
@@ -60,9 +74,14 @@ cwd = "pipeline"
 description = "Retention R7: delete var/cache files (and superseded staging) older than 90 days."
 
 [tasks.lint-python]
-cmd = "ruff check . && ruff format --check ."
+# ops/ is linted with the pipeline's Ruff settings (it has no pyproject of its own).
+cmd = "ruff check . && ruff format --check . && ruff check --config pyproject.toml ../ops && ruff format --check --config pyproject.toml ../ops"
 cwd = "pipeline"
-description = "Ruff lint + format check over the pipeline."
+description = "Ruff lint + format check over the pipeline and ops/ scripts."
+
+[tasks.lint-shell]
+cmd = "shellcheck --shell=bash --severity=style scripts/*.sh ops/vps/*.sh"
+description = "ShellCheck over the shell scripts (scripts/, ops/vps/)."
 
 [tasks.lint-web]
 cmd = "bun run lint"
@@ -70,8 +89,8 @@ cwd = "webapp"
 description = "Biome lint over the webapp."
 
 [tasks.lint]
-depends-on = ["lint-python", "lint-web"]
-description = "Lint everything: Ruff (Python) + Biome (TS)."
+depends-on = ["lint-python", "lint-shell", "lint-web"]
+description = "Lint everything: Ruff (Python) + ShellCheck + Biome (TS)."
 
 [tasks.format-python]
 cmd = "ruff format . && ruff check --fix ."

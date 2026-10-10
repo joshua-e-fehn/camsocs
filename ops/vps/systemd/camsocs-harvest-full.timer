@@ -1,0 +1,16 @@
+# The weekly full run (`sync --group full`): every stage, the re-derivation,
+# the coverage report, then prune-cache (retention R7).
+# Decision D5; /opt/camsocs/docs/ops-vps.md.
+[Unit]
+Description=camsocs weekly full harvest (Sunday 02:00 Europe/London)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+
+[Timer]
+# 02:00 exists exactly once on both clock-change Sundays in London.
+OnCalendar=Sun *-*-* 02:00:00 Europe/London
+# A tick missed while the host was down runs once at the next boot.
+Persistent=true
+Unit=camsocs-harvest@full.service
+
+[Install]
+WantedBy=timers.target

@@ -42,4 +42,8 @@ def run(ctx: StageContext) -> None:
         f"{listed} listed organisations, {counts.counterparts} counterparts; "
         f"{sum(events.by_source.values())} upcoming events → {path}"
     )
-    ctx.report.metrics.update(listed=listed, upcomingEvents=sum(events.by_source.values()))
+    ctx.report.metrics.update(
+        listed=listed,
+        counterparts=counts.counterparts,
+        upcomingEvents=sum(events.by_source.values()),
+    )

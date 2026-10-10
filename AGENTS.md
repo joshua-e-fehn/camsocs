@@ -12,7 +12,8 @@ camsocs is a verified, current database of Cambridge student societies and sport
   - `PLAN.md`: spec, tasks, decisions log;
   - `docs/data-model.md`: the schema contract;
   - `docs/source-research.md`: per-source rules (cite as §N);
-  - `docs/webapp.md`: webapp internals.
+  - `docs/webapp.md`: webapp internals;
+  - `docs/ops-vps.md`: the scheduled harvests on the VPS host (D5).
 
 ## Techstack
 
@@ -33,6 +34,7 @@ camsocs is a verified, current database of Cambridge student societies and sport
 - **The pipeline never sends `null` for a field it didn't observe.** Upserts are patches, so it omits the field. (A null once blanked 633 records in Bundestracker.)
 - **Entity values arrive only as claims.** `POST /api/pipeline/claims` appends to `fieldClaims`; the server resolves (`convex/lib/resolve.ts`), materialises and derives the row (`convex/lib/materialise.ts`). Field names, validators and merge rules are one registry, `convex/lib/fields.ts`, over the tuples in `lib/vocab.ts`. The public read API and its types are documented in `docs/webapp.md` "Public API".
 - **Keys are minted identically on both sides** (`webapp/lib/keys.ts`, `pipeline/.../keys.py`); `webapp/lib/keys.fixtures.json` is asserted by both test suites.
+- **Scheduled runs are stage groups** (`GROUPS` in `stages/__init__.py`): `sync --group events` daily, `--group full` weekly. They run on the VPS host under systemd timers as the `camsocs` user (`ops/vps/`, `docs/ops-vps.md`, decision D5), never inside Mya's Hermes container; a failure DMs the operator on Slack. Nothing in the repo installs or deploys them: Joshua's operator does.
 - **Pipeline stages are one ordered registry**, `pipeline/src/camsocs_pipeline/stages/__init__.py` (seed → harvest → resolve → enrich → classify → events → inbox → load → report). Adding a stage is one line; its docstring has the convention. Harvest stages only write observations (`models/observation.py`) to `var/staging/`; `resolve` assigns keys; `load` posts. Events stages (`camsocs_pipeline/events/`) write keyed events to `var/staging/<source_type>.events/`. Calendar noise (decision D6) is judged at load, not in staging: notices (a prayer room closed, a deadline) are never posted, and someone else's event a society only takes part in is posted `hosting: takes_part` (`events/noise.py` rules, `extract/event_noise.py` model); the UI never shows such an event as organised by the society. Images are stored copies, uploaded by `load` (`media.py`), never hotlinks.
 - **Vocabularies live in `webapp/lib/vocab.ts`** (as-const tuples, no server imports) and are mirrored in the pipeline. A test asserts the two match.
 - **Privacy boundary:**
@@ -66,7 +68,9 @@ camsocs is a verified, current database of Cambridge student societies and sport
 pixi install
 pixi run dev | build | lint | format | typecheck | test | check-codegen
 pixi run pipeline -- status | health | sync [--dry-run] [--stages a,b] [--limit N]
-caffeinate -i pixi run harvest           # full run: every stage, derive, var/reports/coverage-<date>.md (keep a laptop awake)
+caffeinate -i pixi run harvest           # full run (sync --group full): every stage, derive, var/reports/coverage-<date>.md (keep a laptop awake)
+pixi run harvest-events                  # the daily run (sync --group events) over what the last full run staged
+pixi run harvest -- --env prod           # arguments after `--` follow the command (`--env`, `--dry-run`, `--summary-json`)
 pixi run prune-cache                     # retention R7: var/cache + superseded staging older than 90 days
 pixi run pipeline -- --env prod status   # pipeline/.env.prod on top of pipeline/.env (docs/deploy.md §4)
 cd webapp && bun run e2e                 # Playwright smoke + screenshots → var/screenshots/<date>/ (read-only guard)
@@ -78,7 +82,7 @@ cd webapp && bunx convex env list                                # add --prod fo
 - **Never export `CONVEX_DEPLOY_KEY` in a shell.** It overrides `.env.local`, and once deployed one project's functions onto another project's production. `scripts/convex-deploy-if-key.sh` deploys only on Vercel.
 - Secrets live in `webapp/.env.local` (Convex) and `pipeline/.env` (pipeline). Both are gitignored, and their values must never be printed.
 - Bun is the only JS/TS package manager. Never use npm, pnpm or yarn.
-- Gates before review: `pixi run lint`, `typecheck`, `test`, `check-codegen`, plus `cd webapp && bun run build`.
+- Gates before review: `pixi run lint` (Ruff, ShellCheck, Biome), `typecheck`, `test`, `check-codegen`, plus `cd webapp && bun run build`.
 - Any time you create or change UI, consult `webapp/DESIGN.md`. Follow the Atomic Design import rules in `docs/webapp.md`.
 - Third-party source is vendored under `.vibe/sources/`. To read a dependency's real implementation instead of guessing, run `vibe vendor <pkg>`. Prefer this over recalling the API from memory.
 - Commits follow conventional style (`feat:`, `fix:`, `refactor:`, `docs:`).

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Daily pipeline sync, for a system cron (Bundestracker scripts/daily-sync.sh).
 #
+# The VPS host does not use it: it runs ops/vps/camsocs-harvest.sh under
+# systemd timers (`sync --group events` daily, `--group full` weekly; decision
+# D5, docs/ops-vps.md). This stays the generic wrapper for any other cron host.
+#
 # Wraps `pixi run pipeline -- sync` with the three things cron does not give
 # you: an environment, a lock, and a log. Resolves the repo from its own
 # location, because cron starts in $HOME.

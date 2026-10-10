@@ -109,6 +109,30 @@ class RunReport:
             "error": self.error,
         }
 
+    def summary_payload(self) -> dict[str, Any]:
+        """The run as JSON for a scheduler (`camsocs sync --summary-json`; the
+        VPS runner's status file, docs/ops-vps.md): per-stage counts without
+        the notes, one line per stage, and the coverage numbers the `report`
+        stage measured (``None`` when it did not run)."""
+        coverage = next(
+            (dict(s.metrics) for s in self.stages if s.name == "report" and s.ok and s.metrics),
+            None,
+        )
+        return {
+            "runKey": self.run_key,
+            "command": self.command,
+            "dryRun": self.dry_run,
+            "ok": self.ok,
+            "error": self.error,
+            "warnings": list(self.warnings),
+            "stages": [
+                {key: value for key, value in stage.to_payload().items() if key != "notes"}
+                for stage in self.stages
+            ],
+            "summary": [str(stage).splitlines()[0] for stage in self.stages],
+            "coverage": coverage,
+        }
+
     def summary(self) -> str:
         mode = " (dry run — nothing written)" if self.dry_run else ""
         lines = [f"{self.command} {self.run_key}{mode}:"]

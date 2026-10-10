@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 import respx
 from click.testing import CliRunner
@@ -114,3 +116,66 @@ def test_an_unknown_env_file_fails_before_anything_runs(tmp_path, monkeypatch) -
     result = CliRunner().invoke(cli, ["status"], obj={})
     assert result.exit_code == 1
     assert "does not exist" in result.output
+
+
+# --- scheduled runs: groups, --env after the command, the JSON summary (D5) ---------------
+
+
+def test_env_may_follow_the_command(tmp_path) -> None:
+    # What `pixi run harvest -- --env NAME` and `pixi run harvest-events -- --env NAME`
+    # produce. A missing pipeline/.env.<name> is an error, never a fall-back to dev.
+    for args in (
+        ["harvest", "--dry-run", "--env", "nowhere"],
+        ["sync", "--group", "events", "--dry-run", "--env", "nowhere"],
+    ):
+        result = CliRunner().invoke(cli, args, obj={})
+        assert result.exit_code == 1, result.output
+        assert ".env.nowhere does not exist" in result.output
+
+
+def test_two_different_envs_are_refused() -> None:
+    result = CliRunner().invoke(cli, ["--env", "prod", "sync", "--env", "staging"], obj={})
+    assert result.exit_code == 2
+    assert "already given" in result.output
+
+
+def test_a_group_without_its_inputs_fails_and_says_so_in_the_summary(
+    make_settings, tmp_path
+) -> None:
+    summary = tmp_path / "out" / "run.json"
+    result = invoke(
+        make_settings(), "sync", "--group", "events", "--dry-run", "--summary-json", str(summary)
+    )
+    assert result.exit_code == 1
+    assert "--group full" in result.output
+    written = json.loads(summary.read_text())
+    assert written["ok"] is False and written["group"] == "events"
+    assert "holds no _resolved, society_website, su_profile yet" in written["error"]
+
+
+def test_an_unknown_group_is_refused(make_settings) -> None:
+    result = invoke(make_settings(), "sync", "--group", "daily", "--dry-run")
+    assert result.exit_code == 1
+    assert "Unknown group: daily" in result.output
+
+
+def test_the_summary_json_records_the_run(make_settings, tmp_path) -> None:
+    summary = tmp_path / "run.json"
+    result = invoke(
+        make_settings(),
+        "sync",
+        "--dry-run",
+        "--stages",
+        "term_dates",
+        "--summary-json",
+        str(summary),
+    )
+    assert result.exit_code == 0, result.output
+    written = json.loads(summary.read_text())
+    assert written["ok"] is True and written["dryRun"] is True
+    assert written["environment"] == "dev" and written["group"] is None
+    assert written["command"] == "sync"
+    assert [stage["name"] for stage in written["stages"]] == ["term_dates"]
+    assert written["summary"][0].startswith("term_dates:")
+    assert written["coverage"] is None
+    assert not list(tmp_path.glob(".*.tmp")), "written whole, through a temporary file"

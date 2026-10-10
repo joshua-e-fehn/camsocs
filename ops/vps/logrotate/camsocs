@@ -1,0 +1,16 @@
+# Installed as /etc/logrotate.d/camsocs by ops/vps/install.sh (docs/ops-vps.md).
+#
+# Each run writes its own /var/log/camsocs/<London date>-<group>.log, so no log
+# is ever renamed or compressed here: a log is removed once it is 90 days old
+# (minage 90 with rotate 0 — "old versions are removed rather than rotated"),
+# the 90 days retention R7 keeps the cache for. `su`: the directory belongs to
+# the camsocs user, and logrotate works there only as that user.
+/var/log/camsocs/*.log {
+    su camsocs camsocs
+    daily
+    minage 90
+    rotate 0
+    missingok
+    ifempty
+    nocreate
+}
