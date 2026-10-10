@@ -204,6 +204,16 @@ class StagingStore:
         paths = [path for path in self.latest_paths(directory) if _part_of(path) == part]
         return [record for path in paths for record in self.read(path)]
 
+    def read_part_history(self, directory: str, part: str) -> list[Record]:
+        """Every record of every file of one part still kept, oldest first (a
+        stage restating what its earlier runs read: `prune-cache` keeps
+        superseded files for its cutoff)."""
+        folder = self.root / _check_directory(directory)
+        if not folder.is_dir():
+            return []
+        paths = [path for path in sorted(folder.glob("*.jsonl")) if _part_of(path) == part]
+        return [record for path in paths for record in self.read(path)]
+
     def directories(self) -> list[str]:
         """Every staging directory that holds at least one file, sources first."""
         if not self.root.is_dir():

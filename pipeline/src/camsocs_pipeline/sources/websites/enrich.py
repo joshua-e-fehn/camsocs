@@ -45,6 +45,18 @@ website and/or a Linktree:
 The output is ordinary keyed observations — one per page read (plus
 sessions and counterparts), source type ``society_website`` or ``linktree``
 — staged like any harvester's, so `load` posts them with everything else.
+
+**Every reading is restated** (`restate_readings`, as `classify` does): a
+value an earlier run read off a page that this run read again and no longer
+reads there (a committee page's address that is no longer a general email,
+a college officer's address on a JCR's page, a hidden address) gets a
+``missing`` / ``not_found`` claim from the same page and method, so the
+older reading is superseded instead of staying live forever (data-model §1
+rule 1: only a newer reading of the same page retracts one). A page not read
+again this run (unreachable, no longer chosen, or read for its health only)
+retracts nothing; nor does a page the model did not read this run retract
+the model's readings; the `website` health reading is the health check's
+alone.
 """
 
 from __future__ import annotations
@@ -1077,6 +1089,61 @@ def enrich_all(
     return sorted(results, key=lambda r: order[r.target.key])
 
 
+#: Fields a page's reading never restates: the stated website's health is
+#: the health check's (a ``missing`` reading from the URL itself marks the
+#: site dead).
+_NOT_RESTATED = frozenset({"website"})
+
+
+def _read_again(record: Observation) -> bool:
+    """Whether this run read the page's content: it answered, and it is not
+    a health-only reading (a site not shown to be the society's, or not
+    mentioning it, yields no fields: what it said before is left to the
+    operator, `ingest/purge:rejectSourceClaims`)."""
+    status = record.fetch.http_status if record.fetch else None
+    return status is not None and 200 <= status < 300 and bool(record.fields)
+
+
+def restate_readings(current: Iterable[Observation], previous: Iterable[object]) -> int:
+    """Append to this run's page observations a ``missing`` / ``not_found``
+    claim for every value an earlier run read off the same page for the same
+    entity, by the same method, that this run no longer reads there (module
+    docstring). `previous`: earlier runs' output of this stage. Returns how
+    many claims were added."""
+    pages: dict[tuple[str, str], Observation] = {}
+    for record in current:
+        if record.entity_key and _read_again(record):
+            pages.setdefault((record.entity_key, record.source_url), record)
+    claimed = {key: {(f.field, f.method) for f in page.fields} for key, page in pages.items()}
+    model_read = {key for key, page in pages.items() if any(f.method == "llm" for f in page.fields)}
+    restated = 0
+    for record in previous:
+        if not isinstance(record, Observation) or not record.entity_key:
+            continue
+        key = (record.entity_key, record.source_url)
+        page = pages.get(key)
+        if page is None:
+            continue
+        for obs in record.fields:
+            if (
+                obs.value is None
+                or obs.field in _NOT_RESTATED
+                or obs.method not in ("parser", "llm")
+                or (obs.field, obs.method) in claimed[key]
+                or (obs.method == "llm" and key not in model_read)
+            ):
+                continue
+            absent = missing_field(
+                obs.field, "not_found", extractor=obs.extractor, evidence=obs.evidence,
+                method=obs.method,
+            )  # fmt: skip
+            absent.prompt_version = obs.prompt_version
+            page.fields.append(absent)
+            claimed[key].add((obs.field, obs.method))
+            restated += 1
+    return restated
+
+
 __all__ = [
     "FRESH_FOR",
     "Enricher",
@@ -1087,5 +1154,6 @@ __all__ = [
     "enrich_all",
     "host_group",
     "own_site",
+    "restate_readings",
     "targets_from",
 ]

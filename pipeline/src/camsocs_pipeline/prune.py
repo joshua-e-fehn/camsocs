@@ -10,7 +10,9 @@ body). LLM replies (``var/cache/llm/<prompt>/…``) are one file each.
 Superseded staging files go too: ``var/staging/<dir>/<run>--<part>.jsonl``
 older than the cutoff, **except the latest file of each part**, which the
 next `load` still reads — staged observations hold names and addresses from
-public pages, and nothing reads an older run's copy.
+public pages. Until the cutoff, `enrich` reads its older copies to restate
+what earlier runs read off a page and this run no longer does
+(`restate_readings`).
 
 **Mail goes after 30 days** (retention.md R4: message text is deleted 30 days
 after it is read): the model's replies about list mail and its attachments

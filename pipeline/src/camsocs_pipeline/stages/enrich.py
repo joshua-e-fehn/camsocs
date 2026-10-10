@@ -13,6 +13,10 @@ organisation, an unknown student group is dropped. A counterpart an earlier
 run created is restated from the page that names it (its name, type and
 `isCounterpart`), so a load into an empty deployment recreates it.
 
+A value an earlier run read off a page this run read again, and no longer
+reads there, is restated as not found (`restate_readings`, from the
+stage's own earlier output kept in staging).
+
 Writes keyed observations, like any harvester's but already keyed:
 
 - ``var/staging/society_website/<run_key>--enrich.jsonl`` — counterparts first, then
@@ -40,6 +44,7 @@ from camsocs_pipeline.sources.websites.enrich import (
     Stats,
     TargetResult,
     enrich_all,
+    restate_readings,
     targets_from,
 )
 from camsocs_pipeline.staging.store import RESOLVED
@@ -89,6 +94,11 @@ def run(ctx: StageContext) -> None:
     website = [record for result in results for record in result.website]
     linktree = [record for result in results for record in result.linktree]
     part = ctx.report.name
+    # Earlier runs' readings of the pages read again, restated where this
+    # run no longer reads them (`restate_readings`).
+    restated_readings = restate_readings(
+        website, ctx.staging.read_part_history("society_website", part)
+    ) + restate_readings(linktree, ctx.staging.read_part_history("linktree", part))
     written = ctx.staging.write(
         "society_website", ctx.run.run_key, [*counterparts, *website], part=part
     )
@@ -101,6 +111,10 @@ def run(ctx: StageContext) -> None:
         stats.add(result.stats)
     restated = resolver.counts.get("counterparts_restated", 0)
     _report(ctx, stats, written, len(counterparts) - restated, restated, dropped)
+    if restated_readings:
+        ctx.report.notes.append(
+            f"{restated_readings} earlier readings of pages read again restated as not found"
+        )
     shown = [note for result in results for note in result.notes]
     ctx.report.notes.extend(f"  {note}" for note in shown[:MAX_NOTES])
     if len(shown) > MAX_NOTES:

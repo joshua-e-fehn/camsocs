@@ -126,7 +126,7 @@ meta and last-failure note go together, once all are older), LLM replies under
   page record, so the load step's redaction removes them from public text); named sponsors
   become counterpart organisations, restated from the page that names them on every run (the
   crosswalk outlives the deployment's rows, so a counterpart staged only by the run that first
-  met it would be missing after a dev purge or in a new production deployment). It writes keyed observations to `var/staging/society_website/` and
+  met it would be missing after a dev purge or in a new production deployment). A value an earlier run read off a page that this run reads again and no longer reads there (an address that is no longer the general email) is restated `not_found` from that page (`restate_readings`, against the stage's own staged files the prune keeps), so it does not stay live. It writes keyed observations to `var/staging/society_website/` and
   `var/staging/linktree/`. LLM answers are cached under `var/cache/llm/`.
 - **classify** (R2, `stages/classify.py`, `camsocs_pipeline/classify/`, prompt
   `extract/prompts/classify_v1.md`) fills what no source states for every listed

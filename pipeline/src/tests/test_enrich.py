@@ -753,3 +753,84 @@ def test_every_distinct_stated_website_is_a_fallback() -> None:
     )
     assert target.website == "https://handball.example/2023/09/"
     assert target.fallbacks == ["https://cuhandball.example/"]
+
+
+def test_a_page_read_again_retracts_what_it_no_longer_gives(tmp_path: Path) -> None:
+    from camsocs_pipeline.claims import llm_field, missing_field
+    from camsocs_pipeline.models.observation import FetchInfo
+    from camsocs_pipeline.sources.websites.enrich import restate_readings
+
+    def page(url: str, *fields, status: int | None = 200, key: str = "org-quokka-jcr"):
+        return Observation(
+            source_type="society_website",
+            source_key=url,
+            source_url=url,
+            retrieved_at=AT,
+            fetch=FetchInfo(http_status=status),
+            entity_type="organisation",
+            identity=IdentityHints(name="Quokka College JCR"),
+            entity_key=key,
+            fields=list(fields),
+        )
+
+    def described(text: str):
+        return llm_field(
+            "shortDescription", text, quote=text, source_text=text,
+            source_type="society_website", model="m", prompt_version="org_v1", evidence="primary",
+        )  # fmt: skip
+
+    committee = "https://jcr.quokka.example/committee"
+    staff = "https://jcr.quokka.example/staff"
+    home = "https://jcr.quokka.example/"
+
+    def mailto(field: str, value: object):
+        return parser_field(field, value, extractor="website.mailto", evidence="primary")
+
+    bursar = [{"role": "other", "email": "bursar@quokka.example"}]
+    earlier = [
+        page(home, parser_field("website", home, extractor="website.final_url", evidence="primary"),
+             described("The JCR of Quokka College.")),
+        page(committee, mailto("email", "chair.league@quokka.example")),
+        page(staff, mailto("roleEmails", bursar)),
+        page("https://jcr.quokka.example/old", mailto("email", "old@quokka.example")),
+    ]  # fmt: skip
+
+    # This run: the committee page gives no general email, the staff page
+    # no JCR address; the home page was read without the model; the old
+    # page was not read at all; the staff page answered 503.
+    def unanswered(field: str):
+        return missing_field(field, "not_found", extractor="website.llm", evidence="primary",
+                             method="llm")  # fmt: skip
+
+    now = [
+        page(home, missing_field("email", "not_found", extractor="website.email",
+                                 evidence="primary")),
+        page(committee, unanswered("howToJoin")),
+        page(staff, unanswered("howToJoin"), status=503),
+    ]  # fmt: skip
+    assert restate_readings(now, earlier) == 1
+    home_now, committee_now, staff_now = now
+    restated = committee_now.fields[-1]
+    assert (restated.field, restated.status, restated.missing_reason, restated.extractor) == (
+        "email",
+        "missing",
+        "not_found",
+        "website.mailto",
+    )
+    # Never the website's health, never a model reading the model did not
+    # make again, nothing from a page that did not answer.
+    assert [f.field for f in home_now.fields] == ["email"]
+    assert [f.field for f in staff_now.fields] == ["howToJoin"]
+    # Restating twice adds nothing.
+    assert restate_readings(now, earlier) == 0
+    # A health-only reading (the site does not mention the society, or is
+    # not shown to be its own) is no reading of the page's content.
+    assert restate_readings([page(committee)], earlier) == 0
+
+    # The stage reads every kept file of its own part, oldest first.
+    store = StagingStore(tmp_path)
+    store.write("society_website", "20261001T000000Z-aaaaaa", earlier[1:2], part="enrich")
+    store.write("society_website", "20261002T000000Z-bbbbbb", earlier[2:3], part="enrich")
+    store.write("society_website", "20261002T000000Z-bbbbbb", earlier[:1], part="classify")
+    history = store.read_part_history("society_website", "enrich")
+    assert [r.source_url for r in history] == [committee, staff]
