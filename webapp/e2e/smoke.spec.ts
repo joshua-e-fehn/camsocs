@@ -109,6 +109,10 @@ test("an event opens in a sheet @dark", async ({ page }, testInfo) => {
 
 test("events already running fold into one row that opens @dark", async ({ page }, testInfo) => {
   await page.goto("/events")
+  // Count the toggle only once the list (or its empty state) is on screen:
+  // counting before it rendered skipped the test by chance (review 2026-10-10).
+  const listed = page.locator("main ul li a").first()
+  await expect(listed.or(page.getByText("No events in this range"))).toBeVisible()
   const toggle = page.getByRole("button", { name: /^\d+ ongoing events?\b/ })
   test.skip((await toggle.count()) === 0, "nothing in the data began before today and is still on")
   await expect(toggle).toHaveAttribute("aria-expanded", "false")

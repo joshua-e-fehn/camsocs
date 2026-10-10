@@ -222,6 +222,10 @@ readRoute("coverage/events", internal.coverage.eventsPage)
 // Maintenance: re-derive everything now; reset the dev deployment.
 ingestionRoute("derive", internal.derive.daily)
 ingestionRoute("purge", internal.ingest.purge.purge)
+// Events a corrected reader will never restate (`camsocs clean-events`,
+// convex/ingest/cleanup.ts): read them all; remove some, by key, confirmed.
+readRoute("events/scan", internal.ingest.cleanup.eventsPage)
+ingestionRoute("events/remove", internal.ingest.cleanup.removeEvents)
 
 /**
  * `POST /api/pipeline/files` — `{ data: <base64>, contentType }` → the

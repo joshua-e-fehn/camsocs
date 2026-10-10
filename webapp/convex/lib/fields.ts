@@ -206,9 +206,18 @@ const INVITE_LINK =
   /(chat\.whatsapp\.com|discord\.gg|discord\.com\/invite|t\.me\/|join\.slack\.com|groupme\.com\/join)/i
 
 /** An external event's own page: an http(s) URL, never a chat invite. */
+/** Forms and link shorteners: never an event's own page (a shortener can lead to an
+ * invite or a form; pipeline `events/noise.py` `_NOT_A_PAGE_HOSTS`). */
+const NOT_A_PAGE =
+  /^https?:\/\/(?:[^/]+\.)?(?:forms\.gle|docs\.google\.com|forms\.office\.com|forms\.microsoft\.com|typeform\.com|tally\.so|jotform\.com|surveymonkey\.com|bit\.ly|tinyurl\.com|t\.co|ow\.ly|lnkd\.in|buff\.ly|rebrand\.ly|cutt\.ly|shorturl\.at|is\.gd|tiny\.cc)(?:[/:?#]|$)/i
+
 const externalPage: Check = (value) =>
   checks.url(value) ??
-  (INVITE_LINK.test(String(value)) ? "chat invite links are never stored" : null)
+  (INVITE_LINK.test(String(value))
+    ? "chat invite links are never stored"
+    : NOT_A_PAGE.test(String(value))
+      ? "a form or a link shortener is not an event's page"
+      : null)
 
 // --- the registry -------------------------------------------------------------------
 

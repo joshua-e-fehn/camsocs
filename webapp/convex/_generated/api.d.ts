@@ -26,6 +26,7 @@ import type * as events from "../events.js";
 import type * as http from "../http.js";
 import type * as ingest_broker from "../ingest/broker.js";
 import type * as ingest_claims from "../ingest/claims.js";
+import type * as ingest_cleanup from "../ingest/cleanup.js";
 import type * as ingest_files from "../ingest/files.js";
 import type * as ingest_inbound from "../ingest/inbound.js";
 import type * as ingest_orgInternal from "../ingest/orgInternal.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "ingest/broker": typeof ingest_broker;
   "ingest/claims": typeof ingest_claims;
+  "ingest/cleanup": typeof ingest_cleanup;
   "ingest/files": typeof ingest_files;
   "ingest/inbound": typeof ingest_inbound;
   "ingest/orgInternal": typeof ingest_orgInternal;

@@ -158,6 +158,15 @@ const NAMED_ENTITIES: Record<string, string> = {
 }
 const ENTITY = /^&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([A-Za-z]{2,8}));/
 
+/**
+ * Characters an address is made of. Written as a numeric entity they are
+ * obfuscation (`ab123&#64;cam.ac.uk`), which is never decoded (AGENTS.md): the
+ * server's address checks ran on the text as stored, so decoding here would
+ * show what they never saw (review 2026-10-10). Such an entity is shown as
+ * written.
+ */
+const ADDRESS_CHARACTER = /^[A-Za-z0-9@._+-]$/
+
 /** The character an entity stands for, and its length; undefined if it is none. */
 function entityAt(text: string, at: number): { char: string; length: number } | undefined {
   const match = ENTITY.exec(text.slice(at, at + 12))
@@ -169,7 +178,9 @@ function entityAt(text: string, at: number): { char: string; length: number } | 
   }
   const code = decimal !== undefined ? Number(decimal) : Number.parseInt(hex, 16)
   const valid = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff)
-  return { char: valid ? String.fromCodePoint(code) : "�", length: whole.length }
+  const char = valid ? String.fromCodePoint(code) : "�"
+  if (ADDRESS_CHARACTER.test(char)) return undefined
+  return { char, length: whole.length }
 }
 
 /** A link's text may not run on forever looking for its `]`. */

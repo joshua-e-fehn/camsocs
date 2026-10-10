@@ -194,6 +194,17 @@ export async function loadSuppressionIndex(ctx: QueryCtx): Promise<SuppressionIn
 }
 
 const ADDRESS = /[^\s@<>()[\]\\,;:"'`]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/gi
+/** An address whose local part markdown escaped (`jane\_doe@gmail.com`),
+ * which the renderer shows as the address itself (review 2026-10-10). */
+const ESCAPED_ADDRESS =
+  /(?<![A-Za-z0-9._%+-])(?:[A-Za-z0-9._%+-]|\\[_.+-])*\\[_.+-](?:[A-Za-z0-9._%+-]|\\[_.+-])*@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
+
+/** `text` with markdown's escapes taken out of addresses, so every check sees
+ * the address a reader is shown (pipeline `links.unescape_addresses`). */
+export function unescapeAddresses(text: string): string {
+  if (!text.includes("\\")) return text
+  return text.replace(ESCAPED_ADDRESS, (match) => match.replaceAll("\\", ""))
+}
 
 /** Every email-shaped token anywhere in a claim value (strings, arrays,
  * objects): an `email`, the `roleEmails` entries, a mailing list's address,
@@ -202,7 +213,9 @@ export function addressesIn(value: unknown): string[] {
   const found = new Set<string>()
   const walk = (item: unknown): void => {
     if (typeof item === "string") {
-      for (const match of item.matchAll(ADDRESS)) found.add(normaliseAddress(match[0]))
+      for (const match of unescapeAddresses(item).matchAll(ADDRESS)) {
+        found.add(normaliseAddress(match[0]))
+      }
     } else if (Array.isArray(item)) {
       for (const entry of item) walk(entry)
     } else if (item !== null && typeof item === "object") {
@@ -220,7 +233,9 @@ export function redactAddresses(
   replacement = "[address removed]",
 ): string {
   if (contacts.size === 0) return text
-  return text.replace(ADDRESS, (match) => (contacts.has(contactHash(match)) ? replacement : match))
+  return unescapeAddresses(text).replace(ADDRESS, (match) =>
+    contacts.has(contactHash(match)) ? replacement : match,
+  )
 }
 
 /**

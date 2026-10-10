@@ -717,3 +717,91 @@ describe("purge", () => {
     expect(org?.shortDescription).toBeUndefined()
   })
 })
+
+describe("cleaning events a corrected reader never restates (clean-events)", () => {
+  async function seedEvent(t: TestConvex, uid: string, title: string) {
+    const key = eventKey("ics", uid)
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        ["title", title],
+        ["startsAt", NOW - 3 * 86_400_000],
+        ["visibility", "cam_only"],
+        ["source", "ics"],
+        ["externalId", uid],
+        ["sourceUrl", "https://a.org/cal.ics"],
+      ].map(([field, value]) => ({
+        entityType: "event" as const,
+        entityKey: key,
+        evidence: "primary" as const,
+        field: field as string,
+        value,
+        method: "parser" as const,
+        extractor: "t",
+        sourceKey: "src-a",
+        sourceUrl: "https://a.org/cal.ics",
+        sourceType: "ics_feed" as const,
+        retrievedAt: NOW,
+      })),
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: key, organisers: [{ orgKey: "org-a", role: "organiser" }] }],
+    })
+    return key
+  }
+
+  test("the scan reads every event, cam_only ones too, a page at a time", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-a")
+    const notice = await seedEvent(t, "pr-1", "PR closed to brothers")
+    await seedEvent(t, "talk-1", "A talk")
+    const first = await t.query(internal.ingest.cleanup.eventsPage, { limit: 1 })
+    const second = await t.query(internal.ingest.cleanup.eventsPage, {
+      cursor: first.continueCursor,
+      limit: 1,
+    })
+    const seen = [...first.page, ...second.page]
+    expect(seen.map((row) => row.title).sort()).toEqual(["A talk", "PR closed to brothers"])
+    expect(seen.find((row) => row.key === notice)).toMatchObject({
+      visibility: "cam_only",
+      organiserKeys: ["org-a"],
+      source: "ics",
+    })
+  })
+
+  test("removal takes events only, by key, confirmed, a few at a time", async () => {
+    const t = newTest()
+    await seedOrgs(t, "org-a")
+    const notice = await seedEvent(t, "pr-1", "PR closed to brothers")
+    const kept = await seedEvent(t, "talk-1", "A talk")
+    await expect(
+      t.mutation(internal.ingest.cleanup.removeEvents, {
+        keys: [notice],
+        confirm: "REMOVE" as "REMOVE-EVENTS",
+      }),
+    ).rejects.toThrow()
+    await expect(
+      t.mutation(internal.ingest.cleanup.removeEvents, {
+        keys: ["org-a"],
+        confirm: "REMOVE-EVENTS",
+      }),
+    ).rejects.toThrow(/Not an event key/)
+    await expect(
+      t.mutation(internal.ingest.cleanup.removeEvents, {
+        keys: Array.from({ length: 26 }, (_, i) => `evt-${i}`),
+        confirm: "REMOVE-EVENTS",
+      }),
+    ).rejects.toThrow(/At most 25/)
+    const result = await t.mutation(internal.ingest.cleanup.removeEvents, {
+      keys: [notice, "evt-gone"],
+      confirm: "REMOVE-EVENTS",
+    })
+    expect(result).toEqual({ removed: [notice], missing: ["evt-gone"] })
+    const left = await t.run(async (ctx) => ({
+      events: (await ctx.db.query("events").collect()).map((event) => event.key),
+      links: (await ctx.db.query("eventOrganisers").collect()).map((link) => link.eventKey),
+      claims: (await ctx.db.query("fieldClaims").collect()).filter((c) => c.entityKey === notice),
+      orgs: (await ctx.db.query("organisations").collect()).length,
+    }))
+    expect(left).toEqual({ events: [kept], links: [kept], claims: [], orgs: 1 })
+  })
+})

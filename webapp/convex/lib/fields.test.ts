@@ -137,6 +137,21 @@ describe("field checks", () => {
     ).toMatch(/never stored/)
   })
 
+  test("an external event's page is never an invite, a form or a link shortener", () => {
+    expect(check(EVENT_SPECS.externalUrl, "https://ctf.example.org/2026")).toBeNull()
+    for (const url of [
+      "https://discord.gg/abc",
+      "https://bit.ly/3abc",
+      "https://forms.office.com/r/xyz",
+      "https://docs.google.com/forms/d/e/x/viewform",
+      "https://tally.so/r/abc",
+    ]) {
+      expect(check(EVENT_SPECS.externalUrl, url)).not.toBeNull()
+    }
+    // A host that merely ends like one is not one.
+    expect(check(EVENT_SPECS.externalUrl, "https://habit.ly.example.org/")).toBeNull()
+  })
+
   test("an event's sourceUrl may be an internal URI (mailing-list events)", () => {
     expect(check(EVENT_SPECS.sourceUrl, "inbound:<abc@lists.cam.ac.uk>")).toBeNull()
     expect(check(EVENT_SPECS.sourceUrl, "no scheme")).not.toBeNull()

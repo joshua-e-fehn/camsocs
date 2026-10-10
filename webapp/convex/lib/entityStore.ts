@@ -56,8 +56,13 @@ export async function loadTerms(ctx: QueryCtx): Promise<TermDates[]> {
   }))
 }
 
-/** How far back `latestPastEvent` looks through an organisation's event rows. */
-const LATEST_EVENT_SCAN = 50
+/**
+ * How far back `latestPastEvent` looks through an organisation's event rows.
+ * The rows carry what it filters on, so this is a cap on small index rows,
+ * not on event reads: a calendar importing a CTF a day (the Cyber Security
+ * Society's, 445 of 458 entries) never hides the society's own events.
+ */
+export const LATEST_EVENT_SCAN = 2_000
 
 /**
  * The latest *public* event before `now` that `orgKey` organised or
@@ -72,18 +77,22 @@ export async function latestPastEvent(
   orgKey: string,
   now: number,
 ): Promise<LatestEvent | undefined> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .query("eventOrganisers")
     .withIndex("by_org_startsAt", (q) => q.eq("orgKey", orgKey).lte("startsAt", now))
     .order("desc")
-    .take(LATEST_EVENT_SCAN)
-  for (const row of rows) {
-    if (row.role === "sponsor" || row.visibility !== "public") continue
+  let scanned = 0
+  for await (const row of rows) {
+    if (++scanned > LATEST_EVENT_SCAN) break
+    if (row.role === "sponsor" || row.visibility !== "public" || row.hosting === "takes_part") {
+      continue
+    }
     const event = await ctx.db
       .query("events")
       .withIndex("by_key", (q) => q.eq("key", row.eventKey))
       .unique()
-    if (event?.hosting === "takes_part") continue
+    // A row from before the copy: the event says (the derivation fills it in).
+    if (row.hosting === undefined && event?.hosting === "takes_part") continue
     return { startsAt: row.startsAt, meta: event?.meta.startsAt }
   }
   return undefined
@@ -171,18 +180,28 @@ export async function refreshOrganisation(
 }
 
 /** The fields `eventOrganisers` rows copy from their event. */
-export type EventOrganiserCopy = Pick<Doc<"events">, "startsAt" | "spanEndsAt" | "visibility">
+export type EventOrganiserCopy = Pick<
+  Doc<"events">,
+  "startsAt" | "spanEndsAt" | "visibility" | "hosting"
+>
 
 export function eventOrganiserCopy(event: EventOrganiserCopy): EventOrganiserCopy {
-  return { startsAt: event.startsAt, spanEndsAt: event.spanEndsAt, visibility: event.visibility }
+  return {
+    startsAt: event.startsAt,
+    spanEndsAt: event.spanEndsAt,
+    visibility: event.visibility,
+    hosting: event.hosting ?? "hosts",
+  }
 }
 
-/** Whether an event's copied fields changed between two versions. */
+/** Whether an event's copied fields changed between two versions; a row or
+ * event without `hosting` hosts (every row from before decision D6). */
 export function organiserCopyChanged(before: EventOrganiserCopy, after: EventOrganiserCopy) {
   return (
     before.startsAt !== after.startsAt ||
     before.spanEndsAt !== after.spanEndsAt ||
-    before.visibility !== after.visibility
+    before.visibility !== after.visibility ||
+    (before.hosting ?? "hosts") !== (after.hosting ?? "hosts")
   )
 }
 

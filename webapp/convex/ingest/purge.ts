@@ -154,115 +154,126 @@ async function purgeBrokerInferences(
   return used > 0 && (people.length === limit || profiles.length === limit)
 }
 
+/**
+ * Deletes one entity, its claims and what hangs off it (`removeEntity`;
+ * the guarded `ingest/cleanup:removeEvents` route for events). Returns the
+ * rows deleted per table.
+ */
+export async function deleteEntity(
+  ctx: MutationCtx,
+  entityType: (typeof ENTITY_TYPES)[number],
+  key: string,
+): Promise<Record<string, number>> {
+  const deleted: Record<string, number> = {}
+  const count = (table: string) => {
+    deleted[table] = (deleted[table] ?? 0) + 1
+  }
+
+  const entity = await findEntity(ctx, entityType, key)
+  if (entity) {
+    await ctx.db.delete(ENTITY_TABLES[entityType], entity._id as never)
+    count(ENTITY_TABLES[entityType])
+  }
+  for (const field of Object.keys(FIELD_SPECS[entityType])) {
+    const claims = await ctx.db
+      .query("fieldClaims")
+      .withIndex("by_entity_field", (q) =>
+        q.eq("entityType", entityType).eq("entityKey", key).eq("field", field),
+      )
+      .take(2_000)
+    for (const claim of claims) {
+      await ctx.db.delete("fieldClaims", claim._id)
+      count("fieldClaims")
+    }
+  }
+
+  const affectedOrgs = new Set<string>()
+  if (entityType === "organisation") {
+    const card = await ctx.db
+      .query("orgCards")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique()
+    if (card) {
+      await ctx.db.delete("orgCards", card._id)
+      count("orgCards")
+    }
+    for (const index of ["by_from", "by_to"] as const) {
+      const edges = await ctx.db
+        .query("relationships")
+        .withIndex(index, (q) => q.eq(index === "by_from" ? "fromKey" : "toKey", key))
+        .take(1_000)
+      for (const edge of edges) {
+        await ctx.db.delete("relationships", edge._id)
+        count("relationships")
+      }
+    }
+    const links = await ctx.db
+      .query("eventOrganisers")
+      .withIndex("by_org_startsAt", (q) => q.eq("orgKey", key))
+      .take(2_000)
+    for (const link of links) {
+      await ctx.db.delete("eventOrganisers", link._id)
+      count("eventOrganisers")
+      // The event no longer names it among its organisers either.
+      const event = await ctx.db
+        .query("events")
+        .withIndex("by_key", (q) => q.eq("key", link.eventKey))
+        .unique()
+      if (event) {
+        const without = (keys: string[]) => keys.filter((other) => other !== key)
+        await ctx.db.patch("events", event._id, {
+          organiserKeys: without(event.organiserKeys),
+          coHostKeys: without(event.coHostKeys),
+          sponsorKeys: without(event.sponsorKeys),
+          updatedAt: Date.now(),
+        })
+      }
+    }
+    const owned = await ctx.db
+      .query("sources")
+      .withIndex("by_orgKey", (q) => q.eq("orgKey", key))
+      .take(2_000)
+    for (const row of owned) {
+      await ctx.db.delete("sources", row._id)
+      count("sources")
+    }
+    const internal = await ctx.db
+      .query("orgInternal")
+      .withIndex("by_orgKey", (q) => q.eq("orgKey", key))
+      .unique()
+    if (internal) {
+      await ctx.db.delete("orgInternal", internal._id)
+      count("orgInternal")
+    }
+  }
+  if (entityType === "event") {
+    const links = await ctx.db
+      .query("eventOrganisers")
+      .withIndex("by_event", (q) => q.eq("eventKey", key))
+      .take(200)
+    for (const link of links) {
+      affectedOrgs.add(link.orgKey)
+      await ctx.db.delete("eventOrganisers", link._id)
+      count("eventOrganisers")
+    }
+  }
+
+  const now = Date.now()
+  const terms = await loadTerms(ctx)
+  for (const orgKey of affectedOrgs) {
+    const org = await ctx.db
+      .query("organisations")
+      .withIndex("by_key", (q) => q.eq("key", orgKey))
+      .unique()
+    if (org) await refreshOrganisation(ctx, org, { now, terms })
+  }
+  return deleted
+}
+
 export const removeEntity = internalMutation({
   args: { entityType: literalUnion(ENTITY_TYPES), key: v.string() },
   returns: v.object({ deleted: v.record(v.string(), v.number()) }),
-  handler: async (ctx, args) => {
-    const deleted: Record<string, number> = {}
-    const count = (table: string) => {
-      deleted[table] = (deleted[table] ?? 0) + 1
-    }
-
-    const entity = await findEntity(ctx, args.entityType, args.key)
-    if (entity) {
-      await ctx.db.delete(ENTITY_TABLES[args.entityType], entity._id as never)
-      count(ENTITY_TABLES[args.entityType])
-    }
-    for (const field of Object.keys(FIELD_SPECS[args.entityType])) {
-      const claims = await ctx.db
-        .query("fieldClaims")
-        .withIndex("by_entity_field", (q) =>
-          q.eq("entityType", args.entityType).eq("entityKey", args.key).eq("field", field),
-        )
-        .take(2_000)
-      for (const claim of claims) {
-        await ctx.db.delete("fieldClaims", claim._id)
-        count("fieldClaims")
-      }
-    }
-
-    const affectedOrgs = new Set<string>()
-    if (args.entityType === "organisation") {
-      const card = await ctx.db
-        .query("orgCards")
-        .withIndex("by_key", (q) => q.eq("key", args.key))
-        .unique()
-      if (card) {
-        await ctx.db.delete("orgCards", card._id)
-        count("orgCards")
-      }
-      for (const index of ["by_from", "by_to"] as const) {
-        const edges = await ctx.db
-          .query("relationships")
-          .withIndex(index, (q) => q.eq(index === "by_from" ? "fromKey" : "toKey", args.key))
-          .take(1_000)
-        for (const edge of edges) {
-          await ctx.db.delete("relationships", edge._id)
-          count("relationships")
-        }
-      }
-      const links = await ctx.db
-        .query("eventOrganisers")
-        .withIndex("by_org_startsAt", (q) => q.eq("orgKey", args.key))
-        .take(2_000)
-      for (const link of links) {
-        await ctx.db.delete("eventOrganisers", link._id)
-        count("eventOrganisers")
-        // The event no longer names it among its organisers either.
-        const event = await ctx.db
-          .query("events")
-          .withIndex("by_key", (q) => q.eq("key", link.eventKey))
-          .unique()
-        if (event) {
-          const without = (keys: string[]) => keys.filter((key) => key !== args.key)
-          await ctx.db.patch("events", event._id, {
-            organiserKeys: without(event.organiserKeys),
-            coHostKeys: without(event.coHostKeys),
-            sponsorKeys: without(event.sponsorKeys),
-            updatedAt: Date.now(),
-          })
-        }
-      }
-      const owned = await ctx.db
-        .query("sources")
-        .withIndex("by_orgKey", (q) => q.eq("orgKey", args.key))
-        .take(2_000)
-      for (const row of owned) {
-        await ctx.db.delete("sources", row._id)
-        count("sources")
-      }
-      const internal = await ctx.db
-        .query("orgInternal")
-        .withIndex("by_orgKey", (q) => q.eq("orgKey", args.key))
-        .unique()
-      if (internal) {
-        await ctx.db.delete("orgInternal", internal._id)
-        count("orgInternal")
-      }
-    }
-    if (args.entityType === "event") {
-      const links = await ctx.db
-        .query("eventOrganisers")
-        .withIndex("by_event", (q) => q.eq("eventKey", args.key))
-        .take(200)
-      for (const link of links) {
-        affectedOrgs.add(link.orgKey)
-        await ctx.db.delete("eventOrganisers", link._id)
-        count("eventOrganisers")
-      }
-    }
-
-    const now = Date.now()
-    const terms = await loadTerms(ctx)
-    for (const orgKey of affectedOrgs) {
-      const org = await ctx.db
-        .query("organisations")
-        .withIndex("by_key", (q) => q.eq("key", orgKey))
-        .unique()
-      if (org) await refreshOrganisation(ctx, org, { now, terms })
-    }
-    return { deleted }
-  },
+  handler: async (ctx, args) => ({ deleted: await deleteEntity(ctx, args.entityType, args.key) }),
 })
 
 export const removeSources = internalMutation({

@@ -534,3 +534,20 @@ describe("the public projection", () => {
     })
   })
 })
+
+describe("addresses as the reader sees them", () => {
+  test("a markdown-escaped address is matched as the address the page shows", async () => {
+    const { contactHash, redactAddresses, addressesIn, unescapeAddresses } = await import(
+      "./lib/suppressions"
+    )
+    const hash = contactHash("jane_doe@gmail.com")
+    const contacts = new Set([hash])
+    expect(unescapeAddresses("mail jane\\_doe@gmail.com now")).toBe("mail jane_doe@gmail.com now")
+    expect(redactAddresses("mail jane\\_doe@gmail.com now", contacts)).toBe(
+      "mail [address removed] now",
+    )
+    expect(addressesIn("jane\\_doe@gmail.com")).toEqual(["jane_doe@gmail.com"])
+    // Other escapes are left alone.
+    expect(unescapeAddresses("\\*not em\\* and a\\_b")).toBe("\\*not em\\* and a\\_b")
+  })
+})

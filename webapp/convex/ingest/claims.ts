@@ -565,13 +565,12 @@ async function writeEntity(
   if (entityType === "event") {
     const event = written as Doc<"events">
     const before = existing as Doc<"events"> | null
+    // The organiser rows copy its start, visibility and hosting; someone
+    // else's event no longer counts as its organisers' activity (decision D6,
+    // lib/entityStore.ts `latestPastEvent`), and back.
     if (before && organiserCopyChanged(before, event)) {
       const orgKeys = await syncEventOrganiserRows(ctx, event)
       await refreshOrganisations(ctx, orgKeys, context)
-    } else if (before && (before.hosting ?? "hosts") !== event.hosting) {
-      // Someone else's event no longer counts as its organisers' activity
-      // (decision D6, lib/entityStore.ts `latestPastEvent`), and back.
-      await refreshOrganisations(ctx, [...event.organiserKeys, ...event.coHostKeys], context)
     }
   }
   return outcome

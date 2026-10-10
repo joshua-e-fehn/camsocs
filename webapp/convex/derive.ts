@@ -61,6 +61,9 @@ export const recomputeEvents = internalMutation({
       const label = termWeekLabel(event.startsAt, terms)
       const spanEndsAt = spanEndOf(event.startsAt, event.endsAt)
       const sweepGroup = sweepGroupOf(event.source, event.meta.externalId?.sourceUrl)
+      // Also fills in the organiser rows' copy of `hosting` for rows written
+      // before it was copied (it patches only rows that differ).
+      await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
       if (
         label === event.termWeekLabel &&
         spanEndsAt === event.spanEndsAt &&
@@ -69,7 +72,6 @@ export const recomputeEvents = internalMutation({
         continue
       }
       await ctx.db.patch("events", event._id, { termWeekLabel: label, spanEndsAt, sweepGroup })
-      await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
       changed++
     }
     if (!page.isDone) {

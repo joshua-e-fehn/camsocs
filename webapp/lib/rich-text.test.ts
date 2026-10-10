@@ -114,6 +114,16 @@ describe("parseInline", () => {
     ])
   })
 
+  test("an address written with entities is never decoded", () => {
+    // Obfuscation: the server's address checks never saw "ab123@cam.ac.uk".
+    expect(plainText(parseInline("ab123&#64;cam.ac.uk and j&#x40;example&#46;org"))).toBe(
+      "ab123&#64;cam.ac.uk and j&#x40;example&#46;org",
+    )
+    expect(plainText(parseInline("&#97;&#98;&#99;"))).toBe("&#97;&#98;&#99;")
+    // Punctuation and typography still decode.
+    expect(plainText(parseInline("it&#39;s &#38; &#8212;"))).toBe("it's & —")
+  })
+
   test("bare and angle-bracket URLs are links, without trailing punctuation", () => {
     expect(parseInline("Check out our website: https://cueims.soc.srcf.net/.")).toEqual([
       text("Check out our website: "),

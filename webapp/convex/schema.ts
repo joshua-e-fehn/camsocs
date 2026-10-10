@@ -796,6 +796,10 @@ export default defineSchema({
     startsAt: v.number(),
     spanEndsAt: v.optional(v.number()),
     visibility: literalUnion(EVENT_VISIBILITIES),
+    /** The event's `hosting` (D6), so `lastActiveAt` skips someone else's
+     * events without reading them; absent on rows written before it (read
+     * from the event then; the daily re-derivation fills it in). */
+    hosting: v.optional(literalUnion(EVENT_HOSTING)),
   })
     .index("by_org_startsAt", ["orgKey", "startsAt"])
     .index("by_org_spanEndsAt", ["orgKey", "spanEndsAt"])

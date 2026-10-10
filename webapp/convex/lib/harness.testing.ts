@@ -43,6 +43,7 @@ const appModules = {
   "./ingest/files.ts": () => import("../ingest/files"),
   "./ingest/inbound.ts": () => import("../ingest/inbound"),
   "./ingest/orgInternal.ts": () => import("../ingest/orgInternal"),
+  "./ingest/cleanup.ts": () => import("../ingest/cleanup"),
   "./ingest/purge.ts": () => import("../ingest/purge"),
   "./ingest/relationships.ts": () => import("../ingest/relationships"),
   "./ingest/sources.ts": () => import("../ingest/sources"),

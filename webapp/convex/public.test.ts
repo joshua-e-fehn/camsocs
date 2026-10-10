@@ -344,6 +344,49 @@ describe("events societies take part in (decision D6)", () => {
     page = await t.query(api.orgs.getBySlug, { slug: "choir" })
     expect(page?.org.lastActiveAt).toBe(NOW - 2 * DAY)
   })
+
+  test("a calendar of imported CTFs never hides the society's own last event", async () => {
+    // Review 2026-10-10: the scan looked at 50 rows; a CTF a day filled them.
+    const t = newTest()
+    await seed(t)
+    const claims: ClaimInput[] = []
+    const events: { eventKey: string; organisers: { orgKey: string; role: "organiser" }[] }[] = []
+    const own = eventKey("google_calendar", "own-1")
+    const add = (key: string, id: string, startsAt: number, hosting: "hosts" | "takes_part") => {
+      const field = (name: string, value: unknown) =>
+        claim(key, name, value, {
+          entityType: "event",
+          sourceKey: "src-feed",
+          sourceUrl: feed,
+          sourceType: "ics_feed",
+        })
+      claims.push(
+        field("title", `Event ${id}`),
+        field("startsAt", startsAt),
+        field("visibility", "public"),
+        field("source", "google_calendar"),
+        field("externalId", id),
+        field("sourceUrl", feed),
+        field("hosting", hosting),
+      )
+      events.push({ eventKey: key, organisers: [{ orgKey: "org-choir", role: "organiser" }] })
+    }
+    add(own, "own-1", NOW - 70 * DAY, "hosts")
+    for (let i = 0; i < 60; i++) {
+      add(eventKey("google_calendar", `ctf-${i}`), `ctf-${i}`, NOW - (i + 1) * DAY, "takes_part")
+    }
+    await t.mutation(internal.ingest.claims.ingest, { claims })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, { events })
+    const page = await t.query(api.orgs.getBySlug, { slug: "choir" })
+    expect(page?.org.lastActiveAt).toBe(NOW - 70 * DAY)
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("eventOrganisers")
+        .withIndex("by_org_startsAt", (q) => q.eq("orgKey", "org-choir"))
+        .collect(),
+    )
+    expect(rows.filter((row) => row.hosting === "takes_part")).toHaveLength(60)
+  })
 })
 
 describe("events.restrictedCount", () => {
