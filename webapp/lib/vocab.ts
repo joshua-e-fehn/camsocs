@@ -358,6 +358,12 @@ export type EventSource = (typeof EVENT_SOURCES)[number]
 export const EVENT_ORGANISER_ROLES = ["organiser", "co_host", "sponsor"] as const
 export type EventOrganiserRole = (typeof EVENT_ORGANISER_ROLES)[number]
 
+/** Whether an event's organisations host it or only take part in someone else's
+ * (decision D6): least to most restrictive, so the `strictest` merge lets any
+ * current reading that shows the event to be external win. */
+export const EVENT_HOSTING = ["hosts", "takes_part"] as const
+export type EventHosting = (typeof EVENT_HOSTING)[number]
+
 // --- relationships ---------------------------------------------------------------
 
 export const RELATIONSHIP_TYPES = [
@@ -544,6 +550,8 @@ export const EVENT_FIELDS = [
   "source",
   "externalId",
   "sourceUrl",
+  "hosting",
+  "externalUrl",
 ] as const
 export type EventField = (typeof EVENT_FIELDS)[number]
 

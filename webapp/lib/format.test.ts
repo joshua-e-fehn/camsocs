@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { formatEventPrice, formatPence, languageName, paragraphs } from "./format"
+import {
+  formatEventPrice,
+  formatPence,
+  joinNames,
+  languageName,
+  paragraphs,
+  takesPart,
+} from "./format"
 
 describe("format", () => {
   test("pence", () => {
@@ -16,6 +23,13 @@ describe("format", () => {
       "£5 (members £3)",
     )
     expect(formatEventPrice({ free: false, text: "Donation" })).toBe("Donation")
+  })
+
+  test("who takes part in someone else's event (D6)", () => {
+    expect(joinNames(["A", "B", "C"])).toBe("A, B and C")
+    expect(takesPart([])).toBeUndefined()
+    expect(takesPart(["Cyber Security Society"])).toBe("Cyber Security Society takes part")
+    expect(takesPart(["A", "B"])).toBe("A and B take part")
   })
 
   test("languages and paragraphs", () => {

@@ -25,7 +25,10 @@ import { type CompareRule, type FieldSpec, hostOf, normaliseUrl } from "./fields
  *     only the most recent claim per (sourceKey, method) counts: a page that
  *     used to list an email and no longer does has *changed its mind*, and the
  *     newer reading replaces the older (`liveClaims`). A parser and an LLM
- *     reading the same page are separate readings.
+ *     reading the same page are separate readings — except for a field that
+ *     is one reader's verdict (`oneReadingPerSource`: an event's `hosting`,
+ *     decided by a rule or the model), where only each source's newest claim
+ *     counts, whatever its method (`newestPerSource`).
  *  2. **Status is normalised on the server** (`storedStatus`): `manual` /
  *     `owner_submitted` claims are `manual` / `owner_confirmed`; an LLM claim
  *     is `found` only with a verbatim quote check of `exact` or `normalised`,
@@ -158,6 +161,18 @@ export function liveClaims<C extends ResolvableClaim>(claims: readonly C[]): C[]
   return [...latest.values()]
 }
 
+/** Rule 1 for a verdict field (`oneReadingPerSource`): of the live claims,
+ * only each source's newest, whatever its method. A rule's verdict this run
+ * replaces the model's from an earlier run, and back. */
+export function newestPerSource<C extends ResolvableClaim>(claims: readonly C[]): C[] {
+  const latest = new Map<string, C>()
+  for (const claim of claims) {
+    const current = latest.get(claim.sourceKey)
+    if (!current || recency(claim) > recency(current)) latest.set(claim.sourceKey, claim)
+  }
+  return [...latest.values()]
+}
+
 function isEmptyArray(value: unknown): boolean {
   return Array.isArray(value) && value.length === 0
 }
@@ -203,11 +218,17 @@ function provenance(claim: ResolvableClaim): Omit<FieldMeta, "status"> {
  * `applicable` false turns "nobody claimed it" into `not_applicable`.
  */
 export function resolveField(
-  spec: Pick<FieldSpec, "merge" | "compare" | "itemKey" | "order" | "checksLink">,
+  spec: Pick<
+    FieldSpec,
+    "merge" | "compare" | "itemKey" | "order" | "checksLink" | "oneReadingPerSource"
+  >,
   claims: readonly ResolvableClaim[],
   options: { applicable?: boolean } = {},
 ): Resolution {
-  const live = spec.checksLink ? withoutDeadLinks(liveClaims(claims)) : liveClaims(claims)
+  const readings = spec.oneReadingPerSource
+    ? newestPerSource(liveClaims(claims))
+    : liveClaims(claims)
+  const live = spec.checksLink ? withoutDeadLinks(readings) : readings
   const values = live.filter(hasValue).sort(byPrecedence)
   if (values.length === 0) return resolveAbsent(live, options.applicable ?? true)
   if (spec.merge === "union") return resolveUnion(spec, values)

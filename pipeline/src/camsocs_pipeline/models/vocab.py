@@ -365,6 +365,11 @@ EVENT_ORGANISER_ROLES: tuple[str, ...] = (
     "sponsor",
 )
 
+EVENT_HOSTING: tuple[str, ...] = (
+    "hosts",
+    "takes_part",
+)
+
 RELATIONSHIP_TYPES: tuple[str, ...] = (
     "sponsors",
     "co_hosted",
@@ -542,6 +547,8 @@ EVENT_FIELDS: tuple[str, ...] = (
     "source",
     "externalId",
     "sourceUrl",
+    "hosting",
+    "externalUrl",
 )
 
 TEAM_FIELDS: tuple[str, ...] = (

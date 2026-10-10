@@ -51,6 +51,9 @@ const listArgs = {
   q: v.optional(v.string()),
   /** Only events whose organisers belong to one of these colleges. */
   collegeKeys: v.optional(v.array(v.string())),
+  /** `false` leaves out events societies only take part in (`hosting:
+   * takes_part`, decision D6); they are included by default. */
+  includeTakingPart: v.optional(v.boolean()),
 }
 const listArgsObject = v.object(listArgs)
 type ListArgs = Infer<typeof listArgsObject>
@@ -148,6 +151,7 @@ async function matchingEvents(
     (event) =>
       overlaps(event, args.from, args.to) &&
       tiers.includes(event.visibility) &&
+      (args.includeTakingPart !== false || event.hosting !== "takes_part") &&
       (!types || types.has(event.eventType)) &&
       words.every((word) => event.title.toLowerCase().includes(word)),
   )

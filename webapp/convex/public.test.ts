@@ -236,6 +236,116 @@ describe("events.list / events.get", () => {
   })
 })
 
+describe("events societies take part in (decision D6)", () => {
+  const ctfKey = eventKey("google_calendar", "ctf-1")
+  const feed = "https://calendar.google.com/calendar/ical/cyber/public/basic.ics"
+
+  async function seedExternal(t: TestConvex, startsAt = NOW + 5 * DAY) {
+    const field = (name: string, value: unknown, overrides: Partial<ClaimInput> = {}) =>
+      claim(ctfKey, name, value, {
+        entityType: "event",
+        sourceKey: "src-feed",
+        sourceUrl: feed,
+        sourceType: "ics_feed",
+        ...overrides,
+      })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        field("title", "Some CTF 2026"),
+        field("startsAt", startsAt),
+        field("visibility", "public"),
+        field("source", "google_calendar"),
+        field("externalId", "ctf-1"),
+        field("sourceUrl", feed),
+        field("hosting", "takes_part", {
+          status: "inferred",
+          extractor: "event_noise.external.ctftime",
+          evidenceQuote: "CTF Event from CTFTime",
+        }),
+        field("externalUrl", "https://ctf.example.org/"),
+      ],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: ctfKey, organisers: [{ orgKey: "org-choir", role: "organiser" }] }],
+    })
+  }
+
+  test("lists and details carry hosting; the external page only with takes_part", async () => {
+    const t = newTest()
+    const keys = await seed(t)
+    await seedExternal(t)
+    const window = { from: NOW, to: NOW + 30 * DAY }
+    const listed = await t.query(api.events.list, window)
+    const byTitle = Object.fromEntries(listed.map((event) => [event.title, event]))
+    // A row nobody judged (from before D6) hosts.
+    expect(byTitle["Open simul"].hosting).toBe("hosts")
+    expect(byTitle["Open simul"].externalUrl).toBeUndefined()
+    expect(byTitle["Some CTF 2026"].hosting).toBe("takes_part")
+    expect(byTitle["Some CTF 2026"].externalUrl).toBe("https://ctf.example.org/")
+
+    const details = await t.query(api.events.get, { key: ctfKey })
+    expect(details?.hosting).toBe("takes_part")
+    expect(details?.externalUrl).toBe("https://ctf.example.org/")
+    expect(details?.meta.hosting?.status).toBe("inferred")
+    expect((await t.query(api.events.get, { key: keys.open }))?.hosting).toBe("hosts")
+
+    // Included by default; left out on request.
+    const hostedOnly = await t.query(api.events.list, { ...window, includeTakingPart: false })
+    expect(hostedOnly.map((event) => event.title)).toEqual(["Open simul"])
+    const page = await t.query(api.orgs.getBySlug, { slug: "choir" })
+    expect(page?.events.map((event) => [event.title, event.hosting])).toEqual([
+      ["Some CTF 2026", "takes_part"],
+    ])
+  })
+
+  test("a later verdict that it is the society's own hides the external page", async () => {
+    const t = newTest()
+    await seed(t)
+    await seedExternal(t)
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim(ctfKey, "hosting", "hosts", {
+          entityType: "event",
+          sourceKey: "src-feed",
+          sourceUrl: feed,
+          sourceType: "ics_feed",
+          method: "llm",
+          extractor: "bulk-model",
+          promptVersion: "event_noise_v1",
+          evidenceQuote: "Some CTF 2026",
+          quoteCheck: "exact",
+          retrievedAt: NOW,
+        }),
+      ],
+    })
+    const details = await t.query(api.events.get, { key: ctfKey })
+    expect(details?.hosting).toBe("hosts")
+    expect(details?.externalUrl).toBeUndefined()
+  })
+
+  test("someone else's event never counts as the society's activity", async () => {
+    const t = newTest()
+    await seed(t)
+    await seedExternal(t, NOW - 2 * DAY)
+    let page = await t.query(api.orgs.getBySlug, { slug: "choir" })
+    expect(page?.org.lastActiveAt).toBeUndefined()
+    // Judged its own after all: now it does.
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim(ctfKey, "hosting", "hosts", {
+          entityType: "event",
+          sourceKey: "src-manual",
+          sourceUrl: "manual:test",
+          sourceType: "manual",
+          method: "manual",
+        }),
+      ],
+    })
+    page = await t.query(api.orgs.getBySlug, { slug: "choir" })
+    expect(page?.org.lastActiveAt).toBe(NOW - 2 * DAY)
+  })
+})
+
 describe("events.restrictedCount", () => {
   test("counts the cam_only events a visitor cannot see around the dates asked for", async () => {
     const t = newTest()

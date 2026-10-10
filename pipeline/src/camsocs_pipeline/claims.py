@@ -304,7 +304,7 @@ def claims_for_observation(obs: Observation) -> list[ClaimInput]:
         raise ValueError("observation is not resolved: entity_key is None")
     fields = list(obs.fields)
     present = {f.field for f in fields}
-    evidence = _evidence_of(obs.fields)
+    evidence = evidence_of(obs.fields)
     if obs.parent is not None:
         if obs.parent.known_key is None:
             raise ValueError("parent organisation is not resolved")
@@ -364,7 +364,7 @@ def claims_for_event(
     (`source`, `externalId`, `sourceUrl`): the event keeps its own listing.
     `visibility` is still claimed — the strictest reading wins."""
     key = event_key(*(duplicate_of or (obs.event_source, obs.external_id)))
-    evidence = _evidence_of(obs.fields)
+    evidence = evidence_of(obs.fields)
     extra: list[FieldObs] = [
         parser_field("visibility", obs.visibility, extractor="event.identity", evidence=evidence),
     ]
@@ -401,9 +401,10 @@ def claims_for_event(
     return _claims([*fields, *extra], obs, "event", key)
 
 
-def _evidence_of(fields: Iterable[FieldObs]) -> str:
-    """Identity claims inherit the evidence kind of the observation's fields:
-    primary only when all of them are."""
+def evidence_of(fields: Iterable[FieldObs]) -> str:
+    """Identity claims (and the claims a later step derives from a reading, as
+    the calendar-noise verdict) inherit the evidence kind of the observation's
+    fields: primary only when all of them are."""
     kinds = {f.evidence for f in fields}
     return "primary" if kinds == {"primary"} else "secondary"
 
@@ -416,6 +417,7 @@ __all__ = [
     "claims_for_event",
     "claims_for_observation",
     "epoch_ms",
+    "evidence_of",
     "llm_field",
     "llm_items_field",
     "missing_field",

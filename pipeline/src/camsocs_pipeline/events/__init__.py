@@ -31,7 +31,12 @@ Shared pieces:
   expansion inside the window, de-duplication by UID;
 - `events.seeds` — the few verified feeds that no harvested record lists yet;
 - `events.duplicates` — one event, several sources: which staged readings the
-  load stage folds into another source's event (data-model §2).
+  load stage folds into another source's event (data-model §2);
+- `events.noise` — calendar noise (decision D6), the rules: which readings are
+  no events (a prayer room closed, a deadline: dropped at load) and which are
+  someone else's event a society only takes part in (a CTF on its calendar:
+  ``hosting: takes_part``). The model for what the rules leave borderline is
+  `extract.event_noise`, which the load runs; nothing here calls it.
 
 Society websites' events pages are read by the LLM, so that stage
 (`website_events`) lives in `sources.websites.events`, not here.

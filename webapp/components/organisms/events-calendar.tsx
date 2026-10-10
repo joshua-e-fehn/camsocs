@@ -2,6 +2,7 @@
 
 import { type Preloaded, usePreloadedQuery } from "convex/react"
 import {
+  ArrowUpRightIcon,
   CalendarDaysIcon,
   CalendarRangeIcon,
   ChevronLeftIcon,
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { Toggle } from "@/components/ui/toggle"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
@@ -273,7 +275,8 @@ export function EventsCalendar({
       state.eventTypes.length +
       state.collegeKeys.length +
       (state.org ? 1 : 0) +
-      (state.q ? 1 : 0) >
+      (state.q ? 1 : 0) +
+      (state.takingPart ? 0 : 1) >
     0
   const { ongoing, starting } = splitOngoing(events, range.from)
   const byDay = groupByDay(starting, range.days, state.view !== "list")
@@ -317,6 +320,17 @@ export function EventsCalendar({
             placeholder="Any society"
             onChange={(next) => navigate({ ...base, org: next?.slug })}
           />
+          {/* Someone else's events the societies only take part in (D6): on by
+              default, dashed like the events it adds. */}
+          <Toggle
+            variant="outline"
+            pressed={state.takingPart}
+            onPressedChange={(on) => navigate({ ...base, takingPart: on })}
+            className="h-9 border-dashed font-normal"
+          >
+            <ArrowUpRightIcon aria-hidden />
+            Include events societies take part in
+          </Toggle>
           {filtered && (
             <Button
               variant="ghost"
@@ -328,6 +342,7 @@ export function EventsCalendar({
                   categories: [],
                   eventTypes: [],
                   collegeKeys: [],
+                  takingPart: true,
                 })
               }
             >
@@ -579,8 +594,9 @@ export function EventsCalendar({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Times are UK time. Events come from societies&apos; own calendars, listings and mailing
-        lists; each shows its source.
+        Times are UK time. Events come from societies’ own calendars, listings and mailing lists;
+        each shows its source. Dashed events, marked “Taking part”, are someone else’s events a
+        society lists because it takes part.
       </p>
 
       <EventSheet

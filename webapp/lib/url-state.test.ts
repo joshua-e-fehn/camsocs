@@ -87,6 +87,7 @@ describe("events URL state", () => {
       eventTypes: [],
       collegeKeys: [],
       org: undefined,
+      takingPart: true,
       event: undefined,
     })
     expect(serializeEventsState(parseEventsParams({}))).toBe("")
@@ -94,7 +95,7 @@ describe("events URL state", () => {
 
   test("round-trips view, anchor, filters and the open event", () => {
     const event = `evt-${"a".repeat(40)}`
-    const url = `?view=month&date=2026-10-08&q=jazz&cat=music&type=performance,social&org=cu-jazz&event=${event}`
+    const url = `?view=month&date=2026-10-08&q=jazz&cat=music&type=performance,social&org=cu-jazz&external=hide&event=${event}`
     const state = parseEventsParams(Object.fromEntries(new URLSearchParams(url)))
     expect(state.view).toBe("month")
     expect(state.eventTypes).toEqual(["social", "performance"])
@@ -119,5 +120,17 @@ describe("events URL state", () => {
       eventTypes: ["talk"],
       orgKey: "org-cu-jazz",
     })
+  })
+
+  test("events societies only take part in are listed unless hidden (D6)", () => {
+    expect(parseEventsParams({ external: "anything" }).takingPart).toBe(true)
+    const hidden = parseEventsParams({ external: "hide" })
+    expect(hidden.takingPart).toBe(false)
+    expect(eventListArgs(hidden, { from: 1, to: 2 })).toEqual({
+      from: 1,
+      to: 2,
+      includeTakingPart: false,
+    })
+    expect(serializeEventsState(hidden)).toBe("?external=hide")
   })
 })

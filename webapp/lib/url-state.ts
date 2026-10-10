@@ -209,6 +209,9 @@ export type EventsState = {
   collegeKeys: string[]
   /** One organisation's events only, by slug. */
   org?: string
+  /** Whether events societies only take part in (decision D6: someone else's
+   * CTF, conference or fair) are listed. On by default; `?external=hide`. */
+  takingPart: boolean
   /** The event whose details are open. */
   event?: string
 }
@@ -228,6 +231,7 @@ export function parseEventsParams(params: SearchParams): EventsState {
     eventTypes: oneOf(params, "type", EVENT_TYPES),
     collegeKeys: orgKeys(params, "college"),
     org: org && isOrgSlug(org) ? org : undefined,
+    takingPart: firstParam(params, "external") !== "hide",
     event: event && EVENT_KEY.test(event) ? event : undefined,
   }
 }
@@ -241,6 +245,7 @@ export function serializeEventsState(state: EventsState): string {
     ["type", [...state.eventTypes].sort()],
     ["college", [...state.collegeKeys].sort()],
     ["org", state.org],
+    ["external", state.takingPart ? undefined : "hide"],
     ["event", state.event],
   ])
 }
@@ -260,6 +265,7 @@ export function eventListArgs(
     eventTypes: state.eventTypes.length > 0 ? state.eventTypes : undefined,
     collegeKeys: state.collegeKeys.length > 0 ? state.collegeKeys : undefined,
     orgKey: state.org ? `org-${state.org}` : undefined,
+    includeTakingPart: state.takingPart ? undefined : false,
   })
 }
 

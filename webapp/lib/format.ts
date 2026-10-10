@@ -48,3 +48,16 @@ export function paragraphs(text: string): string[] {
     .map((part) => part.trim())
     .filter(Boolean)
 }
+
+/** "A", "A and B", "A, B and C". */
+export function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? ""
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+}
+
+/** Who takes part in someone else's event (decision D6): "Cyber Security
+ * Society takes part", "A and B take part" — never "organised by". */
+export function takesPart(names: readonly string[]): string | undefined {
+  if (names.length === 0) return undefined
+  return `${joinNames(names)} ${names.length === 1 ? "takes" : "take"} part`
+}

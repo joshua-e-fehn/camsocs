@@ -36,6 +36,13 @@ loader. Image fields staged as a bare ``{"sourceUrl"}``
 ``storageId`` (`attach_stored_files`); with a `StoredFileCache` an image this
 deployment already stores is not uploaded again.
 
+`post_observations` is also where calendar noise is sifted out (decision D6,
+`extract.event_noise.sift_events`): event readings that are no events (a prayer room
+closed, a deadline) are not posted at all, and every other one carries its
+`hosting` verdict — someone else's event a society only takes part in is
+`takes_part`. Rules first; the bulk model for borderline readings when a
+`NoiseClassifier` with one is given, else the rules alone.
+
 `post_observations` is also where public free text is made safe to publish
 (`extract.redact.redact_claims`, decision D1): personal names of private
 individuals are replaced by their roles, the original text travels as the
@@ -72,6 +79,7 @@ from camsocs_pipeline.events.duplicates import (
     primaries_first,
 )
 from camsocs_pipeline.events.duplicates import identity as event_identity
+from camsocs_pipeline.extract.event_noise import NoiseClassifier, NoiseStats, sift_events
 from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo, Observation
@@ -631,20 +639,27 @@ class ConvexLoader:
         run_key: str | None = None,
         media: MediaSource | None = None,
         redactor: Redactor | None = None,
+        noise: NoiseClassifier | None = None,
     ) -> LoadReport:
         """Posts keyed observations as every row they imply, in dependency
         order: sources → (files) → claims → orgInternal → relationships →
-        event organisers → broker inferences — after taking out whatever the
-        suppression list forbids. Unkeyed records are skipped (they wait for
-        the resolve stage) and counted. With `media`, image values that name
-        only a ``sourceUrl`` are uploaded first. Public free text is redacted
-        (D1, `extract.redact`) with `redactor`, or with the deterministic rule
-        alone when none is given, after the suppression list has cut out what
-        it forbids (so a suppressed address never reaches `valueRaw`)."""
-        records = list(records)
+        event organisers → broker inferences — after taking out calendar
+        noise (D6, `extract.event_noise`: with `noise`, else by the rules alone) and
+        whatever the suppression list forbids. Unkeyed records are skipped
+        (they wait for the resolve stage) and counted. With `media`, image
+        values that name only a ``sourceUrl`` are uploaded first. Public free
+        text is redacted (D1, `extract.redact`) with `redactor`, or with the
+        deterministic rule alone when none is given, after the suppression
+        list has cut out what it forbids (so a suppressed address never
+        reaches `valueRaw`)."""
+        classifier = noise or NoiseClassifier()
+        records = sift_events(list(records), classifier)
         plan = plan_observations(records)
         report = LoadReport(
-            skipped=plan.skipped, collisions=plan.collisions, merged=plan.duplicates.notes()
+            skipped=plan.skipped,
+            collisions=plan.collisions,
+            merged=plan.duplicates.notes(),
+            noise=classifier.stats,
         )
         report.suppressed = apply_suppressions(plan, self.suppressions())
         plan.claims, report.redaction = redact_claims(
@@ -709,6 +724,8 @@ class LoadReport:
     collisions: list[str] = field(default_factory=list)
     #: Event readings folded into another source's event (`events.duplicates`).
     merged: list[str] = field(default_factory=list)
+    #: Calendar noise (D6, `extract.event_noise`): notices dropped, events taken part in.
+    noise: NoiseStats = field(default_factory=NoiseStats)
     #: What the suppression list held back.
     suppressed: SuppressionReport = field(default_factory=SuppressionReport)
     #: Image claims given a stored copy, and those dropped for want of one.

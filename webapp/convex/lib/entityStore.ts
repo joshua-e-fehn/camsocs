@@ -63,7 +63,9 @@ const LATEST_EVENT_SCAN = 50
  * The latest *public* event before `now` that `orgKey` organised or
  * co-hosted: its start and the provenance of that start. Feeds the public
  * `lastActiveAt` and `status`, so a `cam_only` or `members_only` event — or a
- * sponsorship — never moves them (nor reveals when such an event happened).
+ * sponsorship — never moves them (nor reveals when such an event happened),
+ * and neither does someone else's event it only takes part in (`hosting:
+ * takes_part`, decision D6: a CTF a feed imports says nothing of the society).
  */
 export async function latestPastEvent(
   ctx: QueryCtx,
@@ -75,13 +77,16 @@ export async function latestPastEvent(
     .withIndex("by_org_startsAt", (q) => q.eq("orgKey", orgKey).lte("startsAt", now))
     .order("desc")
     .take(LATEST_EVENT_SCAN)
-  const row = rows.find((entry) => entry.role !== "sponsor" && entry.visibility === "public")
-  if (!row) return undefined
-  const event = await ctx.db
-    .query("events")
-    .withIndex("by_key", (q) => q.eq("key", row.eventKey))
-    .unique()
-  return { startsAt: row.startsAt, meta: event?.meta.startsAt }
+  for (const row of rows) {
+    if (row.role === "sponsor" || row.visibility !== "public") continue
+    const event = await ctx.db
+      .query("events")
+      .withIndex("by_key", (q) => q.eq("key", row.eventKey))
+      .unique()
+    if (event?.hosting === "takes_part") continue
+    return { startsAt: row.startsAt, meta: event?.meta.startsAt }
+  }
+  return undefined
 }
 
 /** The public directory card of an organisation (schema.ts `orgCardFields`). */

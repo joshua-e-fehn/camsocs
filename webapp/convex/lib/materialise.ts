@@ -44,6 +44,8 @@ const EVENT_DEFAULTS: Row = {
   cancelled: false,
   status: "confirmed",
   eventType: "other",
+  // Decision D6: an event nobody has judged is its organisers' own.
+  hosting: "hosts",
 }
 
 /** Reads a (possibly dotted) field from a stored row. */
