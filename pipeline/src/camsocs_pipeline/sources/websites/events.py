@@ -46,6 +46,41 @@ week costs nothing. Dates are resolved in code (`extract.when`); term weeks need
 term the page names (or its URL / title says), else the event is dropped as
 possibly last term's. An event without a stated time is all day, its start
 ``inferred``. Quotes are checked against the text sent (`claims.llm_field`).
+The rules for dates live in `extract.dating`.
+
+**Cards on the page** (`page_card_events`). Many societies publish their
+programme only as images — a term card, a slideshow of posters (the German
+Society's Michaelmas 2026 card) — so each page read also gives its term cards
+and posters (`sources.termcards.card_images`): an image or a linked PDF whose
+alt text, title or file name says term card, a term, poster, flyer,
+programme, schedule, calendar or events, or that sits right under a heading
+announcing a programme — never logos, icons, sponsors' or social networks'
+images, camera photos, anything in the navigation, header or footer or under
+a heading of past events, nothing shown smaller than 300 px or as a strip.
+Old cards are left out before any request (`card_stale_reason`: a past term
+or only earlier years in the name or the heading above, a dated upload path
+before 1 March of this academic year's first year; on a page about an
+earlier season, every card that does not name this year), and after it by
+``Last-Modified``. At most `MAX_CARDS_PER_PAGE` a page, each file once a site
+(resized copies are one file; the original upload is fetched), with the
+society-website purpose bound to the page's site (a CDN keeps its own
+robots.txt and AI opt-outs; Meta's CDNs are never fetched), and only when the
+page itself may reach the model. They are read through the termcard path
+(`extract.cards`, the strong model's vision): every event needs its date in a
+quote off the card, and a yearless date's year a second signal — the card
+names its term with the year, or the heading or alt text beside it does; it
+was uploaded this academic year (a path like ``/2026/10/``, or
+``Last-Modified``); the page names this year or the term; its weekdays agree;
+it lies within eight weeks — while a stated weekday must fall on the date.
+Values read off an image stay ``inferred``. The model's reference date is the
+week the card was published, so an unchanged image is asked about once (the
+reply is cached by its bytes); at most `MAX_CARD_CALLS_PER_RUN` new vision
+calls a run. Their events are ``termcard`` events (source URL the card file,
+public unless the card says members only, organised by the site's
+organisation): one reading per event (`unseen_card_events`), none the page's
+own text already lists that day under a similar title (its quotes checked,
+it beats a reading off an image); other sources' readings merge at load
+(`events.duplicates`).
 
 **Which events.** Upcoming ones: an event that ends before today (London) is
 dropped as past, one starting more than `HORIZON` (nine months) ahead as
@@ -89,17 +124,26 @@ from camsocs_pipeline.events.common import (
     london_midnight,
     observations_from,
 )
+from camsocs_pipeline.extract.cards import CardHints, card_events
+from camsocs_pipeline.extract.dating import (
+    dated_quote,
+    page_dating,
+    weekdays_agree,
+    year_problem,
+)
+from camsocs_pipeline.extract.dedupe import similar_titles
 from camsocs_pipeline.extract.events import (
+    CallBudget,
     EventContext,
     LlmEvent,
     LlmEvents,
+    OverBudget,
     build_events,
     extract_events,
     load_prompt,
     redact_contacts,
     title_slug,
 )
-from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote
 from camsocs_pipeline.extract.llm import (
     LLMClient,
     LLMValidationError,
@@ -117,8 +161,19 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
-from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE, SOCIETY_WEBSITE
-from camsocs_pipeline.sources.termcards import term_hint
+from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE, SOCIETY_WEBSITE, FetchPurpose
+from camsocs_pipeline.sources.termcards import (
+    PageFile,
+    Skipped,
+    TermcardFile,
+    card_images,
+    card_stale_reason,
+    dated_this_year,
+    fetch_card_file,
+    modified_reason,
+    original_url,
+    term_hint,
+)
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.page import Page, parse_page
 from camsocs_pipeline.sources.websites.site import ai_reading, with_note
@@ -128,6 +183,8 @@ logger = logging.getLogger(__name__)
 
 SOURCE_TYPE = "society_website"
 EVENT_SOURCE = "website"
+#: The event source of what the cards on a page give (`extract.cards`).
+CARD_SOURCE = "termcard"
 PROMPT = "website_events_v1"
 EVIDENCE = "primary"
 #: The enrichment stage's page cache age (`sources.websites.enrich.FRESH_FOR`).
@@ -136,6 +193,11 @@ FRESH_FOR = timedelta(days=3)
 HORIZON = timedelta(days=274)
 MAX_EVENT_PAGES = 2
 MAX_PROMPT_CHARS = 12_000
+#: Term cards and posters read off one page at most (a slideshow of a
+#: term's posters is about a dozen).
+MAX_CARDS_PER_PAGE = 15
+#: Model calls for cards in one run; a card read before costs nothing.
+MAX_CARD_CALLS_PER_RUN = 150
 COVERS = frozenset({"description", "endsAt", "venueText"})
 
 _EVENT_WORDS = re.compile(
@@ -151,24 +213,6 @@ _HOME_LISTS = re.compile(
     re.I,
 )
 _EVENT_TYPE = re.compile(r"(?:^|[^A-Za-z])(?:[A-Za-z]*Event|Festival)$")
-
-_MONTH = (
-    r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
-    r"sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
-)
-_DAY_MONTH = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\.?\s*(?:of\s+)?{_MONTH}\b", re.I)
-_MONTH_DAY = re.compile(rf"\b{_MONTH}\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b", re.I)
-_NUMERIC_DATE = re.compile(r"\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2}|\d{4}))?\b")
-_ISO_DATE = re.compile(r"\b20\d\d-(\d\d)-(\d\d)\b")
-_WEEK = re.compile(r"\b(?:week|wk)\.?\s*(\d{1,2})\b|\b(\d{1,2})(?:st|nd|rd|th)\s+week\b", re.I)
-_WEEKDAY = re.compile(r"\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b", re.I)
-_WEEKDAY_NAME = re.compile(
-    r"\b(mon|tue|wed|thu|fri|sat|sun)(?:day|s|sday|nesday|rsday|urday|r|rs|t)?\.?\b", re.I
-)
-_WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-_YEAR = re.compile(r"\b(20\d\d)\b")
-#: A date a page gives without its year or weekday is trusted this far ahead.
-YEARLESS_HORIZON = timedelta(weeks=8)
 
 
 @dataclass(frozen=True)
@@ -192,6 +236,8 @@ class SiteResult:
     structured: int = 0
     llm_calls: int = 0
     llm_cached: int = 0
+    #: Card images (or files) read by the vision model, cached or not.
+    cards: int = 0
     tally: Tally = field(default_factory=Tally)
     notes: list[str] = field(default_factory=list)
 
@@ -401,141 +447,6 @@ def structured_draft(item: dict[str, Any], site: Site) -> EventDraft | None:
 # --- the model's reading --------------------------------------------------------------------
 
 
-def dated_quote(event: LlmEvent, source_text: str) -> bool:
-    """Whether the event's ``when_quote`` is on the page and holds its date:
-    the day number with a month (or a numeric / ISO date) for a calendar
-    date, the week number and a weekday for a term week. Relative days never
-    count: a web page has no date of its own."""
-    quote = (event.when_quote or "").strip()
-    if not quote or check_quote(quote, source_text) is EvidenceMatch.ABSENT:
-        return False
-    if event.relative_day:
-        return False
-    if event.date:
-        day = _iso(event.date)
-        if day is None:
-            return False
-        numbers = {int(m.group(1)) for m in _DAY_MONTH.finditer(quote)} | {
-            int(m.group(1)) for m in _MONTH_DAY.finditer(quote)
-        }
-        numbers |= {int(m.group(2)) for m in _ISO_DATE.finditer(quote)}
-        for m in _NUMERIC_DATE.finditer(quote):
-            numbers |= {int(m.group(1)), int(m.group(2))}
-        return day.day in numbers
-    if event.term_week is not None:
-        weeks = {int(m.group(1) or m.group(2)) for m in _WEEK.finditer(quote)}
-        return event.term_week in weeks and bool(_WEEKDAY.search(quote))
-    return False
-
-
-def _iso(value: str | None) -> date | None:
-    try:
-        return date.fromisoformat((value or "").strip()[:10])
-    except ValueError:
-        return None
-
-
-#: An academic year or a season as pages write it: "2025/2026", "2025-26".
-_SEASON = re.compile(r"\b(20\d\d)\s*[/–-]\s*(20\d\d|\d\d)\b")
-
-
-@dataclass(frozen=True)
-class PageDating:
-    """What a page says about its own year (`page_dating`)."""
-
-    #: Why the page is last season's or older (yearless dates then cannot
-    #: be this year's), or None.
-    stale: str | None = None
-    #: The page names this academic year (a year since it began, or its season).
-    current: bool = False
-    #: The page (or its URL / title) names the term.
-    term: bool = False
-    #: The page's own weekday-dated dates fall on their weekdays this year
-    #: (`weekdays_agree`).
-    weekdays: bool = False
-
-
-def page_dating(text: str, read_on: date, *, term: bool = False) -> PageDating:
-    """A page's own year (module docstring): a page whose seasons are all
-    earlier ones ("the upcoming 2025/2026 season", a fixtures table scored
-    "2025-26"), or that names no year since last season, is stale."""
-    current = read_on.year if read_on.month >= 7 else read_on.year - 1
-    seasons: set[int] = set()
-    for match in _SEASON.finditer(text):
-        first, second = int(match.group(1)), int(match.group(2)) % 100
-        if second == (first + 1) % 100:
-            seasons.add(first)
-    years = {int(y) for y in _YEAR.findall(text)}
-    names_current = current in seasons or any(year >= current for year in years)
-    if seasons and max(seasons) < current and current not in seasons:
-        return PageDating("the page is about an earlier season", False, term)
-    if years and max(years) < current:
-        return PageDating("the page names no year since last season", False, term)
-    return PageDating(None, names_current, term)
-
-
-#: A page that names this year (the default for a single event checked alone).
-CURRENT_PAGE = PageDating(current=True)
-
-
-def year_problem(event: LlmEvent, read_on: date, dating: PageDating = CURRENT_PAGE) -> str | None:
-    """Why the year of a calendar date cannot be trusted, or None. Pages keep
-    last year's programme online without its year, and "5 March" read in
-    October is then next March to a reader who guesses. So the year must be
-    the one the quote states; a yearless date is never taken from a page
-    about an earlier season (`page_dating`), and needs a second signal: the
-    weekday the quote states must fall on that date in that year *and* the
-    page must name this year or the term, or (with no weekday) it must lie
-    within `YEARLESS_HORIZON` of the day the page was read. A yearless date
-    kept is our inference (`LlmEvent._year_inferred`)."""
-    day = _iso(event.date)
-    if day is None:
-        return None
-    quote = event.when_quote or ""
-    years = {int(y) for y in _YEAR.findall(quote)}
-    if years:
-        return None if day.year in years else "the year differs from the page's"
-    if dating.stale is not None:
-        return dating.stale
-    weekdays = {_WEEKDAYS[m.group(1).lower()[:3]] for m in _WEEKDAY_NAME.finditer(quote)}
-    if weekdays:
-        if day.weekday() not in weekdays:
-            return "the weekday does not fall on that date"
-        if not (dating.current or dating.term or dating.weekdays):
-            return "a yearless date with only its weekday to go on"
-    elif day - read_on > YEARLESS_HORIZON:
-        return "a date without its year or weekday, months ahead"
-    event._year_inferred = True
-    return None
-
-
-#: How many of a page's yearless dates must fall on their stated weekdays
-#: this year for the page's dates to count as this year's (`weekdays_agree`).
-MIN_AGREEING_WEEKDAYS = 3
-
-
-def weekdays_agree(events: Sequence[LlmEvent]) -> bool:
-    """Whether the page's yearless, weekday-dated dates are this year's as a
-    set: at least `MIN_AGREEING_WEEKDAYS` distinct dates fall on the weekday
-    their quote states, more than twice as many as those that do not. A
-    weekday matches by chance one date in seven, so last year's programme
-    (or an old archive) agrees on a few dates at most; a current page with
-    one leftover of last year's ("Friday, 10 October" above this year's
-    Saturday dates) still agrees."""
-    agreeing: set[date] = set()
-    disagreeing: set[date] = set()
-    for event in events:
-        day = _iso(event.date)
-        quote = event.when_quote or ""
-        if day is None or _YEAR.search(quote):
-            continue
-        weekdays = {_WEEKDAYS[m.group(1).lower()[:3]] for m in _WEEKDAY_NAME.finditer(quote)}
-        if not weekdays:
-            continue
-        (agreeing if day.weekday() in weekdays else disagreeing).add(day)
-    return len(agreeing) >= MIN_AGREEING_WEEKDAYS and len(agreeing) > 2 * len(disagreeing)
-
-
 def page_text(page: Page) -> str:
     """The text the model reads and quotes are checked against: the title and
     the page's cleaned text, contacts redacted, cut to `MAX_PROMPT_CHARS`."""
@@ -692,8 +603,10 @@ def read_site(
     memo: LLMMemo | None,
     calendar: TermCalendar,
     now: datetime,
+    budget: CallBudget | None = None,
 ) -> SiteResult:
-    """Every upcoming event one society's website lists (module docstring)."""
+    """Every upcoming event one society's website lists (module docstring).
+    `budget`: the run's model calls for the cards its pages show."""
     out = SiteResult(site)
     window = window_from(now)
     home_result = _home(client, site)
@@ -767,8 +680,166 @@ def read_site(
         if record.external_id not in seen:
             seen.add(record.external_id)
             structured.append(record)
+    if llm is not None:
+        cards = page_card_events(
+            client,
+            pages,
+            site,
+            llm=llm,
+            memo=memo,
+            calendar=calendar,
+            now=now,
+            out=out,
+            budget=budget,
+        )
+        structured += unseen_card_events(current(cards, window, out.tally), structured, out.tally)
     out.events = structured
     return out
+
+
+# --- term cards and posters shown as images ------------------------------------------------------
+
+
+def _card_file(
+    client: PoliteClient, item: PageFile, purpose: FetchPurpose
+) -> TermcardFile | Skipped:
+    """The file a page shows: its original upload (`original_url`), else the
+    copy the page shows when the original is not there."""
+    fetched: TermcardFile | Skipped = Skipped(item.url, "not read")
+    for url in dict.fromkeys([original_url(item.url), item.url]):
+        fetched = fetch_card_file(client, url, purpose)
+        if isinstance(fetched, TermcardFile) or not fetched.reason.startswith(
+            ("not_found", "http_error")
+        ):
+            return fetched
+    return fetched
+
+
+def page_card_events(
+    client: PoliteClient,
+    pages: Sequence[tuple[Page, FetchResult]],
+    site: Site,
+    *,
+    llm: LLMClient,
+    memo: LLMMemo | None,
+    calendar: TermCalendar,
+    now: datetime,
+    out: SiteResult,
+    budget: CallBudget | None = None,
+) -> list[EventObservation]:
+    """The events of the term cards and posters a site's events pages show
+    as images or link as files (module docstring, "Cards on the page")."""
+    today = london_date(now)
+    found: list[EventObservation] = []
+    seen: set[str] = set()
+    for page, result in pages:
+        files = [item for item in card_images(result.text, page.url) if item.key not in seen]
+        seen.update(item.key for item in files)
+        if not files:
+            continue
+        # The cards are the page's content: its AI opt-outs hold unless the
+        # D3 override lifts them, as for its text.
+        reading = ai_reading(client, page, SOCIETY_WEBSITE.bound_to(site.home_url))
+        if reading == "refused":
+            out.tally.drop("a card on a page that keeps AI out", len(files))
+            continue
+        dating = page_dating(page_text(page), london_date(fetched_at(result)))
+        purpose = SOCIETY_WEBSITE.bound_to(page.url)
+        read = 0
+        for item in files:
+            stale = card_stale_reason(item, today)
+            if stale is None and dating.stale is not None and not dated_this_year(item, today):
+                stale = dating.stale
+            if stale is not None:
+                out.tally.drop("an old card or poster")
+                continue
+            if read >= MAX_CARDS_PER_PAGE:
+                out.tally.drop("over the page's limit of cards")
+                continue
+            card = _card_file(client, item, purpose)
+            if isinstance(card, Skipped):
+                out.tally.drop(f"a card not read ({card.reason.split(' (', 1)[0]})")
+                continue
+            read += 1
+            if modified_reason(card.fetch.last_modified, today) is not None:
+                out.tally.drop("an old card or poster")
+                continue
+            hints = CardHints(
+                term_text=" ".join(filter(None, [item.alt, item.label, item.heading, page.title])),
+                page=dating,
+            )
+            if reading == "override":
+                card = replace(card, ai_override=True)
+            try:
+                found += card_events(
+                    card,
+                    org_key=site.org_key,
+                    org_name=site.org_name,
+                    listed_url=page.url,
+                    now=now,
+                    llm=llm,
+                    memo=memo,
+                    calendar=calendar,
+                    notes=out.notes,
+                    hints=hints,
+                    budget=budget,
+                    drops=out.tally,
+                )
+            except OverBudget:
+                out.tally.drop("over the run's budget of card readings")
+                return found
+            except LLMValidationError:
+                out.tally.drop("reply did not validate")
+                continue
+            except NoLLMHost:
+                continue
+            out.cards += 1
+    return found
+
+
+def _timed(record: EventObservation) -> bool:
+    return any(obs.field == "allDay" and obs.value is False for obs in record.fields)
+
+
+def _london_day(record: EventObservation) -> date | None:
+    start = _start(record)
+    return start.astimezone(LONDON).date() if start else None
+
+
+def _title(record: EventObservation) -> str:
+    return next((str(f.value) for f in record.fields if f.field == "title" and f.value), "")
+
+
+def unseen_card_events(
+    cards: Sequence[EventObservation], listed: Sequence[EventObservation], tally: Tally
+) -> list[EventObservation]:
+    """The cards' events the site's own text does not already list: one
+    reading per event (a poster and the term card both show the evening; a
+    timed reading before an all-day one, then the fuller one, then page
+    order), and none that the page's text or structured data lists on the
+    same London day under a similar title — the page's words, its quotes
+    checked, beat a reading off an image (a card's "4:30" read as 04:30 is
+    the page's 16:30). Other sources' readings merge at load
+    (`events.duplicates`)."""
+    best: dict[str, EventObservation] = {}
+    for record in cards:
+        held = best.get(record.external_id)
+        if held is None or (_timed(record), len(record.fields)) > (_timed(held), len(held.fields)):
+            best[record.external_id] = record
+    if len(cards) > len(best):
+        tally.drop("one event on several cards", len(cards) - len(best))
+    by_day: dict[date, list[str]] = {}
+    for record in listed:
+        if (day := _london_day(record)) is not None:
+            by_day.setdefault(day, []).append(_title(record))
+    kept: list[EventObservation] = []
+    for record in best.values():
+        day = _london_day(record)
+        if any(similar_titles(_title(record), title) for title in by_day.get(day, [])):
+            tally.drop("already listed on the page")
+        else:
+            kept.append(record)
+    return kept
 
 
 # --- the stage -----------------------------------------------------------------------------------
@@ -799,6 +870,7 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         ctx.report.notes.append(f"LLM not configured ({error}) — structured data only")
     memo = LLMMemo(settings.cache_dir / "llm")
     calendar = TermCalendar.default()
+    budget = CallBudget(MAX_CARD_CALLS_PER_RUN)
     with PoliteClient(
         user_agent=settings.require_user_agent(),
         cache_dir=settings.cache_dir,
@@ -809,7 +881,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             results = list(
                 pool.map(
-                    lambda site: _safe_read(client, site, llm, memo, calendar, now, ctx), sites
+                    lambda site: _safe_read(client, site, llm, memo, calendar, now, budget),
+                    sites,
                 )
             )
     events = [event for result in results for event in result.events]
@@ -838,8 +911,10 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         f"{total} sites read by enrichment; {len(sites)} read for events, {pages} pages; "
         f"{sum(r.structured for r in results)} structured events, "
         f"{sum(r.llm_calls for r in results)} model reads "
-        f"({sum(r.llm_cached for r in results)} cached); {len(events)} events from "
-        f"{sum(1 for r in results if r.events)} sites"
+        f"({sum(r.llm_cached for r in results)} cached); "
+        f"{sum(r.cards for r in results)} card images read ({budget.used} new vision calls), "
+        f"{sum(1 for e in events if e.event_source == CARD_SOURCE)} events from them; "
+        f"{len(events)} events from {sum(1 for r in results if r.events)} sites"
         + (f", {len(carried)} carried forward" if carried else "")
     )
     if tally.dropped:
@@ -857,10 +932,12 @@ def _safe_read(
     memo: LLMMemo | None,
     calendar: TermCalendar,
     now: datetime,
-    ctx: StageContext,
+    budget: CallBudget,
 ) -> SiteResult:
     try:
-        return read_site(client, site, llm=llm, memo=memo, calendar=calendar, now=now)
+        return read_site(
+            client, site, llm=llm, memo=memo, calendar=calendar, now=now, budget=budget
+        )
     except Exception as error:  # one broken site must not end the stage
         logger.exception("events of %s failed", site.org_key)
         result = SiteResult(site)
@@ -870,7 +947,13 @@ def _safe_read(
 
 def _dry_run(ctx: StageContext, sites: list[Site], now: datetime) -> None:
     """Offline: which pages would be read, from the cache only."""
-    pages = structured = 0
+    pages = structured = cards = 0
+    today = london_date(now)
+
+    def count_cards(html: str, url: str) -> int:
+        found = card_images(html, url)
+        return sum(1 for item in found if card_stale_reason(item, today) is None)
+
     with ctx.crawler() as client:
         for site in sites:
             cached = next(
@@ -884,36 +967,40 @@ def _dry_run(ctx: StageContext, sites: list[Site], now: datetime) -> None:
             if cached is None:
                 continue
             home = parse_page(cached.final_url or site.home_url, cached.text)
-            pages += home_lists_events(home)
+            if home_lists_events(home):
+                pages += 1
+                cards += count_cards(cached.text, home.url)
             structured += len(structured_events(home))
-            for url in event_pages(home, today=london_date(now)):
+            for url in event_pages(home, today=today):
                 page = client.cached(url, SOCIETY_WEBSITE)
                 if page is not None:
                     pages += 1
                     structured += len(structured_events(parse_page(url, page.text)))
+                    cards += count_cards(page.text, page.final_url or url)
     ctx.report.notes.append(
         f"dry run: {len(sites)} sites, {pages} cached events pages, "
-        f"{structured} structured events; the model is not asked"
+        f"{structured} structured events, {cards} term cards or posters shown; "
+        "the model is not asked"
     )
 
 
 __all__ = [
     "HORIZON",
+    "MAX_CARDS_PER_PAGE",
+    "MAX_CARD_CALLS_PER_RUN",
     "MAX_EVENT_PAGES",
-    "PageDating",
     "Site",
     "SiteResult",
     "current",
-    "dated_quote",
     "event_pages",
     "home_lists_events",
-    "page_dating",
+    "page_card_events",
     "page_text",
     "read_site",
     "run",
     "sites_from",
     "structured_draft",
     "structured_events",
+    "unseen_card_events",
     "window_from",
-    "year_problem",
 ]

@@ -81,7 +81,8 @@ class Page:
     obfuscated_emails: int = 0
 
 
-def _region(node: LexborNode) -> str:
+def region_of(node: LexborNode) -> str:
+    """Where on the page `node` sits: ``nav``, ``header``, ``footer`` or ``main``."""
     current: LexborNode | None = node.parent
     while current is not None and current.tag not in ("body", "html"):
         tag = current.tag
@@ -159,7 +160,7 @@ def parse_page(url: str, html: str) -> Page:
         if href.lower().startswith("mailto:"):
             found = _mailto(href)
             emails += found
-            if _region(anchor) == "main":
+            if region_of(anchor) == "main":
                 main_emails += found
             continue
         absolute = urljoin(url, href)
@@ -168,7 +169,7 @@ def parse_page(url: str, html: str) -> Page:
         text = _SPACES.sub(" ", anchor.text(separator=" ", strip=True)).strip()
         if not text:
             text = anchor.attributes.get("aria-label") or anchor.attributes.get("title") or ""
-        region = _region(anchor)
+        region = region_of(anchor)
         if (absolute, region) in seen_links:
             continue
         seen_links.add((absolute, region))
@@ -279,4 +280,4 @@ def detect_platform(url: str, html: str) -> str | None:
     return None
 
 
-__all__ = ["Link", "Page", "detect_platform", "parse_page"]
+__all__ = ["Link", "Page", "detect_platform", "parse_page", "region_of", "robots_directives"]

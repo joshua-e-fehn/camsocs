@@ -28,6 +28,7 @@ Honesty rules enforced here, not left to prompts:
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -479,6 +480,27 @@ class Extraction:
     cached: bool
 
 
+class OverBudget(RuntimeError):
+    """The run's budget of model calls is spent (`CallBudget`)."""
+
+
+class CallBudget:
+    """At most `limit` model calls in a run, shared by the threads of a stage;
+    a reply served from the cache (`extract.memo`) costs nothing."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.used = 0
+        self._lock = threading.Lock()
+
+    def take(self) -> bool:
+        with self._lock:
+            if self.used >= self.limit:
+                return False
+            self.used += 1
+            return True
+
+
 def extract_events(
     llm: LLMClient,
     memo: LLMMemo | None,
@@ -488,15 +510,19 @@ def extract_events(
     text: str,
     tier: Tier = "bulk",
     images: tuple[bytes, ...] = (),
+    budget: CallBudget | None = None,
 ) -> Extraction:
     """Ask the model for `LlmEvents` about `text` (and `images`, with the
     strong tier), reusing a cached reply for identical inputs. Raises
-    `LLMValidationError` when the reply does not validate after one retry."""
+    `LLMValidationError` when the reply does not validate after one retry,
+    and `OverBudget` instead of a call `budget` has no room for."""
     key = memo_key(prompt_version, tier, llm.model_for(tier), text, *images)
     if memo is not None:
         cached = memo.get(prompt_version, key, LlmEvents)
         if cached is not None:
             return Extraction(cached[0], cached[1], True)
+    if budget is not None and not budget.take():
+        raise OverBudget(f"the run's {budget.limit} model calls are spent")
     user = vision_message(text, images) if images else {"role": "user", "content": text}
     call = llm.complete_json(
         schema=LlmEvents,
@@ -520,11 +546,13 @@ def quote_supported(quote: str | None, source_text: str) -> bool:
 __all__ = [
     "PROMPTS_DIR",
     "SPEAKER_EVENT_TYPES",
+    "CallBudget",
     "EventContext",
     "Extraction",
     "LlmEvent",
     "LlmEvents",
     "LlmSpeaker",
+    "OverBudget",
     "build_event",
     "build_events",
     "external_id",
