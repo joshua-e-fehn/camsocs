@@ -15,6 +15,8 @@ Camdram, Sport, termcards, mail, SU What's On, calendar feeds, talks.cam):
 A **title** that cannot be made safe takes its event (or session) with it:
 none of its claims is posted (`RedactionStats.dropped`), because a title is
 required and a withheld one would leave the last published title standing.
+So does a title that was nothing but a person's name: redacted, it is only
+role and neutral words ("Sophie Example" → "someone") and says nothing.
 
 The speakers an event publishes (`events.speakers`) are public and stay
 named, both in that field and in its description — but never a name that is
@@ -942,6 +944,9 @@ class Redactor:
             return Redaction(original, None, "withheld", result.redactions)
         names = [name for name, _ in result.redactions] + list(request.private)
         final = strip_named_links(result.text, names) if names else result.text
+        if request.title and result.redactions and allowed_replacement(final):
+            # The title was a name and nothing else: "someone" is no title.
+            return Redaction(original, None, "withheld", result.redactions)
         return Redaction(original, final, result.method, result.redactions)
 
     def _redact(self, request: RedactRequest) -> Redaction:

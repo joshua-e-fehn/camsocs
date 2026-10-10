@@ -592,6 +592,35 @@ def test_an_event_title_is_redacted_and_an_unsafe_one_drops_the_event() -> None:
     assert stats.dropped == ["evt-b"]
 
 
+def test_a_title_that_is_only_a_name_drops_the_event() -> None:
+    # A card's row titled with a person's name alone (the German Society's
+    # 2026-10-10 card): redacted, it would be published as "someone".
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        if "Fireside" in text:
+            return reply("Fireside chat with someone", ("Bo Quokkason", "someone"))
+        return reply("someone", ("Ann Example", "someone"))
+
+    claims = [
+        event_claim("title", "Ann Example", key="evt-a"),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-a"),
+        event_claim("title", "Fireside chat with Bo Quokkason", key="evt-b"),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-b"),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    titles = {c.entity_key: c.value for c in posted if c.field == "title"}
+    assert titles == {"evt-b": "Fireside chat with someone"}
+    assert stats.dropped == ["evt-a"]
+    # Without a model the rule replaces a known name with "someone" too.
+    rule_only = [
+        event_claim("title", "Ann Example", key="evt-c"),
+        event_claim("startsAt", 1_791_000_000_000, key="evt-c"),
+    ]
+    posted, stats = redact_claims(  # type: ignore[arg-type]
+        rule_only, Redactor(), private={"evt-c": ("Ann Example",)}
+    )
+    assert posted == [] and stats.dropped == ["evt-c"]
+
+
 def test_venues_prices_and_chat_notes_are_redacted_too() -> None:
     from camsocs_pipeline.extract.redact import PUBLIC_TEXT_FIELDS
 
