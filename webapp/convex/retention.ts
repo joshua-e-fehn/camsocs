@@ -3,6 +3,7 @@ import { REVIEW_STATUSES } from "../lib/vocab"
 import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
+import { ORIGINAL_TEXT_FIELDS } from "./ingest/claims"
 import { DAY_MS, londonIsoDate } from "./lib/derived"
 import { loadTerms, refreshOrganisation } from "./lib/entityStore"
 
@@ -18,8 +19,11 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  *    after they ended, and their stored images once nothing else shows them;
  *    their organisers are re-derived.
  *  - R4 `stripMailBodies`: the body (text, stored HTML, attachments) of a
- *    processed mailing-list mail 30 days after receipt; `purgeMail` the whole
- *    row 90 days after receipt, processed or not.
+ *    processed mailing-list mail 30 days after receipt, and with it the
+ *    mail's words in its events' claims (quotes and originals of claims
+ *    sourced `inbound:<message-id>`); `purgeMail` the row 90 days after
+ *    receipt, processed or not — a mail its events cite is reduced to a stub
+ *    (message id, list, receipt time, organisation, event keys) instead.
  *  - R5 `expirePeople`: once `staleAfter` (the handover) has passed, the
  *    broker's own rows are archived (out of the active lists) for a 30-day
  *    grace in which the broker may extend `staleAfter`; 30 days after it,
@@ -30,8 +34,10 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  *  - R6 `purgeInteractions`: interactions three years old whose organisation
  *    has had none since, and introductions three years old.
  *  - R8 `purgeRequests`: rejected listing requests 90 days after they were
- *    rejected, the rest two years after resolution. Open requests stay until
- *    handled. Suppressions are never deleted.
+ *    rejected, the rest two years after resolution — an accepted correction,
+ *    which its owner claims cite, is reduced to a stub without the submitter's
+ *    address, message or fields. Open requests stay until handled.
+ *    Suppressions are never deleted.
  *  - R10 `purgeRuns`: run-log rows a year old.
  *
  * Not automated (retention.md says why): R1 listings and R2 their provenance
@@ -158,7 +164,10 @@ async function deleteEvent(
 
 /** Deletes a stored file (and its `storedFiles` row, so the files route never
  * hands out a dead id) unless an event or a logo still shows it. */
-async function deleteFileIfUnused(ctx: MutationCtx, storageId: Id<"_storage">): Promise<void> {
+export async function deleteFileIfUnused(
+  ctx: MutationCtx,
+  storageId: Id<"_storage">,
+): Promise<void> {
   const event = await ctx.db
     .query("events")
     .withIndex("by_imageStorageId", (q) => q.eq("image.storageId", storageId))
@@ -216,6 +225,7 @@ export const stripMailBodies = internalMutation({
         bodyDeletedAt: now,
         updatedAt: now,
       })
+      await clearMailQuotes(ctx, mail)
       deleted++
     }
     const next = page.isDone
@@ -227,6 +237,31 @@ export const stripMailBodies = internalMutation({
     return { processed: page.page.length, deleted, done: next === null }
   },
 })
+
+/** The mail's words in its events' claims go with its body (R4): the quotes
+ * and originals of every claim sourced to it (`inbound:<message-id>`); each
+ * value and its quote check stay. */
+async function clearMailQuotes(ctx: MutationCtx, mail: Doc<"inboundEmails">): Promise<void> {
+  const sourceUrl = `inbound:${mail.messageId}`
+  for (const eventKey of mail.extractedEventKeys) {
+    for (const reviewStatus of REVIEW_STATUSES) {
+      const claims = await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_review", (q) =>
+          q.eq("entityType", "event").eq("entityKey", eventKey).eq("reviewStatus", reviewStatus),
+        )
+        .take(500)
+      for (const claim of claims) {
+        if (claim.sourceUrl !== sourceUrl) continue
+        if (claim.evidenceQuote === undefined && claim.valueRaw === undefined) continue
+        await ctx.db.patch("fieldClaims", claim._id, {
+          evidenceQuote: undefined,
+          valueRaw: undefined,
+        })
+      }
+    }
+  }
+}
 
 const ALL_EXTRACTIONS = ["pending", ...PROCESSED] as const
 
@@ -244,9 +279,28 @@ export const purgeMail = internalMutation({
         q.eq("extraction", extraction).lt("receivedAt", cutoff),
       )
       .paginate({ numItems: PAGE.mail, cursor: args.cursor ?? null })
+    let deleted = 0
     for (const mail of page.page) {
+      if (mail.purgedAt !== undefined) continue
       await deleteMailFiles(ctx, mail)
-      await ctx.db.delete("inboundEmails", mail._id)
+      if (mail.extractedEventKeys.length > 0) {
+        // Its events cite it (`inbound:<message-id>`): a stub stays, with
+        // nothing of the person who sent it or of what it said.
+        await clearMailQuotes(ctx, mail)
+        await ctx.db.patch("inboundEmails", mail._id, {
+          from: "",
+          subject: "",
+          text: "",
+          htmlStorageId: undefined,
+          attachments: [],
+          extractionNote: undefined,
+          purgedAt: now,
+          updatedAt: now,
+        })
+      } else {
+        await ctx.db.delete("inboundEmails", mail._id)
+      }
+      deleted++
     }
     const next = page.isDone
       ? statusIndex + 1 < ALL_EXTRACTIONS.length
@@ -254,7 +308,7 @@ export const purgeMail = internalMutation({
         : null
       : { now, cursor: page.continueCursor, status: statusIndex }
     if (next) await ctx.scheduler.runAfter(0, internal.retention.purgeMail, next)
-    return { processed: page.page.length, deleted: page.page.length, done: next === null }
+    return { processed: page.page.length, deleted, done: next === null }
   },
 })
 
@@ -388,8 +442,20 @@ export const purgeRequests = internalMutation({
       .paginate({ numItems: PAGE.rows, cursor: args.cursor ?? null })
     let deleted = 0
     for (const row of page.page) {
-      if ((row.resolvedAt ?? row.createdAt) >= cutoff) continue
-      await ctx.db.delete("listingRequests", row._id)
+      if ((row.resolvedAt ?? row.createdAt) >= cutoff || row.purgedAt !== undefined) continue
+      if (row.status === "accepted" && (row.outcome?.appliedFields?.length ?? 0) > 0) {
+        // Its owner_submitted claims cite it (`request:<key>`): a stub stays —
+        // what was accepted, for which listing and in what role, when — with
+        // nothing of the person who sent it.
+        await ctx.db.patch("listingRequests", row._id, {
+          submitterEmail: "",
+          message: "",
+          fields: undefined,
+          purgedAt: now,
+        })
+      } else {
+        await ctx.db.delete("listingRequests", row._id)
+      }
       deleted++
     }
     const next = page.isDone
@@ -399,6 +465,37 @@ export const purgeRequests = internalMutation({
       : { now, cursor: page.continueCursor, status: statusIndex }
     if (next) await ctx.scheduler.runAfter(0, internal.retention.purgeRequests, next)
     return { processed: page.page.length, deleted, done: next === null }
+  },
+})
+
+// --- R2 / DPIA R-12: originals of superseded free text -------------------------------------
+
+/**
+ * Clears `valueRaw` on every superseded free-text claim, a page of the claim
+ * log at a time. Since 2026-10-10 the ingestion clears it when it supersedes
+ * a claim (`ingest/claims.ts`); this walk is for claims superseded before
+ * that. Run by hand: `bunx convex run retention:clearSupersededOriginals '{}'`.
+ */
+export const clearSupersededOriginals = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.object({ processed: v.number(), cleared: v.number(), done: v.boolean() }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("fieldClaims")
+      .paginate({ numItems: 100, cursor: args.cursor ?? null })
+    let cleared = 0
+    for (const claim of page.page) {
+      if (claim.reviewStatus !== "superseded" || claim.valueRaw === undefined) continue
+      if (!ORIGINAL_TEXT_FIELDS[claim.entityType].has(claim.field)) continue
+      await ctx.db.patch("fieldClaims", claim._id, { valueRaw: undefined })
+      cleared++
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.retention.clearSupersededOriginals, {
+        cursor: page.continueCursor,
+      })
+    }
+    return { processed: page.page.length, cleared, done: page.isDone }
   },
 })
 

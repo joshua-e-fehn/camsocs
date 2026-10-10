@@ -267,6 +267,8 @@ function describeSuppression(entry: BrokerSuppression): string {
   }
   if (entry.scope === "person") return entry.personName ?? "A named person"
   if (entry.scope === "contact") return "A contact address (stored as a hash)"
+  if (entry.scope === "name") return "A person's name (stored as a hash)"
+  if (entry.scope === "event" && entry.eventKey) return `Event ${entry.eventKey}`
   return SUPPRESSION_SCOPE_LABELS[entry.scope]
 }
 

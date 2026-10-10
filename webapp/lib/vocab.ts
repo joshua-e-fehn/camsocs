@@ -394,7 +394,14 @@ export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
 /** What a suppression covers — an accepted removal or objection (retention.md
  * R8): a whole listing, one field of it, one contact address (stored only as a
  * sha256), or one named person in the broker tables. */
-export const SUPPRESSION_SCOPES = ["organisation", "field", "contact", "person"] as const
+export const SUPPRESSION_SCOPES = [
+  "organisation",
+  "field",
+  "contact",
+  "person",
+  "event",
+  "name",
+] as const
 export type SuppressionScope = (typeof SUPPRESSION_SCOPES)[number]
 
 // --- broker (data-model §4) --------------------------------------------------------
@@ -766,6 +773,8 @@ export const SUPPRESSION_SCOPE_LABELS: Record<SuppressionScope, string> = {
   field: "One field",
   contact: "A contact address",
   person: "A named person (broker contacts)",
+  event: "One or more events",
+  name: "A person's name, in any public text",
 }
 
 /** What a visitor sees for each organisation field (missing-field lists and

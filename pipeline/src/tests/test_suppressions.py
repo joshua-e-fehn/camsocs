@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 import respx
@@ -20,8 +21,8 @@ from camsocs_pipeline.models.observation import (
     OrganiserObs,
     RelObs,
 )
-from camsocs_pipeline.models.wire import SuppressionList
-from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader, plan_observations
+from camsocs_pipeline.models.wire import ClaimInput, EventOrganiserSet, SuppressionList
+from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader, LoadPlan, plan_observations
 from camsocs_pipeline.suppressions import (
     REDACTED,
     Suppressions,
@@ -253,3 +254,50 @@ def test_an_event_with_an_unresolved_organiser_stays_without_the_suppressed_one(
     apply_suppressions(plan, Suppressions(organisations=frozenset({"org-chess"})))
     assert [s.organisers for s in plan.event_organisers] == [[]]
     assert {c.field for c in plan.claims} >= {"title", "startsAt"}
+
+
+#: Shared with webapp/convex/suppressions.test.ts: one name, one hash on both sides.
+NAME_HASH = "93db1c9b776578519dcba3ae13c01ce85d7baf40a6e4d3de3b7f20973bec4774"
+
+
+def test_events_and_names_removed_on_request_are_never_posted() -> None:
+    from camsocs_pipeline.suppressions import Suppressions, apply_suppressions, name_hash
+
+    assert name_hash("Anna-Lena Ó Bríen") == NAME_HASH
+    suppressions = Suppressions.from_wire(
+        SuppressionList(events=["evt-gone"], name_hashes=[name_hash("Anna Example")])
+    )
+
+    def event_claim(key: str, field: str, value: Any) -> ClaimInput:
+        return ClaimInput(
+            entity_type="event",
+            entity_key=key,
+            field=field,
+            value=value,
+            evidence="primary",
+            method="parser",
+            extractor="t",
+            source_key="src-x",
+            source_url="https://x.example/",
+            source_type="ics_feed",
+            retrieved_at=0,
+        )
+
+    plan = LoadPlan(
+        claims=[
+            event_claim("evt-gone", "title", "Quiz"),
+            event_claim("evt-kept", "title", "Talk by ANNA EXAMPLE"),
+            event_claim("evt-kept", "speakers", [{"name": "Anna Example"}, {"name": "Bo Ex"}]),
+            event_claim("evt-solo", "speakers", [{"name": "Anna Example"}]),
+        ],
+        event_organisers=[
+            EventOrganiserSet(event_key="evt-gone", organisers=[]),
+        ],
+    )
+    report = apply_suppressions(plan, suppressions)
+    by = {(c.entity_key, c.field): c.value for c in plan.claims}
+    assert ("evt-gone", "title") not in by and plan.event_organisers == []
+    assert by[("evt-kept", "title")] == "Talk by [name removed]"
+    assert by[("evt-kept", "speakers")] == [{"name": "Bo Ex"}]
+    assert ("evt-solo", "speakers") not in by
+    assert report.counts["events"] == 1

@@ -25,7 +25,13 @@ import {
   teamPublicValidator,
   withoutSuppressed,
 } from "./lib/projections"
-import { MAX_SUPPRESSIONS } from "./lib/suppressions"
+import {
+  loadContactHashes,
+  loadNameHashes,
+  loadSuppressedEvents,
+  MAX_SUPPRESSIONS,
+  scrubAddresses,
+} from "./lib/suppressions"
 import { getViewer, visibleEventTiers } from "./lib/viewer"
 
 /**
@@ -81,8 +87,12 @@ export const list = query({
     const size = Math.max(1, Math.min(MAX_PAGE_SIZE, Math.floor(paginationOpts.numItems) || 1))
     const slice = matching.slice(offset, offset + size)
     const end = offset + slice.length
+    const contacts = await loadContactHashes(ctx)
+    const names = await loadNameHashes(ctx)
     return {
-      page: await Promise.all(slice.map((card) => orgCardPublic(ctx, card))),
+      page: await Promise.all(
+        slice.map(async (card) => scrubAddresses(await orgCardPublic(ctx, card), contacts, names)),
+      ),
       isDone: end >= matching.length,
       continueCursor: String(end),
     }
@@ -189,7 +199,10 @@ export const getBySlug = query({
         .withIndex("by_org_startsAt", (i) => i.eq("orgKey", org.key).gte("startsAt", from))
         .take(UPCOMING_EVENTS * 3),
     ])
-    const links = [...running.filter((link) => link.startsAt < from), ...upcoming]
+    const removed = await loadSuppressedEvents(ctx)
+    const links = [...running.filter((link) => link.startsAt < from), ...upcoming].filter(
+      (link) => !removed.has(link.eventKey),
+    )
     const lookup = orgRefCache(ctx)
     const withdrawn = withdrawnCheck(ctx, Date.now())
     const events: EventListItem[] = []
@@ -206,35 +219,40 @@ export const getBySlug = query({
         events.push(await eventListItem(event, lookup))
       }
     }
+    const contacts = await loadContactHashes(ctx)
+    const names = await loadNameHashes(ctx)
 
     const suppressed = await ctx.db
       .query("suppressions")
       .withIndex("by_orgKey", (i) => i.eq("orgKey", org.key))
       .take(MAX_SUPPRESSIONS)
     if (suppressed.some((row) => row.scope === "organisation")) return null
-    const contacts = await ctx.db
-      .query("suppressions")
-      .withIndex("by_scope", (i) => i.eq("scope", "contact"))
-      .take(MAX_SUPPRESSIONS)
     const projected = withoutSuppressed(
       await orgPublic(ctx, org),
       new Set(suppressed.flatMap((row) => (row.scope === "field" && row.field ? [row.field] : []))),
-      new Set(contacts.flatMap((row) => (row.valueHash ? [row.valueHash] : []))),
+      contacts,
     )
 
-    return {
-      org: projected,
-      teams: teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(teamPublic),
-      sessions: sessions
-        .sort(
-          (a, b) =>
-            (a.dayOfWeek ?? 7) - (b.dayOfWeek ?? 7) ||
-            (a.startTime ?? "").localeCompare(b.startTime ?? ""),
-        )
-        .map(sessionPublic),
-      events,
-      relationships: await publicRelationships(ctx, org.key, lookup),
-    }
+    // Every text, conflict reading and session or event of the listing: no
+    // address or name removed on request, wherever it was quoted
+    // (lib/suppressions.ts).
+    return scrubAddresses(
+      {
+        org: projected,
+        teams: teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(teamPublic),
+        sessions: sessions
+          .sort(
+            (a, b) =>
+              (a.dayOfWeek ?? 7) - (b.dayOfWeek ?? 7) ||
+              (a.startTime ?? "").localeCompare(b.startTime ?? ""),
+          )
+          .map(sessionPublic),
+        events,
+        relationships: await publicRelationships(ctx, org.key, lookup),
+      },
+      contacts,
+      names,
+    )
   },
 })
 

@@ -27,6 +27,11 @@ const suppressionRow = v.object({
   /** The person's name while the broker row exists (it is deleted on
    * suppression, so usually absent). */
   personName: v.optional(v.string()),
+  /** Scope event: the event removed. */
+  eventKey: v.optional(v.string()),
+  /** Scope name: the name is stored only as a hash, so this says only that
+   * there is one. */
+  name: v.boolean(),
   requestKey: v.optional(v.string()),
   requestKind: v.optional(literalUnion(LISTING_REQUEST_KINDS)),
   createdAt: v.number(),
@@ -58,7 +63,9 @@ export const list = query({
         scope: row.scope,
         orgKey: row.orgKey,
         field: row.field,
-        contact: row.valueHash !== undefined,
+        contact: row.scope === "contact" && row.valueHash !== undefined,
+        name: row.scope === "name",
+        eventKey: row.eventKey,
         personKey: row.personKey,
         personName: person?.name,
         requestKey: row.requestKey,

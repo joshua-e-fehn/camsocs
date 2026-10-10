@@ -240,3 +240,28 @@ def test_a_dry_run_harvest_runs_every_stage_in_order_and_writes_no_report(
     assert ran == ["term_dates", "resolve", "load"]
     assert "dry run: no coverage report" in result.output
     assert not settings.reports_dir.exists() or not list(settings.reports_dir.glob("*.md"))
+
+
+def test_what_quotes_list_mail_goes_after_thirty_days(tmp_path: Path):
+    cache = tmp_path / "cache"
+    mail_replies = cache / "llm" / "email_events_v1"
+    pages = cache / "llm" / "org_v1"
+    mail_replies.mkdir(parents=True)
+    pages.mkdir(parents=True)
+    for path in (mail_replies / "old.json", mail_replies / "new.json", pages / "mid.json"):
+        path.write_text("x")
+    age(mail_replies / "old.json", 40)
+    age(mail_replies / "new.json", 5)
+    age(pages / "mid.json", 40)
+    result = prune_cache(cache, timedelta(days=90), now=NOW)
+    assert result.files == {"llm": 1}
+    assert not (mail_replies / "old.json").exists() and (pages / "mid.json").exists()
+
+    staging = tmp_path / "staging"
+    mail = staging / "mailing_list_email"
+    mail.mkdir(parents=True)
+    latest = mail / "20260901T000000Z-aaaaaa--inbox.jsonl"
+    latest.write_text("{}\n")
+    age(latest, 40)
+    # The latest file of the mail's staging goes too: inbox posted it already.
+    assert prune_staging(staging, timedelta(days=90), now=NOW).files == {"staging": 1}

@@ -170,7 +170,9 @@ meta and last-failure note go together, once all are older), LLM replies under
     feed ids, edges, inferences, owned source rows, organiser links; an event it alone
     organised), no value for a suppressed field, no suppressed address (dropped from `email`,
     `roleEmails` and mailing lists, cut out of free text as `[address removed]`; addresses are
-    known only as sha256 hashes), no suppressed broker person. A truncated list stops the
+    known only as sha256 hashes), no suppressed broker person, nothing about a suppressed
+    event, and no suppressed name (cut out of every text as `[name removed]`, a speaker of
+    that name dropped; names are known only as sha256 hashes). A truncated list stops the
     load; an undeployed route filters nothing and the notes say so. Convex refuses whatever
     slips through. The `inbox` stage's posts go through the same filter.
   - **Idempotent.** Each organisation's feed identifiers travel as one merged `orgInternal`

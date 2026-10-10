@@ -170,6 +170,33 @@ describe("the claim log", () => {
     ])
   })
 
+  test("a superseded free-text reading keeps no unredacted original (DPIA R-12)", async () => {
+    const t = newTest()
+    await ingest(t, [
+      claim("name", "CU Test Society"),
+      claim("description", "Ask our President.", { valueRaw: "Ask our President, Anna." }),
+      claim("website", "https://cutest.org/", { valueRaw: "cutest.org" }),
+    ])
+    await ingest(
+      t,
+      [
+        claim("description", "Ask our Secretary.", {
+          valueRaw: "Ask our Secretary, Ben.",
+          retrievedAt: NOW,
+        }),
+        claim("website", "https://www.cutest.org/", { retrievedAt: NOW }),
+      ],
+      "run-2",
+    )
+    const claims = await t.run(async (ctx) => await ctx.db.query("fieldClaims").collect())
+    const byValue = Object.fromEntries(claims.map((c) => [String(c.value), c]))
+    expect(byValue["Ask our President."]).toMatchObject({ reviewStatus: "superseded" })
+    expect(byValue["Ask our President."].valueRaw).toBeUndefined()
+    expect(byValue["Ask our Secretary."].valueRaw).toBe("Ask our Secretary, Ben.")
+    // Not free text: its original stays.
+    expect(byValue["https://cutest.org/"].valueRaw).toBe("cutest.org")
+  })
+
   test("an older reading posted late is stored already superseded", async () => {
     const t = newTest()
     await ingest(t, [claim("name", "CU Test Society"), claim("email", "new@cutest.org")])

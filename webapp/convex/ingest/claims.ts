@@ -355,9 +355,37 @@ async function appendClaim(
   const newerExists = await supersedeOthers(ctx, row)
   await ctx.db.insert("fieldClaims", {
     ...row,
+    ...(newerExists ? withoutOriginal(row.entityType, row.field) : {}),
     reviewStatus: newerExists ? "superseded" : "accepted",
   })
   return "inserted"
+}
+
+/**
+ * Public free text (decision D1) whose claims carry the unredacted original
+ * in `valueRaw`. A superseded reading's original is cleared (DPIA R-12): the
+ * names it held do not outlive the reading that replaced it.
+ */
+export const ORIGINAL_TEXT_FIELDS: Record<EntityType, ReadonlySet<string>> = {
+  organisation: new Set([
+    "shortDescription",
+    "description",
+    "howToJoin",
+    "timeCommitment",
+    "accessibilityNote",
+    "membership",
+    "trials",
+    "sport.kitCostNote",
+    "chatChannels",
+  ]),
+  event: new Set(["title", "description", "venueText", "price"]),
+  session: new Set(["title", "venueText", "note"]),
+  team: new Set(),
+  venue: new Set(),
+}
+
+function withoutOriginal(entityType: EntityType, field: string): { valueRaw?: undefined } {
+  return ORIGINAL_TEXT_FIELDS[entityType].has(field) ? { valueRaw: undefined } : {}
 }
 
 /**
@@ -386,7 +414,10 @@ async function supersedeOthers(
   )
   if (same.some((claim) => claim.lastSeenAt > row.retrievedAt)) return true
   for (const claim of same) {
-    await ctx.db.patch("fieldClaims", claim._id, { reviewStatus: "superseded" })
+    await ctx.db.patch("fieldClaims", claim._id, {
+      reviewStatus: "superseded",
+      ...withoutOriginal(claim.entityType, claim.field),
+    })
   }
   return false
 }

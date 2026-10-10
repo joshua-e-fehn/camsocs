@@ -414,6 +414,8 @@ SUPPRESSION_SCOPES: tuple[str, ...] = (
     "field",
     "contact",
     "person",
+    "event",
+    "name",
 )
 
 CONSENT_BASES: tuple[str, ...] = (

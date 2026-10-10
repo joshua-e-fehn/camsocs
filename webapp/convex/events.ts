@@ -13,6 +13,12 @@ import {
   eventPublicValidator,
   orgRefCache,
 } from "./lib/projections"
+import {
+  loadContactHashes,
+  loadNameHashes,
+  loadSuppressedEvents,
+  scrubAddresses,
+} from "./lib/suppressions"
 import { literalUnion } from "./lib/validators"
 import { getViewer, visibleEventTiers } from "./lib/viewer"
 
@@ -181,8 +187,16 @@ export const list = query({
     const tiers = visibleEventTiers(await getViewer(ctx))
     const lookup = orgRefCache(ctx)
     const events = await matchingEvents(ctx, args, tiers, lookup)
+    const [contacts, names, removed] = await Promise.all([
+      loadContactHashes(ctx),
+      loadNameHashes(ctx),
+      loadSuppressedEvents(ctx),
+    ])
     const out: EventListItem[] = []
-    for (const event of events) out.push(await eventListItem(event, lookup))
+    for (const event of events) {
+      if (removed.has(event.key)) continue
+      out.push(scrubAddresses(await eventListItem(event, lookup), contacts, names))
+    }
     return out
   },
 })
@@ -240,6 +254,14 @@ export const get = query({
     const lookup = orgRefCache(ctx)
     if (!(await hostsListed(event, lookup))) return null
     if (await withdrawnCheck(ctx, Date.now())(event)) return null
-    return await eventPublic(ctx, event, lookup)
+    // An event, an address or a name removed on request never shows, even
+    // before the walk that sets its claims aside reaches this event
+    // (lib/suppressions.ts).
+    if ((await loadSuppressedEvents(ctx)).has(event.key)) return null
+    return scrubAddresses(
+      await eventPublic(ctx, event, lookup),
+      await loadContactHashes(ctx),
+      await loadNameHashes(ctx),
+    )
   },
 })

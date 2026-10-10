@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
 import {
   type BrokerListingRequest,
   runWithToast,
@@ -238,6 +239,12 @@ export function AcceptRemovalDialog({
   )
   const [address, setAddress] = useState("")
   const [personKeys, setPersonKeys] = useState<string[]>([])
+  const [eventKeysText, setEventKeysText] = useState("")
+  const [name, setName] = useState("")
+  const eventKeys = eventKeysText
+    .split(/[\s,]+/)
+    .map((key) => key.trim())
+    .filter(Boolean)
   const [saving, setSaving] = useState(false)
   const detail = useBrokerOrgDetail(open && scope === "person" ? (request.orgKey ?? null) : null)
   const people = detail?.people ?? []
@@ -246,7 +253,9 @@ export function AcceptRemovalDialog({
     scope === "organisation" ||
     (scope === "field" && fields.length > 0) ||
     (scope === "contact" && address.trim().includes("@")) ||
-    (scope === "person" && personKeys.length > 0)
+    (scope === "person" && personKeys.length > 0) ||
+    (scope === "event" && eventKeys.length > 0) ||
+    (scope === "name" && name.trim().split(/\s+/).length >= 2)
 
   const toggle = (list: string[], value: string, on: boolean) =>
     on ? [...new Set([...list, value])] : list.filter((item) => item !== value)
@@ -262,6 +271,8 @@ export function AcceptRemovalDialog({
         ...(scope === "field" ? { fields } : {}),
         ...(scope === "contact" ? { address: address.trim() } : {}),
         ...(scope === "person" ? { personKeys } : {}),
+        ...(scope === "event" ? { eventKeys } : {}),
+        ...(scope === "name" ? { name: name.trim() } : {}),
       }),
       scope === "organisation" ? "Listing removed and suppressed" : "Suppressed",
     )
@@ -366,6 +377,40 @@ export function AcceptRemovalDialog({
                 ))
               )}
             </FieldSet>
+          )}
+
+          {scope === "event" && (
+            <Field>
+              <FieldLabel htmlFor="suppress-events">Event keys</FieldLabel>
+              <Textarea
+                id="suppress-events"
+                value={eventKeysText}
+                onChange={(e) => setEventKeysText(e.target.value)}
+                className="font-mono text-sm"
+                placeholder="evt-…"
+                rows={3}
+              />
+              <FieldDescription>
+                One or more, from the event&apos;s link (<code>?event=evt-…</code>). Each is deleted
+                now and never recorded again.
+              </FieldDescription>
+            </Field>
+          )}
+          {scope === "name" && (
+            <Field>
+              <FieldLabel htmlFor="suppress-name">Name, as published</FieldLabel>
+              <Input
+                id="suppress-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="off"
+              />
+              <FieldDescription>
+                First and last name. Cut out of every public text — descriptions, event titles,
+                speakers — on every listing and event, and refused from now on. Stored only as a
+                hash.
+              </FieldDescription>
+            </Field>
           )}
 
           <DialogFooter>

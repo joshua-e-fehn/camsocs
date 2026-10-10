@@ -368,7 +368,7 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
 | `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
 | `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status, the latest `coverage` snapshot, the latest resolve stage's `quarantine` counts), `refreshCoverage` (schedules the fold now) |
-| `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?})` (remove / object → suppressions, enforced at once) |
+| `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?, eventKeys?, name?})` (remove / object → suppressions, enforced at once; `event` and `name` need no listing) |
 | `broker/suppressions` | `list({orgKey?})` (an address shows only as `contact: true`), `lift({key})` |
 | `broker/session` | `me` |
 

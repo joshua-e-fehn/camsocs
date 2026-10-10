@@ -433,6 +433,11 @@ export const fieldClaimFields = {
   runKey: v.optional(v.string()),
   /** lib/keys.ts claimFingerprint — idempotency. */
   fingerprint: v.string(),
+  /** The suppression that set this claim aside (`reviewStatus: rejected`).
+   * Its value, original and quote are then cleared — only the minimal record
+   * stays — and lifting the suppression deletes it, so the next harvest
+   * records the reading afresh (lib/suppressionEffects.ts). */
+  setAsideBy: v.optional(v.string()),
   createdAt: v.number(),
 }
 
@@ -522,6 +527,10 @@ export const inboundEmailFields = {
    * attachments) of this processed mail (retention.md R4); the row itself
    * goes later. */
   bodyDeletedAt: v.optional(v.number()),
+  /** When the retention job reduced a mail its events cite (`inbound:<id>`)
+   * to a stub: message id, list, receipt time, organisation and event keys
+   * stay; sender, subject and text are gone (R4). */
+  purgedAt: v.optional(v.number()),
   ...stamps,
 }
 
@@ -547,6 +556,10 @@ export const listingRequestFields = {
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
   outcome: v.optional(listingRequestOutcomeValidator),
+  /** When the retention job reduced an accepted correction its owner claims
+   * cite (`request:<key>`) to a stub: key, kind, listing, role, outcome and
+   * dates stay; the submitter's address, message and fields are gone (R8). */
+  purgedAt: v.optional(v.number()),
 }
 
 /**
@@ -570,6 +583,9 @@ export const suppressionFields = {
   valueHash: v.optional(v.string()),
   /** Scope person: the broker `people` key (`per-<sha1>`). */
   personKey: v.optional(v.string()),
+  /** Scope event: the event's key (`evt-<sha1>`). Scope name uses `valueHash`
+   * (sha256 of the normalised name, lib/suppressions.ts `nameHash`). */
+  eventKey: v.optional(v.string()),
   /** The request that asked for it, when one did. */
   requestKey: v.optional(v.string()),
   requestKind: v.optional(literalUnion(LISTING_REQUEST_KINDS)),
@@ -789,7 +805,8 @@ export default defineSchema({
     .index("by_entity_field", ["entityType", "entityKey", "field", "reviewStatus"])
     .index("by_entity_review", ["entityType", "entityKey", "reviewStatus"])
     .index("by_run", ["runKey"])
-    .index("by_fingerprint", ["fingerprint"]),
+    .index("by_fingerprint", ["fingerprint"])
+    .index("by_setAsideBy", ["setAsideBy"]),
   sources: defineTable(sourceFields)
     .index("by_key", ["key"])
     .index("by_orgKey", ["orgKey"])

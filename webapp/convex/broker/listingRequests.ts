@@ -11,7 +11,13 @@ import { requireBrokerUser } from "../lib/auth"
 import { brokerOrgRefs, orgRefValidator } from "../lib/brokerRows"
 import { withoutSystemFields } from "../lib/ingest"
 import { createSuppression } from "../lib/suppressionEffects"
-import { contactHash, type SuppressionTarget } from "../lib/suppressions"
+import {
+  contactHash,
+  MAX_NAME_WORDS,
+  nameHash,
+  nameWords,
+  type SuppressionTarget,
+} from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 import { listingRequestFields } from "../schema"
 
@@ -164,10 +170,13 @@ export const acceptCorrections = mutation({
 })
 
 /**
- * Accepts a removal or objection as suppressions of the request's listing:
- * the whole listing (`organisation`), some `fields`, one contact `address`
- * (kept only as a hash), or named `personKeys` from the broker tables. Each is
- * enforced at once; the request is marked `accepted` with what was created.
+ * Accepts a removal or objection as suppressions: the request's whole
+ * listing (`organisation`), some of its `fields`, one contact `address` (kept
+ * only as a hash), named `personKeys` from the broker tables, one or more
+ * events by key (`eventKeys`), or a person's `name` wherever public text
+ * gives it (kept only as a hash; two words or more). Events and names need
+ * no listing. Each is enforced at once; the request is marked `accepted`
+ * with what was created.
  */
 export const acceptRemoval = mutation({
   args: {
@@ -176,6 +185,8 @@ export const acceptRemoval = mutation({
     fields: v.optional(v.array(v.string())),
     address: v.optional(v.string()),
     personKeys: v.optional(v.array(v.string())),
+    eventKeys: v.optional(v.array(v.string())),
+    name: v.optional(v.string()),
   },
   returns: v.object({ suppressionKeys: v.array(v.string()) }),
   handler: async (ctx, args) => {
@@ -184,10 +195,31 @@ export const acceptRemoval = mutation({
     if (request.kind !== "remove" && request.kind !== "object") {
       throw new ConvexError("Only a removal or an objection is accepted as a suppression")
     }
+    const targets: SuppressionTarget[] = []
+    if (args.scope === "event" || args.scope === "name") {
+      const listing = request.orgKey
+      if (args.scope === "event") {
+        const keys = [...new Set((args.eventKeys ?? []).map((key) => key.trim()))]
+        if (keys.length === 0) throw new ConvexError("Give the events' keys (evt-…)")
+        for (const eventKey of keys) {
+          if (!/^evt-[0-9a-f]{40}$/.test(eventKey)) {
+            throw new ConvexError(`Not an event key: ${eventKey}`)
+          }
+          targets.push({ scope: "event", orgKey: listing, eventKey })
+        }
+      } else {
+        const name = args.name?.trim() ?? ""
+        const words = nameWords(name)
+        if (words.length < 2 || words.length > MAX_NAME_WORDS) {
+          throw new ConvexError(`Give the full name as published (2 to ${MAX_NAME_WORDS} words)`)
+        }
+        targets.push({ scope: "name", orgKey: listing, valueHash: nameHash(name) })
+      }
+      return await suppress(ctx, request, targets)
+    }
     const orgKey = request.orgKey
     if (!orgKey) throw new ConvexError("The request names no listing")
 
-    const targets: SuppressionTarget[] = []
     if (args.scope === "organisation") {
       targets.push({ scope: "organisation", orgKey })
     } else if (args.scope === "field") {
@@ -218,24 +250,33 @@ export const acceptRemoval = mutation({
       }
     }
 
-    const created: string[] = []
-    for (const target of targets) {
-      const { key } = await createSuppression(ctx, target, {
-        key: request.key,
-        kind: request.kind,
-      })
-      created.push(key)
-    }
-    const now = Date.now()
-    await ctx.db.patch("listingRequests", request._id, {
-      status: "accepted",
-      resolvedAt: now,
-      outcome: {
-        ...request.outcome,
-        suppressionKeys: [...new Set([...(request.outcome?.suppressionKeys ?? []), ...created])],
-        acceptedAt: now,
-      },
-    })
-    return { suppressionKeys: created }
+    return await suppress(ctx, request, targets)
   },
 })
+
+/** Creates and enforces `targets` for `request` and marks it accepted. */
+async function suppress(
+  ctx: MutationCtx,
+  request: Doc<"listingRequests">,
+  targets: SuppressionTarget[],
+): Promise<{ suppressionKeys: string[] }> {
+  const created: string[] = []
+  for (const target of targets) {
+    const { key } = await createSuppression(ctx, target, {
+      key: request.key,
+      kind: request.kind,
+    })
+    created.push(key)
+  }
+  const now = Date.now()
+  await ctx.db.patch("listingRequests", request._id, {
+    status: "accepted",
+    resolvedAt: now,
+    outcome: {
+      ...request.outcome,
+      suppressionKeys: [...new Set([...(request.outcome?.suppressionKeys ?? []), ...created])],
+      acceptedAt: now,
+    },
+  })
+  return { suppressionKeys: created }
+}

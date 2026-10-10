@@ -177,6 +177,64 @@ describe("retention", () => {
     expect(after.old).toBeNull()
   })
 
+  test("R4: the mail's words leave its events' claims with its body; a cited mail stays a stub", async () => {
+    const t = newTest()
+    const eventKey = "evt-from-mail"
+    const source = { sourceUrl: "inbound:<m-40>", sourceKey: "src-m-40" }
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: eventClaims(eventKey, NOW + 10 * DAY, [
+        {
+          field: "description",
+          value: "Talk on Tuesday by our society.",
+          method: "llm",
+          extractor: "bulk-model-1",
+          evidenceQuote: "Talk on Tuesday by our society.",
+          quoteCheck: "exact",
+          ...source,
+        },
+      ]),
+    })
+    await t.run(async (ctx) => {
+      const mail = (messageId: string, days: number, events: string[]) => ({
+        messageId,
+        receivedAt: daysAgo(days),
+        from: "Anna Example <anna@example.org>",
+        subject: "Events this week",
+        text: "Talk on Tuesday by our society.",
+        attachments: [],
+        extraction: "done" as const,
+        extractedEventKeys: events,
+        createdAt: daysAgo(days),
+        updatedAt: daysAgo(days),
+      })
+      await ctx.db.insert("inboundEmails", mail("<m-40>", 40, [eventKey]))
+      await ctx.db.insert("inboundEmails", mail("<m-100>", 100, [eventKey]))
+      await ctx.db.insert("inboundEmails", mail("<m-100-none>", 100, []))
+    })
+    await runDaily(t)
+    const after = await t.run(async (ctx) => ({
+      claims: await ctx.db
+        .query("fieldClaims")
+        .withIndex("by_entity_field", (q) =>
+          q
+            .eq("entityType", "event")
+            .eq("entityKey", eventKey)
+            .eq("field", "description")
+            .eq("reviewStatus", "accepted"),
+        )
+        .collect(),
+      mails: await ctx.db.query("inboundEmails").collect(),
+    }))
+    // The value and its check stay; the quote is gone.
+    expect(after.claims[0]).toMatchObject({ value: "Talk on Tuesday by our society." })
+    expect(after.claims[0].evidenceQuote).toBeUndefined()
+    // A mail its events cite stays as a stub; one nothing cites goes.
+    const old = after.mails.find((mail) => mail.messageId === "<m-100>")
+    expect(old).toMatchObject({ from: "", subject: "", text: "", extractedEventKeys: [eventKey] })
+    expect(old?.purgedAt).toBe(NOW)
+    expect(after.mails.find((mail) => mail.messageId === "<m-100-none>")).toBeUndefined()
+  })
+
   test("R5: people go 30 days past their handover; broker rows are archived in the grace", async () => {
     const t = newTest()
     const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10)
@@ -367,6 +425,13 @@ describe("retention", () => {
       await ctx.db.insert("listingRequests", requestRow("lr-accepted", "accepted", 365))
       await ctx.db.insert("listingRequests", requestRow("lr-done-old", "done", 3 * 365))
       await ctx.db.insert("listingRequests", requestRow("lr-open-old", "open", 3 * 365))
+      // An accepted correction its owner claims cite: a stub stays.
+      await ctx.db.insert("listingRequests", {
+        ...requestRow("lr-applied-old", "accepted", 3 * 365),
+        role: "President",
+        fields: { website: "https://a.example/" },
+        outcome: { appliedFields: ["website"], acceptedAt: daysAgo(3 * 365) },
+      })
       for (const [runKey, days] of [
         ["run-old", RETENTION.runDays + 5],
         ["run-new", 3],
@@ -392,11 +457,28 @@ describe("retention", () => {
       interactions: (await ctx.db.query("interactions").take(10)).map((row) => row.key).sort(),
       introductions: await ctx.db.query("introductions").take(10),
       requests: (await ctx.db.query("listingRequests").take(10)).map((row) => row.key).sort(),
+      stub: await ctx.db
+        .query("listingRequests")
+        .withIndex("by_key", (q) => q.eq("key", "lr-applied-old"))
+        .unique(),
       runs: (await ctx.db.query("harvestRuns").take(10)).map((row) => row.runKey),
     }))
     expect(after.interactions).toEqual(["int-new", "int-old-active"])
     expect(after.introductions).toEqual([])
-    expect(after.requests).toEqual(["lr-accepted", "lr-open-old", "lr-rejected-new"])
+    expect(after.requests).toEqual([
+      "lr-accepted",
+      "lr-applied-old",
+      "lr-open-old",
+      "lr-rejected-new",
+    ])
+    expect(after.stub).toMatchObject({
+      submitterEmail: "",
+      message: "",
+      role: "President",
+      outcome: { appliedFields: ["website"] },
+      purgedAt: NOW,
+    })
+    expect(after.stub?.fields).toBeUndefined()
     expect(after.runs).toEqual(["run-new"])
   })
 })

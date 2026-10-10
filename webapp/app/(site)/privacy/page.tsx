@@ -180,7 +180,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             Mailing-list messages: their text and attachments are deleted 30 days after we have read
-            them for events, and the rest of the message after 90 days.
+            them for events, and the rest of the message after 90 days (we keep only its date, its
+            list and which events it gave, without sender or subject).
           </li>
           <li>Events: deleted a year after they took place.</li>
           <li>Notes of our own contacts with a society: three years after the last contact.</li>

@@ -12,6 +12,12 @@ older than the cutoff, **except the latest file of each part**, which the
 next `load` still reads — staged observations hold names and addresses from
 public pages, and nothing reads an older run's copy.
 
+**Mail goes after 30 days** (retention.md R4: message text is deleted 30 days
+after it is read): the model's replies about list mail and its attachments
+(`MAIL_PROMPTS`, which quote it) and the staged mail events
+(`MAIL_STAGING`), the latest file included — the `inbox` stage posted them
+when it read the mail, so no later load needs them.
+
 Nothing here touches Convex. ``--dry-run`` counts without deleting.
 """
 
@@ -27,6 +33,13 @@ from camsocs_pipeline.staging.store import StagingStore
 
 #: The LLM memo's folder inside the cache (`extract/memo.py`).
 LLM_DIR = "llm"
+#: How long anything quoting list mail is kept (retention.md R4).
+MAIL_AGE = timedelta(days=30)
+#: Replies that may quote list mail or its attachments (`stages/inbox.py`;
+#: termcards share the image prompt, whose replies are re-asked weekly anyway).
+MAIL_PROMPTS = frozenset({"email_events_v1", "image_events_v1"})
+#: Staging that holds what was read from list mail.
+MAIL_STAGING = frozenset({"mailing_list_email", "mailing_list_email.events"})
 
 _AGE = re.compile(r"^\s*(\d+)\s*([dhw])\s*$", re.IGNORECASE)
 
@@ -88,8 +101,12 @@ def prune_cache(
         return result
     for folder in sorted(child for child in cache_dir.iterdir() if child.is_dir()):
         if folder.name == LLM_DIR:
+            # Whichever is sooner: the cache's age or the 30 days of R4.
+            mail_cutoff = max(cutoff, (now or datetime.now(UTC)) - MAIL_AGE)
             for path in sorted(p for p in folder.rglob("*") if p.is_file()):
-                if _mtime(path) < cutoff:
+                prompt = path.relative_to(folder).parts[0]
+                limit = mail_cutoff if prompt in MAIL_PROMPTS else cutoff
+                if _mtime(path) < limit:
                     _delete([path], "llm", result, dry_run)
                 else:
                     result.kept += 1
@@ -114,12 +131,15 @@ def prune_staging(
     """Deletes superseded staging files older than `older_than`; the latest
     file of each part always stays."""
     cutoff = (now or datetime.now(UTC)) - older_than
+    mail_cutoff = max(cutoff, (now or datetime.now(UTC)) - MAIL_AGE)
     result = PruneResult()
     store = StagingStore(staging_dir)
     for directory in store.directories():
-        latest = set(store.latest_paths(directory))
+        mail = directory in MAIL_STAGING
+        latest = set() if mail else set(store.latest_paths(directory))
+        limit = mail_cutoff if mail else cutoff
         for path in sorted((staging_dir / directory).glob("*.jsonl")):
-            if path in latest or _mtime(path) >= cutoff:
+            if path in latest or _mtime(path) >= limit:
                 result.kept += 1
                 continue
             _delete([path], "staging", result, dry_run)

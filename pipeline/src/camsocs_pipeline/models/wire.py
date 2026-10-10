@@ -492,6 +492,9 @@ class SuppressionList(WireModel):
     fields: list[SuppressedField] = Field(default_factory=list)
     contact_hashes: list[str] = Field(default_factory=list)
     people: list[str] = Field(default_factory=list)
+    events: list[str] = Field(default_factory=list)
+    #: sha256 of each normalised name (`suppressions.name_hash`).
+    name_hashes: list[str] = Field(default_factory=list)
     #: More rows than the server returns in one read: the list is incomplete.
     truncated: bool = False
 
