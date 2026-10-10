@@ -419,7 +419,7 @@ def company_name(name: str) -> tuple[str, list[str]]:
     office a page wrote ("McKinsey & Company, Inc. Prague" → "McKinsey";
     "The Boston Consulting Group s.r.o. Prague Office" → "Boston Consulting
     Group", also "BCG"; "A.T. Kearney GmbH Prague office" → "Kearney"), so
-    one sponsor is one counterpart. The name as written is an alias."""
+    one sponsor is one counterpart. A brand it is known by is an alias."""
     written = " ".join(name.split())
     current = written
     legal = _LEGAL_FORM.search(current)
@@ -429,10 +429,11 @@ def company_name(name: str) -> tuple[str, list[str]]:
     current = _OFFICE.sub("", current)
     current = re.sub(r"^(?:the|a\.\s?t\.)\s+", "", current, flags=re.IGNORECASE)
     canonical = current.strip(" ,-–—") or written
-    aliases = [written] if written != canonical else []
+    # Only a brand is an alias: the page's own spelling would match the
+    # counterpart an earlier run keyed by it as well as the company's, and two
+    # matches are no match (resolve/crosswalk.py).
     brand = _COMPANY_BRANDS.get(canonical.lower())
-    if brand and brand.lower() != canonical.lower():
-        aliases.append(brand)
+    aliases = [brand] if brand and brand.lower() != canonical.lower() else []
     return canonical, aliases
 
 
