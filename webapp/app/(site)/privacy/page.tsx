@@ -93,9 +93,9 @@ export default function PrivacyPage() {
         <h3>Society mailing lists</h3>
         <p>
           Messages sent to society mailing lists that the operator subscribes to are forwarded to{" "}
-          {SITE_NAME} so that the events they announce can be listed. They contain the sender&apos;s
-          name and address. The messages are kept privately; only the events taken from them are
-          shown, and only to visitors signed in with a verified @cam.ac.uk address.
+          {SITE_NAME} so that the events they announce can be listed. They contain the sender’s name
+          and address. The messages are kept privately; only the events taken from them are shown,
+          and only to visitors signed in with a verified @cam.ac.uk address.
         </p>
         <h3>When you contact us</h3>
         <p>
