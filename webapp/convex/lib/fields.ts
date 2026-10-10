@@ -10,6 +10,7 @@ import {
   ENTITY_TYPES,
   type EntityType,
   EVENT_FIELDS,
+  EVENT_HOSTING,
   EVENT_SOURCES,
   EVENT_STATUSES,
   EVENT_TYPES,
@@ -204,6 +205,11 @@ function urlsIn(pick: (item: Record<string, unknown>) => unknown[]): Check {
 const INVITE_LINK =
   /(chat\.whatsapp\.com|discord\.gg|discord\.com\/invite|t\.me\/|join\.slack\.com|groupme\.com\/join)/i
 
+/** An external event's own page: an http(s) URL, never a chat invite. */
+const externalPage: Check = (value) =>
+  checks.url(value) ??
+  (INVITE_LINK.test(String(value)) ? "chat invite links are never stored" : null)
+
 // --- the registry -------------------------------------------------------------------
 
 /**
@@ -245,6 +251,12 @@ export type FieldSpec = {
    * *from* the URL (it answered 404, a login wall or nothing) sets claims of
    * that URL aside (lib/resolve.ts `withoutDeadLinks`). */
   checksLink?: boolean
+  /** One reader's verdict per source (decision D6: a rule decides, or the
+   * model for a borderline text): of each source's live claims only the
+   * newest counts, whatever its method, so a model verdict an earlier run
+   * made never outlives the rule verdict that replaced it (lib/resolve.ts
+   * `newestPerSource`). */
+  oneReadingPerSource?: boolean
   /** Counts toward `organisations.missingFields` (the outreach list). */
   tracked?: boolean
   /** When false and nobody claimed the field, its status is `not_applicable`. */
@@ -419,6 +431,19 @@ export const EVENT_SPECS: Record<(typeof EVENT_FIELDS)[number], FieldSpec> = {
         : "not a URL or URI",
     requiredOnCreate: true,
   }),
+  /** Whether the listed organisations host it or only take part in someone
+   * else's event (decision D6, the pipeline's calendar-noise classifier):
+   * newest verdict per source, then the strictest across sources — any
+   * current reading that shows the event to be external wins. Rows from
+   * before D6 have none; they host (lib/materialise.ts default). */
+  hosting: scalar(literalUnion(EVENT_HOSTING), {
+    merge: "strictest",
+    order: EVENT_HOSTING,
+    oneReadingPerSource: true,
+  }),
+  /** The external event's own page, for a `takes_part` event only (the
+   * public projection drops it otherwise). */
+  externalUrl: url({ check: externalPage, oneReadingPerSource: true }),
 }
 
 export const TEAM_SPECS: Record<(typeof TEAM_FIELDS)[number], FieldSpec> = {

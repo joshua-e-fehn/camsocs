@@ -568,6 +568,10 @@ async function writeEntity(
     if (before && organiserCopyChanged(before, event)) {
       const orgKeys = await syncEventOrganiserRows(ctx, event)
       await refreshOrganisations(ctx, orgKeys, context)
+    } else if (before && (before.hosting ?? "hosts") !== event.hosting) {
+      // Someone else's event no longer counts as its organisers' activity
+      // (decision D6, lib/entityStore.ts `latestPastEvent`), and back.
+      await refreshOrganisations(ctx, [...event.organiserKeys, ...event.coHostKeys], context)
     }
   }
   return outcome

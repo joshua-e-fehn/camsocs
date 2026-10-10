@@ -10,6 +10,7 @@ import {
   CONSENT_BASES,
   EMAIL_TYPES,
   ENTITY_TYPES,
+  EVENT_HOSTING,
   EVENT_ORGANISER_ROLES,
   EVENT_SOURCES,
   EVENT_STATUSES,
@@ -334,6 +335,12 @@ export const eventFields = {
   source: literalUnion(EVENT_SOURCES),
   externalId: v.string(),
   sourceUrl: v.string(),
+  /** Whether its organisations host it or only take part (decision D6).
+   * Optional: rows written before D6 have none and host (the projection and
+   * lib/materialise.ts default it). */
+  hosting: v.optional(literalUnion(EVENT_HOSTING)),
+  /** The external event's own page, for a `takes_part` event. */
+  externalUrl: v.optional(v.string()),
   /** Derived: the latest retrieval of any of its claims. */
   lastSeenAt: v.number(),
   /** Derived: the listing it was read from (lib/derived.ts `sweepGroupOf`);

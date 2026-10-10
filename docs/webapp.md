@@ -321,18 +321,26 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'. Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'; `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers: {key, slug, name, role}[], speakers,
 price?, bookingUrl?, signupRequired?, visibility, eventType, imageUrl?, cancelled, status, source,
-sourceUrl? (absent for mailing-list events), lastSeenAt, confidence, meta`.
+sourceUrl? (absent for mailing-list events), hosting, externalUrl?, lastSeenAt, confidence, meta`.
+
+`hosting` (decision D6) is `hosts` or `takes_part`: someone else's event (a CTF, a conference,
+another university's event) the listed societies only take part in. The UI then names them as
+taking part ("Cyber Security Society takes part", the "Taking part" badge, a dashed card),
+never as organisers, and links `externalUrl` — the event's own page, present only for
+`takes_part` — off-site; the calendar's "Include events societies take part in" toggle
+(`?external=hide` when off) maps to `includeTakingPart`.
 
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,
-status, source, sourceUrl?` — no description, speakers, price, image or `meta`. A month of events
+status, source, sourceUrl?, hosting, externalUrl?` — no description, speakers, price, image or
+`meta`. A month of events
 was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);
 the sheet reads the rest with `events.get`.
 

@@ -7,6 +7,7 @@ import {
   CLAIM_METHODS,
   COLLEGE_BODIES,
   EMAIL_TYPES,
+  EVENT_HOSTING,
   EVENT_ORGANISER_ROLES,
   EVENT_SOURCES,
   EVENT_STATUSES,
@@ -478,6 +479,11 @@ export const eventListItemValidator = v.object({
   source: literalUnion(EVENT_SOURCES),
   /** The event's page (a show's nights share it); absent for mailing-list events. */
   sourceUrl: v.optional(v.string()),
+  /** `takes_part`: the organisers only take part in someone else's event
+   * (decision D6) — show them as taking part, never as organising it. */
+  hosting: literalUnion(EVENT_HOSTING),
+  /** The external event's own page; only for a `takes_part` event. */
+  externalUrl: v.optional(v.string()),
 })
 export type EventListItem = Infer<typeof eventListItemValidator>
 
@@ -505,6 +511,9 @@ export const eventPublicValidator = v.object({
   source: literalUnion(EVENT_SOURCES),
   /** Absent for mailing-list events (the source is a private inbox). */
   sourceUrl: v.optional(v.string()),
+  hosting: literalUnion(EVENT_HOSTING),
+  /** The external event's own page; only for a `takes_part` event. */
+  externalUrl: v.optional(v.string()),
   lastSeenAt: v.number(),
   confidence: v.number(),
   meta: publicMetaValidator,
@@ -552,6 +561,17 @@ function eventSourceUrl(event: Doc<"events">): string | undefined {
     : event.sourceUrl
 }
 
+/** Hosted or only taken part in (decision D6): a row from before D6 hosts.
+ * The external page goes with `takes_part` only, and only as http(s). */
+function eventHosting(event: Doc<"events">): Pick<EventListItem, "hosting" | "externalUrl"> {
+  const hosting = event.hosting ?? "hosts"
+  const externalUrl =
+    hosting === "takes_part" && event.externalUrl && isHttpUrl(event.externalUrl)
+      ? event.externalUrl
+      : undefined
+  return { hosting, externalUrl }
+}
+
 export async function eventListItem(
   event: Doc<"events">,
   lookup: ReturnType<typeof orgRefCache>,
@@ -572,6 +592,7 @@ export async function eventListItem(
     status: event.status,
     source: event.source,
     sourceUrl: eventSourceUrl(event),
+    ...eventHosting(event),
   }
 }
 
@@ -603,6 +624,7 @@ export async function eventPublic(
     status: event.status,
     source: event.source,
     sourceUrl: eventSourceUrl(event),
+    ...eventHosting(event),
     lastSeenAt: event.lastSeenAt,
     confidence: event.confidence,
     meta: publicMeta(event.meta),

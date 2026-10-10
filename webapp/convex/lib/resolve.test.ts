@@ -4,6 +4,7 @@ import {
   baseConfidence,
   comparable,
   liveClaims,
+  newestPerSource,
   precedenceTier,
   type ResolvableClaim,
   resolveField,
@@ -426,6 +427,74 @@ describe("resolveField — strictest (an event's visibility)", () => {
     const membersOnly = mail("members_only", T0, "m1")
     const manual = claim({ value: "cam_only", status: "manual", method: "manual", sourceKey: "m" })
     expect(resolveField(visibility, [membersOnly, manual]).value).toBe("cam_only")
+  })
+})
+
+describe("resolveField — an event's hosting (decision D6: one verdict per source)", () => {
+  const hosting = EVENT_SPECS.hosting
+  const feed = "https://calendar.google.com/calendar/ical/x/public/basic.ics"
+  const verdict = (
+    value: string,
+    at: number,
+    method: "parser" | "llm",
+    overrides: Partial<ResolvableClaim> = {},
+  ) =>
+    claim({
+      value,
+      status: method === "llm" ? "found" : "inferred",
+      method,
+      sourceKey: "src-feed",
+      sourceUrl: feed,
+      sourceType: "ics_feed",
+      retrievedAt: at,
+      ...overrides,
+    })
+
+  test("of one source, the newest verdict counts, whatever its method", () => {
+    const model = verdict("takes_part", T0, "llm")
+    const rule = verdict("hosts", T0 + DAY, "parser")
+    expect(newestPerSource(liveClaims([model, rule]))).toEqual([rule])
+    // A rule's later verdict replaces the model's, though the model's was
+    // `found` and the rule's only `inferred` — and back again.
+    expect(resolveField(hosting, [model, rule]).value).toBe("hosts")
+    expect(resolveField(hosting, [model, rule]).meta.method).toBe("parser")
+    const again = verdict("takes_part", T0 + 2 * DAY, "llm")
+    expect(resolveField(hosting, [model, rule, again]).value).toBe("takes_part")
+  })
+
+  test("across sources, any current reading that shows it is external wins", () => {
+    const own = verdict("hosts", T0 + DAY, "parser")
+    const page = verdict("takes_part", T0, "parser", {
+      sourceKey: "src-page",
+      sourceUrl: "https://society.org/events",
+      sourceType: "society_website",
+    })
+    expect(resolveField(hosting, [own, page]).value).toBe("takes_part")
+  })
+
+  test("a manual claim lifts it", () => {
+    const external = verdict("takes_part", T0 + DAY, "parser")
+    const manual = claim({
+      value: "hosts",
+      status: "manual",
+      method: "manual",
+      sourceKey: "src-manual",
+      retrievedAt: T0,
+    })
+    expect(resolveField(hosting, [external, manual]).value).toBe("hosts")
+  })
+
+  test("other fields keep a parser's and a model's readings of one page apart", () => {
+    const parsed = claim({ value: "a@society.org", retrievedAt: T0 })
+    const read = claim({
+      value: "a@society.org",
+      method: "llm",
+      quoteCheck: "exact",
+      retrievedAt: T0 + DAY,
+    })
+    expect(liveClaims([parsed, read])).toHaveLength(2)
+    expect(newestPerSource(liveClaims([parsed, read]))).toEqual([read])
+    expect(email.oneReadingPerSource).toBeUndefined()
   })
 })
 
