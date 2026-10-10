@@ -1,0 +1,140 @@
+BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Cambridge CyberSoc Society
+X-WR-TIMEZONE:Europe/London
+BEGIN:VEVENT
+DTSTART:20261017T140000Z
+DTEND:20261019T000000Z
+DTSTAMP:20261010T004035Z
+UID:q931hrnott46igj4bu6d0runkc@google.com
+CREATED:20261004T140010Z
+DESCRIPTION:CTF Event from CTFTime\n\nFormat: Jeopardy\n\nDEADFACE CTF feat
+ ures jeopardy-style challenges and is hosted by Cyber Hacktics and veterans
+  of the United States Air Force in support of National Cyber Security Aware
+ ness Month.\n\nMore info: https://ctf.deadface.io/
+LAST-MODIFIED:20261004T140010Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:🚩 DEADFACE CTF 2026
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260414T000000Z
+DTEND:20260415T000000Z
+DTSTAMP:20261010T004035Z
+UID:uduuqvm90pqt7feilnrqb11cvo@google.com
+CREATED:20260408T140036Z
+DESCRIPTION:CTF Event from CTFTime\n\nFormat: Jeopardy\n\nStep into the wor
+ ld of cybersecurity with INCOGNITO 7.0\, the flagship 24 hour Capture The F
+ lag (CTF) event of Equinox!\n\nBreak codes\, bypass security\, and hunt for
+  hidden "flags" in this fast paced\, jeopardy style competition.\n\nThe Dom
+ ains: Test your skills in Web\, Crypto\, Forensics\, Reverse Engineering\, 
+ Pwn\, and OSINT.\n\nThe Vibe: A 24-hour adrenaline rush fueled by teamwork 
+ and out-of-the-box thinking.\n\nFor Everyone: Whether you're a total beginn
+ er or a seasoned pro\, we have challenges designed for your skill level.\n\
+ nMore info: https://incognito.axiosiiitl.dev/
+LAST-MODIFIED:20260408T140037Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:🚩 Incognito 7.0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260529T180000Z
+DTEND:20260531T180000Z
+DTSTAMP:20261010T004035Z
+UID:h7mujl0in01rs99ucg9vn91rfg@google.com
+CREATED:20260522T200628Z
+DESCRIPTION:CTF Event from CTFTime\n\nFormat: Jeopardy\n\nTHEM?!CTF 2026 is
+  an online\, worldwide jeopardy-style Capture The Flag competition organize
+ d by THEM?!\n\nJoin our discord server btw: https://discord.gg/its-them\n\n
+ The event is designed to be beginner-friendly while still offering enough d
+ epth for intermediate and experienced players. Challenges will span a wide 
+ range of difficulty levels\, so newer players can learn and participate/slo
+ p\, while stronger teams can expect harder problems that require deeper tec
+ hnical skill actual brain functioning.\n\nWe plan to feature 40+ challenges
+  across the following categories:\n\nCrypto\, Web\, Reverse\, Pwn\, Web3\, 
+ OSINT\, Forensics\, and Misc\n\nFor THEM?!CTF we put a lot of effort into o
+ riginal yet interesting challenge design. We are paying special attention t
+ o reducing low-effort solving aka. slopping and flag-sharing through very i
+ ntentional challenge design choices\, with the goal of making the event fun
+  and more competitive for everyone.\n\nSharing flags\, solutions\, or even 
+ the slightest hint is STRICTLY forbidden\, and will NOT be tolerated.\n\nTh
+ e use AI is not forbidden\, since it cannot be reliably proven\, but relyin
+ g on it too much tends to be embarrassingly obvious. \n\nSlopping will resu
+ lt in a ban.\n\nThe event is fully online and open to players worldwide.\nT
+ here is no team size limit.\n\n\nWe wish all players and teams best of luck
+ .\n\n\nBig thanks to our sponsors: \nGoogle Cloud cloud.google.com\nKenshi 
+ Security kenshisecurity.com\nNordVPN nordvpn.com\nNordPass nordpass.com\nIn
+ cogni incogni.com\nSaily saily.com\nNexos AI nexos.ai\n\nMore info: https:/
+ /themctf.com/
+LAST-MODIFIED:20260522T200629Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:🚩 THEM?!CTF 2026
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20251030T160000Z
+DTEND:20251030T170000Z
+DTSTAMP:20261010T004035Z
+UID:00ljpo0s4gjacfnsienqq6hpob@google.com
+CREATED:20251018T132358Z
+LAST-MODIFIED:20251018T132359Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:Beginner CTF Workshop
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20251206T160000Z
+DTEND:20251206T180000Z
+DTSTAMP:20261010T004035Z
+UID:5cus5ep80te3vf3m4rrlktrpev@google.com
+CREATED:20251018T132524Z
+LAST-MODIFIED:20251018T132524Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:HTB workshop event
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20251114T160000Z
+DTEND:20251114T170000Z
+DTSTAMP:20261010T004035Z
+UID:032shpviqfk7v3k5t8sad4mmch@google.com
+CREATED:20251106T234441Z
+DESCRIPTION:The CyberSoc President will be speaking on the basics of CyberS
+ ecurity hygiene — simple\, practical ways to stay safe online.\n\nThis sess
+ ion is suitable for **anyone at any level** — whether you’re new to cyberse
+ curity or want a quick refresher on essential habits.\n\n💡 Topics include:
+ \n- Common online threats and how to avoid them\n- Secure passwords and acc
+ ount protection\n- Safe browsing and recognizing scams\n- Device and data h
+ ygiene\n\nCome learn the fundamentals of digital safety in an engaging\, be
+ ginner-friendly talk!
+LAST-MODIFIED:20260411T115958Z
+LOCATION:Seminar Room 1\, King's College\, Cambridge\, CB2 1ST\, UK
+SEQUENCE:1
+STATUS:CONFIRMED
+SUMMARY:🧼💻 CyberSecurity Hygiene Basics - with CyberSoc President
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260224T140000Z
+DTEND:20260224T150000Z
+DTSTAMP:20261010T004035Z
+UID:6g43s6g8k0mlehrls3c2jf65e0@google.com
+CREATED:20260209T204407Z
+DESCRIPTION:Speaker: [name left out of the fixture]\, University of Ottawa.\n\nMore info:
+  https://talks.cam.ac.uk/talk/index/243718
+LAST-MODIFIED:20260209T204407Z
+LOCATION:Webinar & FW11\, Computer Laboratory\, William Gates Building.
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:Title to be confirmed
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

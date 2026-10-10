@@ -50,6 +50,7 @@ from datetime import UTC, date, datetime
 
 from camsocs_pipeline.claims import epoch_ms, parser_field
 from camsocs_pipeline.extract.dedupe import EventIndex
+from camsocs_pipeline.extract.event_noise import classifier_for
 from camsocs_pipeline.extract.events import (
     EventContext,
     LlmEvents,
@@ -135,6 +136,8 @@ def run(ctx: StageContext) -> None:
 def finish(ctx: StageContext, outcomes: Sequence[MailOutcome]) -> None:
     """Post the events, then mark the mails; record counts and state."""
     records = [record for o in outcomes for record in (*o.events, *o.extra)]
+    #: Events the calendar-noise filter found to be no events (D6): not posted.
+    dropped: set[str] = set()
     if records:
         with ctx.staging.writer(SOURCE_TYPE, ctx.run.run_key) as out:
             out.write_all(records)
@@ -142,7 +145,15 @@ def finish(ctx: StageContext, outcomes: Sequence[MailOutcome]) -> None:
         redactor, note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
         if note:
             ctx.report.notes.append(note)
-        report = ctx.loader.post_observations(records, run_key=ctx.run.run_key, redactor=redactor)
+        # A notice in a mail (a deadline, a room closed) is no event (D6).
+        noise, noise_note = classifier_for(ctx.settings, dry_run=ctx.dry_run)
+        if noise_note:
+            ctx.report.notes.append(noise_note)
+        report = ctx.loader.post_observations(
+            records, run_key=ctx.run.run_key, redactor=redactor, noise=noise
+        )
+        ctx.report.notes.extend(report.noise.notes())
+        dropped = set(report.noise.dropped_keys)
         ctx.report.inserted += report.claims.inserted
         ctx.report.updated += report.claims.updated
         ctx.report.unchanged += report.claims.unchanged
@@ -154,7 +165,11 @@ def finish(ctx: StageContext, outcomes: Sequence[MailOutcome]) -> None:
         InboundMark(
             message_id=o.mail.message_id,
             extraction=o.extraction,
-            extracted_event_keys=[event_key(e.event_source, e.external_id) for e in o.events],
+            extracted_event_keys=[
+                key
+                for e in o.events
+                if (key := event_key(e.event_source, e.external_id)) not in dropped
+            ],
             org_key=o.org_key,
             note="; ".join(o.notes)[:2_000] or None,
         )

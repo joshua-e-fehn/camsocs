@@ -164,6 +164,19 @@ meta and last-failure note go together, once all are older), LLM replies under
   (`events/duplicates.py`, data-model §2 "One event, several sources"). `--limit N` loads the first N keyed records. Claims travel in batches that
   keep each entity's claims together (the server creates an entity only from a request that
   carries its required fields); a batch too heavy for one mutation is posted again in halves.
+  - **Calendar noise (decision D6).** Before anything else, every keyed event reading is
+    judged (`events/noise.py` rules, `extract/event_noise.py` for the model): notices — a
+    prayer room closed, a deadline, a placeholder, a date marker, a cancellation of nothing —
+    are not posted at all (the notes count each rule and show a few titles with their keys;
+    one already on the deployment is withdrawn by its listing three days later, or removed at
+    once with `ingest/purge:removeEntity`), and every other reading gains a `hosting` claim:
+    `takes_part` for someone else's event a society only takes part in (a CTF imported from
+    CTFtime, a talk on another talks.cam list, a "[External]" entry), with its own page as
+    `externalUrl`, else `hosts`. Rules are `inferred` parser claims (`event_noise.<rule>`);
+    borderline readings go to the bulk model (prompt `event_noise_v1`, replies cached under
+    `var/cache/llm/event_noise_v1/`, quotes checked), never with talks.cam text. The stage
+    metrics carry `eventNoticesDropped` and `eventsTakingPart`. The inbox's posts take the
+    same path.
   - **The suppression list first.** Before anything is posted, the plan is filtered by what
     accepted removals and objections took off the site (`suppressions.py`, read once per
     loader from `POST /api/pipeline/suppressions`): nothing about a suppressed listing (claims,
@@ -274,7 +287,7 @@ and the crosswalk (`resolve.lookup.OrgLookup`). They share `extract/events.py`:
   numbers redacted. The mail's extraction note counts what was cut, never what it said.
 - `extract/dedupe.py` drops events another staged source already has.
 - `extract/memo.py` caches validated replies under `var/cache/llm/` (the D1 redaction's too,
-  under `redact_names_v2/`). Termcards and website pages give the model the Thursday that
+  under `redact_names_v2/`, and the D6 calendar-noise verdicts under `event_noise_v1/`). Termcards and website pages give the model the Thursday that
   starts the week as the reference date (`extract.when.week_anchor`), so an unchanged card or
   page is asked about once a week.
 

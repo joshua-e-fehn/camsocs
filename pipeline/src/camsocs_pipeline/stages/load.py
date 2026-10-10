@@ -29,12 +29,22 @@ A dry run uses cached replies and the deterministic rule only.
 
 Event readings another source already lists are merged into that source's
 event (`events.duplicates`); the notes say how many, from which sources.
+
+Calendar noise is sifted out first (decision D6: the rules in `events.noise`,
+the model and the claims in `extract.event_noise`): readings that are no
+events — a prayer room closed, a deadline, a placeholder — are not posted,
+and someone else's event a society only takes part in (a CTF on its
+calendar) is posted ``hosting: takes_part``. Rules first, the bulk model
+for borderline readings (replies cached by the input's sha256; a dry run
+uses cached replies and the rules only). The notes count each rule, show a
+few dropped titles with their keys, and the metrics carry the totals.
 """
 
 from __future__ import annotations
 
 from itertools import islice
 
+from camsocs_pipeline.extract.event_noise import classifier_for
 from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.media import CachedImages
 from camsocs_pipeline.pipeline.context import StageContext
@@ -74,11 +84,14 @@ def run(ctx: StageContext) -> None:
     redactor, redaction_note = redactor_for(ctx.settings, dry_run=ctx.dry_run)
     if redaction_note:
         ctx.report.notes.append(redaction_note)
+    noise, noise_note = classifier_for(ctx.settings, dry_run=ctx.dry_run)
+    if noise_note:
+        ctx.report.notes.append(noise_note)
     cache = StoredFileCache.load(stored_files_path(ctx.settings.staging_dir), ctx.loader.base_url)
     ctx.loader.file_cache = cache
     try:
         report = ctx.loader.post_observations(
-            records, run_key=ctx.run.run_key, media=media, redactor=redactor
+            records, run_key=ctx.run.run_key, media=media, redactor=redactor, noise=noise
         )
     finally:
         media.close()
@@ -108,6 +121,10 @@ def run(ctx: StageContext) -> None:
         # until it is withdrawn or removed (`ingest/purge:removeEntity`).
         for key in report.redaction.dropped[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  title unsafe, not posted: {key}")
+    ctx.report.notes.extend(report.noise.notes())
+    if report.noise.readings:
+        ctx.report.metrics["eventNoticesDropped"] = sum(report.noise.dropped.values())
+        ctx.report.metrics["eventsTakingPart"] = sum(report.noise.external.values())
     ctx.report.notes.extend(report.merged)
     if ctx.loader.suppressions_note:
         ctx.report.notes.append(ctx.loader.suppressions_note)
