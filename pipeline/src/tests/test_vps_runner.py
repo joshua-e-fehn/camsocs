@@ -58,10 +58,14 @@ esac
 echo "flock $*" >>"$SHIM_CALLS"
 exit "${SHIM_FLOCK_EXIT:-0}"
 """,
-    # GNU timeout's interface: options, the duration, then the command.
+    # GNU timeout's interface: options, the duration, then the command. The
+    # test's SHIM_TIMEOUT_EXIT ends the pipeline run, SHIM_GIT_TIMEOUT_EXIT git.
     "timeout": r"""#!/usr/bin/env bash
 echo "timeout $*" >>"$SHIM_CALLS"
-if [[ -n "${SHIM_TIMEOUT_EXIT:-}" ]]; then exit "$SHIM_TIMEOUT_EXIT"; fi
+case " $* " in
+  *" sync "*) if [[ -n "${SHIM_TIMEOUT_EXIT:-}" ]]; then exit "$SHIM_TIMEOUT_EXIT"; fi ;;
+  *" git "*) if [[ -n "${SHIM_GIT_TIMEOUT_EXIT:-}" ]]; then exit "$SHIM_GIT_TIMEOUT_EXIT"; fi ;;
+esac
 while [[ "$1" == --* ]]; do shift; done
 shift
 exec "$@"
@@ -189,11 +193,18 @@ def test_a_daily_run_pulls_installs_runs_and_records_its_status(host: Host) -> N
     manifest = f"--manifest-path {host.root}/pixi.toml"
     summary = host.state / "run-events.json"
     run = f"pixi run --locked {manifest} pipeline -- --env prod sync --group events"
+    prune = f"pixi run --locked {manifest} pipeline -- --env prod prune-cache"
     assert host.calls() == [
         "flock -n 9",
-        f"pixi install --locked {manifest}",
+        # git and pixi have limits too: a hung pull never holds the lock.
+        "timeout --kill-after=1m 15m git pull --ff-only --quiet origin main",
+        f"timeout --kill-after=1m 30m pixi install --locked {manifest}",
+        f"pixi install --locked {manifest}",  # what timeout ran
         f"timeout --kill-after=10m 2h {run} --summary-json {summary}",
-        f"{run} --summary-json {summary}",  # what timeout ran
+        f"{run} --summary-json {summary}",
+        # Retention after every run, the daily one too (R7, R4).
+        f"timeout --kill-after=1m 30m {prune}",
+        prune,
     ]
     status = host.status("events")
     assert status == json.loads((host.state / "status.json").read_text())
@@ -216,15 +227,34 @@ def test_the_weekly_run_has_six_hours_and_prunes_the_cache(host: Host) -> None:
     done = host.run("full", SHIM_SUMMARY=json.dumps(SUMMARY | {"group": "full"}))
 
     assert done.returncode == 0, done.stdout + done.stderr
-    calls = host.calls()
+    calls = [call for call in host.calls() if call.startswith(("flock", "timeout"))]
     assert calls[0] == "flock -w 10800 9", "the weekly run waits for a daily one"
-    assert calls[2].startswith("timeout --kill-after=10m 6h pixi run --locked")
-    assert calls[2].endswith(f"sync --group full --summary-json {host.state}/run-full.json")
+    assert calls[3].startswith("timeout --kill-after=10m 6h pixi run --locked")
+    assert calls[3].endswith(f"sync --group full --summary-json {host.state}/run-full.json")
     assert calls[4] == (
-        f"pixi run --locked --manifest-path {host.root}/pixi.toml pipeline -- "
-        "--env prod prune-cache"
+        f"timeout --kill-after=1m 30m pixi run --locked --manifest-path {host.root}/pixi.toml "
+        "pipeline -- --env prod prune-cache"
     )
     assert host.status("full")["phase"] == "done"
+
+
+def test_a_weekly_run_that_cannot_have_the_lock_fails_and_alerts(host: Host) -> None:
+    done = host.run("full", SHIM_FLOCK_EXIT="1")
+    assert done.returncode == 75, "non-zero: OnFailure= sends the alert"
+    assert host.calls() == ["flock -w 10800 9"], "nothing else ran"
+    status = host.status("full")
+    assert (status["exitCode"], status["result"], status["phase"]) == (75, "failed", "lock")
+    assert status["invocationId"] == "invocation-1"
+    assert "did not start" in host.log("full")
+
+
+def test_a_hung_pull_is_cut_off_and_fails_the_update(host: Host) -> None:
+    before = host.head()
+    host.push("second")
+    done = host.run("events", SHIM_GIT_TIMEOUT_EXIT="124")
+    assert done.returncode == 10
+    assert host.head() == before
+    assert host.status("events")["phase"] == "update"
 
 
 def test_a_failed_pull_stops_the_run_and_keeps_the_checkout(host: Host) -> None:
@@ -256,7 +286,7 @@ def test_an_environment_that_does_not_install_puts_the_checkout_back(host: Host)
     assert git("symbolic-ref", "--short", "HEAD", cwd=host.root) == "main"
     installs = [call for call in host.calls() if call.startswith("pixi install")]
     assert len(installs) == 2, "the new commit's, then the previous one's again"
-    assert not any(call.startswith("timeout") for call in host.calls())
+    assert not any(" sync " in call for call in host.calls()), "the pipeline never ran"
     assert host.status("events")["phase"] == "install"
 
 
@@ -339,3 +369,74 @@ def test_anything_but_one_group_is_a_usage_error(host: Host, args: tuple[str, ..
     assert done.returncode == 64
     assert "usage" in done.stderr
     assert host.calls() == []
+
+
+# --- the installer's revision: root installs only what it fetched itself ---------------
+
+INSTALL = REPO / "ops" / "vps" / "install.sh"
+OPS_FILES = (
+    "camsocs-harvest.sh",
+    "camsocs-alert.py",
+    "camsocs-status.py",
+    "install.sh",
+    "logrotate/camsocs",
+    "systemd/camsocs-harvest@.service",
+    "systemd/camsocs-alert@.service",
+)
+
+
+def _fetch(tmp: Path, origin: Path, revision: str) -> subprocess.CompletedProcess[str]:
+    """Runs install.sh's `fetch_revision` against a local origin, with root's
+    `install -o root` replaced (the test is no root) and GNU timeout too."""
+    script = f"""
+set -euo pipefail
+source "{INSTALL}"
+install() {{ mkdir -p "${{@: -1}}"; }}
+timeout() {{ while [[ "$1" == --* ]]; do shift; done; shift; "$@"; }}
+REPO_URL="{origin}"
+MIRROR="{tmp}/mirror/camsocs.git"
+WORK="{tmp}/work"
+mkdir -p "$WORK"
+fetch_revision "$1"
+cat "$REV_DIR/camsocs-harvest.sh"
+"""
+    return subprocess.run(
+        ["bash", "-c", script, "_", revision],
+        capture_output=True,
+        text=True,
+        env={**os.environ, **GIT_ENV},
+        check=False,
+        timeout=60,
+    )
+
+
+def test_the_installer_extracts_a_reviewed_commit_of_main_from_its_own_mirror(
+    tmp_path: Path,
+) -> None:
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    git("init", "-q", cwd=seed)
+    git("checkout", "-q", "-b", "main", cwd=seed)
+    for name in OPS_FILES:
+        path = seed / "ops" / "vps" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# reviewed {name}\n")
+    git("add", ".", cwd=seed)
+    git("commit", "-q", "-m", "reviewed", cwd=seed)
+    reviewed = git("rev-parse", "HEAD", cwd=seed)
+    # A commit that never reached main (a branch someone pushed).
+    git("checkout", "-q", "-b", "other", cwd=seed)
+    (seed / "ops" / "vps" / "camsocs-harvest.sh").write_text("# not reviewed\n")
+    git("commit", "-q", "-am", "elsewhere", cwd=seed)
+    elsewhere = git("rev-parse", "HEAD", cwd=seed)
+    git("checkout", "-q", "main", cwd=seed)
+    origin = tmp_path / "origin.git"
+    git("clone", "-q", "--bare", str(seed), str(origin), cwd=tmp_path)
+
+    done = _fetch(tmp_path, origin, reviewed)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip().endswith("# reviewed camsocs-harvest.sh")
+
+    refused = _fetch(tmp_path, origin, elsewhere)
+    assert refused.returncode != 0
+    assert "is not on main" in refused.stderr or "is not a commit" in refused.stderr

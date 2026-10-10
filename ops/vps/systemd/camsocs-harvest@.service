@@ -1,7 +1,9 @@
 # One scheduled camsocs harvest; %i is the group: `events` (daily) or `full`
 # (weekly). Started by camsocs-harvest-events.timer / camsocs-harvest-full.timer,
 # or by hand: `systemctl start camsocs-harvest@full.service`.
-# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md.
+# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md. Installed by
+# install.sh from a reviewed commit; the script it runs is root-owned in
+# /usr/local/lib/camsocs-ops/, outside the checkout the run writes.
 [Unit]
 Description=camsocs harvest (%i group)
 Documentation=file:/opt/camsocs/docs/ops-vps.md
@@ -15,7 +17,7 @@ Type=oneshot
 User=camsocs
 Group=camsocs
 WorkingDirectory=/opt/camsocs
-ExecStart=/opt/camsocs/ops/vps/camsocs-harvest.sh %i
+ExecStart=/usr/local/lib/camsocs-ops/camsocs-harvest.sh %i
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=CAMSOCS_ROOT=/opt/camsocs CAMSOCS_STATE_DIR=/var/lib/camsocs CAMSOCS_LOG_DIR=/var/log/camsocs
 # The script's own limits end the pipeline first (events 2 h, full 6 h, plus
@@ -58,3 +60,12 @@ LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 CapabilityBoundingSet=
+# Other users' processes (Mya's, cliproxy's) are invisible.
+ProtectProc=invisible
+# Defence in depth behind the fetcher's own refusal of non-public addresses
+# (pipeline sources/base.py): no private, CGNAT (Tailscale), link-local or
+# multicast range. The loopback stays open: cliproxy (127.0.0.1:8317) and the
+# host's DNS stub (127.0.0.53).
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

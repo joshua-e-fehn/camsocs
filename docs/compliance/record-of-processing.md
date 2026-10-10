@@ -37,6 +37,6 @@ Not processed: special category data (no inference of religion, politics, ethnic
 
 - Broker and internal tables reachable only through functions that call `requireBrokerUser`; public queries return validated projections only (`convex/lib/projections.ts`, `returns` validators).
 - Pipeline writes only through `/api/pipeline/*` with a Bearer key; secrets live in `pipeline/.env` and the Convex env, never in Git.
-- On the VPS host (D5) the pipeline runs as its own unprivileged user under sandboxed systemd units (`ProtectSystem=strict`, `NoNewPrivileges`, no capabilities, Mya's agent data and Docker unreachable), with its env files `0600`, a read-only deploy key and its own cliproxy key; it is not run inside the LLM agent's container (`docs/ops-vps.md`).
+- On the VPS host (D5) the pipeline runs as its own unprivileged user under sandboxed systemd units (`ProtectSystem=strict`, `NoNewPrivileges`, no capabilities, Mya's agent data and Docker unreachable, private address ranges denied), with its env files `0600`, a read-only deploy key and its own cliproxy key; it is not run inside the LLM agent's container, and its fetcher never connects to a non-public address (`docs/ops-vps.md`). A failed run's Slack alert carries structured facts only (group, exit code, phase, commit, run key, failed stages' names, the log's path): no personal data goes to Slack, so Slack is no recipient here.
 - `cam_only` events need a verified `@cam.ac.uk` session; `members_only` events are never shown.
 - TLS everywhere; no analytics or third-party trackers on the site.

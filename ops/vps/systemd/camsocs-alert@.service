@@ -1,7 +1,9 @@
 # The Slack DM for a failed camsocs harvest; %i is the group. Started by
 # camsocs-harvest@%i.service's OnFailure=, or by hand to test the alert path:
 # `systemctl start camsocs-alert@events.service` (sends a real DM).
-# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md "Alerts".
+# Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md "Alerts". Installed
+# by install.sh from a reviewed commit; the script is root-owned in
+# /usr/local/lib/camsocs-ops/, never run from the checkout the harvest writes.
 [Unit]
 Description=camsocs harvest failure alert (%i group)
 Documentation=file:/opt/camsocs/docs/ops-vps.md
@@ -10,26 +12,27 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=camsocs
-Group=camsocs
-ExecStart=/usr/bin/python3 -I /opt/camsocs/ops/vps/camsocs-alert.py %i
-# Mya's Hermes env file stays root's: systemd reads it and hands this unit a
-# read-only copy only it can read, for as long as it runs. The script keeps
-# SLACK_BOT_TOKEN, SLACK_HOME_CHANNEL and SLACK_ALLOWED_USERS and ignores the rest.
-LoadCredential=slack-env:/docker/hermes-agent-vspa/data/.env
+# Not the harvest's user: a user of its own for each run, in the camsocs group
+# only to read the status file (/var/lib/camsocs is 0750, the file 0640).
+DynamicUser=yes
+SupplementaryGroups=camsocs
+ExecStart=/usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-alert.py %i
+# The three Slack values only, which install.sh extracted from Mya's env file
+# into this root-owned 0600 file; systemd hands the unit a read-only copy only
+# it can read, for as long as it runs.
+LoadCredential=slack-env:/etc/camsocs/alert.env
 Environment=CAMSOCS_ALERT_ENV=%d/slack-env
-Environment=CAMSOCS_STATE_DIR=/var/lib/camsocs CAMSOCS_LOG_DIR=/var/log/camsocs
-# Values of secret-looking keys in these files are masked out of the message.
-Environment=CAMSOCS_SECRET_FILES=/opt/camsocs/pipeline/.env:/opt/camsocs/pipeline/.env.prod
+Environment=CAMSOCS_STATE_DIR=/var/lib/camsocs
 TimeoutStartSec=2min
 
-# --- hardening: it only reads files and talks to slack.com ------------------
+# --- hardening: it reads one status file and talks to slack.com ---------------
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-# Not /docker itself: the credential above is read from there.
-InaccessiblePaths=-/var/lib/docker -/run/docker.sock -/root
+# Mya's data, Docker, root's files, the checkout (with the pipeline's keys)
+# and the logs are out of its reach.
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/opt/camsocs -/var/log/camsocs
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
@@ -37,6 +40,7 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
+ProtectProc=invisible
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
@@ -44,4 +48,6 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=

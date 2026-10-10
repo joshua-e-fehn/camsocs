@@ -5,25 +5,31 @@
 
 Run by ``camsocs-alert@<group>.service``, which ``camsocs-harvest@<group>.service``
 names in ``OnFailure=``. Modelled on the host's ``mya-backup`` ``send_alert``: it
-posts through Mya's Slack bot with the Slack Web API.
+posts through Mya's Slack bot with the Slack Web API. Installed root-owned in
+``/usr/local/lib/camsocs-ops/`` from a reviewed commit (``install.sh``), never run
+from the checkout the harvest can write.
 
-- **Credentials.** From the env file ``CAMSOCS_ALERT_ENV`` names (Mya's Hermes
-  ``.env``, which the unit hands over read-only as a systemd credential; default
-  ``$CREDENTIALS_DIRECTORY/slack-env``) it reads ``SLACK_BOT_TOKEN``,
+- **Credentials.** From the env file ``CAMSOCS_ALERT_ENV`` names (default
+  ``$CREDENTIALS_DIRECTORY/slack-env``: the unit's systemd credential, a copy of
+  the root-owned ``/etc/camsocs/alert.env``, which ``install.sh`` extracts from
+  Mya's env file and which holds nothing else) it reads ``SLACK_BOT_TOKEN``,
   ``SLACK_HOME_CHANNEL`` and ``SLACK_ALLOWED_USERS`` — no other key is kept.
 - **Where.** ``SLACK_HOME_CHANNEL`` when it is set; otherwise the first user in
   ``SLACK_ALLOWED_USERS``, whose DM ``conversations.open`` opens; then
   ``chat.postMessage``.
-- **What.** The group, the exit code and how the unit ended (systemd's
-  ``MONITOR_*`` variables for ``OnFailure=`` units), the phase that failed, the
-  failed stages and the last 20 lines of the run's log — all masked: Slack,
-  OpenAI-style, GitHub and Google keys, ``Bearer …``, ``NAME=value`` for any
-  environment name with KEY, TOKEN, SECRET, PASSWORD or AUTH in it (and
-  ``api_key=``, ``"access_token":``, ``password:`` …), credentials in URLs,
-  secret-looking query parameters, long opaque strings (32+ characters with
-  letters and digits, absolute paths excepted), and the literal values of such
-  keys in the env files ``CAMSOCS_SECRET_FILES`` lists (``:``-separated).
-- ``--dry-run`` prints the masked message instead of sending it.
+- **What.** Structured facts only, never text a harvest read: the group, the
+  exit code and how the unit ended (systemd's ``MONITOR_*`` variables for
+  ``OnFailure=`` units), and from the status file — written by the harvest, so
+  untrusted — only values of a known shape: the phase (one of the runner's
+  phases), the commit (hex), the run key, the start and finish times and the
+  failed stages' names. Anything else in it (the pipeline's error text, its
+  warnings, the log) is not sent: the message names the log's path on the host
+  instead. Scraped titles, descriptions and server errors therefore never reach
+  Slack (or Mya's channel). The whole message is still masked as a last line
+  of defence: Slack, OpenAI-style, GitHub and Google keys, ``Bearer …``,
+  ``NAME=value`` for secret-looking names, credentials in URLs, secret-looking
+  query parameters and long opaque strings.
+- ``--dry-run`` prints the message instead of sending it.
 
 Standard library only (the host's python3). Exit 0 when the message was sent
 (or printed), 1 when it was not; the reason goes to stderr (the journal) and
@@ -40,6 +46,7 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,11 +55,20 @@ WANTED_KEYS = ("SLACK_BOT_TOKEN", "SLACK_HOME_CHANNEL", "SLACK_ALLOWED_USERS")
 DEFAULT_STATE_DIR = "/var/lib/camsocs"
 DEFAULT_LOG_DIR = "/var/log/camsocs"
 CREDENTIAL_NAME = "slack-env"
-TAIL_LINES = 20
 #: Slack accepts far more; an alert this long is already unreadable on a phone.
-MAX_MESSAGE_CHARS = 3500
-MAX_LINE_CHARS = 300
+MAX_MESSAGE_CHARS = 1500
 MASK = "***"
+#: The phases `camsocs-harvest.sh` records (docs/ops-vps.md, exit codes).
+PHASES = frozenset({"done", "lock", "update", "install", "pipeline", "prune", "script", "stopped"})
+#: Shapes a status value must have to be shown (the file is the harvest's).
+_COMMIT = re.compile(r"[0-9a-f]{7,40}")
+_RUN_KEY = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]{0,63}")
+_STAGE = re.compile(r"[a-z][a-z0-9_]{0,39}")
+_INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+_LOG_FILE = re.compile(r"/var/log/camsocs/\d{4}-\d{2}-\d{2}-[a-z]+\.log")
+_MONITOR = re.compile(r"[A-Za-z0-9_-]{1,40}")
+#: Failed stages named at most.
+MAX_STAGES = 12
 
 #: An environment-style name that says it holds a secret (LLM_API_KEY, SLACK_BOT_TOKEN).
 _SECRET_ENV_NAME = r"[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL)[A-Z0-9_]*"
@@ -120,19 +136,6 @@ def read_env(path: Path, keys: Iterable[str] | None = None) -> dict[str, str]:
     return values
 
 
-def secret_values(paths: Iterable[Path]) -> set[str]:
-    """The values of secret-looking keys in env files (missing files are skipped)."""
-    name = re.compile(rf"(?i)^{_SECRET_ENV_NAME}$")
-    found: set[str] = set()
-    for path in paths:
-        try:
-            values = read_env(path)
-        except OSError:
-            continue
-        found.update(v for k, v in values.items() if name.match(k) and len(v) >= 8)
-    return found
-
-
 # --- masking ------------------------------------------------------------------------------
 
 
@@ -158,6 +161,16 @@ def mask(text: str, known: Iterable[str] = ()) -> str:
 # --- what to say --------------------------------------------------------------------------
 
 
+def london_today() -> str:
+    """Today's London date, as the runner names its logs (UTC without tzdata)."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("Europe/London")).strftime("%Y-%m-%d")
+    except Exception:  # no time-zone data on the host: UTC is a day off at most
+        return datetime.now(UTC).strftime("%Y-%m-%d")
+
+
 def load_status(state_dir: Path, group: str) -> dict[str, Any]:
     path = state_dir / f"status-{group}.json"
     try:
@@ -167,26 +180,15 @@ def load_status(state_dir: Path, group: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def find_log(log_dir: Path, group: str, status: Mapping[str, Any]) -> Path | None:
-    """The run's log: the status file's, else the group's newest."""
-    named = status.get("logFile")
-    if isinstance(named, str) and named and Path(named).is_file():
-        return Path(named)
-    logs = sorted(log_dir.glob(f"*-{group}.log"), key=lambda p: p.stat().st_mtime)
-    return logs[-1] if logs else None
+def _shaped(value: Any, pattern: re.Pattern[str]) -> str | None:
+    """`value` when it is a string of exactly `pattern`'s shape, else None."""
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
 
 
-def tail(path: Path | None, count: int = TAIL_LINES) -> list[str]:
-    if path is None:
-        return []
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-    return [
-        line if len(line) <= MAX_LINE_CHARS else line[: MAX_LINE_CHARS - 1] + "…"
-        for line in lines[-count:]
-    ]
+def log_path(group: str, status: Mapping[str, Any], today: str) -> str:
+    """Where the run's log is on the host: the status file's path when it has
+    the runner's own shape, else the day's log of the group."""
+    return _shaped(status.get("logFile"), _LOG_FILE) or f"{DEFAULT_LOG_DIR}/{today}-{group}.log"
 
 
 def build_message(
@@ -194,53 +196,54 @@ def build_message(
     *,
     environ: Mapping[str, str],
     status: Mapping[str, Any],
-    log_path: Path | None,
-    lines: list[str],
     host: str,
+    today: str,
     known_secrets: Iterable[str] = (),
 ) -> str:
-    """The alert text (Slack mrkdwn), masked as a whole."""
-    result = environ.get("MONITOR_SERVICE_RESULT") or "failed"
-    exit_code = environ.get("MONITOR_EXIT_CODE") or ""
-    exit_status = environ.get("MONITOR_EXIT_STATUS") or str(status.get("exitCode", "?"))
+    """The alert text (Slack mrkdwn): structured facts only (module
+    docstring), masked as a whole."""
+    result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
+    exit_code = _shaped(environ.get("MONITOR_EXIT_CODE"), _MONITOR) or ""
+    exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR)
+    if exit_status is None:
+        code = status.get("exitCode")
+        exit_status = str(code) if isinstance(code, int) and not isinstance(code, bool) else "?"
     head = f":rotating_light: camsocs harvest *{group}* failed on {host}"
     facts = [f"exit status {exit_status}" + (f" ({exit_code}, {result})" if exit_code else "")]
     invocation = environ.get("MONITOR_INVOCATION_ID")
     current = bool(status) and (
         not invocation or not status.get("invocationId") or status["invocationId"] == invocation
     )
+    body = [head]
     if current:
-        facts.append(f"phase: {status.get('phase', '?')}")
-        if status.get("commit"):
-            facts.append(f"commit {status['commit']}")
-        if status.get("runKey"):
-            facts.append(f"run {status['runKey']}")
-    body = [head, " · ".join(facts)]
-    if current and status.get("startedAt"):
-        body.append(f"started {status['startedAt']}, finished {status.get('finishedAt', '?')}")
-    if current and status.get("failedStages"):
-        body.append("failed stages: " + ", ".join(str(s) for s in status["failedStages"]))
-    if current and status.get("error"):
-        body.append(f"error: {status['error']}")
-    if status and not current:
+        phase = status.get("phase")
+        facts.append(f"phase: {phase if phase in PHASES else '?'}")
+        if commit := _shaped(status.get("commit"), _COMMIT):
+            facts.append(f"commit {commit}")
+        if run_key := _shaped(status.get("runKey"), _RUN_KEY):
+            facts.append(f"run {run_key}")
+    body.append(" · ".join(facts))
+    if current:
+        started = _shaped(status.get("startedAt"), _INSTANT)
+        finished = _shaped(status.get("finishedAt"), _INSTANT)
+        if started:
+            body.append(f"started {started}, finished {finished or '?'}")
+        stages = status.get("failedStages")
+        names = [
+            name for name in (stages if isinstance(stages, list) else []) if _shaped(name, _STAGE)
+        ]
+        if names:
+            shown = ", ".join(names[:MAX_STAGES])
+            more = f" and {len(names) - MAX_STAGES} more" if len(names) > MAX_STAGES else ""
+            body.append(f"failed stages: {shown}{more}")
+    elif status:
         body.append("(the status file is from an earlier run: this one ended before writing it)")
-    footer = (
-        f"Status: {DEFAULT_STATE_DIR}/status-{group}.json · "
+    body.append(
+        f"Log on the host: {log_path(group, status if current else {}, today)} · "
+        f"status: {DEFAULT_STATE_DIR}/status-{group}.json · "
         f"journalctl -u camsocs-harvest@{group} · docs/ops-vps.md"
     )
-    # A fence inside a log line would end the code block.
-    shown = [line.replace("```", "'''") for line in lines]
-    while True:
-        if shown:
-            block = "\n".join(shown)
-            log_part = f"Last {len(shown)} lines of {log_path}:\n```\n{block}\n```"
-        else:
-            log_part = "(the log lines are too long to show)" if lines else "No log lines found."
-        text = mask("\n".join([*body, log_part, footer]), known_secrets)
-        if len(text) <= MAX_MESSAGE_CHARS or not shown:
-            return text[:MAX_MESSAGE_CHARS]
-        # Too long for a phone: the oldest lines go first.
-        shown = shown[1:]
+    return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
 
 
 # --- Slack --------------------------------------------------------------------------------
@@ -322,9 +325,7 @@ def main(
     group = args[0]
 
     state_dir = Path(environ.get("CAMSOCS_STATE_DIR") or DEFAULT_STATE_DIR)
-    log_dir = Path(environ.get("CAMSOCS_LOG_DIR") or DEFAULT_LOG_DIR)
     status = load_status(state_dir, group)
-    log_path = find_log(log_dir, group, status)
 
     env_path = environ.get("CAMSOCS_ALERT_ENV") or str(
         Path(environ.get("CREDENTIALS_DIRECTORY") or "/nonexistent") / CREDENTIAL_NAME
@@ -336,18 +337,14 @@ def main(
         if not dry_run:
             print(f"camsocs-alert: cannot read {env_path} ({error.strerror})", file=sys.stderr)
             return 1
-    secret_files = [Path(p) for p in (environ.get("CAMSOCS_SECRET_FILES") or "").split(":") if p]
-    known = secret_values(secret_files)
-    known.update(v for v in (settings.get("SLACK_BOT_TOKEN"),) if v)
 
     text = build_message(
         group,
         environ=environ,
         status=status,
-        log_path=log_path,
-        lines=tail(log_path),
         host=socket.gethostname(),
-        known_secrets=known,
+        today=london_today(),
+        known_secrets=[v for v in (settings.get("SLACK_BOT_TOKEN"),) if v],
     )
     if dry_run:
         print(text)

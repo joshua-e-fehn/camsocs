@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import re
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -78,17 +79,8 @@ def test_ordinary_log_lines_stay_readable() -> None:
         assert alert.mask(line) == line
 
 
-def test_known_secret_values_are_masked_wherever_they_appear(tmp_path: Path) -> None:
-    env = tmp_path / ".env.prod"
-    env.write_text(
-        "# production\n"
-        "CONVEX_HTTP_URL=https://cheerful-bandicoot-511.convex.site\n"
-        "PIPELINE_API_KEY='shortish-key-1'\n"
-        'export META_ACCESS_TOKEN="EAAGm0PX4ZCpsBA"\n'
-    )
-    known = alert.secret_values([env, tmp_path / "missing"])
-    assert known == {"shortish-key-1", "EAAGm0PX4ZCpsBA"}, "URLs are not secrets"
-    assert alert.mask("sent shortish-key-1 and EAAGm0PX4ZCpsBA", known) == "sent *** and ***"
+def test_known_secret_values_are_masked_wherever_they_appear() -> None:
+    assert alert.mask(f"sent {TOKEN} and plain-words", [TOKEN]) == "sent *** and plain-words"
 
 
 def test_only_the_slack_keys_are_read_from_myas_env_file(tmp_path: Path) -> None:
@@ -109,64 +101,90 @@ def test_only_the_slack_keys_are_read_from_myas_env_file(tmp_path: Path) -> None
 
 # --- the message ------------------------------------------------------------------------
 
+STATUS = {
+    "group": "events",
+    "exitCode": 1,
+    "phase": "pipeline",
+    "commit": "0123456789ab",
+    "runKey": "20261010T033000Z-abcdef",
+    "startedAt": "2026-10-10T03:30:00Z",
+    "finishedAt": "2026-10-10T03:52:10Z",
+    "failedStages": ["calendar_feeds"],
+    "invocationId": "inv-1",
+    "logFile": "/var/log/camsocs/2026-10-10-events.log",
+    "error": "Server said: 'PR closed to sisters (Brothers PR Chill)' was refused",
+    "warnings": ["_resolved was last staged 9 days ago"],
+    "summary": ["load: 'MCR room booking (Jane Example)' not posted"],
+}
+MONITOR = {
+    "MONITOR_SERVICE_RESULT": "exit-code",
+    "MONITOR_EXIT_CODE": "exited",
+    "MONITOR_EXIT_STATUS": "1",
+    "MONITOR_INVOCATION_ID": "inv-1",
+}
 
-def message(tmp_path: Path, *, environ: dict[str, str] | None = None, **status) -> str:
-    log = tmp_path / "2026-10-10-events.log"
-    log.write_text(
-        "\n".join(f"line {n}" for n in range(1, 31))
-        + f"\nhttpx error with Authorization: Bearer {TOKEN}\n"
-        + "``` a fence in the log\n"
-    )
-    base = {
-        "group": "events",
-        "exitCode": 1,
-        "phase": "pipeline",
-        "commit": "0123456789ab",
-        "runKey": "20261010T033000Z-abcdef",
-        "startedAt": "2026-10-10T03:30:00Z",
-        "finishedAt": "2026-10-10T03:52:10Z",
-        "failedStages": ["calendar_feeds"],
-        "invocationId": "inv-1",
-        "logFile": str(log),
-    }
-    full_status = base | status
+
+def message(*, environ: dict[str, str] | None = None, **status) -> str:
     return alert.build_message(
         "events",
-        environ=environ
-        or {
-            "MONITOR_SERVICE_RESULT": "exit-code",
-            "MONITOR_EXIT_CODE": "exited",
-            "MONITOR_EXIT_STATUS": "1",
-            "MONITOR_INVOCATION_ID": "inv-1",
-        },
-        status=full_status,
-        log_path=log,
-        lines=alert.tail(log),
+        environ=MONITOR if environ is None else environ,
+        status=STATUS | status,
         host="srv1608974",
+        today="2026-10-10",
         known_secrets=[TOKEN],
     )
 
 
-def test_the_message_names_the_group_the_exit_and_the_last_twenty_lines(tmp_path: Path) -> None:
-    text = message(tmp_path)
+def test_the_message_names_the_group_the_exit_the_phase_and_where_the_log_is() -> None:
+    text = message()
 
     assert "camsocs harvest *events* failed on srv1608974" in text
     assert "exit status 1 (exited, exit-code)" in text
     assert "phase: pipeline" in text and "commit 0123456789ab" in text
+    assert "run 20261010T033000Z-abcdef" in text
     assert "failed stages: calendar_feeds" in text
-    assert "Last 20 lines of" in text
-    # 32 lines in the log: the last 20 start at line 13.
-    assert "line 13\n" in text and "line 12\n" not in text, "only the last 20 lines"
-    assert TOKEN not in text and "Bearer ***" in text
-    assert text.count("```") == 2, "a fence in the log cannot end the code block"
+    assert "/var/log/camsocs/2026-10-10-events.log" in text
+    assert len(text) <= alert.MAX_MESSAGE_CHARS
 
 
-def test_a_status_file_from_an_earlier_run_is_not_presented_as_this_ones(
-    tmp_path: Path,
-) -> None:
-    text = message(tmp_path, invocationId="inv-0")
+def test_nothing_a_harvest_read_reaches_slack() -> None:
+    """The pipeline's error text, warnings, summary and the log carry scraped
+    titles and server errors: none of it is sent, only shaped facts."""
+    text = message()
+    for leaked in ("PR closed", "Jane Example", "Brothers", "9 days", "Server said", "```"):
+        assert leaked not in text
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("phase", "pipeline; see https://evil.example/x"),
+        ("commit", "not a commit <@U123>"),
+        ("runKey", "r1 — Jane Example's booking"),
+        ("startedAt", "Saturday, with Jane"),
+        ("failedStages", ["load", "MCR room booking (Jane Example)"]),
+        ("logFile", "/run/credentials/camsocs-alert@events.service/slack-env"),
+    ],
+)
+def test_a_status_value_of_the_wrong_shape_is_not_shown(field: str, value: object) -> None:
+    text = message(**{field: value})
+    for word in ("evil", "<@U123>", "Jane", "credentials"):
+        assert word not in text
+    if field == "logFile":
+        assert "/var/log/camsocs/2026-10-10-events.log" in text, "the day's log instead"
+    if field == "failedStages":
+        assert "failed stages: load" in text
+
+
+def test_a_status_file_from_an_earlier_run_is_not_presented_as_this_ones() -> None:
+    text = message(invocationId="inv-0")
     assert "from an earlier run" in text
     assert "phase: pipeline" not in text and "failed stages" not in text
+
+
+def test_a_run_that_could_not_have_the_lock_says_so() -> None:
+    text = message(phase="lock", exitCode=75, failedStages=[], runKey=None, commit=None)
+    assert "phase: lock" in text
 
 
 # --- sending ----------------------------------------------------------------------------
@@ -229,10 +247,9 @@ def test_main_reads_the_credential_masks_and_sends(tmp_path: Path, capsys) -> No
     )
     state = tmp_path / "state"
     state.mkdir()
-    logs = tmp_path / "logs"
-    logs.mkdir()
-    (logs / "2026-10-10-full.log").write_text("stage failed\nLLM_API_KEY=sk-abcdefghijklmnopq\n")
-    (state / "status-full.json").write_text(json.dumps({"phase": "update", "exitCode": 10}))
+    (state / "status-full.json").write_text(
+        json.dumps({"phase": "update", "exitCode": 10, "error": "LLM_API_KEY=sk-abcdefghijklmnopq"})
+    )
     slack = FakeSlack(
         {
             "conversations.open": {"ok": True, "channel": {"id": "D0DM"}},
@@ -242,15 +259,14 @@ def test_main_reads_the_credential_masks_and_sends(tmp_path: Path, capsys) -> No
     environ = {
         "CREDENTIALS_DIRECTORY": str(credentials),
         "CAMSOCS_STATE_DIR": str(state),
-        "CAMSOCS_LOG_DIR": str(logs),
         "MONITOR_EXIT_STATUS": "10",
     }
 
     assert alert.main(["full"], environ, slack) == 0
 
     text = slack.requests[-1][1]["text"]
-    assert "*full* failed" in text and "phase: update" in text and "stage failed" in text
-    assert "sk-abcdefghijklmnopq" not in text
+    assert "*full* failed" in text and "phase: update" in text
+    assert "sk-abcdefghijklmnopq" not in text and "LLM_API_KEY" not in text
     out = capsys.readouterr()
     assert TOKEN not in out.out + out.err
 
@@ -353,7 +369,8 @@ def test_the_harvest_unit_runs_the_script_as_camsocs_hardened() -> None:
     harvest = unit("camsocs-harvest@.service")
     assert harvest["Service.Type"] == ["oneshot"]
     assert harvest["Service.User"] == ["camsocs"]
-    assert harvest["Service.ExecStart"] == ["/opt/camsocs/ops/vps/camsocs-harvest.sh %i"]
+    # Root-owned, from a reviewed commit: never the checkout the run writes.
+    assert harvest["Service.ExecStart"] == ["/usr/local/lib/camsocs-ops/camsocs-harvest.sh %i"]
     assert harvest["Unit.OnFailure"] == ["camsocs-alert@%i.service"]
     assert harvest["Service.ProtectSystem"] == ["strict"]
     assert harvest["Service.NoNewPrivileges"] == ["yes"]
@@ -361,20 +378,27 @@ def test_the_harvest_unit_runs_the_script_as_camsocs_hardened() -> None:
     writable = harvest["Service.ReadWritePaths"][0].split()
     assert writable == ["/opt/camsocs", "/var/lib/camsocs", "/var/log/camsocs"]
     assert "-/docker" in harvest["Service.InaccessiblePaths"][0].split()
+    denied = harvest["Service.IPAddressDeny"][0].split()
+    for network in ("link-local", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"):
+        assert network in denied
+    assert harvest["Service.ProtectProc"] == ["invisible"]
 
 
-def test_the_alert_unit_gets_myas_env_file_as_a_credential() -> None:
+def test_the_alert_unit_runs_root_owned_code_with_the_three_slack_values_only() -> None:
     sender = unit("camsocs-alert@.service")
-    assert sender["Service.User"] == ["camsocs"]
+    assert "Service.User" not in sender, "not the harvest's user"
+    assert sender["Service.DynamicUser"] == ["yes"]
+    assert sender["Service.SupplementaryGroups"] == ["camsocs"]
     assert sender["Service.ExecStart"] == [
-        "/usr/bin/python3 -I /opt/camsocs/ops/vps/camsocs-alert.py %i"
+        "/usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-alert.py %i"
     ]
-    assert sender["Service.LoadCredential"] == ["slack-env:/docker/hermes-agent-vspa/data/.env"]
+    assert sender["Service.LoadCredential"] == ["slack-env:/etc/camsocs/alert.env"]
     assert "CAMSOCS_ALERT_ENV=%d/slack-env" in sender["Service.Environment"]
     assert sender["Service.ProtectSystem"] == ["strict"]
     assert "Service.ReadWritePaths" not in sender, "the alert writes nothing"
-    # The credential is read from /docker, so that path must stay visible to the unit.
-    assert "-/docker" not in sender["Service.InaccessiblePaths"][0].split()
+    hidden = sender["Service.InaccessiblePaths"][0].split()
+    for path in ("-/docker", "-/opt/camsocs", "-/var/log/camsocs", "-/root"):
+        assert path in hidden
 
 
 @pytest.mark.parametrize(
@@ -405,14 +429,24 @@ def test_logs_go_after_ninety_days_as_the_camsocs_user() -> None:
         assert directive in text
 
 
-def test_the_installer_pins_pixi_and_installs_every_unit_from_the_checkout() -> None:
+def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() -> None:
     text = (OPS / "install.sh").read_text()
     assert 'PIXI_VERSION="0.73.0"' in text
     assert re.search(r'PIXI_SHA256="[0-9a-f]{64}"', text)
     assert "sha256sum --check" in text
-    assert '"$ROOT"/ops/vps/systemd/*' in text
+    # Root installs what it extracted from the revision in its own mirror,
+    # never a file of the camsocs-writable checkout.
+    assert "--revision must be a full 40-character commit id" in text
+    assert 'merge-base --is-ancestor "$revision"' in text
+    assert '"$REV_DIR"/systemd/*' in text and '"$REV_DIR/logrotate/camsocs"' in text
+    assert '"$ROOT"/ops' not in text and "$ROOT/ops" not in text
+    assert 'OPS_DIR="/usr/local/lib/camsocs-ops"' in text
     for timer in ("camsocs-harvest-events.timer", "camsocs-harvest-full.timer"):
         assert timer in text
+    # A re-run leaves the timers as the operator left them.
+    assert '"$enable" == "auto" && $first_install -eq 1' in text
+    # The warm-up waits for, and holds, the harvest's lock.
+    assert 'flock -E 75 -w 600 "$HOME_DIR/harvest.lock"' in text
     # It leaves Docker, Mya's container and cliproxy alone.
     commands = [
         line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")
@@ -423,17 +457,28 @@ def test_the_installer_pins_pixi_and_installs_every_unit_from_the_checkout() -> 
     )
 
 
-def test_a_long_log_loses_its_oldest_lines_not_the_end_of_the_message(tmp_path: Path) -> None:
-    log = tmp_path / "2026-10-10-events.log"
-    log.write_text("\n".join(f"{n:02d} " + "x" * 280 for n in range(20)) + "\n")
-    text = alert.build_message(
-        "events",
-        environ={},
-        status={},
-        log_path=log,
-        lines=alert.tail(log),
-        host="h",
+def test_the_installer_copies_only_the_three_slack_values(tmp_path: Path) -> None:
+    mya = tmp_path / "mya.env"
+    mya.write_text(
+        "OPENAI_API_KEY=sk-not-ours\n"
+        f'SLACK_BOT_TOKEN="{TOKEN}"\n'
+        "SLACK_SIGNING_SECRET=abc\n"
+        "export SLACK_ALLOWED_USERS=U0AAA,U0BBB\n"
+        "SLACK_HOME_CHANNEL=C0HOME\n"
+        "#SLACK_BOT_TOKEN=commented\n"
+        "NOT_SLACK_HOME_CHANNEL=x\n"
     )
-    assert len(text) <= alert.MAX_MESSAGE_CHARS
-    assert text.count("```") == 2 and text.rstrip().endswith("docs/ops-vps.md")
-    assert "19 xxx" in text and "00 xxx" not in text
+    done = subprocess.run(
+        ["bash", "-c", f'source "{OPS / "install.sh"}" && extract_alert_env "$1"', "_", str(mya)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert done.stdout.splitlines() == [
+        f'SLACK_BOT_TOKEN="{TOKEN}"',
+        "export SLACK_ALLOWED_USERS=U0AAA,U0BBB",
+        "SLACK_HOME_CHANNEL=C0HOME",
+    ]
+    copied = tmp_path / "alert.env"
+    copied.write_text(done.stdout)
+    assert set(alert.read_env(copied)) == set(alert.WANTED_KEYS)

@@ -7,14 +7,16 @@
         --log /var/log/camsocs/2026-10-10-events.log \\
         --run-summary /var/lib/camsocs/run-events.json [--invocation ID]
 
-`camsocs-harvest.sh` calls it on every exit once it holds the lock. It writes
+`camsocs-harvest.sh` calls it on every exit once it holds the lock, and when
+the weekly run could not have the lock at all (phase ``lock``). It writes
 ``<state-dir>/status-<group>.json`` (that group's latest run) and
 ``<state-dir>/status.json`` (the latest run of any group), each whole or not
 at all (a temporary file renamed into place):
 
     {"group", "environment", "startedAt", "finishedAt", "exitCode",
      "result": "ok" | "failed" | "timed_out" | "stopped",
-     "phase": "done" | "update" | "install" | "pipeline" | "prune" | "script" | "stopped",
+     "phase": "done" | "lock" | "update" | "install" | "pipeline" | "prune" | "script"
+              | "stopped",
      "commit", "logFile", "invocationId",
      "runKey", "summary": [one line per stage], "failedStages", "warnings",
      "error", "coverage": {"listed", "counterparts", "upcomingEvents", "report"} | null}
