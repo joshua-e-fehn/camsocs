@@ -16,7 +16,9 @@ A **title** that cannot be made safe takes its event (or session) with it:
 none of its claims is posted (`RedactionStats.dropped`), because a title is
 required and a withheld one would leave the last published title standing.
 So does a title that was nothing but a person's name: redacted, it is only
-role and neutral words ("Sophie Example" → "someone") and says nothing.
+role and neutral words ("Sophie Example" → "someone") and says nothing. A
+venue that was only a name ("Sophie's" → "someone's") is withheld the same
+way (`_nameless`); the event keeps its other claims.
 
 The speakers an event publishes (`events.speakers`) are public and stay
 named, both in that field and in its description — but never a name that is
@@ -944,9 +946,6 @@ class Redactor:
             return Redaction(original, None, "withheld", result.redactions)
         names = [name for name, _ in result.redactions] + list(request.private)
         final = strip_named_links(result.text, names) if names else result.text
-        if request.title and result.redactions and allowed_replacement(final):
-            # The title was a name and nothing else: "someone" is no title.
-            return Redaction(original, None, "withheld", result.redactions)
         return Redaction(original, final, result.method, result.redactions)
 
     def _redact(self, request: RedactRequest) -> Redaction:
@@ -1341,6 +1340,8 @@ def redact_claims(
     dropped: set[tuple[str, str]] = set()
     for index, kind, texts in targets:
         done = {text: results[request] for text, request in texts}
+        if kind == "title" or out[index].field == "venueText":
+            done = {text: _nameless(redaction) for text, redaction in done.items()}
         out[index] = _redacted_claim(out[index], kind, done, redactor.stats)
         if kind == "title" and any(r.text is None for r in done.values()):
             dropped.add((out[index].entity_type, out[index].entity_key))
@@ -1348,6 +1349,17 @@ def redact_claims(
         redactor.stats.dropped.extend(sorted(key for _type, key in dropped))
         out = [c for c in out if (c.entity_type, c.entity_key) not in dropped]
     return out, redactor.stats
+
+
+def _nameless(redaction: Redaction) -> Redaction:
+    """A title or venue that was a name and nothing else ("Sophie Example" →
+    "someone", "Lola's" → "someone's") says nothing once redacted: withheld,
+    as one that cannot be made safe (module docstring)."""
+    if redaction.text is None or not redaction.redactions:
+        return redaction
+    if not allowed_replacement(redaction.text):
+        return redaction
+    return Redaction(redaction.original, None, "withheld", redaction.redactions)
 
 
 def _not_published(claim: ClaimInput) -> ClaimInput:

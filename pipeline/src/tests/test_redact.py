@@ -621,6 +621,33 @@ def test_a_title_that_is_only_a_name_drops_the_event() -> None:
     assert posted == [] and stats.dropped == ["evt-c"]
 
 
+def test_a_venue_that_is_only_a_name_is_withheld() -> None:
+    def respond(text: str, _tier: str) -> dict[str, Any]:
+        if "Lola" in text:
+            return reply("someone’s", ("Lola", "someone"))
+        if "Bo Quokkason" in text:
+            return reply("someone’s room", ("Bo Quokkason", "someone"))
+        return reply("Club night" if "Club night" in text else "Supper")
+
+    claims = [
+        event_claim("title", "Club night", key="evt-v"),
+        event_claim("venueText", "Lola’s", key="evt-v"),
+        event_claim("title", "Supper", key="evt-w"),
+        event_claim("venueText", "Bo Quokkason’s room", key="evt-w"),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
+    venues = {
+        c.entity_key: (c.value, c.status, c.missing_reason)
+        for c in posted
+        if c.field == "venueText"
+    }
+    assert venues == {
+        "evt-v": (None, "missing", "not_published"),
+        "evt-w": ("someone’s room", None, None),
+    }
+    assert stats.dropped == []
+
+
 def test_venues_prices_and_chat_notes_are_redacted_too() -> None:
     from camsocs_pipeline.extract.redact import PUBLIC_TEXT_FIELDS
 
