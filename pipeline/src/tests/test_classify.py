@@ -383,3 +383,56 @@ def test_a_society_whose_description_calls_it_a_newspaper_is_media() -> None:
     claims = values(classify_records(records), "org-the-quokka-student")
     (org_type,) = claims["orgType"]
     assert (org_type.value, org_type.status) == ("media", "inferred")
+
+
+@pytest.mark.parametrize(
+    ("description", "org_type"),
+    [
+        (
+            "TQS is an online and print magazine written by and for students. It covers news.",
+            "media",
+        ),
+        ("We are one of the university's two student newspapers.", "media"),
+        ("The Wombat is the city's oldest news publication run by students.", "media"),
+        # What the society does, not what it is.
+        ("The Wombat Society is a society that publishes a magazine each term.", "society"),
+        ("We are a society for people who love zines and comics.", "society"),
+        # Only the first sentence says what the society is.
+        ("We are a debating society. Our termly magazine reports the debates.", "society"),
+    ],
+)
+def test_only_a_first_sentence_that_says_it_is_a_publication_makes_media(
+    description: str, org_type: str
+) -> None:
+    records = su_society("org-the-wombat", "The Wombat", description=description)
+    (claim,) = values(classify_records(records), "org-the-wombat")["orgType"]
+    assert claim.value == org_type
+
+
+def test_a_publication_says_so_on_its_own_site() -> None:
+    from camsocs_pipeline.models.observation import FieldObs as Obs
+
+    quote = "The Wombat is the university's independent student newspaper, founded in 1947."
+    site = record(
+        "society_website", "org-the-wombat", "The Wombat",
+        Obs(
+            field="shortDescription", value="An independent student newspaper.", method="llm",
+            evidence="primary", extractor="m", evidence_quote=quote, quote_check="exact",
+        ),
+        url="https://wombat.example/about",
+    )  # fmt: skip
+    records = [*su_society("org-the-wombat", "The Wombat"), site]
+    (claim,) = values(classify_records(records), "org-the-wombat")["orgType"]
+    assert claim.value == "media"
+    # The claim stands on the page that says so.
+    staged = next(
+        r for r in classify_records(records).records if any(f.field == "orgType" for f in r.fields)
+    )
+    assert staged.source_url == "https://wombat.example/about"
+    # A quote the check could not find on the page is no evidence.
+    unchecked = site.model_copy(
+        update={"fields": [site.fields[0].model_copy(update={"quote_check": "absent"})]}
+    )
+    records = [*su_society("org-the-wombat", "The Wombat"), unchecked]
+    (claim,) = values(classify_records(records), "org-the-wombat")["orgType"]
+    assert claim.value == "society"

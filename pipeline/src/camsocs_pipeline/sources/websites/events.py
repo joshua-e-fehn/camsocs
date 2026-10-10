@@ -34,11 +34,13 @@ yearless date is never taken from a page about an earlier season (a
 "2025/2026 season" post, a fixtures table scored "2025-26", an archive whose
 latest year is last season's: `page_dating`), and needs a second signal —
 its stated weekday falls on it that year *and* the page names this year or
-the term, or, with no weekday, it lies within eight weeks of the day the
-page was read (`year_problem`: pages keep last year's programme online
-without its year). The year of a yearless date is our inference, so its
-start is ``inferred``. The reference
-date the model is given is the Thursday that
+the term, or most of the page's own weekday-dated dates fall on their
+weekdays this year too (at least three, against fewer than half as many
+that do not: `weekdays_agree`; chance matches one weekday in seven), or,
+with no weekday, it lies within eight weeks of the day the page was read
+(`year_problem`: pages keep last year's programme online without its
+year). The year of a yearless date is our inference, so its start is
+``inferred``. The reference date the model is given is the Thursday that
 starts the week the page was read (`week_anchor`), so a re-read within the
 week costs nothing. Dates are resolved in code (`extract.when`); term weeks need the
 term the page names (or its URL / title says), else the event is dropped as
@@ -66,7 +68,7 @@ import logging
 import re
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html import unescape
 from typing import Any
@@ -448,6 +450,9 @@ class PageDating:
     current: bool = False
     #: The page (or its URL / title) names the term.
     term: bool = False
+    #: The page's own weekday-dated dates fall on their weekdays this year
+    #: (`weekdays_agree`).
+    weekdays: bool = False
 
 
 def page_dating(text: str, read_on: date, *, term: bool = False) -> PageDating:
@@ -496,12 +501,39 @@ def year_problem(event: LlmEvent, read_on: date, dating: PageDating = CURRENT_PA
     if weekdays:
         if day.weekday() not in weekdays:
             return "the weekday does not fall on that date"
-        if not (dating.current or dating.term):
+        if not (dating.current or dating.term or dating.weekdays):
             return "a yearless date with only its weekday to go on"
     elif day - read_on > YEARLESS_HORIZON:
         return "a date without its year or weekday, months ahead"
     event._year_inferred = True
     return None
+
+
+#: How many of a page's yearless dates must fall on their stated weekdays
+#: this year for the page's dates to count as this year's (`weekdays_agree`).
+MIN_AGREEING_WEEKDAYS = 3
+
+
+def weekdays_agree(events: Sequence[LlmEvent]) -> bool:
+    """Whether the page's yearless, weekday-dated dates are this year's as a
+    set: at least `MIN_AGREEING_WEEKDAYS` distinct dates fall on the weekday
+    their quote states, more than twice as many as those that do not. A
+    weekday matches by chance one date in seven, so last year's programme
+    (or an old archive) agrees on a few dates at most; a current page with
+    one leftover of last year's ("Friday, 10 October" above this year's
+    Saturday dates) still agrees."""
+    agreeing: set[date] = set()
+    disagreeing: set[date] = set()
+    for event in events:
+        day = _iso(event.date)
+        quote = event.when_quote or ""
+        if day is None or _YEAR.search(quote):
+            continue
+        weekdays = {_WEEKDAYS[m.group(1).lower()[:3]] for m in _WEEKDAY_NAME.finditer(quote)}
+        if not weekdays:
+            continue
+        (agreeing if day.weekday() in weekdays else disagreeing).add(day)
+    return len(agreeing) >= MIN_AGREEING_WEEKDAYS and len(agreeing) > 2 * len(disagreeing)
 
 
 def page_text(page: Page) -> str:
@@ -548,6 +580,8 @@ def llm_events(
     term = calendar.term_named(term_name, term_year, anchor)
     read_on = london_date(retrieved)
     dating = page_dating(text, read_on, term=term is not None)
+    if dating.stale is None and weekdays_agree(extracted.events):
+        dating = replace(dating, weekdays=True)
     if is_venue_booking_page(text):
         # A venue's booking calendar: other groups' functions, not events of
         # the site's organisation.

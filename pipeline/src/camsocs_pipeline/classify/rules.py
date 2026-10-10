@@ -18,7 +18,9 @@ source states them (`type_and_level`), on the register's own record:
 - otherwise ``society`` at ``university`` level — what registering with the
   SU or the Proctors makes a group;
 - a name that says it is a publication or a station ("Journal", "Review",
-  "Magazine", "Radio") → ``media``.
+  "Magazine", "Radio"), or a description whose first sentence says it is a
+  newspaper or magazine (a register's text or a verbatim quote of its own
+  website) → ``media``.
 
 Names that may be something other than a society (a trust, a corps, a
 chaplaincy, "Media") are `ambiguous_type`: the model is asked for their
@@ -87,11 +89,25 @@ _DEPARTMENT = _pattern(
     "judge business school",
 )
 _MEDIA = _pattern("journal", "review", "magazine", "newspaper", "gazette", "radio", "podcast")
-#: A society whose own description opens by calling it a newspaper ("The
-#: Cambridge Student is …'s independent student newspaper"; Varsity).
-_NEWSPAPER_LEAD = _pattern("student newspaper", "newspaper", "news publication", "news outlet")
+#: What a publication's own description calls it in its first sentence
+#: ("TCS is an online and print magazine", "Varsity is Cambridge
+#: University's independent student newspaper"): `_calls_itself_media`.
+_MEDIA_NOUN = re.compile(r"(?:newspaper|magazine|zine|gazette)s?")
+_NEWS_NOUN = frozenset({"publication", "outlet", "website", "site", "paper"})
+#: Words after which the noun is no longer what the society is ("a society
+#: that publishes a magazine", "a society for people who love zines").
+_MEDIA_STOP = frozenset(
+    {"that", "which", "who", "whose", "where", "for", "behind", "with", "publishes",
+     "publishing", "runs", "running", "produces", "producing", "writes", "edits"}
+)  # fmt: skip
+#: How many words after "is" / "are" the noun may come.
+_MEDIA_WINDOW = 8
 #: How much of a description's start is its lead.
 _LEAD = 300
+#: Where a description's first sentence ends.
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s")
+#: Description fields a lead is read from.
+_DESCRIPTIONS = ("shortDescription", "description")
 #: Names that may be something other than a student society: asked of the model.
 _AMBIGUOUS = _pattern(
     "journal",
@@ -151,14 +167,56 @@ def _register_names(profile: OrgProfile) -> list[str]:
     return list(dict.fromkeys([record.identity.name, *record.identity.aliases]))
 
 
-def _newspaper_lead(profile: OrgProfile) -> str | None:
-    """The opening words of a description that calls the society a
-    newspaper, or None."""
-    for _record, text in profile.texts():
-        lines = text.split("\n", 1)
-        lead = (lines[1] if len(lines) > 1 else "")[:_LEAD]
-        if _NEWSPAPER_LEAD.search(_folded(lead)):
-            return lead[:120]
+def _calls_itself_media(text: str) -> bool:
+    """Whether a description's first sentence says the society *is* a
+    newspaper or magazine: the noun within `_MEDIA_WINDOW` words of its first
+    "is" / "are", before any word that makes it something the society does
+    (`_MEDIA_STOP`)."""
+    sentence = _SENTENCE_END.split(text.strip(), maxsplit=1)[0][:_LEAD]
+    words = _folded(sentence).split()
+    if "is" in words:
+        start = words.index("is")
+    elif "are" in words:
+        start = words.index("are")
+    else:
+        return False
+    window = words[start + 1 : start + 1 + _MEDIA_WINDOW]
+    for at, word in enumerate(window):
+        if word in _MEDIA_STOP:
+            return False
+        if _MEDIA_NOUN.fullmatch(word):
+            return True
+        if word == "news" and at + 1 < len(window) and window[at + 1] in _NEWS_NOUN:
+            return True
+    return False
+
+
+def _lead_texts(profile: OrgProfile) -> list[tuple[Observation, str]]:
+    """Descriptions in the organisation's own words: as a register or
+    listing publishes them (parsed), and the verbatim quotes the model's
+    reading of its own website stands on (an exact quote of the page)."""
+    out: list[tuple[Observation, str]] = []
+    for record in profile.records:
+        for obs in record.fields:
+            if obs.field not in _DESCRIPTIONS:
+                continue
+            if obs.method == "parser" and isinstance(obs.value, str):
+                out.append((record, obs.value))
+            elif (
+                record.source_type == "society_website"
+                and obs.quote_check == "exact"
+                and obs.evidence_quote
+            ):
+                out.append((record, obs.evidence_quote))
+    return out
+
+
+def _newspaper_lead(profile: OrgProfile) -> tuple[Observation, str] | None:
+    """The record and opening words of a description that calls the society
+    a newspaper or magazine (`_calls_itself_media`), or None."""
+    for record, text in _lead_texts(profile):
+        if _calls_itself_media(text):
+            return record, text.strip()[:120]
     return None
 
 
@@ -187,14 +245,18 @@ def type_and_level(profile: OrgProfile, *, college_keys: set[str]) -> list[RuleC
     else:
         org_type, level = "society", "university"
         raw = f"registered society: {name}"
+    type_record = record
     if _MEDIA.search(folded) and college is None:
         org_type = "media"
         raw = f"a publication or station: {name}"
     elif college is None and (lead := _newspaper_lead(profile)) is not None:
         org_type = "media"
-        raw = f"its description calls it a newspaper: {lead}"
+        type_record, opening = lead
+        raw = f"its description calls it a newspaper or magazine: {opening}"
     if not profile.has("orgType"):
-        claims.append(RuleClaim("orgType", org_type, record, "classify.registered_society", raw))
+        claims.append(
+            RuleClaim("orgType", org_type, type_record, "classify.registered_society", raw)
+        )
     if not profile.has("level"):
         claims.append(RuleClaim("level", level, record, "classify.registered_society", raw))
     return claims

@@ -353,6 +353,40 @@ def test_last_seasons_pages_give_no_yearless_dates() -> None:
     assert website.year_problem(LlmEvent(title="x", **event), read_on, with_term) is None
 
 
+def test_a_page_whose_weekdays_agree_on_this_year_dates_its_events() -> None:
+    from datetime import date
+
+    read_on = date(2026, 10, 10)
+
+    def read(day: str, quote: str) -> LlmEvent:
+        return LlmEvent(title="x", date=day, when_quote=quote)
+
+    # This year's programme with last year's "next event" left above it
+    # (10 October 2025 was a Friday): three dates agree, one does not.
+    current = [
+        read("2026-10-10", "Friday, 10 October 16:30"),
+        read("2026-10-10", "Saturday, 10 October 16:30"),
+        read("2026-10-17", "Saturday, 17 October 20:00"),
+        read("2026-10-29", "Thursday, 29 October 19:00"),
+    ]
+    assert website.weekdays_agree(current)
+    dating = website.PageDating(weekdays=True)
+    assert website.year_problem(current[2], read_on, dating) is None
+    # The leftover still fails its own weekday.
+    assert "weekday" in (website.year_problem(current[0], read_on, dating) or "")
+    # Two agreeing dates are not enough; nor three among many that disagree
+    # (an old archive matches one weekday in seven by chance).
+    assert not website.weekdays_agree(current[1:3])
+    archive = [
+        *current[1:],
+        *(read(f"2026-11-{day:02d}", f"Monday {day} November") for day in (3, 10, 17, 24)),
+    ]
+    assert not website.weekdays_agree(archive)
+    # A stated year is no yearless date and counts neither way.
+    stated = [read(f"2026-10-{d}", f"Saturday {d} October 2026") for d in (10, 17, 24)]
+    assert not website.weekdays_agree(stated)
+
+
 def test_a_page_that_says_noai_on_a_general_host_never_reaches_the_model(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
