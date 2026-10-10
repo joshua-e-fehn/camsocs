@@ -24,6 +24,9 @@ import { reresolveEntity } from "./claims"
  *  - `removeSources` deletes the `sources` rows of one host (optionally of
  *    one listing): a fetch recorded under a policy since corrected (the
  *    army.mod.uk pages once read as a society's, 2026-10-09).
+ *  - `reresolve` resolves fields of one entity again from its live claims:
+ *    after a change to a merge rule (one social account however its case,
+ *    review 2026-10-10), for rows no new claim touches.
  *  - `rejectSourceClaims` sets aside (`reviewStatus: rejected`) every live
  *    claim one entity has from one host and re-resolves the entity: readings
  *    of a site the pipeline no longer reads as the organisation's own (the
@@ -307,4 +310,14 @@ export const rejectSourceClaims = internalMutation({
     if (fields.size > 0) await reresolveEntity(ctx, args.entityType, args.key, [...fields])
     return { rejected, fields: [...fields].sort() }
   },
+})
+
+export const reresolve = internalMutation({
+  args: {
+    entityType: literalUnion(ENTITY_TYPES),
+    key: v.string(),
+    fields: v.array(v.string()),
+  },
+  returns: v.union(v.literal("updated"), v.literal("unchanged"), v.null()),
+  handler: async (ctx, args) => await reresolveEntity(ctx, args.entityType, args.key, args.fields),
 })
