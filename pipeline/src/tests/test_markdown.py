@@ -14,6 +14,19 @@ def test_paragraphs_breaks_and_emphasis() -> None:
     assert html_to_markdown(html) == "We play **chess** and *go*.\n\nMondays 7pm\nWednesdays 8pm"
 
 
+def test_emphasis_keeps_its_spaces_outside_and_joins_neighbouring_runs() -> None:
+    html = (
+        "<p><strong>Academic Training: </strong>Research and<em> continuation </em>work.</p>"
+        "<p><strong>Committee</strong><strong>(2026–27)</strong> and <b>A</b> <b>B</b></p>"
+        "<p><em><strong>Bold italic</strong></em><strong> </strong>end</p>"
+    )
+    assert html_to_markdown(html) == (
+        "**Academic Training:** Research and *continuation* work.\n\n"
+        "**Committee(2026–27)** and **A** **B**\n\n"
+        "***Bold italic*** end"
+    )
+
+
 def test_lists_and_headings() -> None:
     html = "<h2>What we do</h2><ul><li>Talks</li><li>Socials<ul><li>Formals</li></ul></li></ul>"
     assert html_to_markdown(html) == "### What we do\n\n- Talks\n- Socials\n  - Formals"
