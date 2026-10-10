@@ -28,7 +28,8 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root
+# Not /docker itself: the credential above is read from there.
+InaccessiblePaths=-/var/lib/docker -/run/docker.sock -/root
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

@@ -67,8 +67,10 @@ usage() {
   exit 0
 }
 
+# From the user's home: git and pixi must not start in a directory only root
+# can read (this script's own, under /root).
 as_camsocs() {
-  runuser -u "$USER_NAME" -- env HOME="$HOME_DIR" PATH=/usr/local/bin:/usr/bin:/bin "$@"
+  (cd "$HOME_DIR" && runuser -u "$USER_NAME" -- env HOME="$HOME_DIR" PATH=/usr/local/bin:/usr/bin:/bin "$@")
 }
 
 DEPLOY_KEY=""

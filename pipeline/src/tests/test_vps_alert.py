@@ -373,6 +373,8 @@ def test_the_alert_unit_gets_myas_env_file_as_a_credential() -> None:
     assert "CAMSOCS_ALERT_ENV=%d/slack-env" in sender["Service.Environment"]
     assert sender["Service.ProtectSystem"] == ["strict"]
     assert "Service.ReadWritePaths" not in sender, "the alert writes nothing"
+    # The credential is read from /docker, so that path must stay visible to the unit.
+    assert "-/docker" not in sender["Service.InaccessiblePaths"][0].split()
 
 
 @pytest.mark.parametrize(
