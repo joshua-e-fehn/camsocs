@@ -22,6 +22,7 @@ import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
 import { groupRuns, runSummary } from "@/lib/event-runs"
 import { formatPence, languageName } from "@/lib/format"
 import type { OrgPage, OrgPublic, RelationshipPublic, SessionPublic } from "@/lib/public-api"
+import { plainLine } from "@/lib/rich-text"
 import { camSignInHref } from "@/lib/site"
 import { hasValue, type PublicFieldMeta } from "@/lib/source-line"
 import {
@@ -234,12 +235,12 @@ function Membership({ membership }: { membership: NonNullable<OrgPublic["members
                       .filter(Boolean)
                       .join(" ")}
               </span>
-              {tier.note && <span className="text-muted-foreground">{tier.note}</span>}
+              {tier.note && <span className="text-muted-foreground">{plainLine(tier.note)}</span>}
             </li>
           ))}
         </ul>
       )}
-      {membership.bursaryNote && <p>{membership.bursaryNote}</p>}
+      {membership.bursaryNote && <p>{plainLine(membership.bursaryNote)}</p>}
       {membership.collegeReimbursable && (
         <p className="text-muted-foreground">Some colleges reimburse membership.</p>
       )}
@@ -271,7 +272,7 @@ function Session({ session, showSource }: { session: SessionPublic; showSource: 
       </div>
       {(session.venueText || session.note) && (
         <p className="text-sm text-muted-foreground">
-          {[session.venueText, session.note].filter(Boolean).join(" · ")}
+          {[session.venueText, session.note && plainLine(session.note)].filter(Boolean).join(" · ")}
         </p>
       )}
       {showSource && <SourceLine meta={session.meta.title} />}
@@ -423,7 +424,7 @@ export function OrgProfile({
 
           {org.shortDescription ? (
             <div className="flex max-w-3xl flex-col gap-1.5">
-              <p className="text-lg text-pretty">{org.shortDescription}</p>
+              <p className="text-lg text-pretty">{plainLine(org.shortDescription)}</p>
               <SourceLine meta={meta.shortDescription} />
             </div>
           ) : null}
@@ -502,7 +503,7 @@ export function OrgProfile({
                         </span>
                       )}
                       {org.trials.note && (
-                        <span className="text-muted-foreground">{org.trials.note}</span>
+                        <span className="text-muted-foreground">{plainLine(org.trials.note)}</span>
                       )}
                     </div>
                   ),
@@ -510,7 +511,7 @@ export function OrgProfile({
                 {
                   label: "Time commitment",
                   meta: meta.timeCommitment,
-                  value: org.timeCommitment,
+                  value: org.timeCommitment && <RichText text={org.timeCommitment} />,
                 },
                 {
                   label: "Activities",
@@ -534,7 +535,7 @@ export function OrgProfile({
                 {
                   label: "Accessibility",
                   meta: meta.accessibilityNote,
-                  value: org.accessibilityNote,
+                  value: org.accessibilityNote && <RichText text={org.accessibilityNote} />,
                 },
                 {
                   label: "Termcard",
@@ -794,7 +795,7 @@ export function OrgProfile({
                                 {channel.howToJoin && (
                                   <span className="text-muted-foreground">
                                     {" "}
-                                    — {channel.howToJoin}
+                                    — {plainLine(channel.howToJoin)}
                                   </span>
                                 )}
                               </li>

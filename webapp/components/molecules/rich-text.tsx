@@ -4,11 +4,40 @@ import { type Inline, parseRichText, shortUrl } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 /**
- * A stored description as readable text: paragraphs, lists, bold, italic and
- * links (lib/rich-text.ts reads the markdown; nothing becomes HTML). Links
- * leave the site through `ExternalLink` (new tab, nofollow); a bare URL is
- * shown shortened to its host and path.
+ * A stored description as readable text: paragraphs, line breaks, lists,
+ * bold, italic and links (lib/rich-text.ts reads the markdown; nothing becomes
+ * HTML, React writes every word as text). Links leave the site in a new tab
+ * with `rel="noopener noreferrer nofollow"`: http(s) through `ExternalLink`,
+ * a `mailto:` address as a plain anchor; a bare URL is shown shortened to its
+ * host and path.
  */
+
+const LINK_CLASS =
+  "inline underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground"
+
+function RichLink({ node }: { node: Extract<Inline, { kind: "link" }> }) {
+  const label =
+    node.bare || node.children.length === 0 ? (
+      shortUrl(node.href)
+    ) : (
+      <Inlines nodes={node.children} />
+    )
+  if (node.href.startsWith("mailto:")) {
+    return (
+      <a href={node.href} target="_blank" rel="noopener noreferrer nofollow" className={LINK_CLASS}>
+        {label}
+        <span className="sr-only"> (opens your email app)</span>
+      </a>
+    )
+  }
+  return (
+    // In running text the underline is the affordance; an arrow would wrap
+    // onto a line of its own after a long URL.
+    <ExternalLink href={node.href} icon={false} className={LINK_CLASS}>
+      {label}
+    </ExternalLink>
+  )
+}
 
 function Inlines({ nodes }: { nodes: Inline[] }) {
   return (
@@ -17,6 +46,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
         // The tree is rebuilt from the same text on every render: positions are stable.
         const key = `${node.kind}-${index}`
         if (node.kind === "text") return <Fragment key={key}>{node.text}</Fragment>
+        if (node.kind === "break") return <br key={key} />
         if (node.kind === "strong") {
           return (
             <strong key={key} className="font-semibold">
@@ -31,23 +61,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
             </em>
           )
         }
-        const bare = node.children.length === 1 && node.children[0].kind === "text"
-        const label =
-          bare && node.children[0].kind === "text" && node.children[0].text === node.href
-            ? shortUrl(node.href)
-            : null
-        return (
-          <ExternalLink
-            key={key}
-            href={node.href}
-            // In running text the underline is the affordance; an arrow would
-            // wrap onto a line of its own after a long URL.
-            icon={false}
-            className="inline underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground"
-          >
-            {label ?? <Inlines nodes={node.children} />}
-          </ExternalLink>
-        )
+        return <RichLink key={key} node={node} />
       })}
     </>
   )
@@ -67,33 +81,25 @@ export function RichText({ text, className }: { text: string; className?: string
           )
         }
         if (block.kind === "list") {
-          const List = block.ordered ? "ol" : "ul"
-          return (
-            <List
-              key={key}
-              className={cn(
-                "flex flex-col gap-1 pl-5",
-                block.ordered ? "list-decimal" : "list-disc",
-              )}
-            >
-              {block.items.map((item, itemIndex) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: items have no identity beyond their place
-                <li key={itemIndex}>
-                  <Inlines nodes={item} />
-                </li>
-              ))}
-            </List>
+          const items = block.items.map((item, itemIndex) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: items have no identity beyond their place
+            <li key={itemIndex}>
+              <Inlines nodes={item} />
+            </li>
+          ))
+          return block.ordered ? (
+            <ol key={key} start={block.start} className="flex list-decimal flex-col gap-1 pl-5">
+              {items}
+            </ol>
+          ) : (
+            <ul key={key} className="flex list-disc flex-col gap-1 pl-5">
+              {items}
+            </ul>
           )
         }
         return (
           <p key={key}>
-            {block.lines.map((line, lineIndex) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: lines have no identity beyond their place
-              <Fragment key={lineIndex}>
-                {lineIndex > 0 && <br />}
-                <Inlines nodes={line} />
-              </Fragment>
-            ))}
+            <Inlines nodes={block.children} />
           </p>
         )
       })}
