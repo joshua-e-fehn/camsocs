@@ -212,8 +212,15 @@ class TestNoticeRules:
             "Library opening hours",
         ):
             assert judge(text(title)).rule == "notice.room_closure", title
-        for title in ("(CLOSED) MCR Committee Meeting", "Sisters' Open Mic Night", "Open"):
+        for title in (
+            "(CLOSED) MCR Committee Meeting",
+            "Sisters' Open Mic Night",
+            "Open",
+            "Bar Reopening Night",
+        ):
             assert judge(text(title)).kind == "event", title
+        # A closure is a notice whatever event its reason names.
+        assert judge(text("PR closed to sisters (Brothers Social Night)")).kind == "notice"
 
     def test_cancellations_of_nothing(self) -> None:
         for title in ("Cancelled", "No Archery at Churchill", "No session this week"):

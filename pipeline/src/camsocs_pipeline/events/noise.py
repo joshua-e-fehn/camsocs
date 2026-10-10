@@ -134,6 +134,7 @@ _CLOSURE = re.compile(
     r"|\bopening\s+(?:hours|times)\b",
     re.IGNORECASE,
 )
+_OPENING = re.compile(r"\bopen|\bre-?open", re.IGNORECASE)
 #: A cancellation that names no event.
 _NOTHING = re.compile(
     r"^(?:cancelled|canceled|postponed|no\s+events?|nothing\s+(?:on|planned))\W*$"
@@ -383,7 +384,11 @@ def _notice(text: EventText) -> Verdict | None:
     plain = _plain(title)
     if is_booking(title):
         return Verdict("notice", "notice.booking", title)
-    if found := _CLOSURE.search(title):
+    found = _CLOSURE.search(title)
+    if found and not (_OPENING.search(found.group(0)) and _EVENT_WORDS.search(title)):
+        # An opening with an event word is a party ("Bar Reopening Night"); a
+        # closure is a notice whatever its reason names ("PR closed to
+        # sisters (Brothers Social)").
         return Verdict("notice", "notice.room_closure", found.group(0))
     if found := _NOTHING.search(title):
         return Verdict("notice", "notice.nothing", found.group(0))
