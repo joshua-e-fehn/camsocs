@@ -11,6 +11,7 @@
 ##   pixi run harvest [-- --env prod --dry-run]   full sync + coverage report (var/reports/)
 ##   pixi run harvest-events [-- --env prod]      the daily events run (sync --group events)
 ##   pixi run prune-cache [-- --dry-run]      retention R7 for var/cache and staging
+##   pixi run posthog-dashboards -- --dry-run | --validate | --apply   PostHog dashboards (ENG-10)
 
 [workspace]
 name = "camsocs"
@@ -72,6 +73,14 @@ description = "Daily events run: events sources, inbox, Instagram, termcards, lo
 cmd = "python -m camsocs_pipeline.cli prune-cache"
 cwd = "pipeline"
 description = "Retention R7: delete var/cache files (and superseded staging) older than 90 days."
+
+[tasks.posthog-dashboards]
+cmd = "python ops/posthog/dashboards.py"
+# The four PostHog dashboards as code (ENG-10): `-- --dry-run` prints the
+# JSON, `-- --validate` runs every query once (read-only), `-- --apply`
+# creates or updates them by name. Needs POSTHOG_PERSONAL_API_KEY and
+# POSTHOG_PROJECT_ID in the environment (docs/deploy.md "PostHog").
+description = "PostHog dashboards as code: -- --dry-run | --validate | --apply."
 
 [tasks.lint-python]
 # ops/ is linted with the pipeline's Ruff settings (it has no pyproject of its own).
