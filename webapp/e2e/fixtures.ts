@@ -163,11 +163,39 @@ async function hideDevOverlay(page: Page) {
   })
 }
 
-/** Both fixtures are automatic: every test runs guarded and watched. */
-export const test = base.extend<{ guard: Guard; problems: PageProblems }>({
+/**
+ * The analytics choice a test starts with (lib/consent.ts). Smoke tests start
+ * with a stored refusal, so the consent banner — fixed over the bottom of the
+ * viewport — neither covers what they click nor sits in their screenshots;
+ * nothing else about a page changes. `e2e/consent.spec.ts` opts out with
+ * `test.use({ consent: null })` to meet the banner as a first visitor does.
+ * Seeded before any page script runs, and only while nothing is stored, so a
+ * choice the test itself makes survives a reload.
+ */
+export type ConsentSeed = "granted" | "denied" | null
+
+async function seedConsent(page: Page, choice: ConsentSeed) {
+  if (choice === null) return
+  await page.addInitScript(
+    (value) => {
+      try {
+        if (window.localStorage.getItem("camsocs-consent") === null)
+          window.localStorage.setItem("camsocs-consent", value)
+      } catch {
+        // about:blank and opaque origins have no storage.
+      }
+    },
+    JSON.stringify({ v: 1, choice, at: new Date().toISOString() }),
+  )
+}
+
+/** `guard` and `problems` are automatic: every test runs guarded and watched. */
+export const test = base.extend<{ guard: Guard; problems: PageProblems; consent: ConsentSeed }>({
+  consent: ["denied", { option: true }],
   guard: [
-    async ({ page }, use) => {
+    async ({ page, consent }, use) => {
       await hideDevOverlay(page)
+      await seedConsent(page, consent)
       const guard = await installGuard(page)
       await use(guard)
       expect(guard.blocked, "the page tried to write; the guard blocked it").toEqual([])
