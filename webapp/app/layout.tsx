@@ -4,7 +4,6 @@ import { Figtree, JetBrains_Mono, Young_Serif } from "next/font/google"
 import "./globals.css"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider"
-import { ThemeProvider } from "@/components/providers/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { getToken } from "@/lib/auth-server"
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
@@ -84,10 +83,8 @@ export default async function RootLayout({
     >
       <body>
         <ConvexClientProvider initialToken={token}>
-          <ThemeProvider>
-            <AuthGuard>{children}</AuthGuard>
-            <Toaster />
-          </ThemeProvider>
+          <AuthGuard>{children}</AuthGuard>
+          <Toaster />
         </ConvexClientProvider>
       </body>
     </html>
