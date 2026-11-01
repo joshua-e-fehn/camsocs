@@ -2,7 +2,8 @@ import { checkAndCapture, expect, test } from "./fixtures"
 
 /**
  * Smoke over every public page at desktop (1440×900) and phone (390×844)
- * size; pages tagged @dark run again in dark mode. Each test loads a page,
+ * size; pages tagged @dark run again with a dark OS preference (the site is
+ * light only, DESIGN.md §8). Each test loads a page,
  * checks the basics (fixtures.ts `checkAndCapture`: one h1, no horizontal
  * overflow, a title, a description and a share image, no axe-core violation,
  * no uncaught errors, no write) and saves a full-page screenshot.
@@ -76,6 +77,8 @@ test("dashboard sends a signed-out visitor to sign-in", async ({ page }, testInf
 
 test("directory filters change the URL and the results", async ({ page, isMobile }, testInfo) => {
   await page.goto("/societies")
+  // A category is a toggle chip (aria-pressed) named by its label and count.
+  const sport = { name: /^Sport & Fitness \d+$/ }
   if (isMobile) {
     await page.getByRole("button", { name: /^Filters/ }).click()
     const sheet = page.getByRole("dialog", { name: "Filters" })
@@ -85,15 +88,17 @@ test("directory filters change the URL and the results", async ({ page, isMobile
       fullPage: false,
       skipSettle: true,
     })
-    await sheet.getByRole("checkbox", { name: /Sport & Fitness/ }).click()
-    await page.waitForURL(/cat=sport/)
-    await sheet.getByRole("button", { name: /^Show \d+ results?$/ }).click()
+    const chip = sheet.getByRole("button", { ...sport, pressed: false })
+    await chip.click()
+    await expect(sheet.getByRole("button", { ...sport, pressed: true })).toBeVisible()
+    // The sheet keeps a draft: the URL changes only on "Show N societies".
+    expect(page.url()).not.toMatch(/cat=sport/)
+    await sheet.getByRole("button", { name: /^Show \d+ societ(y|ies)$/ }).click()
     await expect(sheet).toBeHidden()
   } else {
-    await page
-      .getByRole("complementary", { name: "Filters" })
-      .getByRole("checkbox", { name: /Sport & Fitness/ })
-      .click()
+    const filters = page.getByRole("complementary", { name: "Filters" })
+    await filters.getByRole("button", { ...sport, pressed: false }).click()
+    await expect(filters.getByRole("button", { ...sport, pressed: true })).toBeVisible()
   }
   await page.waitForURL(/cat=sport/)
   await expect(page.getByRole("button", { name: "Remove filter: Sport & Fitness" })).toBeVisible()
