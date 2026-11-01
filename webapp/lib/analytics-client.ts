@@ -15,8 +15,8 @@ import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } f
  *    persistence off, then every `ph_*` / `__ph_*` cookie and storage key is
  *    deleted. On every page load without a grant that storage is deleted too,
  *    so it never outlives a choice.
- *  - Events go to our own `/relay` path (next.config.ts rewrites to PostHog's
- *    EU Cloud). Autocapture, replay, heatmaps, dead clicks, rageclicks,
+ *  - Events go to our own `/relay` path (lib/relay.ts forwards to PostHog's
+ *    EU Cloud without the visitor's cookies). Autocapture, replay, heatmaps, dead clicks, rageclicks,
  *    surveys, flags and remote config are off. `sanitizeEvent` (the
  *    `before_send`) is the last word on what leaves the browser: it drops
  *    `/dashboard` and `/sign-in`, unknown events, query strings, fragments,
@@ -28,7 +28,7 @@ import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } f
  * whenever nothing may be sent.
  */
 
-/** Our reverse-proxy path for PostHog (next.config.ts, robots.ts). */
+/** Our reverse-proxy path for PostHog (lib/relay.ts, robots.ts). */
 export const RELAY_PATH = "/relay"
 
 /**
@@ -50,10 +50,14 @@ export type CustomEventProps = Readonly<Record<string, readonly string[]>>
 const REQUIRED_PROPS = ["token", "distinct_id", "environment"] as const
 
 /**
- * Removed at every level of an event: page titles (a talk page's <title> is
- * the talk's title, talks.cam content), element text and structure, the full
- * user-agent string (browser and OS name/version stay, derived by the SDK),
- * the search keyword the SDK reads from a search engine's referrer.
+ * Removed at every level of an event, also as `$initial_…` / `$session_entry_…`
+ * copies: page titles (a talk page's <title> is the talk's title, talks.cam
+ * content), element text and structure, the full user-agent string (browser
+ * and OS name/version stay, derived by the SDK), the search keyword the SDK
+ * reads from a search engine's referrer, and SDK defaults the privacy notice
+ * does not list (window size, device model family, time on the previous page;
+ * scroll depth is switched off at the source). "Device type" and "screen
+ * size" (`$device_type`, `$screen_*`) are listed and stay.
  */
 export const STRIPPED_PROPS: readonly string[] = [
   "title",
@@ -65,6 +69,10 @@ export const STRIPPED_PROPS: readonly string[] = [
   "$useragent",
   "$user_agent",
   "ph_keyword",
+  "$viewport_width",
+  "$viewport_height",
+  "$device",
+  "$prev_pageview_duration",
 ]
 
 /**
@@ -104,12 +112,16 @@ const CAMPAIGN_PARAMS = new Set([
 ])
 const COPY_PREFIXES = ["$initial_", "$session_entry_"] as const
 
-function isCampaignProp(key: string): boolean {
-  const bare = COPY_PREFIXES.reduce(
-    (name, prefix) => (name.startsWith(prefix) ? name.slice(prefix.length) : name),
-    key,
-  )
-  return CAMPAIGN_PARAMS.has(bare)
+/**
+ * Whether `key` goes, under its own name or as a copy: the SDK copies
+ * properties as `$initial_<name>` / `$session_entry_<name>` with the name's
+ * own leading `$` dropped (`$session_entry_ph_keyword`, `$initial_utm_source`,
+ * `$initial_raw_user_agent`), and a rule for a name covers its copies.
+ */
+function isStrippedProp(key: string): boolean {
+  const prefix = COPY_PREFIXES.find((p) => key.startsWith(p))
+  const names = prefix ? [key.slice(prefix.length), `$${key.slice(prefix.length)}`] : [key]
+  return names.some((name) => STRIPPED_PROPS.includes(name) || CAMPAIGN_PARAMS.has(name))
 }
 
 /**
@@ -150,6 +162,15 @@ export function posthogConfig(
     // ENG-6 turns browser exceptions on (consented visitors only).
     capture_exceptions: false,
     save_campaign_params: false,
+    // Keeps the landing URL and referrer out of `$initial_person_info`, which
+    // the SDK writes into its cookie before `before_send` runs. With
+    // campaign params also off it is never written; the page you came from
+    // still travels as `$session_entry_referrer` (cleaned below).
+    save_referrer: false,
+    // No fragment in any URL, and no pageview on a fragment change.
+    disable_capture_url_hashes: true,
+    // No scroll-depth numbers on `$pageview` / `$pageleave` (not in the notice).
+    disable_scroll_properties: true,
     mask_all_text: true,
     mask_all_element_attributes: true,
     // Checked again here, at the last moment: posthog-js keeps running after
@@ -203,7 +224,7 @@ function cleanUrl(value: string, origin: string | null): string {
 function cleanProps(props: Record<string, unknown>, origin: string | null): void {
   for (const key of Object.keys(props)) {
     const value = props[key]
-    if (STRIPPED_PROPS.includes(key) || isCampaignProp(key)) {
+    if (isStrippedProp(key)) {
       delete props[key]
     } else if (typeof value === "string" && key.endsWith("pathname")) {
       const path = value.split(/[?#]/)[0] ?? ""

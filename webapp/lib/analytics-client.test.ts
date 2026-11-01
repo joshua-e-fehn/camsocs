@@ -153,6 +153,10 @@ describe("before_send", () => {
       "$useragent",
       "$user_agent",
       "ph_keyword",
+      "$viewport_width",
+      "$viewport_height",
+      "$device",
+      "$prev_pageview_duration",
     ]
     expect([...STRIPPED_PROPS].sort()).toEqual([...stripped].sort())
     const props: Record<string, unknown> = { $browser: "Chrome", $os: "Mac OS X" }
@@ -166,6 +170,35 @@ describe("before_send", () => {
     // Required for ingestion.
     expect(out?.properties.token).toBe(KEY)
     expect(out?.properties.distinct_id).toBe("d")
+  })
+
+  /** The SDK copies properties as `$initial_<name>` / `$session_entry_<name>`
+   * without the name's own `$`; a search engine's keyword arrives as
+   * `$session_entry_ph_keyword` on every event of the visit. */
+  test("removes the stripped properties' $initial_ and $session_entry_ copies too", () => {
+    const copies = [
+      "$session_entry_ph_keyword",
+      "$initial_ph_keyword",
+      "$initial_raw_user_agent",
+      "$session_entry_title",
+      "$initial_title",
+      "$session_entry_viewport_width",
+    ]
+    const props: Record<string, unknown> = {
+      $device_type: "Desktop",
+      $screen_width: 1440,
+      $session_entry_search_engine: "google",
+      $initial_device_type: "Desktop",
+    }
+    for (const key of copies) props[key] = "secret search"
+    const out = clean(pageview(props, { $set_once: { $initial_ph_keyword: "secret search" } }))
+    for (const key of copies) expect(out?.properties).not.toHaveProperty(key)
+    expect(out?.$set_once).toEqual({})
+    // Listed in the privacy notice, or a domain-level enum: they stay.
+    expect(out?.properties.$device_type).toBe("Desktop")
+    expect(out?.properties.$screen_width).toBe(1440)
+    expect(out?.properties.$session_entry_search_engine).toBe("google")
+    expect(out?.properties.$initial_device_type).toBe("Desktop")
   })
 
   test("a talk page's title never leaves, also from person properties", () => {
@@ -318,6 +351,10 @@ describe("the init options", () => {
       mask_all_element_attributes: true,
       capture_exceptions: false,
       save_campaign_params: false,
+      // No URL in PostHog's cookie; no fragment; no scroll depth.
+      save_referrer: false,
+      disable_capture_url_hashes: true,
+      disable_scroll_properties: true,
     })
     setConsent("granted")
     const out = beforeSend(config)(pageview({ title: "T" }))
