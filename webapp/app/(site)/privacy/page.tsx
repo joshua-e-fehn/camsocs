@@ -137,8 +137,10 @@ export default function PrivacyPage() {
         <p>
           Only if you choose “Accept analytics” (see <a href="#cookies">Cookies</a>), your browser
           sends PostHog, our analytics provider, a record of the pages you view and of these things
-          you do on them, each with only the details named (a “reference” is our short code for a
-          listing, such as <InlineCode>org-chess</InlineCode>, never its name or title):
+          you do on them, each with only the details named. A “reference” is our short code for a
+          listing: for a society or department, its name in lower case with hyphens (such as{" "}
+          <InlineCode>org-chess</InlineCode>); for an event or talk, a code of letters and digits
+          that does not contain its title or speaker:
         </p>
         <ul>
           <li>

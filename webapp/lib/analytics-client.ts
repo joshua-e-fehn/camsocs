@@ -1,5 +1,5 @@
 import type { CaptureResult, PostHog, PostHogConfig, Properties } from "posthog-js"
-import { ANALYTICS_EVENTS, type EventRules, isAllowedProp } from "@/lib/analytics-events"
+import { ANALYTICS_EVENTS, allowedProps, type EventRules } from "@/lib/analytics-events"
 import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } from "@/lib/consent"
 
 /**
@@ -50,7 +50,55 @@ export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave"]
 export type CustomEventProps = EventRules
 
 /** Properties the SDK needs on every event (`token`: a 401 without it). */
-const REQUIRED_PROPS = ["token", "distinct_id", "environment"] as const
+const REQUIRED_PROPS: readonly string[] = ["token", "distinct_id", "environment"]
+
+/**
+ * The SDK context our own events keep besides their allow-listed properties:
+ * exactly what the privacy notice ("When you browse") and record of
+ * processing P11 name (page, referrer, browser and OS, language, time zone,
+ * device type, screen size, the random identifiers), plus the flags that
+ * keep a person profile and GeoIP off and the library's name and version.
+ * Any other `$` key on one of our events goes: a `$set` / `$set_once` /
+ * `$unset` person payload, the SDK's debug and server-side flags, and free
+ * text under a `$` name (posthog-js `calculateEventProperties` and
+ * `getEventProperties`, 1.444.0). `$session_entry_…` copies are cleaned by
+ * the URL rules below.
+ */
+const SDK_CONTEXT_PROPS = new Set([
+  "$current_url",
+  "$host",
+  "$pathname",
+  "$referrer",
+  "$referring_domain",
+  "$browser",
+  "$browser_version",
+  "$browser_language",
+  "$browser_language_prefix",
+  "$os",
+  "$os_version",
+  "$device_type",
+  "$screen_height",
+  "$screen_width",
+  "$timezone",
+  "$timezone_offset",
+  "$device_id",
+  "$session_id",
+  "$window_id",
+  "$pageview_id",
+  "$insert_id",
+  "$time",
+  "$is_identified",
+  "$process_person_profile",
+  "$geoip_disable",
+  "$config_defaults",
+  "$lib",
+  "$lib_version",
+  "$lib_custom_api_host",
+])
+
+function isSdkContextProp(key: string): boolean {
+  return SDK_CONTEXT_PROPS.has(key) || key.startsWith("$session_entry_")
+}
 
 /**
  * Removed at every level of an event, also as `$initial_…` / `$session_entry_…`
@@ -262,9 +310,10 @@ function eventPathname(props: Properties): string {
  *
  *  1. Drops events on `/dashboard*` and `/sign-in*` (hard rule 3), SDK events
  *     outside `SDK_EVENTS`, and our own events outside `customEvents`.
- *  2. Our own events keep only their allow-listed properties whose values
- *     pass their rules (plus `token`, `distinct_id`, `environment` and the
- *     SDK's own `$` context, cleaned below).
+ *  2. Our own events are dropped if a required property is missing or fails
+ *     its rule, and keep only their allow-listed properties whose values pass
+ *     their rules, plus `token`, `distinct_id`, `environment` and the SDK
+ *     context in `SDK_CONTEXT_PROPS` (cleaned below); no person properties.
  *  3. Everywhere: deletes `STRIPPED_PROPS` and campaign parameters; strips
  *     query string and fragment from every URL and every `…pathname`; a
  *     previous page or referrer inside an untracked route is removed (the
@@ -284,11 +333,17 @@ export function sanitizeEvent(
   if (isUntrackedPath(eventPathname(props))) return null
 
   if (custom) {
-    const required: readonly string[] = REQUIRED_PROPS
+    // The same rule as `track()`: a required property missing or failing its
+    // rule stops the event; other properties keep only valid values.
+    const own = allowedProps(customEvents, name, props)
+    if (!own) return null
     for (const key of Object.keys(props)) {
-      if (key.startsWith("$") || required.includes(key)) continue
-      if (!isAllowedProp(customEvents, name, key, props[key])) delete props[key]
+      if (REQUIRED_PROPS.includes(key) || Object.hasOwn(own, key) || isSdkContextProp(key)) continue
+      delete props[key]
     }
+    // Nobody is identified: our events write no person properties.
+    delete event.$set
+    delete event.$set_once
   }
 
   // The previous page's numbers describe it: they go with its path.

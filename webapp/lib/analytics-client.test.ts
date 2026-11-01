@@ -312,7 +312,13 @@ describe("before_send", () => {
       ({ ...pageview(props), event: "search_performed" }) as CaptureResult
     expect(clean(event({ queryLength: 4 }))).toBeNull()
     const out = clean(
-      event({ queryLength: 4, resultCount: 2, query: "my name", email: "a@b.c" }),
+      event({
+        surface: "societies",
+        queryLength: 4,
+        resultCount: 2,
+        query: "my name",
+        email: "a@b.c",
+      }),
       ANALYTICS_EVENTS,
     )
     expect(out?.properties.queryLength).toBe(4)
@@ -339,6 +345,58 @@ describe("before_send", () => {
     expect(out?.properties).not.toHaveProperty("departmentKey")
     expect(out?.properties).not.toHaveProperty("title")
     expect(out?.properties).not.toHaveProperty("speaker")
+  })
+
+  test("our own event missing a valid required property is dropped, as by track()", () => {
+    const talk = (props: Record<string, unknown>) =>
+      ({ ...pageview(props), event: "talk_viewed" }) as CaptureResult
+    expect(clean(talk({ talkKey: "Quantum talk by Dr Smith" }), ANALYTICS_EVENTS)).toBeNull()
+    expect(clean(talk({ departmentKey: "dept-engineering" }), ANALYTICS_EVENTS)).toBeNull()
+  })
+
+  test("our own events keep only the SDK context the notice names, and no person properties", () => {
+    const event = {
+      ...pageview({
+        talkKey: "talk-05f9cb992668bbf0c8dc",
+        $session_id: "s",
+        $device_id: "d",
+        $browser: "Firefox",
+        $process_person_profile: false,
+        $session_entry_referrer: "https://www.google.com/search?q=jane",
+        $search_query: "john.doe@cam.ac.uk",
+        $set: { email: "a@b.c" },
+        $set_once: { name: "Jane" },
+        $unset: ["x"],
+        $groups: { company: "Jane Ltd" },
+        $sdk_debug_retry_queue_size: 0,
+      }),
+      event: "talk_viewed",
+      $set: { name: "Jane Smith" },
+      $set_once: { email: "a@b.c" },
+    } as CaptureResult
+    const out = clean(event, ANALYTICS_EVENTS)
+    expect(out?.properties).toMatchObject({
+      talkKey: "talk-05f9cb992668bbf0c8dc",
+      $session_id: "s",
+      $device_id: "d",
+      $browser: "Firefox",
+      $process_person_profile: false,
+      $session_entry_referrer: "https://www.google.com/search",
+      $pathname: "/societies",
+    })
+    for (const key of [
+      "$search_query",
+      "$set",
+      "$set_once",
+      "$unset",
+      "$groups",
+      "$sdk_debug_retry_queue_size",
+    ]) {
+      expect(out?.properties).not.toHaveProperty(key)
+    }
+    expect(out).not.toHaveProperty("$set")
+    expect(out).not.toHaveProperty("$set_once")
+    expect(JSON.stringify(out)).not.toMatch(/john|Jane|a@b/)
   })
 
   test("by default the taxonomy of lib/analytics-events.ts is the allow-list", () => {

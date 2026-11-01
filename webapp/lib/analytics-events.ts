@@ -7,9 +7,11 @@ import { CATEGORIES, EVENT_HOSTING, LISTING_REQUEST_KINDS } from "@/lib/vocab"
  *
  *  - `track()` (lib/analytics.ts) sends an event only if its name is here and
  *    every required property passes its rule; other properties are dropped;
- *  - `sanitizeEvent`, the `before_send` (lib/analytics-client.ts), drops any
- *    event of ours not named here and every property not allowed or not
- *    passing its rule, whatever called `posthog.capture`.
+ *  - `sanitizeEvent`, the `before_send` (lib/analytics-client.ts), applies
+ *    the same rules again, whatever called `posthog.capture`: it drops any
+ *    event of ours not named here or missing a valid required property, and
+ *    every property not allowed or not passing its rule (keeping only the
+ *    SDK context the privacy notice names).
  *
  * Values are IDs, keys, enums, counts and booleans only (hard rules 1-2): a
  * key must have its exact shape (`org-…`, `evt-<sha1>`, `talk-<20 hex>`,
@@ -182,18 +184,6 @@ export function allowedProps(
     else if (!propRule.optional) return null
   }
   return out
-}
-
-/** Whether `value` may travel as `event`'s property `name` (`sanitizeEvent`). */
-export function isAllowedProp(
-  rules: EventRules,
-  event: string,
-  name: string,
-  value: unknown,
-): boolean {
-  if (!Object.hasOwn(rules, event)) return false
-  const spec = rules[event] ?? {}
-  return Object.hasOwn(spec, name) && (spec[name]?.check(value) ?? false)
 }
 
 // --- markup for the click tracker ---------------------------------------------------------

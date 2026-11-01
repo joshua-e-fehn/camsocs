@@ -24,12 +24,26 @@ export function useTrackView<E extends AnalyticsEvent>(event: E, props: EventPro
 }
 
 /**
+ * The query each surface last sent, for this page load. Module state, not a
+ * ref: it outlives the search box, so a box that mounts again with `?q=`
+ * already in the URL and its results in (Back from a result, a shared link)
+ * does not count the same search again. App Router navigation keeps it.
+ */
+const lastSearch = new Map<SearchSurface, string>()
+
+/** Forgets the queries sent (tests only). */
+export function resetSearchTrackingForTests(): void {
+  lastSearch.clear()
+}
+
+/**
  * Search events for one search box (ENG-5): once a query has settled —
  * `resultCount` is defined only when the results for `query` are in, not
  * while loading or stale — sends `search_performed` with the query's length
  * and the result count, and `search_zero_results` when there are none. Once
- * per query: a live update of the same query's results sends nothing more;
- * clearing the box and searching again does.
+ * per query and surface: a live update of the same query's results, or the
+ * box mounting again with the same query, sends nothing more; clearing the
+ * box (an empty or undefined `query`) and searching again does.
  *
  * ⚠ The query's text never leaves this hook: only its length is sent.
  */
@@ -39,14 +53,13 @@ export function useTrackSearch(
   resultCount: number | undefined,
 ) {
   const text = query?.trim() ?? ""
-  const sentFor = useRef<string | null>(null)
   useEffect(() => {
     if (!text) {
-      sentFor.current = null
+      lastSearch.delete(surface)
       return
     }
-    if (resultCount === undefined || sentFor.current === text) return
-    sentFor.current = text
+    if (resultCount === undefined || lastSearch.get(surface) === text) return
+    lastSearch.set(surface, text)
     const queryLength = Array.from(text).length
     track("search_performed", { surface, queryLength, resultCount })
     if (resultCount === 0) track("search_zero_results", { surface, queryLength })
