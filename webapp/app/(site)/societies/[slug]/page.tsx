@@ -2,6 +2,7 @@ import { fetchQuery } from "convex/nextjs"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { cache } from "react"
+import { TrackView } from "@/components/molecules/track-view"
 import { OrgProfile } from "@/components/organisms/org-profile"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
@@ -102,6 +103,7 @@ export default async function SocietyPage({ params }: Props) {
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD; `<` is escaped below
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
+      <TrackView event="society_viewed" props={{ orgKey: org.key, categories: org.categories }} />
       <OrgProfile
         page={page}
         collegeNames={collegeNames}

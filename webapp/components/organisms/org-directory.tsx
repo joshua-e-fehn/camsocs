@@ -25,6 +25,7 @@ import { SortSelect } from "@/components/molecules/sort-select"
 import { Button } from "@/components/ui/button"
 import { api } from "@/convex/_generated/api"
 import { useStickyQuery } from "@/hooks/convex/use-sticky-query"
+import { useTrackSearch } from "@/hooks/use-analytics"
 import { ORG_SORT_LABELS, type OrgSort } from "@/lib/directory-sort"
 import { directoryTitle } from "@/lib/directory-title"
 import { pageNumbers } from "@/lib/pagination"
@@ -273,6 +274,7 @@ export function OrgDirectory({
   const stale = list.stale || facets.stale
   const results = list.data
   const counts = facets.data
+  useTrackSearch("societies", state.q, stale || !counts ? undefined : counts.total)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [draft, setDraft] = useState<DirectoryState>(state)

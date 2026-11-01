@@ -6,6 +6,7 @@ import { notFound, unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { EventActionBar, EventDetails } from "@/components/molecules/event-details"
 import { OrgMonogram } from "@/components/molecules/org-monogram"
+import { TrackView } from "@/components/molecules/track-view"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { formatDayShort, londonIsoDate } from "@/lib/calendar"
@@ -129,6 +130,14 @@ export default async function EventPage({ params }: Props) {
 
       <div className="mx-auto grid w-full max-w-7xl gap-x-16 gap-y-10 px-4 pt-8 pb-32 sm:px-6 sm:pt-12 sm:pb-20 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <article className="max-w-3xl">
+          <TrackView
+            event="event_viewed"
+            props={{
+              eventKey: event.key,
+              orgKeys: hosts.map((host) => host.key),
+              hosting: event.hosting,
+            }}
+          />
           <EventDetails
             event={event}
             venueName={venueName}
