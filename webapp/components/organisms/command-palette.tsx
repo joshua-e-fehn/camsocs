@@ -191,9 +191,11 @@ export function CommandPalette() {
   const eventRows = (events ?? []).slice(0, EVENT_ROWS)
   const talkRows = (talks ?? []).slice(0, scope === "talks" ? TALK_ROWS_SCOPED : TALK_ROWS)
 
-  // Settled once every shown group that queries has answered (events and
-  // talks skip a one-character query); the count is the rows shown, not the
-  // "see all" links. Only the length of the query is sent.
+  // Settled once every shown group that queries has answered; the count is
+  // the rows shown, not the "see all" links. Only queries of two or more
+  // characters count (events and talks skip a shorter one, so a scoped
+  // palette would report a search that never ran as finding nothing). Only
+  // the length of the query is sent.
   const searchable = query.length >= 2
   const settled =
     open &&
@@ -207,7 +209,7 @@ export function CommandPalette() {
     (show("talks") ? talkRows.length : 0) +
     (show("colleges") ? localColleges.length : 0) +
     (scope === "all" ? localCategories.length + localPages.length : 0)
-  useTrackSearch("palette", open ? query : undefined, settled ? shownRows : undefined)
+  useTrackSearch("palette", open && searchable ? query : undefined, settled ? shownRows : undefined)
 
   // Each shown group's row values in render order; the first one is
   // highlighted whenever it changes (lib/palette.ts `firstPaletteValue`).
