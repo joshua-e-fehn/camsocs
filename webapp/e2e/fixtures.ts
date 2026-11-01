@@ -177,10 +177,11 @@ export const test = base.extend<{ guard: Guard; problems: PageProblems }>({
   problems: [
     async ({ page }, use) => {
       const problems: PageProblems = { console: [], uncaught: [] }
-      // Chromium logs a page's own error status ("Failed to load resource: …
-      // 404") as a console error. The tests assert that status themselves (a
-      // 404 page must be one), so only the main document's line is dropped;
-      // a failing image, script or fetch still counts.
+      // Chromium logs a page's own 404 ("Failed to load resource: … 404") as a
+      // console error. The not-found tests assert that status themselves, so
+      // only that line for the main document is dropped; any other status on
+      // the document (500, 403, …) and a failing image, script or fetch still
+      // count.
       const documents = new Set<string>()
       page.on("request", (request) => {
         if (request.isNavigationRequest() && request.frame() === page.mainFrame())
@@ -189,8 +190,9 @@ export const test = base.extend<{ guard: Guard; problems: PageProblems }>({
       page.on("console", (message) => {
         if (message.type() !== "error") return
         const ownStatus =
-          message.text().startsWith("Failed to load resource:") &&
-          documents.has(message.location().url)
+          /^Failed to load resource: the server responded with a status of 404\b/.test(
+            message.text(),
+          ) && documents.has(message.location().url)
         if (!ownStatus) problems.console.push(message.text())
       })
       page.on("pageerror", (error) => problems.uncaught.push(error.message))
@@ -291,8 +293,8 @@ export async function accessibilityViolations(page: Page): Promise<string[]> {
 /**
  * The checks every page gets, then a full-page screenshot named `name`:
  * one `<h1>`, no horizontal overflow, a `<title>`, a description and a share
- * image, no axe-core violation (in the page's current theme, so contrast is checked in
- * light and dark).
+ * image, no axe-core violation (in the page's current colour scheme; the site
+ * is light only, so the dark projects check a dark OS preference still gets it).
  */
 export async function checkAndCapture(
   page: Page,

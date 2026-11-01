@@ -2,7 +2,8 @@ import { checkAndCapture, expect, test } from "./fixtures"
 
 /**
  * Smoke over every public page at desktop (1440×900) and phone (390×844)
- * size; pages tagged @dark run again in dark mode. Each test loads a page,
+ * size; pages tagged @dark run again with a dark OS preference (the site is
+ * light only, DESIGN.md §8). Each test loads a page,
  * checks the basics (fixtures.ts `checkAndCapture`: one h1, no horizontal
  * overflow, a title, a description and a share image, no axe-core violation,
  * no uncaught errors, no write) and saves a full-page screenshot.
