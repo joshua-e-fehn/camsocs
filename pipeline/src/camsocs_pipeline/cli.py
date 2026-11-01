@@ -64,12 +64,13 @@ from camsocs_pipeline.pipeline.load import (
 )
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
-from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
+from camsocs_pipeline.pipeline.sync import GROUPS, STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
 from camsocs_pipeline.staging.store import StagingStore
+from camsocs_pipeline.telemetry import HarvestTelemetry
 from camsocs_pipeline.worklist import (
     SympaMatcher,
     rank_organisations,
@@ -199,6 +200,8 @@ def status(ctx: click.Context) -> None:
         ("LLM concurrency", str(settings.llm_concurrency)),
         ("Meta IG user", settings.meta_ig_user_id or "(unset)"),
         ("Meta token", secret(settings.meta_access_token)),
+        ("PostHog key", ("set" if settings.posthog_configured else "(unset)") + " (run telemetry)"),
+        ("PostHog host", f"{settings.posthog_host or '(unset)'} ({settings.posthog_env})"),
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
@@ -326,38 +329,61 @@ def _run(
     summary: Path | None,
 ) -> None:
     """`sync` and `harvest`: run, print the report, re-derive when the group
-    asks for it, write the JSON summary, and exit non-zero on any failure."""
+    asks for it, write the JSON summary, and exit non-zero on any failure.
+
+    Run telemetry (`telemetry.py`; nothing without POSTHOG_KEY) is closed in
+    the `finally` — flushed with a bounded wait — on success and on every
+    failure path. A failure before the run could report itself (unknown
+    stage, a group's missing inputs, missing credentials) is sent as a
+    failed `harvest_run_finished` with the exception's class name only."""
     settings = _settings(ctx)
     extra = {"group": group, "environment": _env(ctx).name}
+    telemetry = HarvestTelemetry.from_settings(settings)
     try:
-        chosen = resolve_group(group) if group is not None else None
-        report = run_sync(
-            settings=settings, stages=stages, group=chosen, dry_run=dry_run, limit=limit
-        )
-    except (ConfigError, ConvexError, ValueError) as error:
-        _write_summary(summary, {**extra, "ok": False, "error": str(error), "stages": []})
-        raise click.ClickException(str(error)) from error
-    click.echo(report.summary())
-    if chosen is not None and chosen.derive and not dry_run:
-        # Statuses and term weeks were derived on ingest; this catches what
-        # the clock alone changes, and refreshes the overview's coverage.
         try:
-            with _loader(settings) as loader:
-                loader.derive()
-            click.echo("derive: scheduled")
-        except ConvexError as error:
-            click.echo(f"warning: derive not scheduled ({error})", err=True)
-            report.warnings.append(f"derive not scheduled ({error})")
-    path = report_path(settings.reports_dir, london_today())
-    written = not dry_run and any(s.name == "report" and s.ok for s in report.stages)
-    if written and path.exists():
-        click.echo(f"coverage report: {path}")
-    _write_summary(summary, _summary(report, extra, path if written else None))
-    if not report.ok:
-        raise click.ClickException(
-            "One or more stages failed — see the report above. Every write is an upsert, "
-            "so the next run repairs what this one missed."
-        )
+            chosen = resolve_group(group) if group is not None else None
+            report = run_sync(
+                settings=settings,
+                stages=stages,
+                group=chosen,
+                dry_run=dry_run,
+                limit=limit,
+                telemetry=telemetry,
+            )
+        except (ConfigError, ConvexError, ValueError) as error:
+            _write_summary(summary, {**extra, "ok": False, "error": str(error), "stages": []})
+            raise click.ClickException(str(error)) from error
+        click.echo(report.summary())
+        if chosen is not None and chosen.derive and not dry_run:
+            # Statuses and term weeks were derived on ingest; this catches what
+            # the clock alone changes, and refreshes the overview's coverage.
+            try:
+                with _loader(settings) as loader:
+                    loader.derive()
+                click.echo("derive: scheduled")
+            except ConvexError as error:
+                click.echo(f"warning: derive not scheduled ({error})", err=True)
+                report.warnings.append(f"derive not scheduled ({error})")
+        path = report_path(settings.reports_dir, london_today())
+        written = not dry_run and any(s.name == "report" and s.ok for s in report.stages)
+        if written and path.exists():
+            click.echo(f"coverage report: {path}")
+        _write_summary(summary, _summary(report, extra, path if written else None))
+        if not report.ok:
+            raise click.ClickException(
+                "One or more stages failed — see the report above. Every write is an upsert, "
+                "so the next run repairs what this one missed."
+            )
+    except BaseException as error:
+        # The ClickException above wraps the real failure; send its class.
+        cause = error.__cause__ if isinstance(error, click.ClickException) else None
+        # An unknown --group is operator-typed text: never sent.
+        known = group if group in GROUPS else None
+        command = "sync" if known is None else f"sync --group {known}"
+        telemetry.run_aborted(cause or error, group=known, command=command)
+        raise
+    finally:
+        telemetry.close()
 
 
 def _summary(report: RunReport, extra: dict, coverage_report: Path | None) -> dict:
