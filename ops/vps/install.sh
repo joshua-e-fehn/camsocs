@@ -57,7 +57,8 @@
 #      /etc/logrotate.d/camsocs
 #  10. the systemd units → /etc/systemd/system, daemon-reload; the timers on
 #      for a first install (unless --no-enable) or with --enable; a timer new to
-#      this host on too (unless --no-enable); else each as it was
+#      this host on too (unless --no-enable, or both harvest timers are off);
+#      else each as it was
 #  11. `pixi install --locked` as camsocs, holding the harvest lock (it waits up
 #      to 10 minutes for a running harvest), so the first run starts warm
 set -euo pipefail
@@ -104,7 +105,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,62p' "$0"
+  sed -n '2,63p' "$0"
   exit 0
 }
 
@@ -446,10 +447,20 @@ install_runner() {
   elif [[ $first_install -eq 1 ]]; then
     say "timers left off (--no-enable): systemctl enable --now ${TIMERS[*]}"
   else
-    # A timer this host never had (the monitor's, on an upgrade) starts on.
+    # A timer this host never had (the monitor's, on an upgrade) starts on,
+    # unless the operator has stopped the harvests: then it stays off too (the
+    # monitor would only report the stale harvest).
     if [[ "$enable" == "auto" && ${#new_timers[@]} -gt 0 ]]; then
-      systemctl enable --now "${new_timers[@]}"
-      say "new timers enabled: ${new_timers[*]}"
+      local harvest_on=0
+      for timer in camsocs-harvest-events.timer camsocs-harvest-full.timer; do
+        if systemctl is-enabled --quiet "$timer" 2>/dev/null; then harvest_on=1; fi
+      done
+      if [[ $harvest_on -eq 1 ]]; then
+        systemctl enable --now "${new_timers[@]}"
+        say "new timers enabled: ${new_timers[*]}"
+      else
+        say "new timers left off (the harvest timers are off): systemctl enable --now ${new_timers[*]}"
+      fi
     fi
     for timer in "${TIMERS[@]}"; do
       say "$timer: $(systemctl is-enabled "$timer" 2>/dev/null || true)"

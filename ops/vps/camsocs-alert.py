@@ -277,7 +277,9 @@ def _check_line(check: Mapping[str, Any]) -> str | None:
     name = _shaped(check.get("name"), _CHECK)
     value, threshold = _number(check.get("value")), _number(check.get("threshold"))
     window = _number(check.get("windowHours"))
-    sign = {"gt": ">", "lt": "<"}.get(check.get("op"))
+    op = check.get("op")
+    # A list or dict here would be unhashable: shape-check before the lookup.
+    sign = {"gt": ">", "lt": "<"}.get(op) if isinstance(op, str) else None
     if name is None or value is None or threshold is None or sign is None:
         return f"• {name}" if name else None
     line = f"• {name}: {value} (fails when {sign} {threshold}" + (
@@ -432,14 +434,21 @@ def main(
             print(f"camsocs-alert: cannot read {env_path} ({error.strerror})", file=sys.stderr)
             return 1
 
-    text = build_message(
-        group,
-        environ=environ,
-        status=status,
-        host=socket.gethostname(),
-        today=london_today(),
-        known_secrets=[v for v in (settings.get("SLACK_BOT_TOKEN"),) if v],
-    )
+    host = socket.gethostname()
+    try:
+        text = build_message(
+            group,
+            environ=environ,
+            status=status,
+            host=host,
+            today=london_today(),
+            known_secrets=[v for v in (settings.get("SLACK_BOT_TOKEN"),) if v],
+        )
+    except Exception as error:  # a bad status file must not silence the alert
+        # The status file is written by camsocs and so untrusted: whatever in
+        # it trips the message builder, the operator still hears of the failure.
+        print(f"camsocs-alert: message fell back ({type(error).__name__})", file=sys.stderr)
+        text = f":rotating_light: camsocs {group} failed on {host} (status file unreadable)"
     if dry_run:
         print(text)
         return 0

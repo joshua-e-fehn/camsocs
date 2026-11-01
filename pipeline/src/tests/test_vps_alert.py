@@ -242,6 +242,35 @@ def test_the_monitor_alert_shows_only_shaped_names_and_numbers() -> None:
     assert "• error_spike" in text, "the name stays; the bad value goes"
 
 
+@pytest.mark.parametrize("op", [["gt"], {"gt": 1}, 1])
+def test_a_monitor_check_with_an_op_of_the_wrong_shape_shows_its_name_only(op: object) -> None:
+    status = monitor_status()
+    for check in status["checks"]:
+        check["op"] = op
+    text = monitor_message(status)
+    assert "camsocs monitor: 2 checks failing on srv1608974" in text
+    assert "fails when" not in text
+
+
+def test_a_status_file_that_breaks_the_message_still_alerts(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    def broken(*_args, **_kwargs):
+        raise TypeError("unhashable type: 'list'")
+
+    monkeypatch.setattr(alert, "build_message", broken)
+    env = tmp_path / "alert.env"
+    env.write_text(f"SLACK_BOT_TOKEN={TOKEN}\n")
+    code = alert.main(
+        ["--dry-run", "monitor"],
+        environ={"CAMSOCS_ALERT_ENV": str(env), "CAMSOCS_STATE_DIR": str(tmp_path)},
+    )
+    assert code == 0
+    out = capsys.readouterr()
+    assert "camsocs monitor failed on" in out.out and "status file unreadable" in out.out
+    assert "TypeError" in out.err and "unhashable" not in out.err
+
+
 def test_a_monitor_that_wrote_no_status_this_run_says_it_failed_itself() -> None:
     for status in ({}, monitor_status(invocationId="0" * 32)):
         text = monitor_message(status, MONITOR_SERVICE_RESULT="exit-code")
@@ -484,11 +513,33 @@ def test_the_monitor_unit_runs_the_pipeline_as_camsocs_hardened() -> None:
     writable = monitor["Service.ReadWritePaths"][0].split()
     assert writable == ["/var/lib/camsocs", "-/opt/camsocs/.pixi"], "not the whole checkout"
     hidden = monitor["Service.InaccessiblePaths"][0].split()
-    for path in ("-/docker", "-/root", "-/etc/camsocs"):
+    for path in (
+        "-/docker",
+        "-/root",
+        "-/etc/camsocs",
+        "-/var/lib/camsocs/.ssh",
+        "-/var/log/camsocs",
+    ):
         assert path in hidden
     harvest = unit("camsocs-harvest@.service")
-    assert monitor["Service.IPAddressDeny"] == harvest["Service.IPAddressDeny"]
+    # The harvest's denied ranges and the loopback, except the DNS stub:
+    # cliproxy and every other local service are out of reach.
+    denied = monitor["Service.IPAddressDeny"][0].split()
+    assert set(harvest["Service.IPAddressDeny"][0].split()) <= set(denied)
+    assert "localhost" in denied
+    assert monitor["Service.IPAddressAllow"] == ["127.0.0.53"]
     assert monitor["Service.SystemCallFilter"] == harvest["Service.SystemCallFilter"]
+
+
+def test_the_monitor_unit_skips_quietly_on_a_checkout_without_the_monitor() -> None:
+    # The checkout is only pulled by the harvest, and a pin can hold a commit
+    # from before ENG-10: a failed condition skips the run without OnFailure=,
+    # where a missing `monitor` command would alert every hour.
+    monitor = unit("camsocs-monitor.service")
+    assert monitor["Unit.ConditionPathExists"] == [
+        "/opt/camsocs/pipeline/src/camsocs_pipeline/monitor.py"
+    ]
+    assert (REPO / "pipeline" / "src" / "camsocs_pipeline" / "monitor.py").is_file()
 
 
 def test_the_monitor_timer_runs_hourly_spread_out() -> None:
@@ -550,6 +601,10 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     )
     assert '"$enable" == "auto" && ${#new_timers[@]} -gt 0' in text
     assert 'systemctl enable --now "${new_timers[@]}"' in text
+    # … only while a harvest timer is on: a host the operator stopped stays off.
+    assert "for timer in camsocs-harvest-events.timer camsocs-harvest-full.timer; do" in text
+    assert 'systemctl is-enabled --quiet "$timer"' in text
+    assert "new timers left off (the harvest timers are off)" in text
     # The monitor runs from the checkout as camsocs: no script of its own for root.
     assert "OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py install.sh)" in text
     # Names only, never values, for the monitor's optional key.
