@@ -301,6 +301,8 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
 | `CAMSOCS_REPORTS_DIR` | Reports such as the mailing-list worklist (default `<repo>/var/reports`) |
 | `META_IG_USER_ID`, `META_ACCESS_TOKEN` | Instagram Business Discovery (both unset: the `instagram` stage skips itself); setup in `docs/setup/inbox-instagram.md` |
 | `META_GRAPH_VERSION` | Graph API version (default `v25.0`) |
+| `POSTHOG_KEY` | Optional PostHog project token for run telemetry (`telemetry.py`): run, stage and finish events with counts and durations only. Unset: nothing is sent. Set it in `pipeline/.env.prod` only (docs/deploy.md §4) |
+| `POSTHOG_HOST`, `POSTHOG_ENV` | Ingestion host (default `https://eu.i.posthog.com`) and the `environment` tag (default `development`; `production` on the VPS) |
 
 ## Politeness rules (enforced in `sources/base.py` and `sources/policy.py`)
 

@@ -92,7 +92,7 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 
 ### PostHog (monitoring)
 
-The variables above are provisioned (2026-11-01); the code that reads them lands with the PostHog monitoring tickets (ENG-4 onwards), so until then they change nothing. One PostHog project, `camsocs`, on **EU Cloud** (the free plan allows one project). Production and local development share it: browser events are to carry `environment` (`production` or `development`, from `NEXT_PUBLIC_POSTHOG_ENV`), and the project's "Filter out internal and test users" setting already excludes `environment = development`. Server-side senders (Convex, the VPS harvester) tag their own events and run with a key on production only. Unit tests (`bun test`) never send anything; e2e starts `next dev`, which reads `.env.local`, so keep the PostHog key out of `.env.local` while running it, and never point the e2e suite at `https://camsocs.uk` with analytics on. Project settings: client IP data discarded, session replay off, timezone Europe/London; PostHog AI must stay off at organisation level (talks.cam content must never reach a model, so talk events are to carry IDs only). The project token, project id and the personal API key live in the 1Password Mya vault, item `PostHog`. Where the VPS harvester keeps its PostHog values is decided with its telemetry (ENG-8, `docs/ops-vps.md`).
+The variables above are provisioned (2026-11-01); the code that reads them lands with the PostHog monitoring tickets (ENG-4 onwards), so until then they change nothing. One PostHog project, `camsocs`, on **EU Cloud** (the free plan allows one project). Production and local development share it: browser events are to carry `environment` (`production` or `development`, from `NEXT_PUBLIC_POSTHOG_ENV`), and the project's "Filter out internal and test users" setting already excludes `environment = development`. Server-side senders (Convex, the VPS harvester) tag their own events and run with a key on production only. Unit tests (`bun test`) never send anything; e2e starts `next dev`, which reads `.env.local`, so keep the PostHog key out of `.env.local` while running it, and never point the e2e suite at `https://camsocs.uk` with analytics on. Project settings: client IP data discarded, session replay off, timezone Europe/London; PostHog AI must stay off at organisation level (talks.cam content must never reach a model, so talk events are to carry IDs only). The project token, project id and the personal API key live in the 1Password Mya vault, item `PostHog`. The VPS harvester reads its PostHog values from `pipeline/.env.prod` (§4, ENG-8).
 
 ## 4. The pipeline against production
 
@@ -106,6 +106,16 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    ```
 
    Everything else (LLM, User-Agent, Camdram, Meta) is inherited from `pipeline/.env`; override any of it here if production should differ.
+
+   Optional, for run telemetry (`pipeline/src/camsocs_pipeline/telemetry.py`): the same file takes the PostHog project token, so only production runs send events:
+
+   ```dotenv
+   POSTHOG_KEY=<the project token, phc_…; 1Password Mya vault, item PostHog>
+   POSTHOG_HOST=https://eu.i.posthog.com
+   POSTHOG_ENV=production
+   ```
+
+   Unset `POSTHOG_KEY` (the default, and `pipeline/.env`'s) means nothing is sent and the SDK is not loaded. `POSTHOG_HOST` defaults to the EU host and `POSTHOG_ENV` to `development`. Events: `harvest_run_started`, `harvest_stage_completed`, `harvest_run_finished`, as `camsocs-harvester` without a person profile, carrying counts, durations, statuses, stage names and exception class names only. On the VPS host the file is `/opt/camsocs/pipeline/.env.prod` (`0600`, owned by `camsocs`; `docs/ops-vps.md` §2, §6, §7): the harvest reads it there like `PIPELINE_API_KEY`, so no unit or installer change is involved.
 2. Run with `--env prod` (or `CAMSOCS_ENV_FILE=pipeline/.env.prod`, relative to the repo root; the flag wins):
 
    ```bash
