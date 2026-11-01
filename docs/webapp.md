@@ -93,7 +93,8 @@ convex/
   _generated/                COMMITTED codegen (see .gitignore note)
 
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
-hooks/use-consent.ts         useConsent() / useConsentBannerOpen() over lib/consent.ts
+hooks/use-consent.ts         useConsent() / useConsentBannerOpen() / useConsentSettingsRequests()
+                             over lib/consent.ts
 hooks/convex/broker.ts       The broker area's hooks (mounted only inside BrokerGate) + runWithToast
 lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline,
@@ -140,7 +141,8 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
   fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
   smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, the
                              ongoing strip, form
-  consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen
+  consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen,
+                             focus never hidden behind it (360px), 400% zoom (320x256)
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 ```
 
@@ -242,20 +244,30 @@ and the ICO's consent guidance). The pieces:
 - **Store, `lib/consent.ts`** (pure TS, `lib/consent.test.ts`): localStorage `camsocs-consent` =
   `{"v":1,"choice":"granted"|"denied","at":"<ISO>"}`, in force for 180 days. Anything missing,
   malformed, of another version, expired or future-dated reads as no choice. Storage that throws
-  reads as no choice, and a choice made on the page then holds in memory until it closes.
+  reads as no choice, and a choice made on the page then holds in memory until it closes. The page's
+  own latest choice wins over storage (so a refusal that cannot be written still beats an older
+  stored grant, which is then removed); another tab's change, via the `storage` event, replaces it.
   `getConsent()`, `setConsent()`, `clearConsent()`, `subscribe()` (the `useSyncExternalStore`
   contract), `onConsentChange(cb)` (only real changes of choice; listeners hear a refusal before
-  storage is cleared), `openConsentSettings()` (the reopen signal) and `isConsentBannerOpen()`.
-- **Withdrawal**: `setConsent("denied")` and `clearConsent()` call `clearAnalyticsStorage()`, which
+  storage is cleared), `openConsentSettings()` (the reopen signal; every press counts, see
+  `getConsentSettingsRequests()`) and `isConsentBannerOpen()`.
+- **Withdrawal**: `setConsent("denied")`, `clearConsent()` and a refusal or withdrawal arriving from
+  another tab call `clearAnalyticsStorage()` after the listeners have run, which
   deletes every `ph_*` / `__ph_*` cookie (host-only and each parent domain, path `/`) and
   localStorage / sessionStorage key. The analytics client calls `opt_out_capturing()` /
   `reset()` from its `onConsentChange` listener.
 - **Banner, `organisms/consent-banner.tsx`**: a labelled region (not a dialog: no overlay, no focus
   trap) fixed to the bottom, mounted in the root layout and hidden on `UNTRACKED_PATHS`
   (`/dashboard*`, `/sign-in*`, never tracked). Two identical outline buttons, the PostHog EU Cloud
-  disclosure and a link to `/privacy#cookies`. Not in server HTML; appears after hydration.
+  disclosure and a link to `/privacy#cookies`. Not in server HTML; appears after hydration. While
+  open it sets `--consent-inset` (its height) on `<html>`, which `globals.css` turns into body
+  `padding-bottom` and `scroll-padding-bottom`: the end of the page scrolls clear of it and a
+  focused control is never hidden behind it (WCAG 2.2 SC 2.4.11). Capped at the viewport below the
+  header and scrolling inside itself past that, so it stays readable at 400% zoom (SC 1.4.10).
 - **Reopen, `molecules/cookie-settings-button.tsx`**: "Cookie settings" in the footer's camsocs
-  column; focus moves to the banner and returns to the button after a choice.
+  column; each press moves focus to the banner (also while it is already open) and a choice returns
+  focus to the button. A choice made without it (a first visit) hands focus to `<main id="main">`
+  (`tabIndex={-1}`), not `<body>`.
 
 ## Environments
 
