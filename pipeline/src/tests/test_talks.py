@@ -974,6 +974,39 @@ class TestStage:
         notes = "\n".join(ctx.report.notes)
         assert "1/11 slices, incomplete" in notes and "dry run: 2 talks not posted" in notes
 
+    def test_the_stage_never_reaches_a_model(
+        self, stage_ctx, net: respx.MockRouter, llm_tripwire: list[str]
+    ) -> None:
+        """Hard rule (AGENTS.md, source-research §6): talks.cam content never
+        reaches a model. The whole stage runs — talks.cam, the real department
+        parsers, dedupe, staging, the push — with every way to a model wired to
+        fail the test (`llm_tripwire`), on invented data only."""
+        net.get(f"{CAM}/robots.txt").respond(200, text=ROBOTS)
+        net.get(url__startswith=API).mock(side_effect=fake_api(cam_talks()))
+        net.get("https://widgets.example.org/robots.txt").respond(404)
+        net.get("https://history.example.org/robots.txt").respond(404)
+        net.get("https://widgets.example.org/talks.ics").respond(
+            200,
+            content=(
+                b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//camsocs test//EN\r\n"
+                b"BEGIN:VEVENT\r\nUID:synthetic-1@widgets.example.org\r\n"
+                b"DTSTART:20261105T130000Z\r\nDTEND:20261105T140000Z\r\n"
+                b"SUMMARY:Widget Studies Seminar: invented talk\r\n"
+                b"LOCATION:Example Building\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+            ),
+            headers={"content-type": "text/calendar"},
+        )
+        net.get("https://widgets.example.org/feed").respond(404)
+        net.get(url__startswith="https://history.example.org/").respond(404)
+        routes = convex(net)
+        ctx = stage_ctx()
+
+        stage.run(ctx, now=NOW)
+
+        assert llm_tripwire == []
+        assert routes["batch"].called and ctx.report.inserted >= 2
+        assert "dept sources: 1 ok, 2 failed, 0 skipped" in "\n".join(ctx.report.notes)
+
     def test_department_budget_and_limit_skip_sources(self) -> None:
         calls: list[str] = []
 

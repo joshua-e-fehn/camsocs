@@ -2,6 +2,11 @@
 allow-listed numbers and ids only, never message content or error text; off
 without a key; never in the way of the call. All offline (respx, fake
 PostHog client).
+
+The hard rule that talks stages never reach a model is proven where those
+stages are tested (`test_the_stage_never_reaches_a_model` in test_talks.py and
+test_events_sources.py, through conftest's `llm_tripwire`); the tripwire
+itself is checked here.
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ import pytest
 import respx
 from pydantic import BaseModel
 
+from camsocs_pipeline import telemetry as telemetry_module
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
 from camsocs_pipeline.pipeline.context import Stage, StageContext
 from camsocs_pipeline.pipeline.report import RunReport
@@ -26,6 +32,7 @@ from camsocs_pipeline.telemetry import (
     HarvestTelemetry,
     active_telemetry,
 )
+from tests.conftest import ModelReached
 from tests.test_llm import BASE, COMPLETIONS, completion, llm_settings
 from tests.test_telemetry import FakeClient
 
@@ -305,3 +312,24 @@ def test_close_also_ends_the_active_run() -> None:
     assert active_telemetry() is telemetry
     telemetry.close()
     assert active_telemetry() is None
+
+
+# --- the talks tripwire --------------------------------------------------------
+
+
+def test_the_tripwire_catches_every_way_to_a_model(
+    llm_tripwire: list[str], net: respx.MockRouter
+) -> None:
+    route = net.post(COMPLETIONS).mock(return_value=completion("{}"))
+    with pytest.raises(ModelReached):
+        LLMClient(llm_settings())
+    with pytest.raises(ModelReached):
+        openai.OpenAI(base_url=BASE, api_key="test-llm-key")
+    with pytest.raises(ModelReached):
+        HarvestTelemetry().generation(
+            model="m", tier="bulk", prompt_version="v", latency_s=0.0, attempts=1
+        )
+    with pytest.raises(ModelReached):
+        LLMClient.complete_json(object(), schema=Society, messages=[], prompt_version="v")  # type: ignore[arg-type]
+    assert len(llm_tripwire) == 4 and not route.called
+    assert telemetry_module.active_telemetry() is None
