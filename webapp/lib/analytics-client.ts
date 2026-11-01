@@ -1,5 +1,6 @@
 import type { CaptureResult, PostHog, PostHogConfig, Properties } from "posthog-js"
 import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } from "@/lib/consent"
+import { scrubExceptionProps } from "@/lib/error-scrub"
 
 /**
  * The browser analytics client (ENG-4; spec "Browser analytics client",
@@ -22,10 +23,15 @@ import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } f
  *    `/dashboard` and `/sign-in`, unknown events, query strings, fragments,
  *    page titles, element text and the user-agent string (hard rules 1-3;
  *    the privacy notice's "When you browse" lists what remains).
+ *  - Browser errors (ENG-6): uncaught errors and unhandled rejections
+ *    (`capture_exceptions`) and what the error boundaries catch
+ *    (`captureBrowserException`) go out as `$exception`, consented visitors
+ *    only like everything else, with URLs and emails scrubbed from messages
+ *    and stacks (lib/error-scrub.ts).
  *
  * `instrumentation-client.ts` calls `startAnalytics()` once per page.
  * ENG-5/ENG-6 reach the instance through `getPostHog()`, which is null
- * whenever nothing may be sent.
+ * whenever nothing may be sent. (Server errors are lib/posthog-server.ts.)
  */
 
 /** Our reverse-proxy path for PostHog (lib/relay.ts, robots.ts). */
@@ -35,9 +41,9 @@ export const RELAY_PATH = "/relay"
  * The SDK's own events that may leave the browser. Everything else the SDK
  * might emit ($autocapture, $rageclick, $snapshot, $web_vitals, $identify,
  * $opt_in, …) is dropped even if a setting or a remote default turned it on.
- * ENG-6 adds `$exception`.
+ * `$exception` is a browser error (ENG-6), scrubbed in `sanitizeEvent`.
  */
-export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave"]
+export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave", "$exception"]
 
 /**
  * Our own events, each with the properties it may carry (spec "Event
@@ -156,11 +162,14 @@ export function posthogConfig(
     advanced_disable_flags: true,
     capture_performance: false,
     // Nothing above needs a lazily loaded script, and this also keeps the
-    // toolbar (opened from a URL fragment) from loading. ENG-6 revisits it if
-    // exception autocapture needs its extension.
+    // toolbar (opened from a URL fragment) from loading. Exception autocapture
+    // would fetch its extension (`exception-autocapture.js`); `startAnalytics`
+    // bundles it with the package instead (`loadPostHog`).
     disable_external_dependency_loading: true,
-    // ENG-6 turns browser exceptions on (consented visitors only).
-    capture_exceptions: false,
+    // Uncaught errors and unhandled rejections; `true` leaves console.error
+    // out (posthog-js ExceptionObserver). ENG-6; the client only exists after
+    // "Accept analytics".
+    capture_exceptions: true,
     save_campaign_params: false,
     // Keeps the landing URL and referrer out of `$initial_person_info`, which
     // the SDK writes into its cookie before `before_send` runs. With
@@ -265,7 +274,10 @@ function eventPathname(props: Properties): string {
  *     query string and fragment from every URL and every `…pathname`; a
  *     previous page or referrer inside an untracked route is removed (the
  *     `$prev_pageview_*` group with it) or cut to the origin.
- *  4. Sets `environment` and `$geoip_disable: true`.
+ *  4. `$exception…` properties: messages and types lose URLs' query strings
+ *     and fragments and email addresses, stack frames keep their file's
+ *     path only and lose source lines (lib/error-scrub.ts).
+ *  5. Sets `environment` and `$geoip_disable: true`.
  */
 export function sanitizeEvent(
   event: CaptureResult | null,
@@ -298,6 +310,7 @@ export function sanitizeEvent(
   }
 
   cleanProps(props, origin)
+  scrubExceptionProps(props)
   for (const person of [event.$set, event.$set_once]) {
     if (person) cleanProps(person, origin)
   }
@@ -309,6 +322,19 @@ export function sanitizeEvent(
 // --- the client -------------------------------------------------------------------------------
 
 type PostHogModule = { default: PostHog }
+
+/**
+ * posthog-js plus its exception-autocapture extension. The SDK would fetch
+ * the extension as a script when `capture_exceptions` is on, which
+ * `disable_external_dependency_loading` forbids; loaded here, as part of the
+ * same lazy chunk, it is already in place at `init` and nothing is fetched
+ * from PostHog (the extension only registers its error hooks on `window`).
+ */
+function loadPostHog(): Promise<PostHogModule> {
+  return Promise.all([import("posthog-js"), import("posthog-js/dist/exception-autocapture")]).then(
+    ([posthog]) => posthog,
+  )
+}
 
 export type StartOptions = {
   /** The project token; unset means analytics never loads. */
@@ -337,6 +363,20 @@ export function getPostHog(): PostHog | null {
   return capturing ? instance : null
 }
 
+/**
+ * Reports an error an error boundary caught (`app/(site)/error.tsx`,
+ * `app/global-error.tsx`): those never reach the uncaught-error hook. Only
+ * while the client runs (consent granted, key set); otherwise nothing
+ * happens. Never throws.
+ */
+export function captureBrowserException(error: unknown): void {
+  try {
+    getPostHog()?.captureException(error)
+  } catch {
+    // Reporting an error must never cause another.
+  }
+}
+
 function webdriver(): boolean {
   return typeof navigator !== "undefined" && navigator.webdriver === true
 }
@@ -351,7 +391,7 @@ export function startAnalytics({
   key = process.env.NEXT_PUBLIC_POSTHOG_KEY,
   environment = process.env.NEXT_PUBLIC_POSTHOG_ENV ?? "development",
   customEvents = {},
-  load = () => import("posthog-js"),
+  load = loadPostHog,
 }: StartOptions = {}): () => void {
   if (stopListening) return stopListening
   if (typeof window === "undefined") return () => {}
