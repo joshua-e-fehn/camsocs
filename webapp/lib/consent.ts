@@ -82,6 +82,8 @@ function inForce(time: number, now: number): boolean {
 let memory: ConsentRecord | null = null
 /** "Cookie settings" asked for the banner although a choice is in force. */
 let reopened = false
+/** How many times "Cookie settings" was pressed: the banner moves focus on each. */
+let settingsRequests = 0
 const listeners = new Set<() => void>()
 
 function storedRecord(now: number): ConsentRecord | null {
@@ -93,11 +95,16 @@ function storedRecord(now: number): ConsentRecord | null {
   }
 }
 
-/** The record in force at `now`: storage first, else this page's own choice. */
+/**
+ * The record in force at `now`: this page's own latest choice first, else
+ * storage. The page's choice must win: when a write fails (storage full)
+ * an older stored grant would otherwise outlive a refusal made here.
+ * `memory` is dropped whenever storage changes under us (another tab,
+ * `clearConsent`), so it never hides a newer stored record.
+ */
 export function getConsentRecord(now: number = Date.now()): ConsentRecord | null {
-  const stored = storedRecord(now)
-  if (stored) return stored
-  return memory && inForce(Date.parse(memory.at), now) ? memory : null
+  if (memory && inForce(Date.parse(memory.at), now)) return memory
+  return storedRecord(now)
 }
 
 /** "granted", "denied", or null while the visitor has not (validly) chosen. */
@@ -122,7 +129,14 @@ export function setConsent(choice: ConsentChoice, now: Date = new Date()): void 
   try {
     window.localStorage.setItem(CONSENT_KEY, JSON.stringify(record))
   } catch {
-    // Storage blocked: the choice holds for this page (`memory`) only.
+    // Storage blocked or full: the choice holds for this page (`memory`)
+    // only. Drop any older record too, so a stale grant cannot come back
+    // on the next visit; the banner asks again there instead.
+    try {
+      window.localStorage.removeItem(CONSENT_KEY)
+    } catch {
+      // Nothing stored that we could reach.
+    }
   }
   emit()
   if (choice === "denied") clearAnalyticsStorage()
@@ -141,11 +155,20 @@ export function clearConsent(): void {
   clearAnalyticsStorage()
 }
 
-/** Shows the banner again (the footer's "Cookie settings"), choice unchanged. */
+/**
+ * Shows the banner again (the footer's "Cookie settings"), choice unchanged.
+ * Every press counts, also while the banner is already open (a first visit),
+ * so the banner can take focus each time instead of doing nothing visible.
+ */
 export function openConsentSettings(): void {
-  if (reopened) return
   reopened = true
+  settingsRequests++
   emit()
+}
+
+/** How many times `openConsentSettings` ran on this page (0 until pressed). */
+export function getConsentSettingsRequests(): number {
+  return settingsRequests
 }
 
 // --- listening --------------------------------------------------------------------------------
@@ -154,11 +177,18 @@ function emit(): void {
   for (const listener of [...listeners]) listener()
 }
 
-/** Another tab changed the record (or site data was cleared): re-read it. */
+/**
+ * Another tab changed the record (or site data was cleared): re-read it.
+ * Same order as `setConsent`: listeners first (the analytics client opts
+ * out and resets, which writes fresh `ph_*` entries), then anything short
+ * of a grant clears analytics storage, so a withdrawal in another tab
+ * leaves nothing behind here either.
+ */
 function onStorage(event: StorageEvent): void {
   if (event.key !== null && event.key !== CONSENT_KEY) return
   memory = null
   emit()
+  if (getConsent() !== "granted") clearAnalyticsStorage()
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   cookieDomains,
   getConsent,
   getConsentRecord,
+  getConsentSettingsRequests,
   isConsentBannerOpen,
   isUntrackedPath,
   onConsentChange,
@@ -167,6 +168,37 @@ describe("storage that throws", () => {
       if (descriptor) Object.defineProperty(window, "localStorage", descriptor)
     }
   })
+
+  test("a refusal that cannot be written still beats an older stored grant", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage")
+    let stored: string | null = raw({ choice: "granted" })
+    const full = {
+      getItem: () => stored,
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError")
+      },
+      removeItem: () => {
+        stored = null
+      },
+      key: () => null,
+      length: 0,
+    }
+    Object.defineProperty(window, "localStorage", { configurable: true, get: () => full })
+    try {
+      expect(getConsent(NOW)).toBe("granted")
+      const seen: (string | null)[] = []
+      const stop = onConsentChange((choice) => seen.push(choice))
+      setConsent("denied", new Date(NOW))
+      stop()
+      expect(getConsent(NOW)).toBe("denied")
+      expect(isConsentBannerOpen(NOW)).toBe(false)
+      expect(seen).toEqual(["denied"])
+      // The stale grant is gone too, so the next visit asks instead of granting.
+      expect(stored).toBeNull()
+    } finally {
+      if (descriptor) Object.defineProperty(window, "localStorage", descriptor)
+    }
+  })
 })
 
 describe("listeners", () => {
@@ -174,14 +206,16 @@ describe("listeners", () => {
     let calls = 0
     const stop = subscribe(() => calls++)
     setConsent("granted")
+    const before = getConsentSettingsRequests()
     openConsentSettings()
-    openConsentSettings() // already open: no news
+    openConsentSettings() // already open, still news: the banner takes focus again
+    expect(getConsentSettingsRequests()).toBe(before + 2)
     setConsent("denied")
     clearConsent()
-    expect(calls).toBe(4)
+    expect(calls).toBe(5)
     stop()
     setConsent("granted")
-    expect(calls).toBe(4)
+    expect(calls).toBe(5)
   })
 
   test("onConsentChange reports only real changes of choice", () => {
@@ -209,6 +243,48 @@ describe("listeners", () => {
     expect(calls).toBe(1)
     expect(getConsent()).toBe("denied")
     stop()
+  })
+
+  test("another tab's choice replaces this page's own", () => {
+    const stop = subscribe(() => {})
+    setConsent("granted")
+    window.localStorage.setItem(
+      CONSENT_KEY,
+      raw({ choice: "denied", at: new Date().toISOString() }),
+    )
+    window.dispatchEvent(new StorageEvent("storage", { key: CONSENT_KEY }))
+    stop()
+    expect(getConsent()).toBe("denied")
+  })
+
+  test("a withdrawal in another tab clears what this tab's listeners leave", () => {
+    setConsent("granted")
+    window.localStorage.setItem("ph_phc_test_posthog", "{}")
+    // As the analytics client's opt-out and reset do: they write fresh entries.
+    const stop = onConsentChange(() => {
+      window.localStorage.setItem("__ph_opt_in_out_phc_test", "0")
+      window.localStorage.setItem("ph_phc_test_posthog", "{}")
+    })
+    window.localStorage.setItem(
+      CONSENT_KEY,
+      raw({ choice: "denied", at: new Date().toISOString() }),
+    )
+    window.dispatchEvent(new StorageEvent("storage", { key: CONSENT_KEY }))
+    stop()
+    expect(window.localStorage.getItem("ph_phc_test_posthog")).toBeNull()
+    expect(window.localStorage.getItem("__ph_opt_in_out_phc_test")).toBeNull()
+    expect(window.localStorage.getItem(CONSENT_KEY)).not.toBeNull()
+  })
+
+  test("a grant in another tab clears nothing", () => {
+    let calls = 0
+    const stop = subscribe(() => calls++)
+    window.localStorage.setItem("ph_phc_test_posthog", "{}")
+    window.localStorage.setItem(CONSENT_KEY, raw({ at: new Date().toISOString() }))
+    window.dispatchEvent(new StorageEvent("storage", { key: CONSENT_KEY }))
+    stop()
+    expect(calls).toBe(1)
+    expect(window.localStorage.getItem("ph_phc_test_posthog")).toBe("{}")
   })
 })
 

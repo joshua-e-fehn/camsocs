@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from "react"
-import { type ConsentChoice, getConsent, isConsentBannerOpen, subscribe } from "@/lib/consent"
+import {
+  type ConsentChoice,
+  getConsent,
+  getConsentSettingsRequests,
+  isConsentBannerOpen,
+  subscribe,
+} from "@/lib/consent"
 
 /**
  * The consent store (lib/consent.ts) for components. The server snapshot is
@@ -18,10 +24,19 @@ export function useConsentBannerOpen(): boolean {
   return useSyncExternalStore(subscribe, () => isConsentBannerOpen(), serverBannerOpen)
 }
 
+/** Counts presses of "Cookie settings"; the banner takes focus when it grows. */
+export function useConsentSettingsRequests(): number {
+  return useSyncExternalStore(subscribe, getConsentSettingsRequests, serverSettingsRequests)
+}
+
 function serverConsent(): ConsentChoice | null {
   return null
 }
 
 function serverBannerOpen(): boolean {
   return false
+}
+
+function serverSettingsRequests(): number {
+  return 0
 }
