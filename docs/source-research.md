@@ -6,7 +6,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 
 ## Global rules
 
-- **User-Agent:** `camsocs-bot/0.1 (+https://camsocs.vercel.app/about)`. It contains no personal email.
+- **User-Agent:** `camsocs-bot/0.1 (+https://camsocs.uk/about)`. It contains no personal email.
 - **robots.txt:** checked per host, with our User-Agent, before the first fetch of each run. `Crawl-delay` is honoured. It is honoured on every page except society pages and feeds (below).
 - **Fetch policy (decision D3, 2026-10-08; `pipeline/.../sources/policy.py`).** Every fetch carries a purpose.
   - A `general` fetch honours robots.txt and every AI opt-out.

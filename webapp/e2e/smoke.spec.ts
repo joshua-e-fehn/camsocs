@@ -40,6 +40,11 @@ const PAGES: { name: string; path: string; dark?: boolean }[] = [
   { name: "events-week", path: "/events?view=week" },
   { name: "events-month", path: "/events?view=month", dark: true },
   { name: "events-org", path: `/events?org=${PROFILES["profile-university"]}` },
+  // Talks: a heading or the empty state, never the error boundary — also on
+  // the first deploy, before the first talks sync (deploy.md §5.4).
+  { name: "talks", path: "/talks", dark: true },
+  { name: "talks-week", path: "/talks?preset=week" },
+  { name: "talks-departments", path: "/talks/departments" },
   { name: "about", path: "/about" },
   { name: "privacy", path: "/privacy" },
   { name: "request", path: "/request" },
@@ -112,8 +117,8 @@ test("events already running fold into one row that opens @dark", async ({ page 
   // Count the toggle only once the list (or its empty state) is on screen:
   // counting before it rendered skipped the test by chance (review 2026-10-10).
   const listed = page.locator("main ul li a").first()
-  await expect(listed.or(page.getByText("No events in this range"))).toBeVisible()
-  const toggle = page.getByRole("button", { name: /^\d+ ongoing events?\b/ })
+  await expect(listed.or(page.getByText(/^Nothing on/))).toBeVisible()
+  const toggle = page.getByRole("button", { name: /^\d+ already on events?\b/ })
   test.skip((await toggle.count()) === 0, "nothing in the data began before today and is still on")
   await expect(toggle).toHaveAttribute("aria-expanded", "false")
   await toggle.click()
@@ -157,4 +162,37 @@ test("robots.txt, the sitemap and the share image are served", async ({ request 
   const image = await request.get("/opengraph-image")
   expect(image.status()).toBe(200)
   expect(image.headers()["content-type"]).toBe("image/png")
+})
+
+test("an unknown talk is a talks 404", async ({ page }, testInfo) => {
+  const response = await page.goto("/talks/talk-00000000000000000000")
+  expect(response?.status()).toBe(404)
+  await expect(page.getByRole("heading", { name: "This talk is no longer listed" })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Upcoming talks" })).toHaveAttribute("href", "/talks")
+  await checkAndCapture(page, testInfo, "talk-not-found")
+})
+
+test("the talks feed is a calendar, and AI crawlers are kept off talks", async ({ request }) => {
+  const feed = await request.get("/talks.ics")
+  expect(feed.status()).toBe(200)
+  expect(feed.headers()["content-type"]).toContain("text/calendar")
+  expect(await feed.text()).toContain("BEGIN:VCALENDAR")
+
+  const robots = await (await request.get("/robots.txt")).text()
+  const aiGroup = robots.slice(robots.indexOf("User-Agent: GPTBot"))
+  expect(aiGroup).toContain("Disallow: /talks")
+})
+
+test("closing the search palette returns focus to the header button", async ({ page }) => {
+  await page.goto("/talks")
+  // The header pill on desktop, the icon button on a phone: whichever shows.
+  const button = page.locator("header button:visible", { hasText: "Search" }).first()
+  await expect(button).toBeVisible()
+  await button.focus()
+  await page.keyboard.press("Enter")
+  const dialog = page.getByRole("dialog", { name: "Search camsocs" })
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(dialog).toBeHidden()
+  await expect(button).toBeFocused()
 })

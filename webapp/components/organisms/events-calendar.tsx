@@ -1,7 +1,8 @@
 "use client"
 
-import { type Preloaded, usePreloadedQuery } from "convex/react"
+import { type Preloaded, usePreloadedQuery, useQuery } from "convex/react"
 import {
+  ArrowRightIcon,
   ArrowUpRightIcon,
   CalendarDaysIcon,
   CalendarRangeIcon,
@@ -9,29 +10,37 @@ import {
   ChevronRightIcon,
   ListIcon,
   LockIcon,
+  SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useState, useTransition } from "react"
-import { EventDetails } from "@/components/molecules/event-details"
-import { EventChip, EventItem } from "@/components/molecules/event-item"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { DatePresets } from "@/components/molecules/date-presets"
+import { EventDetails, EventEyebrow } from "@/components/molecules/event-details"
+import { EventMonthGrid, EventWeekGrid } from "@/components/molecules/event-grids"
+import {
+  EventChip,
+  EventRow,
+  EventRowSkeleton,
+  EventTitle,
+} from "@/components/molecules/event-item"
+import { FacetChips } from "@/components/molecules/facet-chips"
 import { FacetPopover } from "@/components/molecules/facet-popover"
+import {
+  type AppliedChip,
+  FilterChipStrip,
+  type QuickChip,
+} from "@/components/molecules/filter-chip-strip"
+import { FilterSheet } from "@/components/molecules/filter-sheet"
 import { OrgPicker } from "@/components/molecules/org-picker"
 import { SearchField } from "@/components/molecules/search-field"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { WeekStrip } from "@/components/molecules/week-strip"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -39,65 +48,107 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { Toggle } from "@/components/ui/toggle"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { api } from "@/convex/_generated/api"
+import { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
+import { useEventWindow, useRestrictedCount } from "@/hooks/convex/events"
 import {
+  addDays,
   type CalendarView,
   formatDayShort,
+  formatMonth,
   formatRange,
+  londonIsoDate,
   shiftAnchor,
-  viewWindow,
-  WEEKDAYS,
 } from "@/lib/calendar"
+import { availablePresets, currentTermEnd, type DatePreset } from "@/lib/date-presets"
 import { eventsByDay, lastDayOf, splitOngoing } from "@/lib/event-runs"
+import {
+  dayCounts,
+  matchesEventQuery,
+  nextDayWithEvents,
+  spokenTitle,
+  stripPages,
+  stripRangeLabel,
+} from "@/lib/events"
 import type { EventListItem, OrgRef } from "@/lib/public-api"
-import { camSignInHref } from "@/lib/site"
-import { type EventsState, serializeEventsState } from "@/lib/url-state"
+import { camSignInHref, SITE_URL } from "@/lib/site"
+import { dayHeading } from "@/lib/talks"
+import type { TermDatesRow } from "@/lib/term-week"
+import {
+  activeEventFilterCount,
+  type EventsState,
+  eventListArgs,
+  eventRestrictedArgs,
+  eventsHref,
+  eventsWindow,
+  MAX_LIST_WEEKS,
+  parseEventsParams,
+  type SearchParams,
+} from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 import { CATEGORIES, CATEGORY_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/vocab"
+import { termWeekTag } from "@/lib/week-strip"
 
 const VIEWS: { value: CalendarView; label: string; icon: typeof ListIcon }[] = [
   { value: "list", label: "List", icon: ListIcon },
   { value: "week", label: "Week", icon: CalendarRangeIcon },
   { value: "month", label: "Month", icon: CalendarDaysIcon },
 ]
+const LONG_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+/** A preset in a sentence: "5 events this weekend". */
+const PRESET_PHRASES: Record<DatePreset, string> = {
+  today: "today",
+  tomorrow: "tomorrow",
+  week: "this week",
+  weekend: "this weekend",
+  term: "for the rest of term",
+}
+/** "Search the next N weeks" from an empty search. */
+const SEARCH_WEEKS = 4
 
-const MONTH_CELL_CHIPS = 3
+function searchParamsObject(params: URLSearchParams): SearchParams {
+  const out: SearchParams = {}
+  for (const key of new Set(params.keys())) {
+    const all = params.getAll(key)
+    out[key] = all.length > 1 ? all : all[0]
+  }
+  return out
+}
 
-/** "N Cambridge-only events in these weeks — sign in": rendered only when the
- * server could count them; the count itself stays live. The server counts
- * whole weeks and ignores the filters (so the count cannot reveal what it
- * counts), hence "around these dates", not "in this view". */
-function CamOnlyNote({
-  preloaded,
-  next,
-}: {
-  preloaded: Preloaded<typeof api.events.restrictedCount>
-  next: string
-}) {
-  const { camOnly } = usePreloadedQuery(preloaded)
-  if (camOnly === 0) return null
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+/** A punt on the Cam, pole raised: the empty state's mark. */
+function PuntMark() {
   return (
-    <Alert>
-      <LockIcon />
-      <AlertDescription className="text-foreground">
-        <span>
-          <span className="font-mono tabular-nums">{camOnly}</span> Cambridge-only{" "}
-          {camOnly === 1 ? "event is" : "events are"} listed in the weeks around these dates —{" "}
-          <Link href={camSignInHref(next)}>sign in with your @cam.ac.uk email</Link> to see{" "}
-          {camOnly === 1 ? "it" : "them"}.
-        </span>
-      </AlertDescription>
-    </Alert>
+    <svg
+      aria-hidden
+      viewBox="0 0 120 52"
+      className="h-13 w-30 text-events"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 33h78l-6 6H26z" />
+      <path d="M86 33V27h8" opacity=".6" />
+      <path d="M72 6 52 44" />
+      <path d="M63 27c0-3 2-5 5-5s5 2 5 5v6H63z" opacity=".7" />
+      <path
+        d="M4 45c10-4 18 4 28 0s18 4 28 0 18 4 28 0 18 4 28 0"
+        stroke="var(--backs)"
+        strokeWidth="2"
+      />
+    </svg>
   )
 }
 
 /** Events that began before the dates on screen and are still on (a film
- * listed for months, a month-long competition, lib/event-runs.ts): one folded
- * row, "N ongoing", above the days instead of a card on each. Opened, it lists
- * them as chips, soonest to end first. */
+ * listed for months, lib/event-runs.ts): one folded row, "N ongoing", above
+ * the days. Opened, it lists them as chips, soonest to end first. */
 function Ongoing({
   events,
   hrefFor,
@@ -105,14 +156,18 @@ function Ongoing({
 }: {
   events: EventListItem[]
   hrefFor: (event: EventListItem) => string
-  onSelect: (event: EventListItem) => void
+  onSelect: (event: EventListItem, target: HTMLElement) => void
 }) {
   const [open, setOpen] = useState(false)
   if (events.length === 0) return null
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border bg-card">
-      <h3 className="text-sm">
-        <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:rounded-b-none">
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="rounded-xl border border-dashed bg-card/60"
+    >
+      <h2 className="text-sm">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:rounded-b-none">
           <ChevronRightIcon
             aria-hidden
             className={cn(
@@ -121,27 +176,27 @@ function Ongoing({
             )}
           />
           <span className="shrink-0 font-medium">
-            <span className="font-mono tabular-nums">{events.length}</span> ongoing
+            <span className="font-mono tabular-nums">{events.length}</span> already on
             <span className="sr-only"> {events.length === 1 ? "event" : "events"}</span>
           </span>
           {!open && (
             <span aria-hidden className="min-w-0 truncate text-muted-foreground">
-              {events.map((event) => event.title).join(" · ")}
+              {events.map((event) => spokenTitle(event.title)).join(" · ")}
             </span>
           )}
           <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
             {open ? "Hide" : "Show"}
           </span>
         </CollapsibleTrigger>
-      </h3>
+      </h2>
       <CollapsibleContent>
-        <ul className="grid grid-cols-1 gap-1.5 border-t p-2 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-1.5 border-t border-dashed p-2 sm:grid-cols-2">
           {events.map((event) => (
             <li key={event.key} className="min-w-0">
               <EventChip
                 event={event}
                 href={hrefFor(event)}
-                onSelect={() => onSelect(event)}
+                onSelect={(target) => onSelect(event, target)}
                 when={`until ${formatDayShort(lastDayOf(event))}`}
                 className="px-2 py-3 text-sm sm:py-1.5"
               />
@@ -154,455 +209,1132 @@ function Ongoing({
 }
 
 /**
- * One event's details, read with `events.get` (lists carry no descriptions).
- * The list item it was opened from gives the title at once.
- */
-function EventSheet({
-  eventKey,
-  placeholder,
-  onClose,
-  signInNext,
-}: {
-  eventKey: string | undefined
-  placeholder: EventListItem | undefined
-  onClose: () => void
-  /** Where a Cambridge sign-in lands: this view, with the event open. */
-  signInNext: string
-}) {
-  const event = useEvent(eventKey)
-  const venues = useVenues(Boolean(event?.venueKey && !event.venueText))
-  const venueName = venues?.find((venue) => venue.key === event?.venueKey)?.name
-  const title = event?.title ?? placeholder?.title
-
-  return (
-    <Sheet open={eventKey !== undefined} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-        {event ? (
-          <>
-            <SheetHeader className="pr-12">
-              <SheetTitle className={cn("text-xl", event.cancelled && "line-through")}>
-                {event.title}
-              </SheetTitle>
-              <SheetDescription className="sr-only">Event details</SheetDescription>
-            </SheetHeader>
-            <div className="px-4 pb-8">
-              <EventDetails event={event} venueName={venueName} />
-            </div>
-          </>
-        ) : event === null ? (
-          <SheetHeader>
-            <SheetTitle>Event not available</SheetTitle>
-            <SheetDescription>
-              It may have been removed, or it is a Cambridge-only event:{" "}
-              <Link href={camSignInHref(signInNext)} className="underline underline-offset-4">
-                sign in with your @cam.ac.uk email
-              </Link>{" "}
-              to see those.
-            </SheetDescription>
-          </SheetHeader>
-        ) : (
-          <div className="flex flex-col gap-4 p-4" aria-busy>
-            <SheetHeader className="p-0 pr-12">
-              <SheetTitle className={cn("text-xl", !title && "sr-only")}>
-                {title ?? "Loading event"}
-              </SheetTitle>
-              <SheetDescription className="sr-only">Loading the details</SheetDescription>
-            </SheetHeader>
-            {!title && <Skeleton className="h-7 w-3/4" />}
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
-  )
-}
-
-/**
- * The events calendar: list (default), week and month views of what the
- * viewer may see, with filters by category, type, college and society, and a
- * search. View, range and filters live in the URL and are preloaded by the
- * server page; opening an event only adds `event=` to the URL (no reload).
+ * The /events calendar (talks-redesign-spec §6 "/events"). The URL is the
+ * state (lib/url-state.ts): every change writes it with `history.pushState`,
+ * which Next folds into `useSearchParams`, and the live `events.list` query
+ * follows over the open socket — no server round trip, the previous events
+ * staying on screen (with a thin brick progress line) until the next arrive.
+ * The server page preloads the first view: one week, not four.
+ *
+ * Layout: serif header with a slim "Talks" cross-link → a sticky search bar
+ * (desktop: facet popovers, society, "Include taking part"; phone: a
+ * "Filters" bottom sheet and chips) → the list view's day-grouped agenda
+ * under sticky day headers beside (desktop) or under (phone) the week strip
+ * and date presets, loading a week at a time; or the week / month grids.
+ * An event opens in a side sheet (`?event=`) and has its own page,
+ * /events/[key].
  */
 export function EventsCalendar({
-  state,
   today,
-  org,
+  terms,
+  org: serverOrg,
   preloadedEvents,
   preloadedColleges,
   preloadedRestricted,
 }: {
-  state: EventsState
+  /** London's today, from the server, so both renders agree. */
   today: string
+  terms: TermDatesRow[]
+  /** The `?org=` society the server found, for its name. */
   org: OrgRef | null
   preloadedEvents: Preloaded<typeof api.events.list>
   preloadedColleges: Preloaded<typeof api.orgs.colleges>
   preloadedRestricted: Preloaded<typeof api.events.restrictedCount> | null
 }) {
-  const events = usePreloadedQuery(preloadedEvents)
-  const colleges = usePreloadedQuery(preloadedColleges)
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const [isPending, startTransition] = useTransition()
-
-  const anchor = state.date ?? today
-  const range = viewWindow(state.view, anchor)
+  const state = useMemo(
+    () => parseEventsParams(searchParamsObject(new URLSearchParams(searchParams.toString()))),
+    [searchParams],
+  )
   const base: EventsState = { ...state, event: undefined }
-  const hrefFor = (next: EventsState) => `/events${serializeEventsState(next)}`
-  const navigate = (next: EventsState) =>
-    startTransition(() => router.push(hrefFor({ ...next, event: undefined }), { scroll: false }))
+  const termEnd = useMemo(() => currentTermEnd(today, terms), [today, terms])
+  const window_ = eventsWindow(state, today, termEnd)
+  const colleges = usePreloadedQuery(preloadedColleges)
 
-  // The open event lives only in the URL, changed without a server round trip.
-  const selectedKey = searchParams.get("event") ?? undefined
-  const select = (key: string | undefined) =>
-    window.history.pushState(null, "", hrefFor({ ...base, event: key }))
-  const eventHref = (event: EventListItem) => hrefFor({ ...base, event: event.key })
+  // Societies picked in this visit, by slug, so a filter keeps its name.
+  const [knownOrgs, setKnownOrgs] = useState<Record<string, OrgRef>>(() =>
+    serverOrg ? { [serverOrg.slug]: serverOrg } : {},
+  )
+  const org: OrgRef | null = state.org
+    ? (knownOrgs[state.org] ?? { key: `org-${state.org}`, slug: state.org, name: state.org })
+    : null
 
+  // --- navigation ------------------------------------------------------------------------
+  const resultsTop = useRef<HTMLDivElement>(null)
+  const apply = (next: EventsState, { replace = false, scroll = false } = {}) => {
+    const href = eventsHref({ ...next, event: undefined })
+    if (replace) window.history.replaceState(null, "", href)
+    else window.history.pushState(null, "", href)
+    if (scroll) {
+      const top = resultsTop.current
+      if (top && top.getBoundingClientRect().top < 0) top.scrollIntoView({ block: "start" })
+    }
+  }
+  const openedHere = useRef(false)
+  useEffect(() => {
+    if (!state.event) openedHere.current = false
+  }, [state.event])
+  // The row that opened the sheet, to take focus back when it closes.
+  const opener = useRef<HTMLElement | null>(null)
+  const openEvent = (event: EventListItem, from?: HTMLElement) => {
+    openedHere.current = true
+    opener.current = from ?? null
+    window.history.pushState(null, "", eventsHref({ ...base, event: event.key }))
+  }
+  const closeEvent = () => {
+    if (openedHere.current) window.history.back()
+    else window.history.replaceState(null, "", eventsHref(base))
+  }
+  const eventHref = (event: EventListItem) => `/events/${event.key}`
+  const dayHref = (day: string) =>
+    eventsHref({
+      ...base,
+      view: "list",
+      preset: undefined,
+      weeks: 1,
+      date: day === today ? undefined : day,
+    })
+
+  // --- data ------------------------------------------------------------------------------
+  const args = eventListArgs(state, window_)
+  const loaded = useEventWindow(args, preloadedEvents)
+  const stale = loaded.stale
+  const camOnly = useRestrictedCount(
+    preloadedRestricted ? eventRestrictedArgs(args) : "skip",
+    preloadedRestricted ?? undefined,
+  )
+  const all = loaded.data ?? []
+  const matching = useMemo(
+    () => all.filter((event) => matchesEventQuery(event, state.q)),
+    [all, state.q],
+  )
+  const { ongoing, starting } = splitOngoing(matching, window_.from)
+  const list = state.view === "list"
+  // Every loaded day (the strip's counts) and the days the agenda shows.
+  const loadedByDay = eventsByDay(starting, window_.days, !list)
+  const shownDays = window_.days.filter(
+    (day) => day >= window_.shown.first && day <= window_.shown.last,
+  )
+  const agenda = [...loadedByDay.entries()].filter(
+    ([day]) => day >= window_.shown.first && day <= window_.shown.last,
+  )
+  const shownCount = agenda.reduce((sum, [, events]) => sum + events.length, 0)
+  const loading = loaded.data === undefined
+
+  // --- the week strip ----------------------------------------------------------------------
+  const pages = stripPages(window_.days)
+  const [stripPage, setStripPage] = useState(0)
+  const [seenFirst, setSeenFirst] = useState(window_.days[0])
+  if (seenFirst !== window_.days[0]) {
+    setSeenFirst(window_.days[0])
+    setStripPage(0)
+  }
+  const pageIndex = Math.min(stripPage, pages.length - 1)
+  const stripDays = pages[pageIndex] ?? []
+  const [focusDay, setFocusDay] = useState<string | undefined>(undefined)
+  const pendingScroll = useRef<string | undefined>(undefined)
+
+  const scrollToDay = (day: string) => {
+    const target = nextDayWithEvents(
+      day,
+      agenda.map(([date]) => date),
+    )
+    const element = target
+      ? document.getElementById(`day-${target}`)
+      : document.getElementById("events-agenda-end")
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    element?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" })
+  }
+  // A day picked outside a preset's range: the preset is dropped, then the
+  // agenda scrolls to the day once it shows it.
+  useEffect(() => {
+    const day = pendingScroll.current
+    if (day && day >= window_.shown.first && day <= window_.shown.last && !stale) {
+      pendingScroll.current = undefined
+      scrollToDay(day)
+    }
+  })
+  const pickDay = (day: string) => {
+    setFocusDay(day)
+    if (day >= window_.shown.first && day <= window_.shown.last) {
+      scrollToDay(day)
+      return
+    }
+    pendingScroll.current = day
+    apply({
+      ...base,
+      preset: undefined,
+      date: window_.days[0] === today ? undefined : window_.days[0],
+      weeks: Math.min(MAX_LIST_WEEKS, Math.ceil(window_.days.length / 7)),
+    })
+  }
+  const extendWeek = () =>
+    apply(
+      {
+        ...base,
+        preset: undefined,
+        date: state.preset ? undefined : state.date,
+        weeks: state.weeks + 1,
+      },
+      { replace: true },
+    )
+  const stripPrev = () => {
+    if (pageIndex > 0) return setStripPage(pageIndex - 1)
+    const back = addDays(window_.days[0], -7)
+    apply({ ...base, preset: undefined, date: back <= today ? undefined : back })
+  }
+  const stripNext = () => {
+    if (pageIndex < pages.length - 1) return setStripPage(pageIndex + 1)
+    if (state.preset) {
+      apply({
+        ...base,
+        preset: undefined,
+        date: window_.days[0] === today ? undefined : window_.days[0],
+        weeks: Math.min(MAX_LIST_WEEKS, Math.ceil(window_.days.length / 7) + 1),
+      })
+    } else extendWeek()
+    setStripPage(pageIndex + 1)
+  }
+  // The strip's last page of the longest list the URL allows. A preset's
+  // window counts in loaded weeks: past MAX_LIST_WEEKS, "next" would load a
+  // shorter window than the one on screen ("Rest of term" from Week 0 is nine).
+  const loadedWeeks = state.preset ? Math.ceil(window_.days.length / 7) : state.weeks
+  const atLastWeek = loadedWeeks >= MAX_LIST_WEEKS && pageIndex >= pages.length - 1
+
+  // The sticky search bar's height, so day headers stick just under it.
+  const bar = useRef<HTMLDivElement>(null)
+  const [barHeight, setBarHeight] = useState(0)
+  useEffect(() => {
+    const element = bar.current
+    if (!element) return
+    const measure = () => setBarHeight(element.getBoundingClientRect().height)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  // --- the open event --------------------------------------------------------------------
+  const openKey = state.event
+  const openData = useEvent(openKey)
+  const venues = useVenues(Boolean(openData?.venueKey && !openData.venueText))
+  const openVenue = venues?.find((venue) => venue.key === openData?.venueKey)?.name
+  const openPlaceholder = all.find((event) => event.key === openKey)
+
+  // --- filters ---------------------------------------------------------------------------
+  const filterCount = activeEventFilterCount(state)
   const toggle = (
+    from: EventsState,
     facet: "categories" | "eventTypes" | "collegeKeys",
     value: string,
     on: boolean,
-  ) => {
-    const current = state[facet] as string[]
-    navigate({ ...base, [facet]: on ? [...current, value] : current.filter((v) => v !== value) })
+  ): EventsState => {
+    const current = from[facet] as string[]
+    return {
+      ...from,
+      [facet]: on ? [...current, value] : current.filter((item) => item !== value),
+    }
+  }
+  const collegeName = (key: string) => colleges.find((college) => college.key === key)?.name ?? key
+  const applied: AppliedChip[] = [
+    ...state.eventTypes.map((type) => ({
+      key: `type-${type}`,
+      label: EVENT_TYPE_LABELS[type],
+      onRemove: () => apply(toggle(base, "eventTypes", type, false)),
+    })),
+    ...state.categories.map((category) => ({
+      key: `cat-${category}`,
+      label: CATEGORY_LABELS[category],
+      onRemove: () => apply(toggle(base, "categories", category, false)),
+    })),
+    ...state.collegeKeys.map((key) => ({
+      key: `college-${key}`,
+      label: collegeName(key),
+      onRemove: () => apply(toggle(base, "collegeKeys", key, false)),
+    })),
+    ...(org
+      ? [{ key: "org", label: org.name, onRemove: () => apply({ ...base, org: undefined }) }]
+      : []),
+    ...(state.takingPart
+      ? [
+          {
+            key: "external",
+            label: "Incl. taking part",
+            onRemove: () => apply({ ...base, takingPart: false }),
+          },
+        ]
+      : []),
+  ]
+  const quick: QuickChip[] = [
+    ...(!state.takingPart
+      ? [
+          {
+            key: "external",
+            label: "Include taking part",
+            onSelect: () => apply({ ...base, takingPart: true }),
+          },
+        ]
+      : []),
+    ...(["social", "performance", "match", "formal"] as const)
+      .filter((type) => !state.eventTypes.includes(type))
+      .map((type) => ({
+        key: type,
+        label: EVENT_TYPE_LABELS[type],
+        onSelect: () => apply(toggle(base, "eventTypes", type, true)),
+      })),
+  ]
+  const clearAll = () =>
+    apply({
+      view: state.view,
+      date: state.date,
+      preset: state.preset,
+      weeks: state.weeks,
+      categories: [],
+      eventTypes: [],
+      collegeKeys: [],
+      takingPart: false,
+    })
+  const pickOrg = (next: OrgRef | null, from: EventsState) => {
+    if (next) setKnownOrgs((known) => ({ ...known, [next.slug]: next }))
+    return { ...from, org: next?.slug }
   }
 
-  const filtered =
-    state.categories.length +
-      state.eventTypes.length +
-      state.collegeKeys.length +
-      (state.org ? 1 : 0) +
-      (state.q ? 1 : 0) +
-      (state.takingPart ? 0 : 1) >
-    0
-  const { ongoing, starting } = splitOngoing(events, range.from)
-  const byDay = eventsByDay(starting, range.days, state.view !== "list")
-  const ongoingSection = (
-    <Ongoing events={ongoing} hrefFor={eventHref} onSelect={(event) => select(event.key)} />
+  // The phone's filter sheet keeps a draft and applies it on "Show N events".
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [draft, setDraft] = useState<EventsState>(base)
+  const draftRows = useQuery(
+    api.events.list,
+    sheetOpen ? eventListArgs(draft, eventsWindow(draft, today, termEnd)) : "skip",
   )
+  const draftCount = draftRows
+    ? (() => {
+        // The count the page will show after "Show N": the list counts the
+        // events starting on its days (not the folded "already on" ones);
+        // the week and month grids count every event they load.
+        const span = eventsWindow(draft, today, termEnd)
+        return draftRows.filter(
+          (event) =>
+            matchesEventQuery(event, draft.q) &&
+            (draft.view === "list"
+              ? event.startsAt >= span.from && londonIsoDate(event.startsAt) <= span.shown.last
+              : true),
+        ).length
+      })()
+    : undefined
+  const draftOrg = draft.org
+    ? (knownOrgs[draft.org] ?? { key: `org-${draft.org}`, slug: draft.org, name: draft.org })
+    : null
 
-  return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-8 sm:px-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <SearchField
-          className="lg:max-w-sm"
-          value={state.q ?? ""}
-          label="Search events by title"
-          placeholder="Search event titles"
-          onSearch={(q) => navigate({ ...base, q: q || undefined })}
+  const sheet = (
+    <FilterSheet
+      open={sheetOpen}
+      onOpenChange={(open) => {
+        if (open) setDraft(base)
+        setSheetOpen(open)
+      }}
+      trigger={
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium sm:h-8 lg:hidden",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            filterCount > 0 ? "border-events bg-events-tint text-events" : "bg-card",
+          )}
+        >
+          <SlidersHorizontalIcon aria-hidden className="size-3.5" />
+          Filters
+          {filterCount > 0 && <span className="font-mono tabular-nums">· {filterCount}</span>}
+        </button>
+      }
+      count={draftCount}
+      noun={["event", "events"]}
+      accent="events"
+      onApply={() => {
+        apply(draft, { scroll: true })
+        setSheetOpen(false)
+      }}
+      onClear={() =>
+        setDraft({
+          ...draft,
+          categories: [],
+          eventTypes: [],
+          collegeKeys: [],
+          org: undefined,
+          takingPart: false,
+        })
+      }
+      clearDisabled={activeEventFilterCount(draft) === 0}
+    >
+      <div className="flex flex-col gap-7">
+        <FacetChips
+          legend="Type"
+          options={EVENT_TYPES.map((value) => ({ value, label: EVENT_TYPE_LABELS[value] }))}
+          selected={draft.eventTypes}
+          onToggle={(value, on) => setDraft(toggle(draft, "eventTypes", value, on))}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <FacetPopover
-            label="Category"
-            options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
-            selected={state.categories}
-            onToggle={(value, on) => toggle("categories", value, on)}
-          />
-          <FacetPopover
-            label="Type"
-            options={EVENT_TYPES.map((value) => ({ value, label: EVENT_TYPE_LABELS[value] }))}
-            selected={state.eventTypes}
-            onToggle={(value, on) => toggle("eventTypes", value, on)}
-          />
-          <FacetPopover
-            label="College"
-            options={colleges.map((college) => ({ value: college.key, label: college.name }))}
-            selected={state.collegeKeys}
-            onToggle={(value, on) => toggle("collegeKeys", value, on)}
-          />
+        <FacetChips
+          legend="Society category"
+          options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+          selected={draft.categories}
+          onToggle={(value, on) => setDraft(toggle(draft, "categories", value, on))}
+        />
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+            Society
+          </legend>
           <OrgPicker
-            className="w-56"
-            value={org}
+            value={draftOrg}
             label="Society"
             placeholder="Any society"
-            onChange={(next) => navigate({ ...base, org: next?.slug })}
+            onChange={(next) => setDraft(pickOrg(next, draft))}
           />
-          {/* Someone else's events the societies only take part in (D6): on by
-              default, dashed like the events it adds. */}
-          <Toggle
-            variant="outline"
-            pressed={state.takingPart}
-            onPressedChange={(on) => navigate({ ...base, takingPart: on })}
-            className="h-9 border-dashed font-normal"
-          >
-            <ArrowUpRightIcon aria-hidden />
-            Include events societies take part in
-          </Toggle>
-          {filtered && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                navigate({
-                  view: state.view,
-                  date: state.date,
-                  categories: [],
-                  eventTypes: [],
-                  collegeKeys: [],
-                  takingPart: true,
-                })
-              }
-            >
-              <XIcon data-icon="inline-start" />
-              Clear filters
-            </Button>
-          )}
-        </div>
+        </fieldset>
+        <FacetChips
+          legend="Someone else’s events"
+          options={[{ value: "show", label: "Include events societies take part in" }]}
+          selected={draft.takingPart ? ["show"] : []}
+          onToggle={(_, on) => setDraft({ ...draft, takingPart: on })}
+        />
+        <FacetChips
+          legend="College"
+          options={colleges.map((college) => ({ value: college.key, label: college.name }))}
+          selected={draft.collegeKeys}
+          onToggle={(value, on) => setDraft(toggle(draft, "collegeKeys", value, on))}
+        />
       </div>
+    </FilterSheet>
+  )
 
-      <div className="flex flex-wrap items-center gap-3 border-y py-3">
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          value={state.view}
-          onValueChange={(value) => value && navigate({ ...base, view: value as CalendarView })}
-          aria-label="Calendar view"
+  // --- the header ------------------------------------------------------------------------
+  // The header sums up what is on (before the search box narrows it).
+  const onShown = all.filter((event) => {
+    const day = londonIsoDate(event.startsAt)
+    return day >= window_.shown.first && day <= window_.shown.last
+  })
+  const societies = new Set(onShown.flatMap((event) => event.organisers.map((o) => o.key))).size
+  const spanText =
+    window_.shown.first === window_.shown.last
+      ? formatDayShort(window_.shown.first)
+      : `${formatDayShort(window_.shown.first)} – ${formatDayShort(window_.shown.last)}`
+  const when = window_.preset
+    ? PRESET_PHRASES[window_.preset]
+    : state.date && state.date !== today
+      ? `from ${formatDayShort(state.date)}`
+      : state.weeks > 1
+        ? `in the next ${state.weeks} weeks`
+        : "in the next seven days"
+  // While a new window loads (stale), the last window's count would read as
+  // the new one's ("61 events for the rest of term" was one week's).
+  const headline =
+    loading || stale
+      ? "What Cambridge societies and clubs have published: socials, shows, matches, formals and more."
+      : list
+        ? `${plural(onShown.length, "event", "events")} ${when}${societies > 0 ? ` from ${plural(societies, "society", "societies")} and clubs` : ""}.`
+        : "Socials, shows, matches and formals from Cambridge societies and clubs, a week or a month at a glance."
+  const anchor = state.date ?? today
+  const nextWeekFirst = addDays(window_.shown.last, 1)
+  const showsTalks = state.eventTypes.includes("talk")
+
+  const viewSwitch = (
+    <ToggleGroup
+      type="single"
+      value={state.view}
+      onValueChange={(value) =>
+        value &&
+        apply(
+          { ...base, view: value as CalendarView, preset: undefined, weeks: 1 },
+          { scroll: true },
+        )
+      }
+      aria-label="Calendar view"
+      className="shrink-0 rounded-full border bg-card p-0.5"
+    >
+      {VIEWS.map(({ value, label, icon: Icon }) => (
+        <ToggleGroupItem
+          key={value}
+          value={value}
+          aria-label={`${label} view`}
+          className="h-11 min-w-11 rounded-full px-3 text-[13px] data-[state=on]:bg-foreground data-[state=on]:text-background sm:h-8 sm:min-w-0"
         >
-          {VIEWS.map(({ value, label, icon: Icon }) => (
-            <ToggleGroupItem key={value} value={value} aria-label={`${label} view`}>
-              <Icon aria-hidden />
-              <span className="hidden sm:inline">{label}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" asChild>
-            <Link
-              href={hrefFor({ ...base, date: shiftAnchor(state.view, anchor, -1) })}
-              scroll={false}
-              aria-label="Earlier"
-            >
-              <ChevronLeftIcon />
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href={hrefFor({ ...base, date: undefined })} scroll={false}>
-              Today
-            </Link>
-          </Button>
-          <Button variant="outline" size="icon" asChild>
-            <Link
-              href={hrefFor({ ...base, date: shiftAnchor(state.view, anchor, 1) })}
-              scroll={false}
-              aria-label="Later"
-            >
-              <ChevronRightIcon />
-            </Link>
-          </Button>
-        </div>
-        <h2 className="font-mono text-sm font-medium tabular-nums" aria-live="polite">
-          {formatRange(state.view, range, anchor)}
-        </h2>
-        <p className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-          {isPending ? (
-            <>
-              <Spinner /> Updating…
-            </>
-          ) : (
-            <>
-              <span className="font-mono text-foreground tabular-nums">{events.length}</span>
-              {events.length === 1 ? "event" : "events"}
-            </>
-          )}
-        </p>
-      </div>
+          <Icon aria-hidden />
+          <span className="hidden sm:inline">{label}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
 
-      {preloadedRestricted && <CamOnlyNote preloaded={preloadedRestricted} next={hrefFor(base)} />}
+  const stickyTop = `calc(var(--site-header-height, 4rem) + ${barHeight}px)`
 
-      <div
-        aria-busy={isPending}
-        className={cn("transition-opacity duration-200", isPending && "opacity-60")}
-      >
-        {state.view === "list" &&
-          (events.length > 0 ? (
-            <div className="flex flex-col gap-8">
-              {ongoingSection}
-              {[...byDay.entries()].map(([day, dayEvents]) => (
-                <section key={day} aria-labelledby={`day-${day}`} className="flex flex-col gap-2">
-                  <h3
-                    id={`day-${day}`}
-                    className="sticky top-14 z-10 bg-background/95 py-1 font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase backdrop-blur"
-                  >
-                    {formatDayShort(day)}
-                    {day === today && <span className="ml-2 text-foreground">Today</span>}
-                  </h3>
-                  <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                    {dayEvents.map((event) => (
-                      <li key={event.key} className="min-w-0">
-                        <EventItem
-                          event={event}
-                          href={eventHref(event)}
-                          onSelect={() => select(event.key)}
-                          className="h-full"
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <Empty className="rounded-xl border border-dashed py-14">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <CalendarDaysIcon />
-                </EmptyMedia>
-                <EmptyTitle>No events in this range</EmptyTitle>
-                <EmptyDescription>
-                  {filtered
-                    ? "Nothing matches these filters. Try fewer, or a later range."
-                    : "No events are listed for these weeks yet. Calendars are added as societies' feeds are found."}
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent className="flex-row justify-center">
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={hrefFor({ ...base, date: shiftAnchor(state.view, anchor, 1) })}>
-                    Later
-                  </Link>
-                </Button>
-              </EmptyContent>
-            </Empty>
-          ))}
-
-        {state.view === "week" && (
-          <div className="flex flex-col gap-4">
-            {ongoingSection}
-            <ol className="grid grid-cols-1 gap-2 md:grid-cols-7">
-              {range.days.map((day) => {
-                const dayEvents = byDay.get(day) ?? []
-                return (
-                  <li
-                    key={day}
-                    className={cn(
-                      "flex min-w-0 flex-col gap-1.5 rounded-xl border p-2 md:min-h-28",
-                      day === today && "border-primary/40 bg-muted/40",
-                    )}
-                  >
-                    <h3 className="font-mono text-xs font-medium text-muted-foreground uppercase">
-                      {formatDayShort(day)}
-                      {day === today && <span className="sr-only"> (today)</span>}
-                    </h3>
-                    {dayEvents.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No events</p>
-                    )}
-                    {dayEvents.map((event) => (
-                      <EventChip
-                        key={event.key}
-                        event={event}
-                        href={eventHref(event)}
-                        onSelect={() => select(event.key)}
-                      />
-                    ))}
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-        )}
-
-        {state.view === "month" && (
-          <div className="flex flex-col gap-4">
-            {ongoingSection}
-            <div className="flex flex-col gap-1">
-              <div
-                aria-hidden
-                className="grid grid-cols-7 gap-1 font-mono text-xs text-muted-foreground uppercase"
+  return (
+    <div style={{ "--events-bar": `${barHeight}px` } as React.CSSProperties}>
+      <header className="border-b bg-card/40">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pt-8 pb-5 sm:px-6 sm:pt-12">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex max-w-3xl flex-col gap-2.5">
+              <p className="flex items-center gap-2 font-mono text-[0.6875rem] font-medium tracking-[0.14em] text-events uppercase">
+                <span aria-hidden className="h-px w-6 bg-events" />
+                What’s on
+              </p>
+              <h1
+                className={cn(
+                  "font-serif leading-[1.02] font-normal tracking-[-0.025em] text-balance",
+                  org ? "text-[clamp(2.3rem,5.8vw,4rem)]" : "text-[clamp(2.6rem,7.2vw,4.75rem)]",
+                )}
               >
-                {WEEKDAYS.map((name) => (
-                  <span key={name} className="px-1 text-center md:text-left">
-                    {name}
-                  </span>
-                ))}
-              </div>
-              <ol className="grid grid-cols-7 gap-1">
-                {range.days.map((day) => {
-                  const dayEvents = byDay.get(day) ?? []
-                  const inMonth = day.slice(0, 7) === anchor.slice(0, 7)
-                  const dayHref = hrefFor({ ...base, view: "list", date: day })
-                  const dayLabel = `${formatDayShort(day)}: ${dayEvents.length} ${dayEvents.length === 1 ? "event" : "events"}`
-                  return (
-                    <li
-                      key={day}
-                      className={cn(
-                        "flex min-w-0 flex-col rounded-lg border md:min-h-28 md:gap-1 md:p-1",
-                        !inMonth && "bg-muted/30 text-muted-foreground",
-                        day === today && "border-primary/50",
-                      )}
-                    >
-                      {/* Phones: the whole cell is the day — its number and how
-                          many events — and opens that day in the list. */}
-                      <Link
-                        href={dayHref}
-                        aria-label={dayLabel}
-                        className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg font-mono text-xs tabular-nums hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden"
-                      >
-                        <span className={cn(day === today && "font-semibold text-foreground")}>
-                          {Number(day.slice(8, 10))}
-                        </span>
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "h-1.5 rounded-full",
-                            dayEvents.length === 0
-                              ? "w-1.5 bg-transparent"
-                              : dayEvents.length < 3
-                                ? "w-1.5 bg-primary/70"
-                                : "w-3.5 bg-primary",
-                          )}
-                        />
-                      </Link>
-                      <Link
-                        href={dayHref}
-                        aria-label={dayLabel}
-                        className="hidden rounded px-1 font-mono text-xs tabular-nums hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:block"
-                      >
-                        <span className={cn(day === today && "font-semibold text-foreground")}>
-                          {Number(day.slice(8, 10))}
-                        </span>
-                      </Link>
-                      <div className="hidden min-w-0 flex-col gap-1 md:flex">
-                        {dayEvents.slice(0, MONTH_CELL_CHIPS).map((event) => (
-                          <EventChip
-                            key={event.key}
-                            event={event}
-                            href={eventHref(event)}
-                            onSelect={() => select(event.key)}
-                          />
-                        ))}
-                        {dayEvents.length > MONTH_CELL_CHIPS && (
-                          <Link
-                            href={dayHref}
-                            className="px-1 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            +{dayEvents.length - MONTH_CELL_CHIPS} more
-                          </Link>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ol>
-              <p className="text-xs text-muted-foreground md:hidden">
-                A bar under a day means events; tap a day to list them.
+                {org ? (
+                  <>
+                    Events from <span className="text-events italic">{org.name}</span>
+                  </>
+                ) : (
+                  <>
+                    Events<span className="text-events">.</span>
+                  </>
+                )}
+              </h1>
+              <p
+                className="max-w-2xl text-pretty text-muted-foreground sm:text-lg"
+                aria-live="polite"
+              >
+                {headline}
               </p>
             </div>
+            <Link
+              href="/talks"
+              className="group flex max-w-sm items-center gap-3 self-start rounded-full border border-talks/40 bg-talks-tint/60 py-1.5 pr-4 pl-1.5 text-sm transition-colors duration-150 hover:border-talks focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:rounded-2xl sm:py-3 sm:pl-4 lg:self-end"
+            >
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-talks font-serif text-base text-talks-foreground italic sm:size-9 sm:text-lg"
+              >
+                T
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="hidden font-mono text-[0.625rem] font-medium tracking-[0.14em] text-talks uppercase sm:block">
+                  New · the lecture list
+                </span>
+                <span className="font-medium">
+                  Academic talks now have their own page
+                  <ArrowRightIcon
+                    aria-hidden
+                    className="ml-1 inline size-3.5 align-[-2px] transition-transform group-hover:translate-x-0.5"
+                  />
+                </span>
+              </span>
+            </Link>
           </div>
-        )}
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <div
+          ref={(element) => {
+            bar.current = element
+            resultsTop.current = element
+          }}
+          className="sticky top-[var(--site-header-height,4rem)] z-30 -mx-4 flex scroll-mt-[var(--site-header-height,4rem)] flex-col gap-2.5 border-b bg-background/95 px-4 pt-3 pb-2.5 backdrop-blur supports-backdrop-filter:bg-background/80 sm:-mx-6 sm:px-6"
+        >
+          <div className="flex items-center gap-2">
+            <SearchField
+              size="lg"
+              className="min-w-0 flex-1"
+              value={state.q ?? ""}
+              label="Search events"
+              placeholder="Search events, societies or venues"
+              onSearch={(q) =>
+                apply({ ...base, q: q || undefined }, { replace: Boolean(state.q && q) })
+              }
+            />
+            <div className="hidden items-center gap-1.5 lg:flex">
+              <FacetPopover
+                label="Type"
+                accent="events"
+                options={EVENT_TYPES.map((value) => ({ value, label: EVENT_TYPE_LABELS[value] }))}
+                selected={state.eventTypes}
+                onToggle={(value, on) => apply(toggle(base, "eventTypes", value, on))}
+              />
+              <FacetPopover
+                label="Category"
+                accent="events"
+                options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+                selected={state.categories}
+                onToggle={(value, on) => apply(toggle(base, "categories", value, on))}
+              />
+              <FacetPopover
+                label="College"
+                accent="events"
+                options={colleges.map((college) => ({ value: college.key, label: college.name }))}
+                selected={state.collegeKeys}
+                onToggle={(value, on) => apply(toggle(base, "collegeKeys", value, on))}
+              />
+              <OrgPicker
+                className="w-44 [&_button]:rounded-full [&_button]:bg-card"
+                value={org}
+                label="Society"
+                placeholder="Any society"
+                onChange={(next) => apply(pickOrg(next, base))}
+              />
+              <button
+                type="button"
+                aria-pressed={state.takingPart}
+                onClick={() => apply({ ...base, takingPart: !state.takingPart })}
+                title="Someone else’s events (a CTF, a fair, a conference) a society lists because it takes part"
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-dashed px-3 text-[13px] whitespace-nowrap transition-colors duration-150",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                  state.takingPart
+                    ? "border-events bg-events-tint font-medium text-events"
+                    : "border-foreground/30 bg-card hover:border-foreground/60",
+                )}
+              >
+                <ArrowUpRightIcon aria-hidden className="size-3.5" />
+                Include taking part
+              </button>
+            </div>
+          </div>
+          <FilterChipStrip
+            className="lg:hidden"
+            leading={sheet}
+            applied={applied}
+            quick={quick}
+            onClear={applied.length > 0 || state.q ? clearAll : undefined}
+          />
+          {applied.length > 0 && (
+            <FilterChipStrip
+              className="hidden lg:flex"
+              applied={applied}
+              quick={[]}
+              onClear={clearAll}
+            />
+          )}
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-x-0 -bottom-px h-0.5 origin-left bg-events transition-[opacity,transform] duration-500",
+              stale ? "scale-x-75 opacity-100" : "scale-x-0 opacity-0 duration-150",
+            )}
+          />
+        </div>
+
+        <div
+          className={cn(
+            "grid grid-cols-[minmax(0,1fr)] gap-x-12 pt-5 pb-14",
+            list && "lg:grid-cols-[minmax(0,1fr)_20rem]",
+          )}
+        >
+          {list && (
+            <aside
+              aria-label="Dates"
+              className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[calc(var(--site-header-height,4rem)+var(--events-bar)+1.25rem)] lg:order-2 lg:self-start"
+            >
+              <div className="rounded-2xl border bg-card p-3 sm:p-4">
+                <WeekStrip
+                  days={dayCounts(stripDays, loadedByDay)}
+                  selected={focusDay && stripDays.includes(focusDay) ? focusDay : undefined}
+                  range={window_.preset ? window_.shown : undefined}
+                  onSelect={pickDay}
+                  today={today}
+                  minDate={today}
+                  termLabel={stripRangeLabel(stripDays, terms)}
+                  onPrev={stripPrev}
+                  onNext={stripNext}
+                  prevDisabled={pageIndex === 0 && window_.days[0] <= today}
+                  nextDisabled={atLastWeek}
+                  noun={["event", "events"]}
+                  accent="events"
+                />
+              </div>
+              <DatePresets
+                value={window_.preset}
+                available={availablePresets(today, termEnd, window_.preset)}
+                onChange={(preset) =>
+                  apply({ ...base, preset, date: undefined, weeks: 1 }, { scroll: true })
+                }
+                accent="events"
+              />
+              {camOnly !== undefined && camOnly > 0 && (
+                <p className="flex gap-2.5 rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <LockIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-foreground" />
+                  <span>
+                    <span className="font-mono text-foreground tabular-nums">{camOnly}</span>{" "}
+                    Cambridge-only {camOnly === 1 ? "event is" : "events are"} listed around these
+                    dates.{" "}
+                    <Link
+                      href={camSignInHref(eventsHref(base))}
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      Sign in with your @cam.ac.uk email
+                    </Link>{" "}
+                    to see {camOnly === 1 ? "it" : "them"}.
+                  </span>
+                </p>
+              )}
+            </aside>
+          )}
+
+          <div className="flex min-w-0 flex-col" aria-busy={stale || loading}>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-5 pb-1 lg:pt-0">
+              {list ? (
+                // While a new window loads, say so rather than pair the last
+                // window's count with the new range (as talks-browser does).
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  {stale || loading ? (
+                    "Counting…"
+                  ) : (
+                    <>
+                      <span className="font-mono text-foreground tabular-nums">{shownCount}</span>{" "}
+                      {shownCount === 1 ? "event" : "events"}
+                      {state.q && (
+                        <>
+                          {" "}
+                          matching <span className="text-foreground">“{state.q}”</span>
+                        </>
+                      )}{" "}
+                      · {spanText}
+                    </>
+                  )}
+                </p>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={eventsHref({ ...base, date: shiftAnchor(state.view, anchor, -1) })}
+                    scroll={false}
+                    aria-label={state.view === "week" ? "Previous week" : "Previous month"}
+                    className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:size-9"
+                  >
+                    <ChevronLeftIcon aria-hidden className="size-4" />
+                  </Link>
+                  <Link
+                    href={eventsHref({ ...base, date: undefined })}
+                    scroll={false}
+                    className="inline-flex h-11 items-center rounded-full border bg-card px-3.5 text-[13px] font-medium hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-ring sm:h-8"
+                  >
+                    Today
+                  </Link>
+                  <Link
+                    href={eventsHref({ ...base, date: shiftAnchor(state.view, anchor, 1) })}
+                    scroll={false}
+                    aria-label={state.view === "week" ? "Next week" : "Next month"}
+                    className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:size-9"
+                  >
+                    <ChevronRightIcon aria-hidden className="size-4" />
+                  </Link>
+                  <h2
+                    className="ml-2 font-serif text-xl leading-tight sm:text-2xl"
+                    aria-live="polite"
+                  >
+                    {state.view === "month"
+                      ? formatMonth(anchor)
+                      : formatRange("week", window_, anchor)}
+                  </h2>
+                  <span className="ml-3 hidden font-mono text-[0.6875rem] tracking-wide text-muted-foreground uppercase sm:inline">
+                    {plural(matching.length, "event", "events")}
+                  </span>
+                </div>
+              )}
+              {viewSwitch}
+            </div>
+
+            {showsTalks && (
+              <p className="mt-3 flex gap-3 rounded-2xl border border-talks/40 bg-talks-tint/50 px-4 py-3 text-sm">
+                <span aria-hidden className="mt-1 size-2 shrink-0 rounded-full bg-talks" />
+                <span>
+                  These are talks societies run. For department seminars and lectures across
+                  Cambridge, by School and department, see{" "}
+                  <Link
+                    href="/talks"
+                    className="font-medium text-talks underline underline-offset-4"
+                  >
+                    Talks
+                  </Link>
+                  .
+                </span>
+              </p>
+            )}
+
+            {!list && camOnly !== undefined && camOnly > 0 && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <LockIcon aria-hidden className="size-4 shrink-0" />
+                <span>
+                  {plural(camOnly, "Cambridge-only event", "Cambridge-only events")} around these
+                  dates —{" "}
+                  <Link
+                    href={camSignInHref(eventsHref(base))}
+                    className="font-medium text-foreground underline underline-offset-4"
+                  >
+                    sign in with your @cam.ac.uk email
+                  </Link>
+                  .
+                </span>
+              </p>
+            )}
+
+            {ongoing.length > 0 && (
+              <div className="mt-4">
+                <Ongoing events={ongoing} hrefFor={eventHref} onSelect={openEvent} />
+              </div>
+            )}
+
+            {loading ? (
+              <div className="flex flex-col">
+                <Skeleton className="mt-4 mb-1 h-7 w-48" />
+                {Array.from({ length: 6 }, (_, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: placeholders
+                  <EventRowSkeleton key={index} />
+                ))}
+              </div>
+            ) : !list ? (
+              <div className={cn("mt-4 transition-opacity", stale && "opacity-80")}>
+                {state.view === "week" ? (
+                  <EventWeekGrid
+                    days={window_.days}
+                    byDay={loadedByDay}
+                    today={today}
+                    eventHref={eventHref}
+                    onSelect={openEvent}
+                    dayHref={dayHref}
+                  />
+                ) : (
+                  <EventMonthGrid
+                    days={window_.days}
+                    byDay={loadedByDay}
+                    today={today}
+                    month={anchor.slice(0, 7)}
+                    terms={terms}
+                    eventHref={eventHref}
+                    onSelect={openEvent}
+                    dayHref={dayHref}
+                  />
+                )}
+              </div>
+            ) : agenda.length === 0 ? (
+              <EmptyEvents
+                q={state.q}
+                chips={applied}
+                weeks={state.weeks}
+                termTag={termWeekTag(window_.shown.first, terms)}
+                hasPreset={Boolean(window_.preset)}
+                onSearchWider={() =>
+                  apply({ ...base, preset: undefined, weeks: SEARCH_WEEKS }, { replace: true })
+                }
+                onDropQuery={() => apply({ ...base, q: undefined })}
+                onClear={clearAll}
+                onNextWeek={extendWeek}
+                canExtend={state.weeks < MAX_LIST_WEEKS}
+              />
+            ) : (
+              <div className="flex flex-col">
+                {agenda.map(([day, dayEvents]) => {
+                  const heading = dayHeading(day, today)
+                  const tag = termWeekTag(day, terms)
+                  const weekday = LONG_WEEKDAYS[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]
+                  return (
+                    <section
+                      key={day}
+                      id={`day-${day}`}
+                      aria-labelledby={`day-${day}-heading`}
+                      style={{ scrollMarginTop: stickyTop }}
+                      className="flex flex-col"
+                    >
+                      <h2
+                        id={`day-${day}-heading`}
+                        style={{ top: stickyTop }}
+                        className="sticky z-20 -mx-4 flex items-baseline justify-between gap-3 border-b bg-background/95 px-4 pt-4 pb-2 backdrop-blur supports-backdrop-filter:bg-background/85 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0"
+                      >
+                        <span className="flex min-w-0 items-baseline gap-2">
+                          <span
+                            className={cn(
+                              "font-serif text-xl leading-tight italic sm:text-2xl",
+                              day === today && "text-events",
+                            )}
+                          >
+                            {heading.relative ?? weekday}
+                          </span>
+                          <span className="truncate text-sm text-muted-foreground">
+                            {heading.relative
+                              ? `· ${heading.date}`
+                              : heading.date.replace(/^\w+ /, "")}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-baseline gap-3 font-mono text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
+                          {tag && <span className="hidden sm:inline">{tag}</span>}
+                          <span>{plural(dayEvents.length, "event", "events")}</span>
+                        </span>
+                      </h2>
+                      <ul className="flex flex-col divide-y divide-dashed">
+                        {dayEvents.map((event) => (
+                          <li key={event.key}>
+                            <EventRow
+                              event={event}
+                              href={eventHref(event)}
+                              onSelect={(target) => openEvent(event, target)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )
+                })}
+
+                <div
+                  id="events-agenda-end"
+                  style={{ scrollMarginTop: stickyTop }}
+                  className="flex flex-col items-center gap-3 border-t pt-8"
+                >
+                  <p className="text-center text-sm text-muted-foreground">
+                    {window_.preset
+                      ? `That is everything listed ${PRESET_PHRASES[window_.preset]}.`
+                      : `That is everything listed until ${formatDayShort(window_.shown.last)}.`}
+                  </p>
+                  {window_.preset ? (
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-full px-6"
+                      onClick={() =>
+                        apply(
+                          {
+                            ...base,
+                            preset: undefined,
+                            date: window_.shown.first === today ? undefined : window_.shown.first,
+                            weeks: Math.min(MAX_LIST_WEEKS, Math.ceil(shownDays.length / 7) + 1),
+                          },
+                          { replace: true },
+                        )
+                      }
+                    >
+                      Keep going: the week after
+                      <ArrowRightIcon data-icon="inline-end" />
+                    </Button>
+                  ) : state.weeks < MAX_LIST_WEEKS ? (
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-full border-events/50 px-6 hover:border-events hover:bg-events-tint/60"
+                      disabled={stale}
+                      onClick={extendWeek}
+                    >
+                      {stale && <Spinner data-icon="inline-start" />}
+                      Show next week
+                      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                        {formatDayShort(nextWeekFirst)} –{" "}
+                        {formatDayShort(addDays(nextWeekFirst, 6))}
+                      </span>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-full px-6"
+                      onClick={() =>
+                        apply({ ...base, date: nextWeekFirst, weeks: 1 }, { scroll: true })
+                      }
+                    >
+                      From {formatDayShort(nextWeekFirst)}
+                      <ArrowRightIcon data-icon="inline-end" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="mt-10 flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+              <span>
+                Times are UK time. Events come from societies’ own calendars, listings and mailing
+                lists; each shows its source.
+              </span>
+              {state.takingPart ? (
+                <span>
+                  Dashed events, marked “Taking part”, are someone else’s that a society lists
+                  because it takes part.{" "}
+                  <button
+                    type="button"
+                    onClick={() => apply({ ...base, takingPart: false })}
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 sm:min-h-0"
+                  >
+                    Hide them
+                  </button>
+                </span>
+              ) : (
+                <span>
+                  Someone else’s events a society only takes part in (a CTF, a fair, a conference)
+                  are left out.{" "}
+                  <button
+                    type="button"
+                    onClick={() => apply({ ...base, takingPart: true })}
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 sm:min-h-0"
+                  >
+                    Include them
+                  </button>
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Times are UK time. Events come from societies’ own calendars, listings and mailing lists;
-        each shows its source. Dashed events, marked “Taking part”, are someone else’s events a
-        society lists because it takes part.
-      </p>
+      <Sheet open={openKey !== undefined} onOpenChange={(open) => !open && closeEvent()}>
+        <SheetContent
+          showCloseButton={false}
+          onCloseAutoFocus={(event) => {
+            const row = opener.current
+            opener.current = null
+            if (row?.isConnected) {
+              event.preventDefault()
+              row.focus({ preventScroll: true })
+            }
+          }}
+          className="w-full overflow-y-auto data-[side=right]:w-full sm:max-w-lg data-[side=right]:sm:max-w-lg"
+        >
+          <SheetClose className="absolute top-2 right-2 z-10 inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <XIcon aria-hidden className="size-4" />
+            <span className="sr-only">Close</span>
+          </SheetClose>
+          {openData ? (
+            <>
+              <SheetHeader className="gap-2 px-5 pt-6 pr-14 sm:px-7 sm:pr-16">
+                <EventEyebrow event={openData} />
+                <SheetTitle
+                  className={cn(
+                    "font-serif text-[1.75rem] leading-[1.12] font-normal tracking-[-0.015em] text-balance",
+                    openData.cancelled && "text-muted-foreground line-through",
+                  )}
+                >
+                  <EventTitle title={openData.title} />
+                </SheetTitle>
+                <SheetDescription className="sr-only">Event details</SheetDescription>
+              </SheetHeader>
+              <div className="px-5 pb-10 sm:px-7">
+                <EventDetails
+                  event={openData}
+                  venueName={openVenue}
+                  pageUrl={`${SITE_URL}/events/${openData.key}`}
+                  termWeek={termWeekTag(londonIsoDate(openData.startsAt), terms)}
+                />
+                <Link
+                  href={`/events/${openData.key}`}
+                  className="mt-6 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-events underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  Open the event’s own page
+                  <ArrowRightIcon aria-hidden className="size-3.5" />
+                </Link>
+              </div>
+            </>
+          ) : openData === null ? (
+            <SheetHeader className="px-5 pt-6 pr-14 sm:px-7 sm:pr-16">
+              <SheetTitle className="font-serif text-2xl font-normal">
+                This event is not available
+              </SheetTitle>
+              <SheetDescription>
+                It may have been taken down, or it is a Cambridge-only event:{" "}
+                <Link
+                  href={camSignInHref(eventsHref({ ...base, event: openKey }))}
+                  className="underline underline-offset-4"
+                >
+                  sign in with your @cam.ac.uk email
+                </Link>{" "}
+                to see those.
+              </SheetDescription>
+            </SheetHeader>
+          ) : (
+            <div className="flex flex-col gap-4 px-5 pt-6 sm:px-7" aria-busy>
+              <SheetHeader className="p-0 pr-14">
+                <SheetTitle
+                  className={cn(
+                    "font-serif text-[1.75rem] leading-[1.12] font-normal",
+                    !openPlaceholder && "sr-only",
+                  )}
+                >
+                  {openPlaceholder ? (
+                    <EventTitle title={openPlaceholder.title} />
+                  ) : (
+                    "Loading the event"
+                  )}
+                </SheetTitle>
+                <SheetDescription className="sr-only">Loading the details</SheetDescription>
+              </SheetHeader>
+              {!openPlaceholder && <Skeleton className="h-8 w-3/4" />}
+              <Skeleton className="h-16 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
 
-      <EventSheet
-        eventKey={selectedKey}
-        placeholder={events.find((event) => event.key === selectedKey)}
-        onClose={() => select(undefined)}
-        signInNext={hrefFor({ ...base, event: selectedKey })}
-      />
+function EmptyEvents({
+  q,
+  chips,
+  weeks,
+  termTag,
+  hasPreset,
+  onSearchWider,
+  onDropQuery,
+  onClear,
+  onNextWeek,
+  canExtend,
+}: {
+  q?: string
+  chips: AppliedChip[]
+  weeks: number
+  termTag?: string
+  hasPreset: boolean
+  onSearchWider: () => void
+  onDropQuery: () => void
+  onClear: () => void
+  onNextWeek: () => void
+  canExtend: boolean
+}) {
+  const filtered = chips.length > 0 || Boolean(q)
+  return (
+    <div className="mt-4 flex flex-col items-center gap-5 rounded-2xl border border-dashed px-6 py-12 text-center">
+      <PuntMark />
+      <div className="flex max-w-md flex-col gap-1.5">
+        <h2 className="font-serif text-2xl font-normal">
+          {filtered
+            ? "Nothing on with those"
+            : `Nothing on${termTag ? ` — unusual for ${termTag.replace(" · ", " ")}` : ""}`}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {q
+            ? `No event on these days has “${q}” in its title, society or venue.`
+            : filtered
+              ? "No event on these days matches all of these. Drop a filter, or look further ahead."
+              : "No society has listed anything for these days yet. Calendars are added as their feeds are found."}
+        </p>
+      </div>
+      <div className="flex max-w-xl flex-wrap justify-center gap-2">
+        {q && weeks < SEARCH_WEEKS && (
+          <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={onSearchWider}>
+            Search the next four weeks
+          </Button>
+        )}
+        {!q && !hasPreset && canExtend && (
+          <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={onNextWeek}>
+            Show next week
+          </Button>
+        )}
+        {q && (
+          <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={onDropQuery}>
+            Drop the search “{q}”
+          </Button>
+        )}
+        {chips.map((chip) => (
+          <Button
+            key={chip.key}
+            variant="outline"
+            size="sm"
+            className="h-11 sm:h-9"
+            onClick={chip.onRemove}
+          >
+            Drop “{chip.label}”
+          </Button>
+        ))}
+        {filtered && (
+          <Button variant="ghost" size="sm" className="h-11 sm:h-9" onClick={onClear}>
+            Clear all
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

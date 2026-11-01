@@ -1,0 +1,80 @@
+BEGIN:VCALENDAR
+X-CAMSOCS-FIXTURE:Recorded from https://www.bas.ac.uk/events/list/?ical=1 (fetched 2026-10-31 by camsocs-bot); trimmed to 2 of 3 events
+VERSION:2.0
+PRODID:-//British Antarctic Survey - ECPv6.18.3//NONSGML v1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:British Antarctic Survey
+X-ORIGINAL-URL:https://www.bas.ac.uk
+X-WR-CALDESC:Events for British Antarctic Survey
+REFRESH-INTERVAL;VALUE=DURATION:PT1H
+X-Robots-Tag:noindex
+X-PUBLISHED-TTL:PT1H
+BEGIN:VTIMEZONE
+TZID:Europe/London
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0100
+TZNAME:BST
+DTSTART:20250330T010000
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0000
+TZNAME:GMT
+DTSTART:20251026T010000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0100
+TZNAME:BST
+DTSTART:20260329T010000
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0000
+TZNAME:GMT
+DTSTART:20261025T010000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0100
+TZNAME:BST
+DTSTART:20270328T010000
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0000
+TZNAME:GMT
+DTSTART:20271031T010000
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+DTSTART;TZID=Europe/London:20261110T140000
+DTEND;TZID=Europe/London:20261110T144000
+DTSTAMP:20261009T153143Z
+CREATED:20261009T152241Z
+LAST-MODIFIED:20261009T153143Z
+UID:197166-1794319200-1794321600@www.bas.ac.uk
+SUMMARY:Antarctica Live! - Online lesson for schools
+DESCRIPTION:Join us on Tuesday 10 November at 2pm for Antarctica Live! A free Happy by Nature live lesson on one of the most extreme environments on Earth. With our hosts\, TV presenter and journalist Julia Bradbury and CBeebies presenter Gemma Hunt! From WWF\, British Antarctic Survey and Dynamic Earth. \nGet ready to transport your pupils to one of the most extreme environments! Together\, we’ll explore the icy Antarctic climate\, investigate how animals survive in freezing conditions\, discover why tiny krill are vital to entire ecosystems\, and link up live with British Antarctic Survey’s scientists and teams working in Antarctica right now! \nWhen: Tuesday 10 November 2pm – 2.40pm GMT\nWhere: Online – register on the WWF web page\, and they will send you the link! \n  \n \n  \nThe 40 minute lesson is designed for (ages 7-11) Key Stage 2/Second Level students\, but open for learners of all stages. \nThe WWF team will send the joining link before the event\, so all you need to do is gather your class and get ready for an unforgettable learning experience. \n  \nRegister on the WWF website.
+URL:https://www.bas.ac.uk/event/antarctica-live-online-lesson-for-schools/
+LOCATION:Online
+CATEGORIES:Public engagement
+ATTACH;FMTTYPE=image/jpeg:https://www.bas.ac.uk/wp-content/uploads/2026/10/WWF-live-lesson-polar-paid-social-1x1-1.jpg
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/London:20261203T180000
+DTEND;TZID=Europe/London:20261203T220000
+DTSTAMP:20261008T141230Z
+CREATED:20261002T092500Z
+LAST-MODIFIED:20261008T141230Z
+UID:196744-1796320800-1796335200@www.bas.ac.uk
+SUMMARY:British Antarctic Survey at Ice Station RGS
+DESCRIPTION:The British Antarctic Survey invites you to join us at the Royal Geographical Society’s (RGS) Ice Station event this December! \nIce Station RGS is an immersive evening event bringing together art\, geography\, science\, music\, film\, literature and exploration to look at ice from every angle and discover what it can tell us about our changing planet. \nAfter being welcomed to the event in the historic Ondaatje Theatre\, explore the Society after dark and experience a series of encounters\, performances and icy installations! \nVisit the Summit Room\, where you’ll meet our scientists and discover more about life and research in some of the most remote environments on Earth. Step inside our cosy polar tent\, try on authentic polar gear\, and discover what’s on the menu for scientists working in the field. \nIn the Map Room\, where a million maps lie beneath your feet – listen to live music and contemplate the journeys\, landscapes and stories held within its walls. \n  \nCamping in Antarctica \nWander into the Polar Hall\, where you can enjoy expertly curated ice themed cocktails. Discover extraordinary images from our Platinum Print Collection\, before stepping into the Foyle Reading Room to uncover the story of the Discovery expedition\, 125 years after its remarkable journey into the Antarctic. \nIn the Pavilion Gallery\, discover our unique exhibition about ice\, ranging from the legendary Antarctic photographs of Frank Hurley to knitted portraits of glaciers. \nAlong the way\, watch films\, hear spoken word and encounter ideas that explore our relationship with ice\, culturally\, scientifically and creatively. Throughout the building\, artists respond to ice in their own ways\, inviting you to pause\, look closer and see this familiar yet extraordinary substance differently. \n  \nFor ticket information please visit the Royal Geographical Society’s website.
+URL:https://www.bas.ac.uk/event/british-antarctic-survey-at-ice-station-rgs/
+LOCATION:Royal Geographical Society\, 1 Kensignton Gore\, London\, SW7 2AR\, United Kingdom
+CATEGORIES:Exhibition
+ATTACH;FMTTYPE=image/jpeg:https://www.bas.ac.uk/wp-content/uploads/2024/12/10006667.jpg
+END:VEVENT
+END:VCALENDAR

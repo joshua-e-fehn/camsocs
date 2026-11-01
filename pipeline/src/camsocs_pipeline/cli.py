@@ -4,7 +4,7 @@
                                          pipeline/.env, or CAMSOCS_ENV_FILE); docs/deploy.md
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
-    camsocs sync [--stages a,b | --group events|full] [--dry-run] [--limit N]
+    camsocs sync [--stages a,b | --group events|full|talks] [--dry-run] [--limit N]
     camsocs harvest [--dry-run] [--limit N]   = sync --group full: every stage, re-derive, report
     camsocs derive                       re-derive statuses, term weeks, stale flags now
     camsocs purge-dev --yes              empty pipeline tables on the DEV deployment
@@ -278,7 +278,10 @@ def _parse_stages(_ctx: click.Context, _param: click.Parameter, value: str | Non
 @click.option(
     "--group",
     metavar="NAME",
-    help="A scheduled run's stages instead (stages.GROUPS): events (daily) or full (weekly).",
+    help=(
+        "A scheduled run's stages instead (stages.GROUPS): events (daily), full (weekly) "
+        "or talks (the talks pillar alone)."
+    ),
 )
 @click.option("--dry-run", is_flag=True, help="No credentials needed; nothing is written.")
 @click.option("--limit", type=click.IntRange(min=1), help="Process at most N items per stage.")
@@ -563,6 +566,62 @@ def coverage(ctx: click.Context, before: Path | None, as_json: bool) -> None:
         click.echo(
             "quarantine: " + ", ".join(f"{name} {count}" for name, count in quarantine.items())
         )
+
+
+@cli.command("talks-verify")
+@click.option("--only", metavar="DEPT_KEY", help="Check one department's sources only.")
+@click.option(
+    "--json",
+    "json_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Also write the results as JSON (for docs/talks-coverage.md).",
+)
+@click.pass_context
+def talks_verify(ctx: click.Context, only: str | None, json_path: Path | None) -> None:
+    """Fetch every department-registry source once and print, per source, its
+    status, upcoming talk count and errors (counts only, never page text)."""
+    from camsocs_pipeline.events.common import polite_client
+    from camsocs_pipeline.talks import verify
+
+    with polite_client(_settings(ctx)) as client:
+        try:
+            checks = verify.run(client, only=only, json_path=json_path, echo=click.echo)
+        except ValueError as error:
+            raise click.ClickException(str(error)) from error
+    if any(c.status == "error" for c in checks):
+        ctx.exit(1)
+
+
+@cli.command("talks-demo-seed")
+@click.option("--days", default=35, show_default=True, help="Days of synthetic talks from today.")
+@click.pass_context
+def talks_demo_seed(ctx: click.Context, days: int) -> None:
+    """Post invented talks (real department names, fake everything else) to the
+    DEV deployment, for building and screenshotting the talks UI without real
+    talks.cam content. Refuses any --env."""
+    from datetime import datetime, time, timedelta
+    from zoneinfo import ZoneInfo
+
+    from camsocs_pipeline.events.common import EventWindow
+    from camsocs_pipeline.talks import demo, push
+    from camsocs_pipeline.talks.registry import load_registry
+
+    if ctx.obj.get("env_name"):
+        raise click.ClickException("talks-demo-seed is for the dev deployment only (no --env)")
+    settings = _settings(ctx)
+    departments = load_registry()
+    start = datetime.combine(
+        datetime.now(ZoneInfo("Europe/London")).date(), time(0), ZoneInfo("Europe/London")
+    )
+    records = demo.demo_talks(departments, start, days)
+    run_id = f"demo-{start:%Y%m%d}"
+    with _loader(settings) as loader:
+        push.push_departments(loader, departments)
+        result = push.push_talks(loader, run_id, records)
+        sources = sorted({r.source for r in records})
+        window = EventWindow(start=start, end=start + timedelta(days=days))
+        missing = push.sweep(loader, run_id, window, sources)
+    click.echo(f"departments {len(departments)}; {result}; swept {missing}")
 
 
 def main() -> None:

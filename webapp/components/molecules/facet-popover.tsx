@@ -13,22 +13,39 @@ export function FacetPopover({
   options,
   selected,
   onToggle,
+  accent = "primary",
 }: {
   label: string
   options: FacetOption[]
   selected: readonly string[]
   onToggle: (value: string, checked: boolean) => void
+  /** The pillar colour of a filter that is on: Societies sage, Events brick. */
+  accent?: "primary" | "events"
 }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={cn("h-9 font-normal", selected.length > 0 && "border-primary/40")}
+          className={cn(
+            "h-9 font-normal",
+            accent === "events" && "rounded-full bg-card",
+            selected.length > 0 &&
+              (accent === "events"
+                ? "border-events bg-events-tint text-events"
+                : "border-primary/40"),
+          )}
         >
           {label}
           {selected.length > 0 && (
-            <span className="rounded bg-primary px-1 font-mono text-[11px] text-primary-foreground tabular-nums">
+            <span
+              className={cn(
+                "rounded px-1 font-mono text-[11px] tabular-nums",
+                accent === "events"
+                  ? "bg-events text-events-foreground"
+                  : "bg-primary text-primary-foreground",
+              )}
+            >
               {selected.length}
             </span>
           )}

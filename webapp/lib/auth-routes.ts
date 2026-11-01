@@ -26,6 +26,7 @@ export const PUBLIC_PATHS = [
   "/api",
   "/societies",
   "/events",
+  "/talks",
   "/request",
   "/about",
   "/privacy",

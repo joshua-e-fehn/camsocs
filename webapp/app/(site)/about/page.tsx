@@ -13,7 +13,7 @@ import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-
 export const metadata: Metadata = pageMetadata({
   title: "About",
   description:
-    "What camsocs is, who runs it, and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, every fact sourced.",
+    "What camsocs is, who runs it, and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, talks read by parsers alone, every fact sourced.",
   path: "/about",
 })
 
@@ -26,7 +26,14 @@ const SOURCES = [
   ["College, JCR and MCR websites", "student bodies and their role contacts"],
   ["Societies' own websites and Linktree pages", "how to join, membership, contacts, socials"],
   ["Public calendar feeds (Google Calendar, Luma, iCal)", "events societies publish"],
-  ["talks.cam", "talks, read by a parser only, never by an AI model"],
+  [
+    "talks.cam, through its public API",
+    "academic talks, read by a parser only, never by an AI model",
+  ],
+  [
+    "Department and institute websites (their calendar feeds and event pages)",
+    "academic talks, read by parsers where robots.txt allows, never by an AI model",
+  ],
   ["Playwaze and SU What's On", "leagues and events"],
   ["The University's term-dates page", "Full Term dates, for week numbers"],
 ] as const
@@ -47,19 +54,21 @@ export default async function AboutPage() {
     <div className="mx-auto grid w-full max-w-7xl gap-12 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_18rem]">
       <div className="flex max-w-3xl flex-col gap-10">
         <header className="flex flex-col gap-3">
-          <h1 className="text-3xl font-bold tracking-tight">About camsocs</h1>
+          <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
+            About camsocs
+          </h1>
           <p className="text-lg text-muted-foreground">
-            A directory of Cambridge student societies and sports clubs, with an events calendar, in
-            which every fact says where it came from.
+            Cambridge student societies and sports clubs, their events, and the public academic
+            talks across the University’s departments, with every fact saying where it came from.
           </p>
         </header>
 
         <ProseSection id="what" title="What it is">
           <p>
             Cambridge has well over a thousand student groups, listed in many places that rarely
-            agree: the SU directory, the Proctors&apos; register, Sport Cambridge, Camdram, college
-            and JCR/MCR sites, and each society&apos;s own pages. camsocs brings them together into
-            one record per group, keeps the record current, and shows the source, date and status of
+            agree: the SU directory, the Proctors’ register, Sport Cambridge, Camdram, college and
+            JCR/MCR sites, and each society’s own pages. camsocs brings them together into one
+            record per group, keeps the record current, and shows the source, date and status of
             every fact, so you can judge it for yourself.
           </p>
           <p>
@@ -69,9 +78,9 @@ export default async function AboutPage() {
 
         <ProseSection id="unofficial" title="Unofficial and independent">
           <p>
-            <strong>{DISCLAIMER}</strong> It does not use the University&apos;s name, crest or logo
-            as branding, and nothing here should be read as the University&apos;s or the SU&apos;s
-            view. Societies registered with the Proctors or the SU are bodies independent of both.
+            <strong>{DISCLAIMER}</strong> It does not use the University’s name, crest or logo as
+            branding, and nothing here should be read as the University’s or the SU’s view.
+            Societies registered with the Proctors or the SU are bodies independent of both.
           </p>
         </ProseSection>
 
@@ -95,21 +104,21 @@ export default async function AboutPage() {
               per site.
             </li>
             <li>
-              <strong>Nothing behind a login.</strong> Pages that need a Raven or members&apos;
-              login, or that refuse access, are never fetched. Email addresses a site has hidden or
-              obscured are never decoded.
+              <strong>Nothing behind a login.</strong> Pages that need a Raven or members’ login, or
+              that refuse access, are never fetched. Email addresses a site has hidden or obscured
+              are never decoded.
             </li>
             <li>
               <strong>No Instagram, Facebook or LinkedIn scraping.</strong> We store links to those
-              profiles only. Instagram posts are read, if at all, only through Meta&apos;s official
-              API for public professional accounts.
+              profiles only. Instagram posts are read, if at all, only through Meta’s official API
+              for public professional accounts.
             </li>
             <li>
               <strong>AI extraction, checked.</strong> An AI language model, run by a third-party
-              provider, reads free text from societies&apos; own pages to pull out facts such as how
-              to join. A fact counts as <em>found</em> only when the model quotes the source word
-              for word and the quote is checked; otherwise it is labelled <em>inferred</em>. Content
-              from talks.cam and tbc.xyz is never given to an AI model.
+              provider, reads free text from societies’ own pages to pull out facts such as how to
+              join. A fact counts as <em>found</em> only when the model quotes the source word for
+              word and the quote is checked; otherwise it is labelled <em>inferred</em>. Content
+              from talks.cam, departments’ talk listings and tbc.xyz is never given to an AI model.
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown
@@ -120,8 +129,8 @@ export default async function AboutPage() {
               <strong>Societies, not people.</strong> Public listings show organisations and the
               role addresses they publish (president@…, secretary@…). Personal student addresses are
               not shown. Where a description names a committee member, performer or other student,
-              the name is replaced by their role (&ldquo;contact our President&rdquo;) before it is
-              published. Speakers announced for public talks keep their names.
+              the name is replaced by their role (“contact our President”) before it is published.
+              Speakers announced for public talks keep their names.
             </li>
           </ul>
           <h3>Sources</h3>
@@ -132,6 +141,52 @@ export default async function AboutPage() {
               </li>
             ))}
           </ul>
+        </ProseSection>
+
+        <ProseSection id="talks" title="Talks">
+          <p>
+            The Talks pages list public academic talks: seminars, lectures, workshops and
+            conferences that departments, institutes and lecture series open to anyone. They are
+            separate from society events, and are collected differently.
+          </p>
+          <ul>
+            <li>
+              <strong>Two kinds of source.</strong> talks.cam is read through its public API, at
+              most one request every ten seconds. Departments’ own websites are read through the
+              calendar feeds and event pages they publish, only where their robots.txt allows it;
+              the society exception above never applies to them. Nothing behind a login is read.
+            </li>
+            <li>
+              <strong>Parsers only, no AI.</strong> Every talk is read by fixed code that picks out
+              the title, speakers, time and place. No language model reads talks.cam or a
+              department’s pages, and none writes or rewrites a talk. Our robots.txt asks AI
+              crawlers to keep off the talk pages and calendar feeds, as talks.cam’s own does.
+            </li>
+            <li>
+              <strong>Speakers as published.</strong> A talk’s speakers and their affiliations are
+              shown as the organiser listed them, because a speaker is the point of a public talk.
+              Titles and abstracts are the organisers’ own words.
+            </li>
+            <li>
+              <strong>One source per talk.</strong> Each talk links to the page it was read from and
+              says when. A talk listed in two places is shown once; a talk its source no longer
+              lists disappears, and talks are deleted 30 days after they took place.
+            </li>
+          </ul>
+          <p>
+            To correct or remove a talk, or your name on one,{" "}
+            {CONTACT_EMAIL ? (
+              <>
+                email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the talk’s link
+              </>
+            ) : (
+              <>
+                use the <Link href="/request?kind=object">request form</Link> with the talk’s link
+              </>
+            )}
+            . The organiser’s own listing is the place to change it for good: what it says is what
+            we show at the next read.
+          </p>
         </ProseSection>
 
         <ProseSection id="statuses" title="What the labels mean">
@@ -157,7 +212,7 @@ export default async function AboutPage() {
           </dl>
           <p>
             The percentage is a confidence computed by fixed rules (how the value was read, from
-            whose page, and how many independent sources agree). It is never the AI model&apos;s own
+            whose page, and how many independent sources agree). It is never the AI model’s own
             estimate.
           </p>
         </ProseSection>
@@ -205,6 +260,7 @@ export default async function AboutPage() {
             ["#what", "What it is"],
             ["#unofficial", "Unofficial and independent"],
             ["#data", "How we collect data"],
+            ["#talks", "Talks"],
             ["#statuses", "What the labels mean"],
             ["#contact", "Corrections and contact"],
           ].map(([href, label]) => (

@@ -8,7 +8,10 @@
 
 ## Role
 
-Act as a world-class Creative Developer (Awwwards-level) specializing in modern Next.js applications, sophisticated data-driven interfaces, and premium UX. You draw heavy inspiration from **Palantir's design language** — commanding dark interfaces, structured grid layouts, precise typography, restrained color use with purposeful accent highlights, and a sense of operational intelligence. Every screen should feel like a high-end control surface: powerful yet clear, data-rich yet uncluttered.
+Act as a creative developer building a warm, editorial, distinctly Cambridge student site: a
+well-set college handbook crossed with a good local listings paper, made interactive. Dense
+where data is dense (agendas, indexes), generous where it is editorial (heroes, footers). The
+build contract for the current direction is `docs/talks-redesign-spec.md` §5–6.
 
 ---
 
@@ -54,97 +57,83 @@ Use **CSS transitions only** for:
 
 ---
 
-## ✏️ Branding (EDIT THIS SECTION)
+## ✏️ Branding
 
-| Property        | Value                                                                          |
-| --------------- | ------------------------------------------------------------------------------ |
-| **App Name**    | camsocs                                                                        |
-| **Tagline**     | A sourced directory of Cambridge societies and sports clubs                    |
-| **Tone**        | Authoritative, precise, quietly confident                                      |
-| **Personality** | Palantir meets clean SaaS — intelligent, structured, no unnecessary decoration |
-| **Visual Mood** | Dark command center, surgical precision, data as art                           |
+| Property        | Value                                                                        |
+| --------------- | ---------------------------------------------------------------------------- |
+| **App Name**    | camsocs (always lower case; the wordmark is Newsreader italic + river glyph) |
+| **Tagline**     | Cambridge societies, events and talks, sourced (`SITE_TAGLINE`, lib/site.ts)  |
+| **Direction**   | "Backs & limestone": Ketton-limestone paper, ink, the Cam as a line           |
+| **Tone**        | Plain, warm, a little wry, local — Mich/Lent/Easter, Week 0, formals, bops, supos, Sidgwick Site |
+| **Never**       | University crest, arms, shields, "University of Cambridge" as branding, Feijoa / Open Sans, the #8EE8D8-led brand palette, heritage dot/arrow patterns, implied endorsement |
+
+The site is unofficial: the disclaimer sits in every footer, and copy may refer to Cambridge
+factually ("for students in Cambridge") but never as if speaking for the University or a College.
 
 ---
 
-## ✏️ Color Palette (EDIT THIS SECTION)
+## ✏️ Color Palette
 
-Colors are defined as CSS custom properties in `app/globals.css` using oklch.
-Update them there — these docs describe the **intent** behind each token.
+Tokens live in `app/globals.css` (`:root` light, `.dark` dark) as hex, exposed to Tailwind
+through `@theme inline`. **The token names are a contract** (spec §5): components use them and
+the shadcn semantic names, never raw hex.
 
-The neutral family is shadcn's **mauve** (`components.json` → `tailwind.baseColor: "mauve"`,
-style `radix-nova`): greys with a faint violet tint (oklch hue ≈ 320–326), not zinc.
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| `--background` | #F7F4EC | #0E1614 | limestone paper / night river (with a faint CSS paper grain) |
+| `--card`, `--popover` | #FFFDF8 | #15201D | raised surfaces |
+| `--foreground` | #16231F | #ECE8DE | ink |
+| `--muted` / `--muted-foreground` | #EFEADD / #5B6660 | #1A2622 / #9AA49E | quiet fills, secondary text |
+| `--border`, `--input` | #E2DCCD | #24302C | rules |
+| `--primary` (Cam sage), `--ring` | #2E6A55 | #8CC7AE | **Societies**, primary actions, focus |
+| `--accent` | #DCEBE2 | #1C3029 | sage tint (hover, selected rows, term strip) |
+| `--events` / `--events-tint` | #A8432C / #F3DED6 | #E58B70 / #3A2019 | **Events** (Tudor brick) — `bg-events`, `text-events`, `bg-events-tint` |
+| `--talks` / `--talks-tint` | #34407A / #E1E4F2 | #A9B3EA / #1F2440 | **Talks** (lecture-hall indigo) |
+| `--gilt` | #B8902F | #D9B65A | decoration only, never text |
+| `--backs` | #A9CDBB | #2F5446 | the river line; decoration only, never text |
+| `--school-{arts,hss,bio,clinical,physical,tech,other}` + `-tint` | ink on tint, ≥ 5.8:1 | same | talk School chips |
 
-### Current Theme Tokens
-
-| Token                      | Role                            | Notes                                  |
-| -------------------------- | ------------------------------- | -------------------------------------- |
-| `--background`             | Page background                 | Near-white (light) / near-black (dark) |
-| `--foreground`             | Primary text                    | High contrast against background       |
-| `--primary`                | Key actions, buttons, links     | Dark mauve (light) / light mauve (dark) |
-| `--primary-foreground`     | Text on primary surfaces        | Inverted from primary                  |
-| `--secondary`              | Secondary actions, subtle fills | Lighter/darker mauve                   |
-| `--accent`                 | Hover states, highlights        | Same family as secondary               |
-| `--muted`                  | Disabled states, placeholders   | Subdued mauve                          |
-| `--muted-foreground`       | Secondary text, captions        | Mid-tone mauve                         |
-| `--destructive`            | Errors, delete actions          | Red                                    |
-| `--border`                 | Dividers, card outlines         | Subtle mauve / white-alpha             |
-| `--card`                   | Card surfaces                   | White (light) / dark mauve (dark)      |
-| `--ring`                   | Focus rings                     | Mid mauve                              |
-| `--chart-1` to `--chart-5` | Data visualization palette      | Teal/green spectrum                    |
-
-### ✏️ Semantic Colors (extend as needed)
-
-In use (`app/globals.css`, light and dark): `--success` / `--success-foreground` and `--warning` /
-`--warning-foreground`, for provenance chips only (found / owner-confirmed; inferred / conflicting —
-`components/molecules/source-line.tsx`). Always with an icon and a word, never colour alone.
-
-Further tokens, if a need appears:
-
-```css
-/* Example — uncomment and adjust when ready:
-  --success: oklch(0.65 0.2 145);          /* Green — positive state        */
-  --warning: oklch(0.75 0.15 85);          /* Amber — caution               */
-  --info:    oklch(0.65 0.15 250);         /* Blue — informational          */
-  --highlight: oklch(0.8 0.12 85);         /* Gold/amber — premium accent   */
-*/
-```
-
-> **To rebrand:** Change values in `globals.css` → `:root` / `.dark` blocks.
-> All shadcn/ui components and Tailwind classes (`bg-primary`, `text-muted-foreground`, etc.)
-> pick up new colors automatically. No find-and-replace needed.
+- Pillar colour coding is fixed: Societies = sage, Events = brick, Talks = indigo. Use it for
+  marks, rails, counters and active indicators — not for large backgrounds.
+- `--success` / `--warning` (+ `-foreground`) stay for provenance chips only, always with an
+  icon and a word.
+- `--sidebar-*` tint the broker dashboard to match (a deeper limestone rail).
+- Every text pair above is ≥ 4.5:1 in its mode (checked 2026-10-31). Re-check when changing one.
+- The footer is a night-river band in both themes: it carries the `dark` class, which scopes the
+  dark tokens to its subtree.
 
 ---
 
 ## ✏️ Typography
 
-| Property           | Value                                                     |
-| ------------------ | --------------------------------------------------------- |
-| **Font Family**    | `Geist` via `var(--font-sans)` (`next/font/google`, app/layout.tsx) |
-| **Mono Family**    | `Geist Mono` via `var(--font-mono)`                       |
-| **Heading Weight** | `600` (semibold) – `700` (bold)                           |
-| **Body Weight**    | `400` (regular)                                           |
-| **Letter Spacing** | `tracking-tight` on headings, default on body             |
-| **Line Height**    | Tailwind defaults (`leading-normal` / `leading-relaxed`)  |
-| **Heading Style**  | Short (max ~8 words), uppercase sparingly for labels only |
+| Role | Face | Notes |
+| --- | --- | --- |
+| Display | **Newsreader** (`font-serif`, `--font-serif`) | variable with `opsz` + italic, `next/font/google`. h1/h2, the wordmark, big numerals, detail-page titles. Weight 300–400; italics for warmth ("this *term*"). |
+| UI / body | Geist Sans (`font-sans`) | rows, filters, buttons, body copy |
+| Data | Geist Mono (`font-mono`, `tabular-nums`) | times, counts, term stamps ("MICH · WK 4"), eyebrows |
 
-> Palantir-inspired: prefer sentence case over title case.
-> Use monospace (`font-mono`) for data values, IDs, timestamps, and code.
+- h1 `clamp(2.6rem, 7.2vw, 4.75rem)`, leading 1.02, tracking −0.025em; section h2 serif 2rem.
+- Mono eyebrows: 11px, uppercase, tracking 0.12–0.16em. Use sparingly — mono everywhere reads
+  as a dev dashboard.
+- Inputs are 16px on phones (no iOS zoom).
 
 ---
 
 ## Design Principles
 
-### 1. Structured Precision (Palantir DNA)
+### 1. Editorial structure
 
-Layouts follow a strict grid. Align elements to a consistent spatial system. Use clear visual hierarchy — size, weight, and placement communicate importance, not decoration. Negative space is a feature, not waste.
+Layouts follow a strict grid, set like a well-made printed index. Align elements to a consistent spatial system. Use clear visual hierarchy — size, weight, and placement communicate importance, not decoration. Negative space is a feature, not waste.
 
 ### 2. Data-Forward
 
-Information density is acceptable when organized. Use tables, grids, and metric cards confidently. Let the data breathe with consistent padding, but don't hide it behind excessive drill-downs. Dashboards should feel like mission control.
+Information density is acceptable when organized. Use tables, grids, and metric cards confidently. Let the data breathe with consistent padding, but don't hide it behind excessive drill-downs. Prefer ruled rows to stacks of identical cards.
 
 ### 3. Restrained Color
 
-Use the monochromatic mauve palette as the foundation. Accent colors appear **sparingly** and with purpose — a single highlighted metric, an active state, an error. When everything is colorful, nothing stands out.
+Paper and ink are the foundation; the three pillar colours carry meaning (sage societies, brick
+events, indigo talks) and appear as marks, rails and numerals rather than fills. Gilt and the
+Backs green are decoration only.
 
 ### 4. Progressive Disclosure
 
@@ -172,9 +161,7 @@ Design for 375px first, then scale up. Touch targets minimum 44px. Sidebar colla
 
 ### 8. Both Themes Are First-Class
 
-The theme **follows the operating system** (`defaultTheme="system"` in `components/providers/theme-provider.tsx`; press `d` to toggle). Design and test every screen in both light and dark — neither is an afterthought. Always use semantic tokens (`bg-card`, `text-muted-foreground`) — never hard-coded hex/oklch values in components.
-
-> ✏️ Open decision: the template's original direction was dark-first (Palantir-style). If that is wanted, set `defaultTheme="dark"` in the theme provider and update this section — the code and this file must say the same thing.
+The theme **follows the operating system** (`defaultTheme="system"` in `components/providers/theme-provider.tsx`), with a visible Light / Dark / System toggle in the header and the mobile menu (`components/molecules/theme-toggle.tsx`). There is no single-key shortcut (WCAG 2.1.4). Design and test every screen in both light and dark. Always use semantic tokens (`bg-card`, `text-muted-foreground`, `text-events`) — never hard-coded hex/oklch values in components.
 
 ---
 
@@ -184,7 +171,7 @@ The theme **follows the operating system** (`defaultTheme="system"` in `componen
 
 - **Page max-width:** `max-w-7xl mx-auto` for content areas
 - **Dashboard:** Sidebar (`app-sidebar`) + header + scrollable main area
-- **Public pages:** Full-width sections, `PublicHeader` with transparent-to-solid scroll effect
+- **Public pages:** term strip, sticky translucent `PublicHeader`, full-width sections, editorial `SiteFooter`
 - **Auth pages:** Centered card on a clean background
 - **Landing page:** Full-bleed hero, scroll-triggered sections, generous vertical spacing
 
@@ -249,7 +236,7 @@ Never show a blank area. Provide:
 | --------------------- | --------------------------------------------------------------------- |
 | Page transition       | `AnimatePresence` + `motion.div` fade/slide (`y: 10` → `0`, 300ms)    |
 | Hero text entrance    | Staggered `motion.span` per word, slide-up + fade-in, 50ms stagger    |
-| Scroll reveal         | `whileInView={{ opacity: 1, y: 0 }}` with `viewport={{ once: true }}` |
+| Scroll reveal         | `<Reveal>` (CSS + IntersectionObserver, never hidden in server HTML) |
 | Card hover lift       | `whileHover={{ y: -4, transition: { duration: 0.2 } }}`               |
 | List item entrance    | `motion.li` with stagger via parent `staggerChildren: 0.06`           |
 | Step transition       | `AnimatePresence mode="wait"` with slide-left/slide-right             |
@@ -270,18 +257,33 @@ Never show a blank area. Provide:
 
 ---
 
-## Landing Page Direction
+## Shell & motifs
 
-Inspired by palantir.com:
+- **Term clock strip** (`components/molecules/term-strip.tsx`, `lib/term-week.ts`): 28px mono
+  strip above the header, "MICH · WK 4 · SAT 31 OCT" or "VACATION · LENT STARTS IN 9 WEEKS",
+  from `termDates`. Weeks follow `termWeekLabel` (Thursday to Wednesday).
+- **Header** (`public-header.tsx`): wordmark, Societies · Events · Talks · About with a
+  pillar-coloured underline on the current page, the "Search ⌘K" pill, theme toggle, account
+  menu (Sign in lives there); a right sheet with serif nav on phones.
+- **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the
+  header pill, or `openPalette()` (`lib/palette.ts`). Grouped results with serif small-caps
+  headings, scope chips, recents; full screen below `sm`.
+- **RiverLine** (`molecules/river-line.tsx`): one meandering stroke in `--backs` under the hero,
+  between sections and above the footer (Grantchester → Baits Bite). It draws itself once by CSS
+  under `prefers-reduced-motion: no-preference`.
+- **Footer**: night-river band, river, link columns, the current term, an oversized italic
+  wordmark and the disclaimer.
+- **Reveal** never ships `opacity:0` in server HTML: it only tucks content away after mount, when
+  motion is allowed and the block is still below the fold.
+- Ruled, N°-numbered index rows (colleges, departments); dashed hairlines between agenda rows.
 
-- **Hero:** Full-viewport, dark background with subtle animated grid/mesh. Large bold headline, concise subtext, single CTA. Consider a particle field or geometric animation.
-- **Sections:** Alternate between full-bleed dark and slightly lighter `bg-card` bands. Each section: icon/visual left, text right (or reversed). Scroll-triggered entrance animations.
-- **Metrics / Social proof:** Animated number counters, clean grid of stats.
-- **Navigation:** Transparent on hero, solid on scroll. Minimal links, prominent CTA.
-- **Footer:** Dark, minimal, structured columns. No clutter.
-- **Overall feel:** Less "startup playful", more "enterprise intelligence". Confidence through restraint.
+## Landing page
 
----
+Mobile-first, in this order: serif hero with a scoped search (All / Societies / Events / Talks)
+and quick chips, plus a "Next up" ledger on desktop → pillar counters in big serif numerals →
+"This week", day by day, with pillar tabs → category tiles with real example names → talks by
+School (wave 2) → by college (a ruled index with leader dots) → a footnote-style method note.
+No photography and no fake numbers: a pillar without real data renders nothing.
 
 ## Do NOT
 
@@ -289,6 +291,7 @@ Inspired by palantir.com:
 - Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only
 - Create components outside the Atomic Design structure (`ui/` → `molecules/` → `organisms/`)
 - Skip dark or light mode testing — the theme follows the system, both must work
+- Use University marks, shields or the University's brand colours and fonts (see Branding)
 - Use `any` in TypeScript — type all props, state, and API responses
 - Add placeholder text like "Lorem ipsum" — use realistic copy
 - Over-animate — if an animation doesn't aid comprehension or delight, remove it

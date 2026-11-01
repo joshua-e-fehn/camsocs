@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { EventDetails } from "@/components/molecules/event-details"
-import { EventChip, EventItem } from "@/components/molecules/event-item"
+import { EventChip, EventRow } from "@/components/molecules/event-item"
 import type { EventListItem, EventPublic } from "@/lib/public-api"
 
 /**
@@ -52,6 +52,8 @@ const details: EventPublic = {
   },
 }
 
+const PAGE = `https://camsocs.uk/events/${listed.key}`
+
 let root: Root | undefined
 
 async function render(node: React.ReactNode): Promise<HTMLElement> {
@@ -70,14 +72,12 @@ afterEach(async () => {
 
 describe("events societies take part in (D6)", () => {
   test("a list item says who takes part, dashed, with the label", async () => {
-    const page = await render(<EventItem event={listed} href="/events" />)
+    const page = await render(<EventRow event={listed} href="/events" />)
     expect(page.textContent).toContain("Taking part")
     expect(page.textContent).toContain("Cyber Security Society takes part")
-    expect(page.querySelector("a")?.className).toContain("border-dashed")
+    expect(page.querySelector(".border-dashed")?.textContent).toContain("Taking part")
 
-    const hosted = await render(
-      <EventItem event={{ ...listed, hosting: "hosts" }} href="/events" />,
-    )
+    const hosted = await render(<EventRow event={{ ...listed, hosting: "hosts" }} href="/events" />)
     expect(hosted.textContent).not.toContain("Taking part")
     expect(hosted.textContent).not.toContain("takes part")
   })
@@ -89,7 +89,7 @@ describe("events societies take part in (D6)", () => {
   })
 
   test("the details never say organised by, and link the event's own page", async () => {
-    const sheet = await render(<EventDetails event={details} />)
+    const sheet = await render(<EventDetails event={details} pageUrl={PAGE} />)
     expect(sheet.textContent).not.toMatch(/organised by/i)
     expect(sheet.textContent).toContain("takes part")
     const external = [...sheet.querySelectorAll("a")].find(
@@ -102,9 +102,41 @@ describe("events societies take part in (D6)", () => {
 
   test("a hosted event still names its organisers", async () => {
     const sheet = await render(
-      <EventDetails event={{ ...details, hosting: "hosts", externalUrl: undefined }} />,
+      <EventDetails
+        event={{ ...details, hosting: "hosts", externalUrl: undefined }}
+        pageUrl={PAGE}
+      />,
     )
     expect(sheet.textContent).not.toContain("takes part")
     expect(sheet.textContent).toContain("Cyber Security Society")
+  })
+})
+
+describe("emoji in titles", () => {
+  test("stay on screen but out of the link's spoken name", async () => {
+    const row = await render(<EventRow event={listed} href="/events" />)
+    const link = row.querySelector("a")
+    expect(link?.textContent).toContain("🚩")
+    const hidden = link?.querySelector("[aria-hidden]")
+    expect(hidden?.textContent).toBe("🚩")
+    expect(link?.querySelector("span:not([aria-hidden])")?.textContent?.trim()).toBe(
+      "DEADFACE CTF 2026",
+    )
+  })
+
+  test("a chip's tooltip leaves them out", async () => {
+    const chip = await render(<EventChip event={listed} href="/events" />)
+    expect(chip.querySelector("a")?.getAttribute("title")).not.toContain("🚩")
+  })
+})
+
+describe("calendar links", () => {
+  test("a venue known only by its key is still the location", async () => {
+    const { eventCalendarLinks } = await import("@/components/molecules/event-details")
+    const keyed = { ...details, venueText: undefined, venueKey: "venue-adc-theatre" }
+    const links = eventCalendarLinks(keyed, PAGE, "ADC Theatre")
+    expect(new URL(links.google).searchParams.get("location")).toBe("ADC Theatre")
+    expect(new URL(links.outlook).searchParams.get("location")).toBe("ADC Theatre")
+    expect(new URL(eventCalendarLinks(keyed, PAGE).google).searchParams.has("location")).toBe(false)
   })
 })

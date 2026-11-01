@@ -1,0 +1,2828 @@
+[
+  {
+    "key": "dept-architecture",
+    "slug": "architecture",
+    "name": "Department of Architecture",
+    "shortName": "Architecture",
+    "school": "arts_humanities",
+    "website": "https://www.arct.cam.ac.uk",
+    "aliases": [
+      "Martin Centre",
+      "Martin Centre for Architectural and Urban Studies"
+    ],
+    "venueHints": [
+      "Scroope Terrace"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.arct.cam.ac.uk/events",
+        "label": "Department events (incl. Martin Centre seminars)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-history-of-art",
+    "slug": "history-of-art",
+    "name": "Department of History of Art",
+    "shortName": "History of Art",
+    "school": "arts_humanities",
+    "website": "https://www.hoart.cam.ac.uk",
+    "aliases": [
+      "HoA"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.hoart.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-asian-and-middle-eastern-studies",
+    "slug": "asian-and-middle-eastern-studies",
+    "name": "Faculty of Asian and Middle Eastern Studies",
+    "shortName": "AMES",
+    "school": "arts_humanities",
+    "website": "https://www.ames.cam.ac.uk",
+    "aliases": [
+      "Asian and Middle Eastern Studies",
+      "Oriental Studies",
+      "FAMES"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.ames.cam.ac.uk/events",
+        "label": "Faculty events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-divinity",
+    "slug": "divinity",
+    "name": "Faculty of Divinity",
+    "shortName": "Divinity",
+    "school": "arts_humanities",
+    "website": "https://www.divinity.cam.ac.uk",
+    "aliases": [
+      "Theology",
+      "Faculty of Divinity"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.divinity.cam.ac.uk/events",
+        "label": "Faculty events and research seminars",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-interfaith-programme",
+    "slug": "interfaith-programme",
+    "name": "Cambridge Interfaith Programme",
+    "shortName": "Interfaith Programme",
+    "school": "arts_humanities",
+    "website": "https://www.interfaith.cam.ac.uk",
+    "aliases": [
+      "CIP",
+      "Interfaith"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.interfaith.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-english",
+    "slug": "english",
+    "name": "Faculty of English",
+    "shortName": "English",
+    "school": "arts_humanities",
+    "website": "https://www.english.cam.ac.uk",
+    "aliases": [
+      "English Faculty"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.english.cam.ac.uk/events",
+        "label": "Faculty events and research seminars",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-mmll",
+    "slug": "mmll",
+    "name": "Faculty of Modern and Medieval Languages and Linguistics",
+    "shortName": "MMLL",
+    "school": "arts_humanities",
+    "website": "https://www.mmll.cam.ac.uk",
+    "aliases": [
+      "Modern and Medieval Languages",
+      "Modern and Medieval Languages and Linguistics",
+      "Theoretical and Applied Linguistics"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "23396"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.mmll.cam.ac.uk/events",
+        "label": "Faculty events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-greek-studies",
+    "slug": "greek-studies",
+    "name": "Cambridge Centre for Greek Studies",
+    "shortName": "Greek Studies",
+    "school": "arts_humanities",
+    "website": "https://www.ccgs.csah.cam.ac.uk",
+    "aliases": [
+      "CCGS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.ccgs.csah.cam.ac.uk/events",
+        "label": "Centre events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-music",
+    "slug": "music",
+    "name": "Faculty of Music",
+    "shortName": "Music",
+    "school": "arts_humanities",
+    "website": "https://www.mus.cam.ac.uk",
+    "aliases": [
+      "Music Faculty"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.mus.cam.ac.uk/events",
+        "label": "Faculty events (colloquia, workshops)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-music-and-science",
+    "slug": "music-and-science",
+    "name": "Centre for Music and Science",
+    "shortName": "Music and Science",
+    "school": "arts_humanities",
+    "website": "https://cms.mus.cam.ac.uk",
+    "aliases": [
+      "CMS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://cms.mus.cam.ac.uk/events/index.xml",
+        "label": "Upcoming events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-language-sciences",
+    "slug": "language-sciences",
+    "name": "Cambridge Language Sciences Interdisciplinary Research Centre",
+    "shortName": "Language Sciences",
+    "school": "other",
+    "website": "https://www.languagesciences.cam.ac.uk",
+    "aliases": [
+      "Cambridge Language Sciences"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.languagesciences.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-economics",
+    "slug": "economics",
+    "name": "Faculty of Economics",
+    "shortName": "Economics",
+    "school": "humanities_social_sciences",
+    "website": "https://www.econ.cam.ac.uk",
+    "aliases": [
+      "Economics Faculty"
+    ],
+    "venueHints": [
+      "Austin Robinson Building"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.econ.cam.ac.uk/seminars/upcoming",
+        "label": "Upcoming seminars (all series)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-janeway-institute",
+    "slug": "janeway-institute",
+    "name": "Janeway Institute for Economics",
+    "shortName": "Janeway Institute",
+    "school": "humanities_social_sciences",
+    "website": "https://www.janeway.econ.cam.ac.uk",
+    "aliases": [
+      "Weslie and William Janeway Institute for Economics"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.janeway.econ.cam.ac.uk/seminars-talks",
+        "label": "Seminars and talks",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-history",
+    "slug": "history",
+    "name": "Faculty of History",
+    "shortName": "History",
+    "school": "humanities_social_sciences",
+    "website": "https://www.hist.cam.ac.uk",
+    "aliases": [
+      "History Faculty"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "20820",
+      "41994"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-campop",
+    "slug": "campop",
+    "name": "Cambridge Group for the History of Population and Social Structure",
+    "shortName": "CAMPOP",
+    "school": "humanities_social_sciences",
+    "website": "https://www.campop.geog.cam.ac.uk",
+    "aliases": [
+      "CAMPOP",
+      "Cambridge Group for the History of Population"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "6526",
+      "60442",
+      "6694",
+      "45685"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-hsps",
+    "slug": "hsps",
+    "name": "Faculty of Human, Social and Political Science",
+    "shortName": "HSPS",
+    "school": "humanities_social_sciences",
+    "website": "https://www.hsps.cam.ac.uk",
+    "aliases": [
+      "Human, Social and Political Science"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.hsps.cam.ac.uk/events",
+        "label": "Faculty events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-archaeology",
+    "slug": "archaeology",
+    "name": "Department of Archaeology",
+    "shortName": "Archaeology",
+    "school": "humanities_social_sciences",
+    "website": "https://www.arch.cam.ac.uk",
+    "aliases": [
+      "McDonald Institute for Archaeological Research",
+      "McDonald Institute",
+      "Biological Anthropology"
+    ],
+    "venueHints": [
+      "McDonald Institute"
+    ],
+    "talksCamListIds": [
+      "127276",
+      "47534",
+      "190276",
+      "173620",
+      "127216",
+      "170402",
+      "190270",
+      "140072",
+      "162950",
+      "190273",
+      "190279",
+      "178795",
+      "189772",
+      "39743",
+      "141248",
+      "27470"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.arch.cam.ac.uk/events/event-search",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-heritage-research-centre",
+    "slug": "heritage-research-centre",
+    "name": "Cambridge Heritage Research Centre",
+    "shortName": "Heritage Research Centre",
+    "school": "humanities_social_sciences",
+    "website": "https://www.heritage.arch.cam.ac.uk",
+    "aliases": [
+      "CHRC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.heritage.arch.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-social-anthropology",
+    "slug": "social-anthropology",
+    "name": "Department of Social Anthropology",
+    "shortName": "Social Anthropology",
+    "school": "humanities_social_sciences",
+    "website": "https://www.socanth.cam.ac.uk",
+    "aliases": [
+      "Mongolia and Inner Asia Studies Unit",
+      "MIASU"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.socanth.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      },
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.miasu.socanth.cam.ac.uk/events",
+        "label": "MIASU research seminars",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-polis",
+    "slug": "polis",
+    "name": "Department of Politics and International Studies",
+    "shortName": "POLIS",
+    "school": "humanities_social_sciences",
+    "website": "https://www.polis.cam.ac.uk",
+    "aliases": [
+      "Politics and International Studies",
+      "POLIS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.polis.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-sociology",
+    "slug": "sociology",
+    "name": "Department of Sociology",
+    "shortName": "Sociology",
+    "school": "humanities_social_sciences",
+    "website": "https://www.sociology.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.sociology.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-law",
+    "slug": "law",
+    "name": "Faculty of Law",
+    "shortName": "Law",
+    "school": "humanities_social_sciences",
+    "website": "https://www.law.cam.ac.uk",
+    "aliases": [
+      "Law Faculty"
+    ],
+    "venueHints": [
+      "David Williams Building"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.law.cam.ac.uk/press/events/feed.xml/10",
+        "label": "Faculty events feed (all centres)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cels",
+    "slug": "cels",
+    "name": "Centre for European Legal Studies",
+    "shortName": "CELS",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cels.law.cam.ac.uk",
+    "aliases": [
+      "CELS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.cels.law.cam.ac.uk/press/events/feed.xml/2",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cipil",
+    "slug": "cipil",
+    "name": "Centre for Intellectual Property and Information Law",
+    "shortName": "CIPIL",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cipil.law.cam.ac.uk",
+    "aliases": [
+      "CIPIL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.cipil.law.cam.ac.uk/press/events/feed.xml/1",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-public-law",
+    "slug": "public-law",
+    "name": "Centre for Public Law",
+    "shortName": "Public Law",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cpl.law.cam.ac.uk",
+    "aliases": [
+      "CPL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.cpl.law.cam.ac.uk/press/events/feed.xml/6",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-private-law",
+    "slug": "private-law",
+    "name": "Cambridge Private Law Centre",
+    "shortName": "Private Law",
+    "school": "humanities_social_sciences",
+    "website": "https://www.privatelaw.law.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.privatelaw.law.cam.ac.uk/press/events/feed.xml/24",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-corporate-and-commercial-law",
+    "slug": "corporate-and-commercial-law",
+    "name": "Centre for Corporate and Commercial Law",
+    "shortName": "3CL",
+    "school": "humanities_social_sciences",
+    "website": "https://www.3cl.law.cam.ac.uk",
+    "aliases": [
+      "3CL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.3cl.law.cam.ac.uk/press/events/feed.xml/3",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-legal-and-political-philosophy",
+    "slug": "legal-and-political-philosophy",
+    "name": "Cambridge Forum for Legal and Political Philosophy",
+    "shortName": "CFLPP",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cflpp.law.cam.ac.uk",
+    "aliases": [
+      "CFLPP"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.cflpp.law.cam.ac.uk/press/events/feed.xml/5",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-tax-law",
+    "slug": "tax-law",
+    "name": "Centre for Tax Law",
+    "shortName": "Tax Law",
+    "school": "humanities_social_sciences",
+    "website": "https://www.ctl.law.cam.ac.uk",
+    "aliases": [
+      "CTL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.ctl.law.cam.ac.uk/press/events/feed.xml/4",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-lauterpacht-centre",
+    "slug": "lauterpacht-centre",
+    "name": "Lauterpacht Centre for International Law",
+    "shortName": "Lauterpacht Centre",
+    "school": "humanities_social_sciences",
+    "website": "https://www.lcil.cam.ac.uk",
+    "aliases": [
+      "LCIL"
+    ],
+    "venueHints": [
+      "Lauterpacht Centre"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://www.lcil.cam.ac.uk/press/events/feed.xml/11",
+        "label": "Events feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-criminology",
+    "slug": "criminology",
+    "name": "Institute of Criminology",
+    "shortName": "Criminology",
+    "school": "humanities_social_sciences",
+    "website": "https://www.crim.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.crim.cam.ac.uk/events?filter=upcoming_events",
+        "label": "Institute events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-prisons-research-centre",
+    "slug": "prisons-research-centre",
+    "name": "Prisons Research Centre",
+    "shortName": "Prisons Research Centre",
+    "school": "humanities_social_sciences",
+    "website": "https://www.prc.crim.cam.ac.uk",
+    "aliases": [
+      "PRC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.prc.crim.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-hps",
+    "slug": "hps",
+    "name": "Department of History and Philosophy of Science",
+    "shortName": "HPS",
+    "school": "humanities_social_sciences",
+    "website": "https://www.hps.cam.ac.uk",
+    "aliases": [
+      "History and Philosophy of Science",
+      "HPS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "6067"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-land-economy",
+    "slug": "land-economy",
+    "name": "Department of Land Economy",
+    "shortName": "Land Economy",
+    "school": "humanities_social_sciences",
+    "website": "https://www.landecon.cam.ac.uk",
+    "aliases": [
+      "Cambridge Real Estate Research Centre",
+      "CRERC",
+      "CEENRG"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.landecon.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-development-studies",
+    "slug": "development-studies",
+    "name": "Centre of Development Studies",
+    "shortName": "Development Studies",
+    "school": "humanities_social_sciences",
+    "website": "https://www.devstudies.cam.ac.uk",
+    "aliases": [
+      "CDS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.devstudies.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-african-studies",
+    "slug": "african-studies",
+    "name": "Centre of African Studies",
+    "shortName": "African Studies",
+    "school": "humanities_social_sciences",
+    "website": "https://www.african.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.african.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-child-adolescent-family-research",
+    "slug": "child-adolescent-family-research",
+    "name": "Centre for Child, Adolescent and Family Research",
+    "shortName": "CAFR",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cfr.cam.ac.uk",
+    "aliases": [
+      "Centre for Family Research",
+      "CAFR"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cfr.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cshss",
+    "slug": "cshss",
+    "name": "School of the Humanities and Social Sciences",
+    "shortName": "CSHSS",
+    "school": "humanities_social_sciences",
+    "website": "https://www.cshss.cam.ac.uk",
+    "aliases": [
+      "Council of the School of the Humanities and Social Sciences"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cshss.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-biochemistry",
+    "slug": "biochemistry",
+    "name": "Department of Biochemistry",
+    "shortName": "Biochemistry",
+    "school": "biological_sciences",
+    "website": "https://www.bioc.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [
+      "Sanger Building"
+    ],
+    "talksCamListIds": [
+      "34453"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.bioc.cam.ac.uk/events?filter=upcoming_events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-genetics",
+    "slug": "genetics",
+    "name": "Department of Genetics",
+    "shortName": "Genetics",
+    "school": "biological_sciences",
+    "website": "https://www.gen.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "6262"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.gen.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-pathology",
+    "slug": "pathology",
+    "name": "Department of Pathology",
+    "shortName": "Pathology",
+    "school": "biological_sciences",
+    "website": "https://www.path.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.path.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-pharmacology",
+    "slug": "pharmacology",
+    "name": "Department of Pharmacology",
+    "shortName": "Pharmacology",
+    "school": "biological_sciences",
+    "website": "https://www.phar.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "163919"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.phar.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-pdn",
+    "slug": "pdn",
+    "name": "Department of Physiology, Development and Neuroscience",
+    "shortName": "PDN",
+    "school": "biological_sciences",
+    "website": "https://www.pdn.cam.ac.uk",
+    "aliases": [
+      "Physiology, Development and Neuroscience",
+      "PDN"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.pdn.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-plant-sciences",
+    "slug": "plant-sciences",
+    "name": "Department of Plant Sciences",
+    "shortName": "Plant Sciences",
+    "school": "biological_sciences",
+    "website": "https://www.plantsci.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "130588"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.plantsci.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-psychology",
+    "slug": "psychology",
+    "name": "Department of Psychology",
+    "shortName": "Psychology",
+    "school": "biological_sciences",
+    "website": "https://www.psychol.cam.ac.uk",
+    "aliases": [
+      "Behavioural and Clinical Neuroscience Institute",
+      "BCNI"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "39836"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.psychol.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-neuroscience-in-education",
+    "slug": "neuroscience-in-education",
+    "name": "Centre for Neuroscience in Education",
+    "shortName": "Neuroscience in Education",
+    "school": "biological_sciences",
+    "website": "https://www.cne.psychol.cam.ac.uk",
+    "aliases": [
+      "CNE"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cne.psychol.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-speech-language-brain",
+    "slug": "speech-language-brain",
+    "name": "Centre for Speech, Language and the Brain",
+    "shortName": "CSLB",
+    "school": "biological_sciences",
+    "website": "https://cslb.psychol.cam.ac.uk",
+    "aliases": [
+      "CSLB"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://cslb.psychol.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-zoology",
+    "slug": "zoology",
+    "name": "Department of Zoology",
+    "shortName": "Zoology",
+    "school": "biological_sciences",
+    "website": "https://www.zoo.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "178792"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.zoo.cam.ac.uk/events",
+        "label": "Department seminars",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-museum-of-zoology",
+    "slug": "museum-of-zoology",
+    "name": "Museum of Zoology",
+    "shortName": "Museum of Zoology",
+    "school": "other",
+    "website": "https://www.museum.zoo.cam.ac.uk",
+    "aliases": [
+      "Zoology Museum"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.museum.zoo.cam.ac.uk/events",
+        "label": "What's on",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-veterinary-medicine",
+    "slug": "veterinary-medicine",
+    "name": "Department of Veterinary Medicine",
+    "shortName": "Vet Medicine",
+    "school": "biological_sciences",
+    "website": "https://www.vet.cam.ac.uk",
+    "aliases": [
+      "Veterinary Medicine",
+      "Vet School"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "7282",
+      "7316"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.vet.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-stem-cell-institute",
+    "slug": "stem-cell-institute",
+    "name": "Cambridge Stem Cell Institute",
+    "shortName": "Stem Cell Institute",
+    "school": "biological_sciences",
+    "website": "https://www.stemcells.cam.ac.uk",
+    "aliases": [
+      "CSCI"
+    ],
+    "venueHints": [
+      "Jeffrey Cheah Biomedical Centre"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.stemcells.cam.ac.uk/events",
+        "label": "Institute events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-mrc-toxicology-unit",
+    "slug": "mrc-toxicology-unit",
+    "name": "MRC Toxicology Unit",
+    "shortName": "MRC Tox",
+    "school": "biological_sciences",
+    "website": "https://www.mrc-tox.cam.ac.uk",
+    "aliases": [
+      "MRC Toxicology Unit"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.mrc-tox.cam.ac.uk/events",
+        "label": "Unit events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-sainsbury-laboratory",
+    "slug": "sainsbury-laboratory",
+    "name": "Sainsbury Laboratory Cambridge University",
+    "shortName": "Sainsbury Lab",
+    "school": "biological_sciences",
+    "website": "https://www.slcu.cam.ac.uk",
+    "aliases": [
+      "SLCU",
+      "Sainsbury Laboratory"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.slcu.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-postgraduate-school-life-sciences",
+    "slug": "postgraduate-school-life-sciences",
+    "name": "Postgraduate School of Life Sciences",
+    "shortName": "PSLS",
+    "school": "biological_sciences",
+    "website": "https://www.postgradschl.lifesci.cam.ac.uk",
+    "aliases": [
+      "PSLS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.postgradschl.lifesci.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-infectious-diseases",
+    "slug": "infectious-diseases",
+    "name": "Cambridge Infectious Diseases",
+    "shortName": "Infectious Diseases",
+    "school": "other",
+    "website": "https://www.infectiousdisease.cam.ac.uk",
+    "aliases": [
+      "Cambridge Infectious Diseases IRC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.infectiousdisease.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-advanced-imaging-centre",
+    "slug": "advanced-imaging-centre",
+    "name": "Cambridge Advanced Imaging Centre",
+    "shortName": "CAIC",
+    "school": "biological_sciences",
+    "website": "https://caic.bio.cam.ac.uk",
+    "aliases": [
+      "CAIC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://caic.bio.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-clinical-neurosciences",
+    "slug": "clinical-neurosciences",
+    "name": "Department of Clinical Neurosciences",
+    "shortName": "Clinical Neurosciences",
+    "school": "clinical_medicine",
+    "website": "https://www.clinical-neuroscience.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.clinical-neuroscience.cam.ac.uk/events",
+        "label": "Departmental events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-haematology",
+    "slug": "haematology",
+    "name": "Department of Haematology",
+    "shortName": "Haematology",
+    "school": "clinical_medicine",
+    "website": "https://www.haem.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.haem.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-medicine",
+    "slug": "medicine",
+    "name": "Department of Medicine",
+    "shortName": "Medicine",
+    "school": "clinical_medicine",
+    "website": "https://www.med.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.med.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-early-cancer-institute",
+    "slug": "early-cancer-institute",
+    "name": "Early Cancer Institute",
+    "shortName": "Early Cancer Institute",
+    "school": "clinical_medicine",
+    "website": "https://www.earlycancer.cam.ac.uk",
+    "aliases": [
+      "ECI"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.earlycancer.cam.ac.uk/events",
+        "label": "ECI events and seminars",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-psychiatry",
+    "slug": "psychiatry",
+    "name": "Department of Psychiatry",
+    "shortName": "Psychiatry",
+    "school": "clinical_medicine",
+    "website": "https://www.psychiatry.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.psychiatry.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-autism-research-centre",
+    "slug": "autism-research-centre",
+    "name": "Autism Research Centre",
+    "shortName": "Autism Research Centre",
+    "school": "clinical_medicine",
+    "website": "https://www.autismresearchcentre.com",
+    "aliases": [
+      "ARC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "9692"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-public-health-primary-care",
+    "slug": "public-health-primary-care",
+    "name": "Department of Public Health and Primary Care",
+    "shortName": "PHPC",
+    "school": "clinical_medicine",
+    "website": "https://www.phpc.cam.ac.uk",
+    "aliases": [
+      "Public Health and Primary Care"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.phpc.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cimr",
+    "slug": "cimr",
+    "name": "Cambridge Institute for Medical Research",
+    "shortName": "CIMR",
+    "school": "clinical_medicine",
+    "website": "https://www.cimr.cam.ac.uk",
+    "aliases": [
+      "CIMR"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cimr.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cruk-cambridge-institute",
+    "slug": "cruk-cambridge-institute",
+    "name": "Cancer Research UK Cambridge Institute",
+    "shortName": "CRUK CI",
+    "school": "clinical_medicine",
+    "website": "https://www.cruk.cam.ac.uk",
+    "aliases": [
+      "CRUK Cambridge Institute",
+      "CRUK CI"
+    ],
+    "venueHints": [
+      "Li Ka Shing Centre"
+    ],
+    "talksCamListIds": [
+      "52622"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-cruk-cambridge-centre",
+    "slug": "cruk-cambridge-centre",
+    "name": "Cancer Research UK Cambridge Centre",
+    "shortName": "CRUK Cambridge Centre",
+    "school": "clinical_medicine",
+    "website": "https://crukcambridgecentre.org.uk",
+    "aliases": [
+      "CRUK CC",
+      "Cambridge Cancer Centre"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "8177"
+    ],
+    "sources": [
+      {
+        "kind": "rss",
+        "url": "https://crukcambridgecentre.org.uk/seminars-and-conferences/rss.xml",
+        "label": "Seminars and conferences feed",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-immunology-network",
+    "slug": "immunology-network",
+    "name": "Cambridge Immunology Network",
+    "shortName": "Immunology",
+    "school": "other",
+    "website": "https://www.immunology.cam.ac.uk",
+    "aliases": [
+      "Cambridge Immunology"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "12848"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-metabolic-research-laboratories",
+    "slug": "metabolic-research-laboratories",
+    "name": "Institute of Metabolic Science – Metabolic Research Laboratories",
+    "shortName": "IMS-MRL",
+    "school": "clinical_medicine",
+    "website": "https://www.mrl.ims.cam.ac.uk",
+    "aliases": [
+      "Institute of Metabolic Science",
+      "MRC Metabolic Diseases Unit",
+      "IMS-MRL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.mrl.ims.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-mrc-epidemiology-unit",
+    "slug": "mrc-epidemiology-unit",
+    "name": "MRC Epidemiology Unit",
+    "shortName": "MRC Epidemiology",
+    "school": "clinical_medicine",
+    "website": "https://www.epi.ims.cam.ac.uk",
+    "aliases": [
+      "IMS-Epi"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "ics",
+        "url": "https://www.epi.ims.cam.ac.uk/events/?ical=1",
+        "label": "Events calendar (ICS)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-mrc-biostatistics-unit",
+    "slug": "mrc-biostatistics-unit",
+    "name": "MRC Biostatistics Unit",
+    "shortName": "MRC BSU",
+    "school": "clinical_medicine",
+    "website": "https://www.mrc-bsu.cam.ac.uk",
+    "aliases": [
+      "BSU",
+      "MRC BSU"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.medschl.cam.ac.uk/institutions/mrc-bsu/events-mrc-biostatistics-unit",
+        "label": "Seminars and events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-mrc-mitochondrial-biology-unit",
+    "slug": "mrc-mitochondrial-biology-unit",
+    "name": "MRC Mitochondrial Biology Unit",
+    "shortName": "MRC MBU",
+    "school": "clinical_medicine",
+    "website": "https://www.mrc-mbu.cam.ac.uk",
+    "aliases": [
+      "MBU"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "28467"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.mrc-mbu.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-public-health-irc",
+    "slug": "public-health-irc",
+    "name": "Cambridge Public Health",
+    "shortName": "Cambridge Public Health",
+    "school": "other",
+    "website": "https://www.cph.cam.ac.uk",
+    "aliases": [
+      "CPH"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cph.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cambridge-neuroscience",
+    "slug": "cambridge-neuroscience",
+    "name": "Cambridge Neuroscience",
+    "shortName": "Cambridge Neuroscience",
+    "school": "other",
+    "website": "https://neuroscience.cam.ac.uk",
+    "aliases": [
+      "CamNeuro"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "json_api",
+        "url": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/events?per_page=50",
+        "label": "CamNeuro events (calendar API)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-wolfson-brain-imaging-centre",
+    "slug": "wolfson-brain-imaging-centre",
+    "name": "Wolfson Brain Imaging Centre",
+    "shortName": "WBIC",
+    "school": "clinical_medicine",
+    "website": "https://www.wbic.cam.ac.uk",
+    "aliases": [
+      "WBIC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.wbic.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-damtp",
+    "slug": "damtp",
+    "name": "Department of Applied Mathematics and Theoretical Physics",
+    "shortName": "DAMTP",
+    "school": "physical_sciences",
+    "website": "https://www.damtp.cam.ac.uk",
+    "aliases": [
+      "Applied Mathematics and Theoretical Physics",
+      "DAMTP"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "11757",
+      "50716",
+      "5648",
+      "18332",
+      "10515",
+      "64479"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.damtp.cam.ac.uk/talks",
+        "label": "Talks in DAMTP (talks.cam mirror)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-dpmms",
+    "slug": "dpmms",
+    "name": "Department of Pure Mathematics and Mathematical Statistics",
+    "shortName": "DPMMS",
+    "school": "physical_sciences",
+    "website": "https://www.dpmms.cam.ac.uk",
+    "aliases": [
+      "Pure Mathematics and Mathematical Statistics",
+      "DPMMS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "11758",
+      "6660",
+      "12242",
+      "63148",
+      "178804",
+      "10035",
+      "48314",
+      "164015",
+      "203974",
+      "6658"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-statistical-laboratory",
+    "slug": "statistical-laboratory",
+    "name": "Statistical Laboratory",
+    "shortName": "Statslab",
+    "school": "physical_sciences",
+    "website": "https://www.statslab.cam.ac.uk",
+    "aliases": [
+      "Statslab",
+      "Stats Lab"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "9932",
+      "9938",
+      "144905",
+      "72891",
+      "40432",
+      "14503",
+      "15419"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-centre-for-theoretical-cosmology",
+    "slug": "centre-for-theoretical-cosmology",
+    "name": "Centre for Theoretical Cosmology",
+    "shortName": "CTC",
+    "school": "physical_sciences",
+    "website": "https://www.ctc.cam.ac.uk",
+    "aliases": [
+      "CTC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "6325",
+      "6716",
+      "9454"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-quantum-information-foundations",
+    "slug": "quantum-information-foundations",
+    "name": "Centre for Quantum Information and Foundations",
+    "shortName": "CQIF",
+    "school": "physical_sciences",
+    "website": "https://www.qi.damtp.cam.ac.uk",
+    "aliases": [
+      "CQIF"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "8279"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-physics",
+    "slug": "physics",
+    "name": "Department of Physics",
+    "shortName": "Physics",
+    "school": "physical_sciences",
+    "website": "https://www.phy.cam.ac.uk",
+    "aliases": [
+      "Cavendish Laboratory",
+      "Cavendish",
+      "Cavendish Astrophysics",
+      "Mullard Radio Astronomy Observatory"
+    ],
+    "venueHints": [
+      "Cavendish Laboratory",
+      "Ray Dolby Centre",
+      "Bragg Building"
+    ],
+    "talksCamListIds": [
+      "5444",
+      "197110",
+      "197356",
+      "201070",
+      "8656"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-theory-of-condensed-matter",
+    "slug": "theory-of-condensed-matter",
+    "name": "Theory of Condensed Matter Group",
+    "shortName": "TCM",
+    "school": "physical_sciences",
+    "website": "https://www.tcm.phy.cam.ac.uk",
+    "aliases": [
+      "TCM"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "5348"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-quantum-matter",
+    "slug": "quantum-matter",
+    "name": "Quantum Matter Group",
+    "shortName": "Quantum Matter",
+    "school": "physical_sciences",
+    "website": "https://www.qm.phy.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "5363"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-semiconductor-physics",
+    "slug": "semiconductor-physics",
+    "name": "Semiconductor Physics Group",
+    "shortName": "Semiconductor Physics",
+    "school": "physical_sciences",
+    "website": "https://www.sp.phy.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.sp.phy.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-maxwell-centre",
+    "slug": "maxwell-centre",
+    "name": "Maxwell Centre",
+    "shortName": "Maxwell Centre",
+    "school": "physical_sciences",
+    "website": "https://www.maxwell.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.maxwell.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-life-in-the-universe",
+    "slug": "life-in-the-universe",
+    "name": "Leverhulme Centre for Life in the Universe",
+    "shortName": "LCLU",
+    "school": "physical_sciences",
+    "website": "https://www.lclu.cam.ac.uk",
+    "aliases": [
+      "LCLU"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "140240",
+      "47514"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.lclu.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-lennard-jones-centre",
+    "slug": "lennard-jones-centre",
+    "name": "Lennard-Jones Centre",
+    "shortName": "Lennard-Jones Centre",
+    "school": "physical_sciences",
+    "website": "https://ljc.group.cam.ac.uk",
+    "aliases": [
+      "LJC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "38787"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-astronomy",
+    "slug": "astronomy",
+    "name": "Institute of Astronomy",
+    "shortName": "Astronomy",
+    "school": "physical_sciences",
+    "website": "https://www.ast.cam.ac.uk",
+    "aliases": [
+      "IoA"
+    ],
+    "venueHints": [
+      "Hoyle Building",
+      "Sackler Building"
+    ],
+    "talksCamListIds": [
+      "13724"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.ast.cam.ac.uk/events",
+        "label": "Institute events",
+        "checked": "2026-10-31"
+      },
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.public.ast.cam.ac.uk/events",
+        "label": "Public talks and open evenings",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-kavli-institute-for-cosmology",
+    "slug": "kavli-institute-for-cosmology",
+    "name": "Kavli Institute for Cosmology Cambridge",
+    "shortName": "KICC",
+    "school": "physical_sciences",
+    "website": "https://www.kicc.cam.ac.uk",
+    "aliases": [
+      "KICC"
+    ],
+    "venueHints": [
+      "Kavli Institute"
+    ],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.kicc.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-chemistry",
+    "slug": "chemistry",
+    "name": "Yusuf Hamied Department of Chemistry",
+    "shortName": "Chemistry",
+    "school": "physical_sciences",
+    "website": "https://www.ch.cam.ac.uk",
+    "aliases": [
+      "Department of Chemistry"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.ch.cam.ac.uk/talks",
+        "label": "All upcoming talks",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-atmospheric-science",
+    "slug": "atmospheric-science",
+    "name": "Centre for Atmospheric Science",
+    "shortName": "Atmospheric Science",
+    "school": "physical_sciences",
+    "website": "https://atm.group.ch.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.ch.cam.ac.uk/talks/other/atmospheric",
+        "label": "Seminars (Chemistry talks view)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-earth-sciences",
+    "slug": "earth-sciences",
+    "name": "Department of Earth Sciences",
+    "shortName": "Earth Sciences",
+    "school": "physical_sciences",
+    "website": "https://www.esc.cam.ac.uk",
+    "aliases": [
+      "Bullard Laboratories"
+    ],
+    "venueHints": [
+      "Bullard Laboratories"
+    ],
+    "talksCamListIds": [
+      "15125"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.esc.cam.ac.uk/events",
+        "label": "Department events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-quaternary",
+    "slug": "quaternary",
+    "name": "Cambridge Quaternary",
+    "shortName": "Quaternary",
+    "school": "physical_sciences",
+    "website": "https://www.quaternary.group.cam.ac.uk",
+    "aliases": [
+      "Quaternary Discussion Group",
+      "QDG"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "17246"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-cambridge-zero",
+    "slug": "cambridge-zero",
+    "name": "Cambridge Zero",
+    "shortName": "Cambridge Zero",
+    "school": "other",
+    "website": "https://www.zero.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.zero.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-british-antarctic-survey",
+    "slug": "british-antarctic-survey",
+    "name": "British Antarctic Survey",
+    "shortName": "BAS",
+    "school": "other",
+    "website": "https://www.bas.ac.uk",
+    "aliases": [
+      "BAS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "ics",
+        "url": "https://www.bas.ac.uk/events/list/?ical=1",
+        "label": "Events calendar (ICS)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-computer-science-and-technology",
+    "slug": "computer-science-and-technology",
+    "name": "Department of Computer Science and Technology",
+    "shortName": "Computer Science",
+    "school": "technology",
+    "website": "https://www.cst.cam.ac.uk",
+    "aliases": [
+      "Computer Laboratory",
+      "Computer Lab",
+      "CST"
+    ],
+    "venueHints": [
+      "William Gates Building"
+    ],
+    "talksCamListIds": [
+      "6180",
+      "5695",
+      "185116",
+      "99646",
+      "172414",
+      "50582",
+      "8316",
+      "6401",
+      "6375",
+      "163292",
+      "23706"
+    ],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cst.cam.ac.uk/seminars",
+        "label": "Upcoming seminars (all series)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-carbon-credits",
+    "slug": "carbon-credits",
+    "name": "Cambridge Centre for Carbon Credits",
+    "shortName": "4C",
+    "school": "technology",
+    "website": "https://4c.cst.cam.ac.uk",
+    "aliases": [
+      "4C"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://4c.cst.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-engineering",
+    "slug": "engineering",
+    "name": "Department of Engineering",
+    "shortName": "Engineering",
+    "school": "technology",
+    "website": "https://www.eng.cam.ac.uk",
+    "aliases": [
+      "CUED",
+      "Cambridge University Engineering Department"
+    ],
+    "venueHints": [
+      "Baker Building",
+      "Inglis Building"
+    ],
+    "talksCamListIds": [
+      "11768",
+      "39440",
+      "10139",
+      "5954",
+      "7111",
+      "16440",
+      "7959",
+      "12088",
+      "42708",
+      "30711",
+      "7477",
+      "109672",
+      "7110",
+      "12073",
+      "47352",
+      "39731",
+      "21020"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-machine-learning-group",
+    "slug": "machine-learning-group",
+    "name": "Machine Learning Group",
+    "shortName": "Machine Learning Group",
+    "school": "technology",
+    "website": "https://mlg.eng.cam.ac.uk",
+    "aliases": [
+      "MLG",
+      "Computational and Biological Learning Lab",
+      "CBL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "5397",
+      "6983"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-ellis-unit",
+    "slug": "ellis-unit",
+    "name": "Cambridge ELLIS Unit",
+    "shortName": "ELLIS",
+    "school": "technology",
+    "website": "https://www.ellis.eng.cam.ac.uk",
+    "aliases": [
+      "ELLIS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "134107"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-control-group",
+    "slug": "control-group",
+    "name": "Control Group",
+    "shortName": "Control Group",
+    "school": "technology",
+    "website": "http://www-control.eng.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "11827"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-psi2",
+    "slug": "psi2",
+    "name": "Probabilistic Systems, Information and Inference Group",
+    "shortName": "PSI2",
+    "school": "technology",
+    "website": "https://psi2.eng.cam.ac.uk",
+    "aliases": [
+      "Signal Processing and Communications Laboratory",
+      "SigProC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "6758"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-institute-for-manufacturing",
+    "slug": "institute-for-manufacturing",
+    "name": "Institute for Manufacturing",
+    "shortName": "IfM",
+    "school": "technology",
+    "website": "https://www.ifm.eng.cam.ac.uk",
+    "aliases": [
+      "IfM",
+      "Cambridge Service Alliance"
+    ],
+    "venueHints": [
+      "Alan Reece Building"
+    ],
+    "talksCamListIds": [
+      "43255",
+      "8553"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-smart-infrastructure",
+    "slug": "smart-infrastructure",
+    "name": "Cambridge Centre for Smart Infrastructure and Construction",
+    "shortName": "CSIC",
+    "school": "technology",
+    "website": "https://www-smartinfrastructure.eng.cam.ac.uk",
+    "aliases": [
+      "CSIC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www-smartinfrastructure.eng.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-civil-engineering",
+    "slug": "civil-engineering",
+    "name": "Civil Engineering Division",
+    "shortName": "Civil Engineering",
+    "school": "technology",
+    "website": "https://civileng.eng.cam.ac.uk",
+    "aliases": [
+      "Division D"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "7107"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-engineering-design-centre",
+    "slug": "engineering-design-centre",
+    "name": "Engineering Design Centre",
+    "shortName": "EDC",
+    "school": "technology",
+    "website": "https://www-edc.eng.cam.ac.uk",
+    "aliases": [
+      "EDC"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "58476"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-qamss",
+    "slug": "qamss",
+    "name": "Quantum and Advanced Materials for a Sustainable Society",
+    "shortName": "QAMSS",
+    "school": "technology",
+    "website": "https://www.qamss.cam.ac.uk",
+    "aliases": [
+      "QAMSS",
+      "Cambridge Graphene Centre"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.qamss.cam.ac.uk/events",
+        "label": "Lectures and events",
+        "checked": "2026-10-31"
+      },
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.graphene.cam.ac.uk/events",
+        "label": "Graphene Centre events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-laing-orourke-centre",
+    "slug": "laing-orourke-centre",
+    "name": "Laing O'Rourke Centre for Construction Engineering and Technology",
+    "shortName": "Laing O'Rourke Centre",
+    "school": "technology",
+    "website": "https://www.construction.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.construction.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-sustainable-development",
+    "slug": "sustainable-development",
+    "name": "Centre for Sustainable Development",
+    "shortName": "Sustainable Development",
+    "school": "technology",
+    "website": "https://www-csd.eng.cam.ac.uk",
+    "aliases": [
+      "CSD"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www-csd.eng.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-chemical-engineering-and-biotechnology",
+    "slug": "chemical-engineering-and-biotechnology",
+    "name": "Department of Chemical Engineering and Biotechnology",
+    "shortName": "CEB",
+    "school": "technology",
+    "website": "https://www.ceb.cam.ac.uk",
+    "aliases": [
+      "Chemical Engineering and Biotechnology",
+      "CEB"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "8214"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-judge-business-school",
+    "slug": "judge-business-school",
+    "name": "Cambridge Judge Business School",
+    "shortName": "Judge",
+    "school": "technology",
+    "website": "https://www.jbs.cam.ac.uk",
+    "aliases": [
+      "Judge Business School",
+      "CJBS",
+      "JBS",
+      "Energy Policy Research Group",
+      "EPRG",
+      "Centre for Business Research"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "json_api",
+        "url": "https://www.jbs.cam.ac.uk/wp-json/cjbs-event/v1/search?pagination=1",
+        "label": "Events (search API)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-sustainability-leadership",
+    "slug": "sustainability-leadership",
+    "name": "Cambridge Institute for Sustainability Leadership",
+    "shortName": "CISL",
+    "school": "technology",
+    "website": "https://www.cisl.cam.ac.uk",
+    "aliases": [
+      "CISL"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cisl.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-ai-in-medicine",
+    "slug": "ai-in-medicine",
+    "name": "Cambridge Centre for AI in Medicine",
+    "shortName": "CCAIM",
+    "school": "technology",
+    "website": "https://ccaim.cam.ac.uk",
+    "aliases": [
+      "CCAIM"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [
+      "204070"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-iccs",
+    "slug": "iccs",
+    "name": "Institute of Computing for Climate Science",
+    "shortName": "ICCS",
+    "school": "physical_sciences",
+    "website": "https://iccs.cam.ac.uk",
+    "aliases": [
+      "ICCS"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://iccs.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-whipple-museum",
+    "slug": "whipple-museum",
+    "name": "Whipple Museum of the History of Science",
+    "shortName": "Whipple Museum",
+    "school": "other",
+    "website": "https://www.whipplemuseum.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.whipplemuseum.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-sedgwick-museum",
+    "slug": "sedgwick-museum",
+    "name": "Sedgwick Museum of Earth Sciences",
+    "shortName": "Sedgwick Museum",
+    "school": "other",
+    "website": "https://sedgwickmuseum.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://sedgwickmuseum.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cambridge-festival",
+    "slug": "cambridge-festival",
+    "name": "Cambridge Festival",
+    "shortName": "Cambridge Festival",
+    "school": "other",
+    "website": "https://www.festival.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.festival.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-gates-cambridge",
+    "slug": "gates-cambridge",
+    "name": "Gates Cambridge Trust",
+    "shortName": "Gates Cambridge",
+    "school": "other",
+    "website": "https://www.gatescambridge.org",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "ics",
+        "url": "https://www.gatescambridge.org/?post_type=tribe_events&ical=1&eventDisplay=list",
+        "label": "Events calendar (ICS)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-alumni-relations",
+    "slug": "alumni-relations",
+    "name": "University Development and Alumni Relations",
+    "shortName": "Alumni",
+    "school": "other",
+    "website": "https://www.alumni.cam.ac.uk",
+    "aliases": [
+      "Cambridge Conversations"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.alumni.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-pace",
+    "slug": "pace",
+    "name": "Professional and Continuing Education",
+    "shortName": "PACE",
+    "school": "other",
+    "website": "https://www.pace.cam.ac.uk",
+    "aliases": [
+      "Institute of Continuing Education"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.pace.cam.ac.uk/lectures-and-talks",
+        "label": "Lectures and talks",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cardiovascular-irc",
+    "slug": "cardiovascular-irc",
+    "name": "Cambridge Cardiovascular",
+    "shortName": "Cardiovascular",
+    "school": "other",
+    "website": "https://www.cardiovascular.cam.ac.uk",
+    "aliases": [
+      "Cambridge Cardiovascular Seminar Series"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.cardiovascular.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-conservation-research-institute",
+    "slug": "conservation-research-institute",
+    "name": "Conservation Research Institute",
+    "shortName": "Conservation",
+    "school": "other",
+    "website": "https://www.conservation.cam.ac.uk",
+    "aliases": [
+      "CRI",
+      "University of Cambridge Conservation Research Institute"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.conservation.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-energy-irc",
+    "slug": "energy-irc",
+    "name": "Energy Interdisciplinary Research Centre",
+    "shortName": "Energy IRC",
+    "school": "other",
+    "website": "https://www.energy.cam.ac.uk",
+    "aliases": [
+      "Energy@Cambridge"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.energy.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-engineering-biology-irc",
+    "slug": "engineering-biology-irc",
+    "name": "Engineering Biology Interdisciplinary Research Centre",
+    "shortName": "Engineering Biology",
+    "school": "other",
+    "website": "https://www.engbio.cam.ac.uk",
+    "aliases": [
+      "EngBio"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.engbio.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-global-food-systems",
+    "slug": "global-food-systems",
+    "name": "Cambridge Global Food Systems",
+    "shortName": "Global Food",
+    "school": "other",
+    "website": "https://www.globalfood.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.globalfood.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-reproduction-irc",
+    "slug": "reproduction-irc",
+    "name": "Cambridge Reproduction",
+    "shortName": "Reproduction",
+    "school": "other",
+    "website": "https://www.repro.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.repro.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-ai-at-cam",
+    "slug": "ai-at-cam",
+    "name": "ai@cam",
+    "shortName": "ai@cam",
+    "school": "other",
+    "website": "https://www.ai.cam.ac.uk",
+    "aliases": [
+      "ai@cam"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "json_api",
+        "url": "https://www.ai.cam.ac.uk/events.json",
+        "label": "Events (JSON)",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-intellectual-forum",
+    "slug": "intellectual-forum",
+    "name": "Intellectual Forum, Jesus College",
+    "shortName": "Intellectual Forum",
+    "school": "other",
+    "website": "https://www.jesus.cam.ac.uk/research/intellectual-forum",
+    "aliases": [
+      "Jesus College Intellectual Forum"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.jesus.cam.ac.uk/research/intellectual-forum/forthcoming-events",
+        "label": "Forthcoming events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-cambridge-philosophical-society",
+    "slug": "cambridge-philosophical-society",
+    "name": "Cambridge Philosophical Society",
+    "shortName": "Philosophical Society",
+    "school": "other",
+    "website": "https://www.cambridgephilosophicalsociety.org",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [
+      "5373"
+    ],
+    "sources": []
+  },
+  {
+    "key": "dept-lucy-cavendish-college",
+    "slug": "lucy-cavendish-college",
+    "name": "Lucy Cavendish College",
+    "shortName": "Lucy Cavendish",
+    "school": "other",
+    "website": "https://www.lucy.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.lucy.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-murray-edwards-college",
+    "slug": "murray-edwards-college",
+    "name": "Murray Edwards College",
+    "shortName": "Murray Edwards",
+    "school": "other",
+    "website": "https://www.murrayedwards.cam.ac.uk",
+    "aliases": [
+      "New Hall"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.murrayedwards.cam.ac.uk/news-events/upcoming-events",
+        "label": "Upcoming events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-girton-college",
+    "slug": "girton-college",
+    "name": "Girton College",
+    "shortName": "Girton",
+    "school": "other",
+    "website": "https://www.girton.cam.ac.uk",
+    "aliases": [
+      "GirtonTalks"
+    ],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.girton.cam.ac.uk/upcoming-events",
+        "label": "Upcoming events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-newnham-college",
+    "slug": "newnham-college",
+    "name": "Newnham College",
+    "shortName": "Newnham",
+    "school": "other",
+    "website": "https://newn.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://newn.cam.ac.uk/newnham-events",
+        "label": "Newnham events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-christs-college",
+    "slug": "christs-college",
+    "name": "Christ's College",
+    "shortName": "Christ's",
+    "school": "other",
+    "website": "https://www.christs.cam.ac.uk",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.christs.cam.ac.uk/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  },
+  {
+    "key": "dept-niab",
+    "slug": "niab",
+    "name": "NIAB",
+    "shortName": "NIAB",
+    "school": "other",
+    "website": "https://www.niab.com",
+    "aliases": [],
+    "venueHints": [],
+    "talksCamListIds": [],
+    "sources": [
+      {
+        "kind": "drupal_uis",
+        "url": "https://www.niab.com/events",
+        "label": "Events",
+        "checked": "2026-10-31"
+      }
+    ]
+  }
+]

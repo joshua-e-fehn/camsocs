@@ -28,7 +28,7 @@ export default async function RequestPage({ searchParams }: Props) {
     <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_20rem]">
       <div className="flex max-w-2xl flex-col gap-8">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
             {org ? `About the listing for ${org.name}` : "Claim, correct or remove a listing"}
           </h1>
           <p className="text-muted-foreground">

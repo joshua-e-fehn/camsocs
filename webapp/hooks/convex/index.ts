@@ -5,7 +5,9 @@
 // A hook that must not run yet passes "skip" as the args:
 //   useQuery(api.x.y, ready ? { id } : "skip")
 import { useMutation, useQuery } from "convex/react"
+import { useMemo } from "react"
 import { api } from "@/convex/_generated/api"
+import { addDays, londonIsoDate, londonMidnight } from "@/lib/calendar"
 
 /** The signed-in user's profile, null when signed out, undefined while loading. */
 export function useCurrentUser() {
@@ -26,6 +28,39 @@ export function useOrgSearch(q: string) {
   return useQuery(
     api.orgs.list,
     text ? { q: text, paginationOpts: { numItems: ORG_SEARCH_LIMIT, cursor: null } } : "skip",
+  )
+}
+
+/** The colleges (key, slug, name), for naming `collegeKeys`; skipped until
+ * `enabled`. */
+export function useColleges(enabled: boolean) {
+  return useQuery(api.orgs.colleges, enabled ? {} : "skip")
+}
+
+const EVENT_SEARCH_DAYS = 28
+
+/** Events of the next four weeks (today included) whose title has every word
+ * of `q`, by start time — for the ⌘K palette. Skipped below two characters;
+ * the window moves on at London midnight, not on every render. */
+export function useEventSearch(q: string) {
+  const text = q.trim()
+  const today = londonIsoDate(Date.now())
+  const range = useMemo(
+    () => ({ from: londonMidnight(today), to: londonMidnight(addDays(today, EVENT_SEARCH_DAYS)) }),
+    [today],
+  )
+  return useQuery(api.events.list, text.length >= 2 ? { ...range, q: text } : "skip")
+}
+
+const TALK_SEARCH_LIMIT = 6
+
+/** Upcoming talks matching `q` (title, speakers, series, venue, departments),
+ * best match first — for the ⌘K palette. Skipped below two characters. */
+export function useTalkSearch(q: string) {
+  const text = q.trim()
+  return useQuery(
+    api.talks.search,
+    text.length >= 2 ? { q: text, limit: TALK_SEARCH_LIMIT } : "skip",
   )
 }
 

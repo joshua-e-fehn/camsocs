@@ -317,10 +317,14 @@ def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_loa
 
     for group in GROUPS.values():
         resolve_stages(group.stages or None)  # every name is a registry stage
-    assert set(GROUPS) == {"events", "full"}
+    assert set(GROUPS) == {"events", "full", "talks"}
     assert GROUPS["full"].stages == () and GROUPS["full"].derive
+    # The talks pillar runs daily inside the events group (after load: a slow
+    # talks.cam day never holds back the day's events), and alone by hand.
+    assert GROUPS["talks"].stages == ("talks",) and not GROUPS["talks"].needs
+    assert "talks" in GROUPS["events"].stages
     events = [stage.name for stage in resolve_stages(GROUPS["events"].stages)]
-    assert events[0] == "term_dates" and events[-2:] == ["load", "report"]
+    assert events[0] == "term_dates" and events[-3:] == ["load", "talks", "report"]
     # Every events source but the University's (which fetches nothing, §10)
     # runs daily; no harvest, resolve, enrich or classify stage does.
     fetching = {s.name for s in STAGES if s.fetches} - {"enrich", "uni_events"}
@@ -331,7 +335,7 @@ def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_loa
 
 
 def test_an_unknown_group_is_an_error() -> None:
-    with pytest.raises(ValueError, match="Known: events, full"):
+    with pytest.raises(ValueError, match="Known: events, full, talks"):
         resolve_group("daily")
 
 

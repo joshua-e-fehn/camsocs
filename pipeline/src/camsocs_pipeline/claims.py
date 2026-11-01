@@ -17,7 +17,7 @@ What these enforce, so no stage has to remember it:
   applies the same rule again (convex/lib/resolve.ts `storedStatus`).
 - **No confidence.** Nothing here computes or sends one; Convex does, by rule.
 - **talks.cam stays out of the LLM** (source-research §6): `llm_field`
-  refuses a ``talks_list`` source.
+  refuses a ``talks_list`` source, and every talk source (decision D7).
 - `stored_status` mirrors the server's status normalisation, so
   `keys.claim_fingerprint` can predict the server's fingerprint.
 """
@@ -32,9 +32,12 @@ from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote
 from camsocs_pipeline.keys import event_key, source_key
 from camsocs_pipeline.models.observation import EventObservation, FieldObs, Observation
 from camsocs_pipeline.models.wire import ClaimInput
+from camsocs_pipeline.talks.model import SOURCE_TYPES as TALK_SOURCE_TYPES
 
-#: Sources whose text never reaches an LLM (robots.txt blocks AI agents; §6).
-NO_LLM_SOURCE_TYPES = frozenset({"talks_list"})
+#: Sources whose text never reaches an LLM: talks.cam lists (robots.txt blocks
+#: AI agents; §6), and every source of the talks pillar, which is parser-only
+#: by decision D7 (`talks.model.SOURCE_TYPES`: talks.cam and department sites).
+NO_LLM_SOURCE_TYPES = frozenset({"talks_list", *TALK_SOURCE_TYPES})
 
 
 class NoLLMSource(ValueError):

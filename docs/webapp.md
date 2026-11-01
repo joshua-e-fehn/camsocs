@@ -235,7 +235,7 @@ Production setup, step by step (Convex prod, Vercel, the pipeline's `--env prod`
   `NEXT_PUBLIC_CONVEX_SITE_URL`, optionally `NEXT_PUBLIC_SITE_URL`. See `.env.example`.
 - Vercel production: the three `NEXT_PUBLIC_*` values + `CONVEX_DEPLOY_KEY` (production only).
   A deploying build never defaults `NEXT_PUBLIC_SITE_URL` to localhost: unset, `lib/site.ts`
-  uses `https://camsocs.vercel.app`.
+  uses `https://camsocs.uk`.
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`,
   `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link).
@@ -306,10 +306,12 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 
 | Function | Args | Returns |
 |---|---|---|
-| `orgs.list` | `OrgFilters & { paginationOpts }` | `{ page: OrgCardPublic[], isDone, continueCursor }` — name order, or search relevance with `q`; works with `usePaginatedQuery` (cursor = offset) |
+| `orgs.list` | `OrgFilters & { sort?: "relevance" \| "name" \| "active", paginationOpts }` | `{ page: (OrgCardPublic & { activity? })[], isDone, continueCursor }` — `relevance` (default): search rank with `q`, else name; `name`: A–Z also with `q`; `active`: most counted events this term first (`convex/lib/orgActivity.ts`: public events a listing organises or co-hosts, not taking-part ones). `activity` = `{ count, inTerm, next?: { startsAt, allDay, termWeekLabel? } }` (term = Week 0 to the end of Full Term; outside term, the next 8 weeks). Works with `usePaginatedQuery` (cursor = offset) |
 | `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly, truncated }`, each but the last `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns; `truncated` when a search matched more than one query returns (1,024, Convex's limit) and the counts cover the best matches only |
 | `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
+| `orgs.busy` | `{ limit? }` | `{ label?, from, to, orgs: { card: OrgCardPublic, count }[] }` — the "Busy this week" shelf: listings with the most counted, not cancelled events this term week (Thu–Wed; `label` "MT26 Wk 4"), else the next 7 days; at most 12 |
+| `orgs.related` | `{ slug, limit? }` | `OrgCardPublic[]` (≤ 6): the same college first, then shared categories (`relatedScore`); empty for an unknown or hidden slug |
 
 `OrgCardPublic`: `key, slug, name, shortName?, shortDescription?, orgType?, level?, status,
 collegeKeys, categories, activityTypes, audiences, beginnerFriendly?, sport?: {sport?, blueStatus?,
@@ -341,8 +343,17 @@ sourceUrl? (absent for mailing-list events), hosting, externalUrl?, lastSeenAt, 
 another university's event) the listed societies only take part in. The UI then names them as
 taking part ("Cyber Security Society takes part", the "Taking part" badge, a dashed card),
 never as organisers, and links `externalUrl` — the event's own page, present only for
-`takes_part` — off-site; the calendar's "Include events societies take part in" toggle
-(`?external=hide` when off) maps to `includeTakingPart`.
+`takes_part` — off-site; the calendar leaves them out by default (`includeTakingPart: false`)
+and its "Include taking part" toggle (`?external=show`) lists them.
+
+The `/events` page (`components/organisms/events-calendar.tsx`, URL state in
+`lib/url-state.ts`) loads one week at a time: `?weeks=N` (1–8, "Show next week") from
+`?date=` (default today), or a `?preset=` range (today, tomorrow, week, weekend, term), never
+less than a week so the week strip has a count for every day. The search box (`?q=`) is
+matched in the browser over the loaded days, against title, organisers and venue
+(`lib/events.ts`), so `q` is not sent to `events.list`. Each event has a page,
+`/events/[key]`, and a one-event `.ics` at `/events/[key]/ics` (read with the viewer's
+session; a Cambridge-only event's file is `private, no-store`).
 
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,

@@ -25,7 +25,7 @@ import {
 
 export const RESEND_API = "https://api.resend.com"
 
-const USER_AGENT = "camsocs-inbound/0.1 (+https://camsocs.vercel.app/about)"
+const USER_AGENT = "camsocs-inbound/0.1 (+https://camsocs.uk/about)"
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>
 

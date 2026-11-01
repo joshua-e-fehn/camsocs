@@ -381,6 +381,10 @@ install_runner() {
     for name in LLM_API_KEY LLM_MODEL_BULK LLM_MODEL_STRONG CAMSOCS_USER_AGENT; do
       grep -q "^$name=." "$ROOT/pipeline/.env" || warn "pipeline/.env: $name is not set"
     done
+    if grep -q '^CAMSOCS_USER_AGENT=.' "$ROOT/pipeline/.env" &&
+      ! grep -q '^CAMSOCS_USER_AGENT=.*https://camsocs\.uk/about' "$ROOT/pipeline/.env"; then
+      warn "pipeline/.env: CAMSOCS_USER_AGENT does not link https://camsocs.uk/about (the About page the site names)"
+    fi
     if grep -Eq '^(CONVEX_URL|CONVEX_HTTP_URL|PIPELINE_API_KEY)=.' "$ROOT/pipeline/.env"; then
       warn "pipeline/.env names a deployment; on this host only pipeline/.env.prod should"
     fi

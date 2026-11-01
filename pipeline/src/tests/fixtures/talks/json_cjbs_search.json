@@ -1,0 +1,81 @@
+{
+ "count": 77,
+ "pagination": {
+  "0": 2,
+  "2": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6
+ },
+ "page_size": 10,
+ "current_count": 10,
+ "pages": 8,
+ "current_page": 1,
+ "post": [
+  {
+   "title": "Cambridge MBA profile review – Johannesburg, South Africa",
+   "excerpt": "Meet our Admissions team in Johannesburg and start the conversation about your Cambridge MBA.",
+   "permalink": "https://www.jbs.cam.ac.uk/events/mba-profile-review-johannesburg-oct-2026/",
+   "audience": "All",
+   "start_date": 1793606400,
+   "day": "2",
+   "month": "November",
+   "date": "02 November",
+   "time": "08:00-10:00",
+   "location": [
+    "Johannesburg, South Africa"
+   ],
+   "tbc": false,
+   "categoryField": "<div class=\"categories\"><span>Category: </span> <a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3287\">MBA admissions events</a></div>"
+  },
+  {
+   "title": "Socio-technical imaginaries of energy and historical amnesia: rethinking the place of the past in energy futures",
+   "excerpt": "Join our Energy Policy Research Group seminar with Dr Hiroki Shin.",
+   "permalink": "https://www.jbs.cam.ac.uk/events/socio-technical-imaginaries-of-energy-and-historical-amnesia/",
+   "audience": "All",
+   "start_date": 1793622600,
+   "day": "2",
+   "month": "November",
+   "date": "02 November",
+   "time": "12:30-13:30",
+   "location": [
+    "Cambridge, UK"
+   ],
+   "tbc": false,
+   "categoryField": "<div class=\"categories\"><span>Category: </span> <a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3289\">Energy Policy Research Group (EPRG) Energy and Environment seminars</a></div>"
+  },
+  {
+   "title": "Financial advisors and the intergenerational transmission of investment behaviour",
+   "excerpt": "Join our Finance seminar with Markus Schmid, Professor of Finance at the University of St Gallen.",
+   "permalink": "https://www.jbs.cam.ac.uk/events/financial-advisors-and-the-intergenerational-transmission-of-investment-behaviour/",
+   "audience": "All",
+   "start_date": 1793704500,
+   "day": "3",
+   "month": "November",
+   "date": "03 November",
+   "time": "11:15-12:30",
+   "location": [
+    "Cambridge, UK"
+   ],
+   "tbc": false,
+   "categoryField": "<div class=\"categories\"><span>Category: </span> <a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3271\">Finance Seminar Series</a><a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3261\">On-campus events</a><a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3263\">Research seminars</a></div>"
+  },
+  {
+   "title": "Inside the Cambridge Executive MBA programmes",
+   "excerpt": "Get valuable insight into the Cambridge Executive MBA experience.",
+   "permalink": "https://www.jbs.cam.ac.uk/events/inside-the-cambridge-emba-nov-2026/",
+   "audience": "All",
+   "start_date": 1793710800,
+   "day": "3",
+   "month": "November",
+   "date": "03 November",
+   "time": "13:00-14:15",
+   "location": [
+    "Online"
+   ],
+   "tbc": false,
+   "categoryField": "<div class=\"categories\"><span>Category: </span> <a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3267\">Admissions events</a><a href=\"#\" data-field=\"category\" class=\"clickable-filter\" data-value=\"3268\">Executive MBA admissions events</a></div>"
+  }
+ ],
+ "_fixture": "Recorded from https://www.jbs.cam.ac.uk/wp-json/cjbs-event/v1/search?pagination=1 (fetched 2026-10-31 by camsocs-bot); trimmed to 4 of 10 posts"
+}

@@ -39,7 +39,9 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
       <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Privacy notice</h1>
+        <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
+          Privacy notice
+        </h1>
         <p className="text-muted-foreground">
           How {SITE_NAME} uses personal data, and your rights. Last updated{" "}
           <span className="font-mono">{formatDate(PRIVACY_NOTICE_UPDATED)}</span>.
@@ -77,18 +79,28 @@ export default function PrivacyPage() {
         <h3>Names in descriptions (replaced before publishing)</h3>
         <p>
           Descriptions copied from public pages sometimes name committee members, performers or
-          other students. Before a description is published, such names are replaced by the
-          person&apos;s role or a neutral phrase, for example &ldquo;contact our President&rdquo;.
-          The original wording is kept privately, with the record of where each fact came from, for
-          as long as the listing exists. Speakers announced for public talks are shown by name, as
-          the organiser published them.
+          other students. Before a description is published, such names are replaced by the person’s
+          role or a neutral phrase, for example “contact our President”. The original wording is
+          kept privately, with the record of where each fact came from, for as long as the listing
+          exists. Speakers announced for public talks are shown by name, as the organiser published
+          them.
+        </p>
+        <h3>Speakers at academic talks (public)</h3>
+        <p>
+          The Talks pages list public academic talks with their speakers’ names and affiliations, as
+          the organiser published them on talks.cam or on a department’s own website. They are read
+          by fixed parser code only: no AI model reads these listings or the names in them. A talk
+          links to the page it was read from, disappears when that page no longer lists it, and is
+          deleted 30 days after it took place. If you are named on a talk and want your name
+          corrected or removed, write to us (see <a href="#rights">Your rights</a>) with the talk’s
+          link; we will also point you to the organiser, whose listing we follow.
         </p>
         <h3>Committee members (private, never published)</h3>
         <p>
           Where a society names its committee on its own public pages, the operator may keep the
           names and roles in private notes, used to contact societies and to make introductions
           between them and possible partners. These notes are not public, are marked out of date
-          after each year&apos;s handover, and are deleted on the schedule below.
+          after each year’s handover, and are deleted on the schedule below.
         </p>
         <h3>Society mailing lists</h3>
         <p>
@@ -110,11 +122,11 @@ export default function PrivacyPage() {
         <h3>Sources</h3>
         <p>
           Apart from what you send us, the data comes from publicly accessible sources: the
-          Cambridge SU society directory, the Proctors&apos; register, Sport Cambridge, Camdram,
-          CUCBC, college and JCR/MCR websites, societies&apos; own websites, Linktree pages and
-          public calendars, talks.cam and Playwaze; and from society mailing lists as described
-          above. The full list and our collection rules are on the{" "}
-          <Link href="/about#data">About page</Link>.
+          Cambridge SU society directory, the Proctors’ register, Sport Cambridge, Camdram, CUCBC,
+          college and JCR/MCR websites, societies’ own websites, Linktree pages and public
+          calendars, talks.cam, departments’ and institutes’ public talk listings, and Playwaze; and
+          from society mailing lists as described above. The full list and our collection rules are
+          on the <Link href="/about#data">About page</Link>.
         </p>
       </ProseSection>
 
@@ -125,6 +137,12 @@ export default function PrivacyPage() {
             and their events: our legitimate interests, and those of students and societies (UK GDPR
             Article 6(1)(f)). We have weighed these against the interests of the people concerned,
             which is why public listings are limited to role addresses.
+          </li>
+          <li>
+            <strong>Publishing academic talks with their speakers</strong>, so anyone can find
+            public talks across the University: legitimate interests, the same that the organisers
+            serve by publishing them. We show only what the organiser published, and nothing is
+            inferred about the speakers.
           </li>
           <li>
             <strong>Private notes for contacting societies and making introductions</strong> between
@@ -141,8 +159,8 @@ export default function PrivacyPage() {
           </li>
         </ul>
         <p>
-          We do not infer anyone&apos;s religion, politics, ethnicity, health or sexuality, and we
-          make no automated decisions about people.
+          We do not infer anyone’s religion, politics, ethnicity, health or sexuality, and we make
+          no automated decisions about people.
         </p>
       </ProseSection>
 
@@ -159,7 +177,7 @@ export default function PrivacyPage() {
           <li>
             OpenAI, through a relay server the operator rents, which provides the AI model that
             extracts facts from public pages and mailing-list messages and replaces names in
-            descriptions with roles.
+            descriptions with roles. Talk listings are never sent to it.
           </li>
         </ul>
         <p>
@@ -184,12 +202,13 @@ export default function PrivacyPage() {
             list and which events it gave, without sender or subject).
           </li>
           <li>Events: deleted a year after they took place.</li>
+          <li>Academic talks: deleted 30 days after they took place.</li>
           <li>Notes of our own contacts with a society: three years after the last contact.</li>
           <li>
             Requests and complaints: two years after they are closed (a request we turned down: 90
             days). If you ask us to remove a listing, a detail or an address, we keep a minimal
-            record — the listing&apos;s key, the field, or only a one-way hash of the address — so
-            it is not added back.
+            record — the listing’s key, the field, or only a one-way hash of the address — so it is
+            not added back.
           </li>
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
@@ -215,7 +234,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           You can also complain to the UK regulator, the Information Commission (formerly the
-          Information Commissioner&apos;s Office), at{" "}
+          Information Commissioner’s Office), at{" "}
           <a href="https://ico.org.uk/make-a-complaint/" rel="noopener noreferrer">
             ico.org.uk
           </a>

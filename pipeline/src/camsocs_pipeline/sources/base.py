@@ -774,7 +774,9 @@ class PoliteClient:
                     retry_after = _retry_after_seconds(response, self._now())
                     wait = retry_after if retry_after is not None else _jittered(backoff)
                 if attempt < self.max_retries:
-                    wait = min(wait, MAX_BACKOFF)
+                    # A retry is a request too: never sooner than the host's
+                    # interval (robots Crawl-delay), whatever Retry-After says.
+                    wait = max(min(wait, MAX_BACKOFF), self.min_interval, robots_delay)
                     logger.warning(
                         "%s on %s (attempt %d/%d) — backing off %.0fs",
                         last_error,

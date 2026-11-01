@@ -100,7 +100,7 @@ export function isOutreachCandidate(row: OutreachRow): boolean {
 
 /**
  * The personalised notice. `siteUrl` is the public origin, e.g.
- * `https://camsocs.vercel.app` (no trailing slash needed).
+ * `https://camsocs.uk` (no trailing slash needed).
  */
 export function outreachNotice(row: OutreachRow, siteUrl: string): string {
   const site = siteUrl.replace(/\/+$/, "")

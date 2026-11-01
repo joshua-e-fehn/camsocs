@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { internal } from "./_generated/api"
 import { newTest } from "./lib/harness.testing"
+import { runKeyOf } from "./lib/orgActivity"
 
 /** The background walks: what time alone changes (data-model §6). */
 
@@ -41,6 +42,49 @@ describe("derive", () => {
     }))
     expect(after.org?.status).toBe("dormant")
     expect(after.card?.status).toBe("dormant")
+  })
+
+  test("recomputeEvents fills in the organiser rows' run and cancelled copies", async () => {
+    const t = newTest()
+    const startsAt = Date.now() + 2 * DAY
+    const field = (name: string, value: unknown) => ({
+      entityType: "event" as const,
+      entityKey: "evt-old",
+      field: name,
+      value,
+      evidence: "primary" as const,
+      method: "parser" as const,
+      extractor: "test",
+      sourceKey: "src-camdram",
+      sourceUrl: "https://example.org/shows/top-girls",
+      sourceType: "camdram" as const,
+      retrievedAt: Date.now() - DAY,
+    })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        field("title", "Top Girls"),
+        field("startsAt", startsAt),
+        field("visibility", "public"),
+        field("source", "camdram"),
+        field("externalId", "top-girls-1"),
+        field("sourceUrl", "https://example.org/shows/top-girls"),
+        field("cancelled", true),
+      ],
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: "evt-old", organisers: [{ orgKey: "org-a", role: "organiser" }] }],
+    })
+    // The row as written before the copies existed.
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("eventOrganisers").first()
+      if (row)
+        await ctx.db.patch("eventOrganisers", row._id, { runKey: undefined, cancelled: undefined })
+    })
+    await t.mutation(internal.derive.recomputeEvents, {})
+    const row = await t.run(async (ctx) => ctx.db.query("eventOrganisers").first())
+    expect(row?.runKey).toBe(runKeyOf("Top Girls"))
+    expect(row?.cancelled).toBe(true)
+    expect(row?.hosting).toBe("hosts")
   })
 
   test("flagStalePeople flags rows whose staleAfter has passed", async () => {

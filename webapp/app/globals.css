@@ -4,39 +4,78 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * "Backs & limestone" (docs/talks-redesign-spec.md §5, DESIGN.md). Token names
+ * are part of the contract: components use these and the shadcn semantic
+ * names, never raw hex. Ketton-limestone paper and ink in light mode, a night
+ * river in dark; one colour per pillar — Societies sage (`--primary`), Events
+ * brick (`--events`), Talks indigo (`--talks`). `--gilt` and `--backs` are
+ * decoration only and never carry text. Contrast of every text pair below is
+ * ≥ 4.5:1 (checked 2026-10-31); none of it is the University's palette.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0.008 326);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.008 326);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.008 326);
-  --primary: oklch(0.212 0.019 322.12);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.003 325.6);
-  --secondary-foreground: oklch(0.212 0.019 322.12);
-  --muted: oklch(0.96 0.003 325.6);
-  --muted-foreground: oklch(0.542 0.034 322.5);
-  --accent: oklch(0.96 0.003 325.6);
-  --accent-foreground: oklch(0.212 0.019 322.12);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.005 325.62);
-  --input: oklch(0.922 0.005 325.62);
-  --ring: oklch(0.711 0.019 323.02);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0.008 326);
-  --sidebar-primary: oklch(0.212 0.019 322.12);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.003 325.6);
-  --sidebar-accent-foreground: oklch(0.212 0.019 322.12);
-  --sidebar-border: oklch(0.922 0.005 325.62);
-  --sidebar-ring: oklch(0.711 0.019 323.02);
+  --background: #f7f4ec;
+  --foreground: #16231f;
+  --card: #fffdf8;
+  --card-foreground: #16231f;
+  --popover: #fffdf8;
+  --popover-foreground: #16231f;
+  --primary: #2e6a55;
+  --primary-foreground: #fffdf8;
+  --secondary: #efeadd;
+  --secondary-foreground: #16231f;
+  --muted: #efeadd;
+  --muted-foreground: #5b6660;
+  --accent: #dcebe2;
+  --accent-foreground: #16231f;
+  --destructive: #b3261e;
+  --border: #e2dccd;
+  --input: #e2dccd;
+  --ring: #2e6a55;
+
+  /* Pillars. `-foreground` is text on the solid colour. */
+  --events: #a8432c;
+  --events-tint: #f3ded6;
+  --events-foreground: #fffdf8;
+  --talks: #34407a;
+  --talks-tint: #e1e4f2;
+  --talks-foreground: #fffdf8;
+  --gilt: #b8902f;
+  --backs: #a9cdbb;
+
+  /* Schools (talks chips): ink on tint, ≥ 5.8:1 in both modes. */
+  --school-arts: #6b2e5f;
+  --school-arts-tint: #f1e1ec;
+  --school-hss: #8e3a26;
+  --school-hss-tint: #f4e0d8;
+  --school-bio: #2f5e2a;
+  --school-bio-tint: #e0edd9;
+  --school-clinical: #1f5f63;
+  --school-clinical-tint: #d9ecec;
+  --school-physical: #33407f;
+  --school-physical-tint: #e1e4f2;
+  --school-tech: #34506e;
+  --school-tech-tint: #dfe7ef;
+  --school-other: #6e5420;
+  --school-other-tint: #f1e8d2;
+
+  --chart-1: #2e6a55;
+  --chart-2: #a8432c;
+  --chart-3: #34407a;
+  --chart-4: #b8902f;
+  --chart-5: #5b6b7a;
+  --radius: 0.5rem;
+
+  /* The broker dashboard: a slightly deeper limestone rail. */
+  --sidebar: #f0ebdf;
+  --sidebar-foreground: #16231f;
+  --sidebar-primary: #2e6a55;
+  --sidebar-primary-foreground: #fffdf8;
+  --sidebar-accent: #e6e0d1;
+  --sidebar-accent-foreground: #16231f;
+  --sidebar-border: #e2dccd;
+  --sidebar-ring: #2e6a55;
+
   /* Semantic status colours (DESIGN.md "Semantic Colors"): provenance chips
    * only — found / owner-confirmed (success), inferred / conflicting (warning).
    * Text on them uses the -foreground pair, which meets WCAG AA. */
@@ -44,48 +83,103 @@
   --success-foreground: oklch(0.38 0.09 160);
   --warning: oklch(0.95 0.06 85);
   --warning-foreground: oklch(0.43 0.1 65);
+
+  /* Paper grain: a fixed tile of fractal noise, a few percent strong. */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.2 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .dark {
-  --background: oklch(0.145 0.008 326);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.212 0.019 322.12);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.212 0.019 322.12);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0.005 325.62);
-  --primary-foreground: oklch(0.212 0.019 322.12);
-  --secondary: oklch(0.263 0.024 320.12);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.263 0.024 320.12);
-  --muted-foreground: oklch(0.711 0.019 323.02);
-  --accent: oklch(0.263 0.024 320.12);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.542 0.034 322.5);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.212 0.019 322.12);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.263 0.024 320.12);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.542 0.034 322.5);
+  --background: #0e1614;
+  --foreground: #ece8de;
+  --card: #15201d;
+  --card-foreground: #ece8de;
+  --popover: #15201d;
+  --popover-foreground: #ece8de;
+  --primary: #8cc7ae;
+  --primary-foreground: #0e1614;
+  --secondary: #1a2622;
+  --secondary-foreground: #ece8de;
+  --muted: #1a2622;
+  --muted-foreground: #9aa49e;
+  --accent: #1c3029;
+  --accent-foreground: #ece8de;
+  --destructive: #f2b8b5;
+  --border: #24302c;
+  --input: #24302c;
+  --ring: #8cc7ae;
+
+  --events: #e58b70;
+  --events-tint: #3a2019;
+  --events-foreground: #0e1614;
+  --talks: #a9b3ea;
+  --talks-tint: #1f2440;
+  --talks-foreground: #0e1614;
+  --gilt: #d9b65a;
+  --backs: #2f5446;
+
+  --school-arts: #e3b3d6;
+  --school-arts-tint: #3a2035;
+  --school-hss: #eda48e;
+  --school-hss-tint: #3b231c;
+  --school-bio: #a9d69c;
+  --school-bio-tint: #1f3320;
+  --school-clinical: #8fd3d3;
+  --school-clinical-tint: #163234;
+  --school-physical: #aeb8ee;
+  --school-physical-tint: #1f2440;
+  --school-tech: #a9c1dd;
+  --school-tech-tint: #1d2a38;
+  --school-other: #e0c27e;
+  --school-other-tint: #352b17;
+
+  --chart-1: #8cc7ae;
+  --chart-2: #e58b70;
+  --chart-3: #a9b3ea;
+  --chart-4: #d9b65a;
+  --chart-5: #9fb0c0;
+
+  --sidebar: #121c19;
+  --sidebar-foreground: #ece8de;
+  --sidebar-primary: #8cc7ae;
+  --sidebar-primary-foreground: #0e1614;
+  --sidebar-accent: #1a2622;
+  --sidebar-accent-foreground: #ece8de;
+  --sidebar-border: #24302c;
+  --sidebar-ring: #8cc7ae;
+
   --success: oklch(0.3 0.06 160);
   --success-foreground: oklch(0.86 0.1 160);
   --warning: oklch(0.32 0.06 75);
   --warning-foreground: oklch(0.88 0.11 85);
+
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.9 0 0 0 0 0.9 0 0 0 0 0.85 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @theme inline {
     --font-sans: var(--font-sans);
+    --font-serif: var(--font-serif);
+    --color-events: var(--events);
+    --color-events-tint: var(--events-tint);
+    --color-events-foreground: var(--events-foreground);
+    --color-talks: var(--talks);
+    --color-talks-tint: var(--talks-tint);
+    --color-talks-foreground: var(--talks-foreground);
+    --color-gilt: var(--gilt);
+    --color-backs: var(--backs);
+    --color-school-arts: var(--school-arts);
+    --color-school-arts-tint: var(--school-arts-tint);
+    --color-school-hss: var(--school-hss);
+    --color-school-hss-tint: var(--school-hss-tint);
+    --color-school-bio: var(--school-bio);
+    --color-school-bio-tint: var(--school-bio-tint);
+    --color-school-clinical: var(--school-clinical);
+    --color-school-clinical-tint: var(--school-clinical-tint);
+    --color-school-physical: var(--school-physical);
+    --color-school-physical-tint: var(--school-physical-tint);
+    --color-school-tech: var(--school-tech);
+    --color-school-tech-tint: var(--school-tech-tint);
+    --color-school-other: var(--school-other);
+    --color-school-other-tint: var(--school-other-tint);
     --color-success: var(--success);
     --color-success-foreground: var(--success-foreground);
     --color-warning: var(--warning);
@@ -136,8 +230,29 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: var(--paper-grain);
   }
   html {
     @apply font-sans;
+  }
+  /* Newsreader's optical sizes: display cuts at headline sizes. */
+  .font-serif {
+    font-optical-sizing: auto;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+}
+
+/* The RiverLine's slow draw, left to right (components/molecules/river-line.tsx).
+ * A clip, not a dash: dashes and `non-scaling-stroke` disagree in browsers.
+ * Decoration only: the line is whole without the animation. */
+@keyframes river-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
   }
 }

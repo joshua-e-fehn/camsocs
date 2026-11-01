@@ -79,6 +79,25 @@ def test_the_documented_user_agent_is_accepted(make_settings) -> None:
     )
 
 
+def test_the_user_agent_defaults_to_the_documented_one() -> None:
+    assert Settings(_env_file=None).user_agent == DOCUMENTED_USER_AGENT
+    assert "https://camsocs.uk/about" in DOCUMENTED_USER_AGENT
+
+
+def test_a_user_agent_without_the_about_page_is_used_with_a_warning(
+    make_settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    old = "camsocs-bot/0.1 (+https://old-host.example.org/about)"
+    with caplog.at_level("WARNING", logger="camsocs_pipeline.config"):
+        assert make_settings(user_agent=old).require_user_agent() == old
+        make_settings(user_agent=old).require_user_agent()
+    assert sum("does not link https://camsocs.uk/about" in r.message for r in caplog.records) == 1
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="camsocs_pipeline.config"):
+        make_settings(user_agent=DOCUMENTED_USER_AGENT).require_user_agent()
+    assert not caplog.records
+
+
 def test_the_error_suggests_no_email(make_settings) -> None:
     with pytest.raises(ConfigError) as error:
         make_settings(user_agent="").require_user_agent()

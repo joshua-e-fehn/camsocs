@@ -1,67 +1,74 @@
 import { fetchQuery } from "convex/nextjs"
 import type { Metadata } from "next"
+import { unstable_rethrow } from "next/navigation"
 import { EventsCalendar } from "@/components/organisms/events-calendar"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
-import { londonIsoDate, viewWindow } from "@/lib/calendar"
+import { londonIsoDate } from "@/lib/calendar"
+import { currentTermEnd } from "@/lib/date-presets"
 import { pageMetadata } from "@/lib/page-metadata"
 import { preloadEvents, preloadPublicColleges, preloadRestrictedCount } from "@/lib/public-data"
-import { eventListArgs, parseEventsParams, type SearchParams } from "@/lib/url-state"
+import { fetchTermDates } from "@/lib/term-dates"
+import type { TermDatesRow } from "@/lib/term-week"
+import {
+  eventListArgs,
+  eventRestrictedArgs,
+  eventsWindow,
+  parseEventsParams,
+  type SearchParams,
+} from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
 
 export const metadata: Metadata = pageMetadata({
   title: "Events",
   description:
-    "Talks, socials, matches and shows from Cambridge societies and clubs, in one calendar. Each event shows where it was listed.",
+    "Socials, shows, matches and formals from Cambridge societies and clubs, day by day. Each event shows where it was listed.",
   path: "/events",
 })
 
+async function loadTerms(): Promise<TermDatesRow[]> {
+  try {
+    return await fetchTermDates()
+  } catch (error) {
+    unstable_rethrow(error)
+    return []
+  }
+}
+
 /**
  * The calendar. Preloads, for the view and filters in the URL: the events the
- * viewer may see (the session token decides whether Cambridge-only events are
- * among them), the count of Cambridge-only events they may not, and the
- * colleges for the filter.
+ * viewer may see in the window it loads — one week for the list, not four
+ * (the audit's 403 events and 1 MB of HTML) — the count of Cambridge-only
+ * events they may not see, and the colleges for the filter. The session
+ * token decides whether Cambridge-only events are among the events.
  */
 export default async function EventsPage({ searchParams }: Props) {
   const state = parseEventsParams(await searchParams)
   const today = londonIsoDate(Date.now())
-  const args = eventListArgs(state, viewWindow(state.view, state.date ?? today))
-  const token = await getToken()
+  const [token, terms] = await Promise.all([getToken(), loadTerms()])
+  const window = eventsWindow(state, today, currentTermEnd(today, terms))
+  const args = eventListArgs(state, window)
 
   const [preloadedEvents, preloadedColleges, preloadedRestricted, orgPage] = await Promise.all([
     preloadEvents(args, token),
     preloadPublicColleges(),
     // A hint, not the page: if the count cannot be had, the calendar still renders.
-    preloadRestrictedCount(args, token).catch(() => null),
-    state.org ? fetchQuery(api.orgs.getBySlug, { slug: state.org }) : null,
+    preloadRestrictedCount(eventRestrictedArgs(args), token).catch(() => null),
+    state.org ? fetchQuery(api.orgs.getBySlug, { slug: state.org }).catch(() => null) : null,
   ])
   const org = orgPage
     ? { key: orgPage.org.key, slug: orgPage.org.slug, name: orgPage.org.name }
     : null
 
   return (
-    <>
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-8 sm:px-6">
-          <h1 className="text-3xl font-bold tracking-tight">
-            {org ? `Events: ${org.name}` : "Events"}
-          </h1>
-          <p className="max-w-2xl text-muted-foreground">
-            What Cambridge societies and clubs have published: talks, socials, matches, shows and
-            more. Public events are open to everyone; Cambridge-only events need a verified
-            @cam.ac.uk sign-in.
-          </p>
-        </div>
-      </header>
-      <EventsCalendar
-        state={state}
-        today={today}
-        org={org}
-        preloadedEvents={preloadedEvents}
-        preloadedColleges={preloadedColleges}
-        preloadedRestricted={preloadedRestricted}
-      />
-    </>
+    <EventsCalendar
+      today={today}
+      terms={terms}
+      org={org}
+      preloadedEvents={preloadedEvents}
+      preloadedColleges={preloadedColleges}
+      preloadedRestricted={preloadedRestricted}
+    />
   )
 }

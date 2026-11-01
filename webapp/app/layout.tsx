@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Newsreader } from "next/font/google"
 
 import "./globals.css"
 import { AuthGuard } from "@/components/providers/auth-guard"
@@ -20,6 +20,15 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
+// The display face (DESIGN.md "Typography"): headings, the wordmark, big
+// numerals. Variable, with its optical-size axis and the italic.
+const fontSerif = Newsreader({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  style: ["normal", "italic"],
+  axes: ["opsz"],
+})
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -34,7 +43,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     locale: "en_GB",
-    title: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
   },
   twitter: { card: "summary_large_image" },
@@ -46,13 +55,32 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   // Null for the signed-out majority — expected, not a failure.
+  //
+  // ⚠ This read (cookies) makes every route dynamic and `no-store` (UI audit
+  // 2026-10-31 §9). It stays, for now, on purpose:
+  //  - `initialToken` is what lets the first client queries run signed in.
+  //    Without it a verified @cam.ac.uk reader's `cam_only` events on /events
+  //    and a profile drop out on hydration and come back once the session
+  //    resolves, and the broker's dashboard starts signed out.
+  //  - Public pages would then prerender at build time, and CI builds against
+  //    a placeholder deployment (scripts/build-env-defaults.sh promises it is
+  //    never contacted), so `fetchQuery` in a static page fails the build.
+  // Moving it needs both solved together: a route-scoped provider (or Cache
+  // Components with the token read inside a Suspense boundary) plus
+  // `connection()` / ISR for the pages that query Convex.
   const token = await getToken()
 
   return (
     <html
       lang="en-GB"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", fontSans.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        fontSerif.variable,
+        "font-sans",
+        fontSans.variable,
+      )}
     >
       <body>
         <ConvexClientProvider initialToken={token}>

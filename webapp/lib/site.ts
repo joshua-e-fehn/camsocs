@@ -9,13 +9,13 @@
 
 export const SITE_NAME = "camsocs"
 
-export const SITE_TAGLINE = "A sourced directory of Cambridge societies and sports clubs"
+export const SITE_TAGLINE = "Cambridge societies, events and talks, sourced"
 
 export const SITE_DESCRIPTION =
-  "Browse Cambridge student societies and sports clubs and their events. Every fact links to the page it came from. Unofficial and independent."
+  "Cambridge student societies and sports clubs, their events, and the public academic talks across the University's departments, in one place. Every fact links to the page it came from. Unofficial and independent."
 
 /** The public origin, for absolute URLs in the sitemap and Open Graph tags. */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.vercel.app").replace(
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.uk").replace(
   /\/+$/,
   "",
 )
@@ -33,10 +33,10 @@ export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-10-09"
+export const PRIVACY_NOTICE_UPDATED = "2026-10-31"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
-export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"
+export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.uk/about)"
 
 /** Where a visitor goes to unlock Cambridge-only events: the @cam.ac.uk
  * sign-in link (`cam=1` selects that option). */
@@ -48,7 +48,7 @@ export function camSignInHref(next: string): string {
 }
 
 /** What the share image shows, for its alt text (app/opengraph-image.tsx). */
-export const SHARE_IMAGE_ALT = `camsocs — ${SITE_TAGLINE.charAt(0).toLowerCase()}${SITE_TAGLINE.slice(1)}`
+export const SHARE_IMAGE_ALT = `${SITE_NAME} — ${SITE_TAGLINE}`
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =

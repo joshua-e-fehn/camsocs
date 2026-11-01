@@ -1,12 +1,13 @@
-import Image from "next/image"
+import { ChevronRightIcon } from "lucide-react"
 import Link from "next/link"
-import { CATEGORY_ICONS } from "@/components/molecules/category-icon"
-import { Badge } from "@/components/ui/badge"
-import { monogram } from "@/lib/monogram"
+import { OrgMonogram } from "@/components/molecules/org-monogram"
+import { TermDateBlock, termWeekShort } from "@/components/molecules/term-date-block"
+import { formatInstantDate, londonIsoDate, weekdayShort } from "@/lib/calendar"
 import type { OrgCard as OrgCardData } from "@/lib/public-api"
 import { plainLine } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import {
+  type BlueStatus,
   CATEGORY_LABELS,
   type Category,
   ORG_LEVEL_LABELS,
@@ -15,72 +16,17 @@ import {
   type OrgStatus,
 } from "@/lib/vocab"
 
-/**
- * The organisation's own logo (our stored copy), or — for the ~92% without
- * one — its initials (lib/monogram.ts) with the icon of its first category in
- * the corner, so a grid of fallbacks still reads at a glance. Decorative: the
- * name is always next to it.
- */
+/** The logo-or-monogram tile under its older name (the profile and other
+ * pages used `OrgLogo`); see `OrgMonogram`. */
 export function OrgLogo({
-  name,
-  shortName,
-  url,
   category,
-  size = 48,
-  className,
-}: {
-  name: string
-  shortName?: string
-  url?: string
-  /** The first category, for the fallback's corner icon. */
-  category?: Category
-  size?: number
-  className?: string
-}) {
-  const Icon = category ? CATEGORY_ICONS[category] : undefined
-  const initials = monogram(name, shortName)
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border",
-        url ? "bg-white" : "bg-linear-to-br from-muted to-background text-foreground/75",
-        className,
-      )}
-      style={{ width: size, height: size }}
-    >
-      {url ? (
-        <Image
-          src={url}
-          alt=""
-          width={size}
-          height={size}
-          sizes={`${size}px`}
-          className="size-full object-contain p-1"
-        />
-      ) : (
-        <>
-          <span
-            className="font-semibold tracking-tight"
-            style={{ fontSize: Math.round(size * (initials.length > 2 ? 0.28 : 0.36)) }}
-          >
-            {initials}
-          </span>
-          {Icon && (
-            <Icon
-              className="absolute right-[7%] bottom-[7%] text-muted-foreground"
-              style={{ width: Math.round(size * 0.28), height: Math.round(size * 0.28) }}
-              strokeWidth={1.75}
-            />
-          )}
-        </>
-      )}
-    </div>
-  )
+  ...props
+}: Omit<React.ComponentProps<typeof OrgMonogram>, "categories"> & { category?: Category }) {
+  return <OrgMonogram categories={category} {...props} />
 }
 
 const STATUS_DOT: Record<OrgStatus, string> = {
-  active: "bg-success-foreground",
+  active: "bg-primary",
   dormant: "bg-muted-foreground/60",
   archived: "bg-muted-foreground/30",
   unknown: "border border-muted-foreground/50",
@@ -98,66 +44,120 @@ export function OrgStatusLabel({ status, className }: { status: OrgStatus; class
   )
 }
 
-/** A directory entry: logo, name, short description, level or college,
- * categories and activity status. The whole card is one link. A card without
- * a short description just ends sooner (the profile says what is unknown). */
+/** Blues worth a badge on a card: a Full or Half Blue, not "No Blue". */
+const BLUE_BADGES: Partial<Record<BlueStatus, string>> = {
+  full: "Full Blue",
+  full_some: "Full Blue",
+  discretionary_full: "Full Blue",
+  half: "Half Blue",
+}
+
+/** Where a listing sits: its colleges, else its level or type. */
+export function placementOf(
+  card: Pick<OrgCardData, "collegeKeys" | "level" | "orgType">,
+  collegeNames: Record<string, string>,
+): string | undefined {
+  const colleges = card.collegeKeys.map((key) => collegeNames[key]).filter(Boolean)
+  if (colleges.length > 0) return colleges.join(", ")
+  if (card.level) return ORG_LEVEL_LABELS[card.level]
+  return card.orgType ? ORG_TYPE_LABELS[card.orgType] : undefined
+}
+
+/** "4 events this term" / "1 event in the next 8 weeks" / undefined. */
+export function activityText(activity: OrgCardData["activity"]): string | undefined {
+  if (!activity || activity.count === 0) return undefined
+  const events = `${activity.count} ${activity.count === 1 ? "event" : "events"}`
+  return activity.inTerm ? `${events} this term` : `${events} in the next 8 weeks`
+}
+
+/** "Thu 5 Nov, Wk 4": the next event, in words, for screen readers. */
+function nextEventWords(next: NonNullable<OrgCardData["activity"]>["next"]): string | undefined {
+  if (!next) return undefined
+  const week = termWeekShort(next.termWeekLabel)
+  const day = `${weekdayShort(londonIsoDate(next.startsAt))} ${formatInstantDate(next.startsAt)}`
+  return `Next event ${day}${week ? `, ${week}` : ""}`
+}
+
+/**
+ * A directory entry. On a phone it is a dense row (tile, name, one meta line,
+ * one line of description, the next event's date chip); from `sm` up it is a
+ * card in a two-column grid. The whole entry is one link. The meta line says
+ * what it is, where it sits and how busy it is this term; a Blue and the
+ * college ride along as badges. A listing without a description just ends
+ * sooner (the profile says what is unknown).
+ */
 export function OrgCard({
   card,
   collegeNames,
+  className,
 }: {
   card: OrgCardData
   collegeNames: Record<string, string>
+  className?: string
 }) {
-  const colleges = card.collegeKeys.map((key) => collegeNames[key]).filter(Boolean)
-  const placement =
-    colleges.length > 0
-      ? colleges.join(", ")
-      : card.level
-        ? ORG_LEVEL_LABELS[card.level]
-        : card.orgType
-          ? ORG_TYPE_LABELS[card.orgType]
-          : undefined
+  const placement = placementOf(card, collegeNames)
+  const blue = card.sport?.blueStatus ? BLUE_BADGES[card.sport.blueStatus] : undefined
+  const busy = activityText(card.activity)
+  const next = card.activity?.next
+  const meta = [
+    card.categories[0] ? CATEGORY_LABELS[card.categories[0]] : undefined,
+    placement,
+    busy,
+    card.status === "dormant" || card.status === "archived"
+      ? ORG_STATUS_LABELS[card.status]
+      : undefined,
+  ].filter(Boolean)
 
   return (
     <Link
       href={`/societies/${card.slug}`}
-      className="group flex h-full flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-colors duration-200 hover:border-primary/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className={cn(
+        "group flex h-full items-start gap-3 py-3 text-card-foreground outline-none transition-colors duration-150 focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "sm:gap-4 sm:rounded-xl sm:border sm:bg-card sm:p-4 sm:hover:border-primary/40 sm:hover:shadow-xs",
+        className,
+      )}
     >
-      <div className="flex items-start gap-3">
-        <OrgLogo
-          name={card.name}
-          shortName={card.shortName}
-          url={card.logoUrl}
-          category={card.categories[0]}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="font-semibold leading-snug tracking-tight group-hover:underline group-hover:underline-offset-4">
+      <OrgMonogram
+        name={card.name}
+        shortName={card.shortName}
+        url={card.logoUrl}
+        categories={card.categories}
+        college={card.collegeKeys.length > 0}
+        size={48}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <h3 className="leading-snug font-semibold tracking-tight text-pretty group-hover:underline group-hover:decoration-primary/50 group-hover:underline-offset-4">
             {card.name}
           </h3>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {placement && <span className="text-xs text-muted-foreground">{placement}</span>}
-            <OrgStatusLabel status={card.status} />
-          </div>
-        </div>
-      </div>
-      {card.shortDescription && (
-        <p className="line-clamp-3 text-sm text-muted-foreground">
-          {plainLine(card.shortDescription)}
-        </p>
-      )}
-      {card.categories.length > 0 && (
-        <div className="mt-auto flex flex-wrap gap-1">
-          {card.categories.slice(0, 3).map((category) => (
-            <Badge key={category} variant="secondary" className="font-normal">
-              {CATEGORY_LABELS[category]}
-            </Badge>
-          ))}
-          {card.categories.length > 3 && (
-            <Badge variant="outline" className="font-normal">
-              +{card.categories.length - 3}
-            </Badge>
+          {blue && (
+            <span className="rounded-sm bg-talks-tint px-1.5 text-[11px] leading-5 font-medium text-talks">
+              {blue}
+            </span>
           )}
         </div>
+        {meta.length > 0 && (
+          <p className="truncate text-xs text-muted-foreground">{meta.join(" · ")}</p>
+        )}
+        {card.shortDescription && (
+          <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground sm:line-clamp-2">
+            {plainLine(card.shortDescription)}
+          </p>
+        )}
+      </div>
+      {next ? (
+        <TermDateBlock
+          startsAt={next.startsAt}
+          termWeekLabel={next.termWeekLabel}
+          size="sm"
+          label={nextEventWords(next)}
+          className="mt-0.5"
+        />
+      ) : (
+        <ChevronRightIcon
+          aria-hidden
+          className="mt-3 size-4 shrink-0 text-muted-foreground/60 sm:hidden"
+        />
       )}
     </Link>
   )

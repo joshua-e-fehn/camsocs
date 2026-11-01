@@ -29,6 +29,7 @@ instead, which raises `ConfigError` with what to set.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Mapping
@@ -86,7 +87,13 @@ DEFAULT_LLM_CONCURRENCY = 8
 DEFAULT_MIN_HOST_INTERVAL = 1.0
 #: The User-Agent source-research "Global rules" documents: a token and the
 #: About page, never an email address.
-DOCUMENTED_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.vercel.app/about)"
+DOCUMENTED_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.uk/about)"
+#: The page the documented User-Agent links (the About page the site shows).
+ABOUT_URL = "https://camsocs.uk/about"
+
+logger = logging.getLogger(__name__)
+#: User-Agents already warned about this process (`require_user_agent`).
+_warned_user_agents: set[str] = set()
 
 
 class ConfigError(RuntimeError):
@@ -116,7 +123,7 @@ class Settings(BaseSettings):
         default=DEFAULT_LLM_CONCURRENCY, ge=1, le=64, validation_alias="LLM_CONCURRENCY"
     )
 
-    user_agent: str = Field(default="", validation_alias="CAMSOCS_USER_AGENT")
+    user_agent: str = Field(default=DOCUMENTED_USER_AGENT, validation_alias="CAMSOCS_USER_AGENT")
     cache_dir: Path = Field(default=DEFAULT_CACHE_DIR, validation_alias="CAMSOCS_CACHE_DIR")
     staging_dir: Path = Field(default=DEFAULT_STAGING_DIR, validation_alias="CAMSOCS_STAGING_DIR")
     state_path: Path = Field(default=DEFAULT_STATE_PATH, validation_alias="CAMSOCS_STATE_PATH")
@@ -228,6 +235,9 @@ class Settings(BaseSettings):
     def require_user_agent(self) -> str:
         """The crawler's User-Agent, or a readable error.
 
+        Unset, it is `DOCUMENTED_USER_AGENT`; set to anything that does not
+        link `ABOUT_URL`, it is used with a warning (once per process).
+
         Honest by rule: it names this crawler and a page about it, so a
         webmaster can recognise it and ask us to slow down. A browser-like
         string is refused — disguising the crawler would be a way around a
@@ -249,6 +259,15 @@ class Settings(BaseSettings):
             raise ConfigError(
                 "CAMSOCS_USER_AGENT contains an email address. It must not: link the About "
                 f'page instead, "{DOCUMENTED_USER_AGENT}".'
+            )
+        if ABOUT_URL not in ua and ua not in _warned_user_agents:
+            # Still honest (the old host redirects), but not the page the site shows.
+            _warned_user_agents.add(ua)
+            logger.warning(
+                "CAMSOCS_USER_AGENT does not link %s, the About page the site names as the "
+                'crawler\'s contact; the documented value is "%s".',
+                ABOUT_URL,
+                DOCUMENTED_USER_AGENT,
             )
         return ua
 

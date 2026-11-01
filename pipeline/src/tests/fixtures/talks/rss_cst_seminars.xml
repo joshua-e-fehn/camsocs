@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic fixture (2026-11-01): a Drupal 7 seminar feed in Computer Science's markup (the date as RDFa dc:date spans inside each escaped description, /seminars/list/<id> links) with invented content and made-up ids. The real feed mirrors talks.cam, so it is not recorded here — real talks.cam text never reaches a model. -->
+<rss version="2.0" xml:base="https://www.cst.cam.ac.uk/seminars/feed" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<title>Invented seminars feed</title>
+<link>https://www.cst.cam.ac.uk/seminars/feed</link>
+<description>Synthetic test feed</description>
+<language>en</language>
+<atom:link href="https://www.cst.cam.ac.uk/seminars/feed" rel="self" type="application/rss+xml" />
+<item>
+<title>An invented talk on example schedulers</title>
+<link>https://www.cst.cam.ac.uk/seminars/list/900101</link>
+<description>&lt;div class=&quot;field field-name-field-event-date&quot;&gt;&lt;span class=&quot;date-display-start&quot; property=&quot;dc:date&quot; datatype=&quot;xsd:dateTime&quot; content=&quot;2026-11-02T13:05:00+00:00&quot;&gt;Monday, 2 November, 2026 - 13:05&lt;/span&gt; to &lt;span class=&quot;date-display-end&quot; property=&quot;dc:date&quot; datatype=&quot;xsd:dateTime&quot; content=&quot;2026-11-02T13:55:00+00:00&quot;&gt;13:55&lt;/span&gt;&lt;/div&gt;&lt;p&gt;Speaker: Sam Placeholder, Example Institute of Computing&lt;/p&gt;&lt;p&gt;An invented abstract about schedulers that exist only in this fixture.&lt;/p&gt;</description>
+<pubDate>Mon, 26 Oct 2026 09:00:00 +0000</pubDate>
+<dc:creator>Example Editor</dc:creator>
+<guid isPermaLink="false">900101 at https://www.cst.cam.ac.uk</guid>
+</item>
+<item>
+<title>A made-up seminar about sample proofs</title>
+<link>https://www.cst.cam.ac.uk/seminars/list/900102</link>
+<description>&lt;div class=&quot;field field-name-field-event-date&quot;&gt;&lt;span class=&quot;date-display-start&quot; property=&quot;dc:date&quot; datatype=&quot;xsd:dateTime&quot; content=&quot;2026-11-04T15:00:00+00:00&quot;&gt;Wednesday, 4 November, 2026 - 15:00&lt;/span&gt; to &lt;span class=&quot;date-display-end&quot; property=&quot;dc:date&quot; datatype=&quot;xsd:dateTime&quot; content=&quot;2026-11-04T16:00:00+00:00&quot;&gt;16:00&lt;/span&gt;&lt;/div&gt;&lt;p&gt;Speaker: Robin Example, Sample University&lt;/p&gt;&lt;p&gt;A made-up abstract about proofs that exist only in this fixture.&lt;/p&gt;</description>
+<pubDate>Tue, 27 Oct 2026 09:00:00 +0000</pubDate>
+<dc:creator>Example Editor</dc:creator>
+<guid isPermaLink="false">900102 at https://www.cst.cam.ac.uk</guid>
+</item>
+</channel>
+</rss>

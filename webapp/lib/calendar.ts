@@ -111,8 +111,10 @@ export function eventDays(event: { startsAt: number; endsAt?: number }): string[
 export const CALENDAR_VIEWS = ["list", "week", "month"] as const
 export type CalendarView = (typeof CALENDAR_VIEWS)[number]
 
-/** How far the list view looks ahead from its first day. */
-export const LIST_DAYS = 28
+/** How far the list view looks ahead from its first day: one week, then
+ * "Show next week" adds another (lib/url-state.ts `weeks`). The audit's
+ * four-week default was 400 events and 1 MB of HTML on first load. */
+export const LIST_DAYS = 7
 
 export type CalendarWindow = {
   /** Epoch ms of the first instant shown (inclusive). */
@@ -123,7 +125,8 @@ export type CalendarWindow = {
   days: string[]
 }
 
-function windowOf(first: string, dayCount: number): CalendarWindow {
+/** `dayCount` London days from `first`. */
+export function dayWindow(first: string, dayCount: number): CalendarWindow {
   const days = Array.from({ length: dayCount }, (_, i) => addDays(first, i))
   return {
     from: londonMidnight(first),
@@ -134,17 +137,17 @@ function windowOf(first: string, dayCount: number): CalendarWindow {
 
 /**
  * The days a view shows around `anchor`:
- *  - list: `LIST_DAYS` days from the anchor itself;
+ *  - list: `LIST_DAYS` days (one week) from the anchor itself;
  *  - week: Monday to Sunday of the anchor's week;
  *  - month: whole weeks (Monday first) covering the anchor's month.
  */
 export function viewWindow(view: CalendarView, anchor: string): CalendarWindow {
-  if (view === "list") return windowOf(anchor, LIST_DAYS)
-  if (view === "week") return windowOf(startOfWeek(anchor), 7)
+  if (view === "list") return dayWindow(anchor, LIST_DAYS)
+  if (view === "week") return dayWindow(startOfWeek(anchor), 7)
   const first = startOfWeek(startOfMonth(anchor))
   const last = addDays(addMonths(anchor, 1), -1)
   const weeks = Math.ceil((isoDateMs(last) - isoDateMs(first) + DAY_MS) / (7 * DAY_MS))
-  return windowOf(first, weeks * 7)
+  return dayWindow(first, weeks * 7)
 }
 
 /** The anchor one page earlier (`-1`) or later (`1`) in a view. */

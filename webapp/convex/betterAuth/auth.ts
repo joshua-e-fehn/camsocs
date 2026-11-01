@@ -140,7 +140,15 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     // `registerRoutes(http, createAuth, { cors: true })` in convex/http.ts reads
     // this same list for its Access-Control-Allow-Origin. Set per deployment:
     //   bunx convex env set SITE_URL https://<public origin>
-    trustedOrigins: [process.env.SITE_URL ?? "http://localhost:3000"],
+    // EXTRA_TRUSTED_ORIGINS (comma-separated) keeps an old origin working while
+    // the public host moves (camsocs.vercel.app → camsocs.uk, 2026-10-31).
+    trustedOrigins: [
+      process.env.SITE_URL ?? "http://localhost:3000",
+      ...(process.env.EXTRA_TRUSTED_ORIGINS ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ],
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       // OAuth only: no passwords stored, no reset flow, no email deliverability.

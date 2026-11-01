@@ -35,7 +35,10 @@ import {
  *  - `event`: deletes the event, its claims and organiser links (its
  *    organisers are re-derived); no later harvest records it again;
  *  - `name`: sets aside, a page at a time, every claim whose value names the
- *    person (`ingest/suppressions:setAsideAddress` with scope `name`).
+ *    person (`ingest/suppressions:setAsideAddress` with scope `name`);
+ *  - `name` and `contact` also rewrite the stored talks, which are not claims:
+ *    a suppressed speaker is dropped and the name or address cut out of every
+ *    text (`ingest/talks:scrubStored`).
  *
  * A claim set aside keeps only its place in the log (entity, field, source,
  * status, fingerprint, `setAsideBy`): its value, original text and quote are
@@ -116,6 +119,10 @@ async function enforce(ctx: MutationCtx, row: SuppressionTarget & { key: string 
   if (row.scope === "event" && row.eventKey) {
     await removeEvent(ctx, row.eventKey)
     return
+  }
+  if ((row.scope === "name" || row.scope === "contact") && row.valueHash) {
+    // Talks are not claims: their stored texts are scrubbed by a walk of their own.
+    await ctx.scheduler.runAfter(0, internal.ingest.talks.scrubStored, { cursor: null })
   }
   if (row.scope === "name" && row.valueHash) {
     await ctx.scheduler.runAfter(0, internal.ingest.suppressions.setAsideAddress, {

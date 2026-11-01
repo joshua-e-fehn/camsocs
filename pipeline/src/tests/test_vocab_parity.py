@@ -56,3 +56,11 @@ def test_run_log_vocabularies_match_too() -> None:
 
 def test_fields_by_entity_type_covers_every_entity_type() -> None:
     assert set(vocab.FIELDS_BY_ENTITY_TYPE) == set(vocab.ENTITY_TYPES)
+
+
+def test_talk_vocabularies_match_the_talk_model() -> None:
+    from camsocs_pipeline.talks import model, registry
+
+    assert model.SOURCE_TYPES == vocab.TALK_SOURCE_TYPES
+    assert model.KINDS == vocab.TALK_KINDS
+    assert registry.SCHOOLS == vocab.TALK_SCHOOLS

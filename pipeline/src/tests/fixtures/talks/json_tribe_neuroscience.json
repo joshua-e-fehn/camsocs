@@ -1,0 +1,263 @@
+{
+ "events": [
+  {
+   "id": 63324,
+   "global_id": "neuroscience.cam.ac.uk?id=63324",
+   "global_id_lineage": [
+    "neuroscience.cam.ac.uk?id=63324"
+   ],
+   "author": "2371",
+   "status": "publish",
+   "date": "2026-10-14 15:25:40",
+   "date_utc": "2026-10-14 14:25:40",
+   "modified": "2026-10-14 17:20:05",
+   "modified_utc": "2026-10-14 16:20:05",
+   "url": "https://neuroscience.cam.ac.uk/event-registration/neurotechnology-and-the-future-of-thought-a-cambrain-panel-discussion/",
+   "rest_url": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/events/63324",
+   "title": "Neurotechnology and the Future of Thought – A CamBRAIN Panel Discussion",
+   "description": "<p>Join Cambridge Neuroscience and CamBRAIN for an evening of fun and networking on November 4th from 18:00-20:30 at St John&#8217;s College, University of Cambridge.</p>\n<p>The panel discussion will be followed by a drinks reception.</p>\n<p>See details on the <a href=\"https://neuroscience.cam.ac.uk/camneuro-events/neurotechnology-and-the-future-of-thought-a-cambrain-panel-discussion/\" target=\"_blank\" rel=\"noopener\">event website</a>.</p>\n<a href=\"https://neuroscience.cam.ac.uk/camneuro-events/neurotechnology-and-the-future-of-thought-a-cambrain-panel-discussion/\" class=\"su-button su-button-style-flat\" style=\"color:#000000;background-color:#FEC211;border-color:#cc9c0e;border-radius:5px\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"color:#000000;padding:0px 20px;font-size:16px;line-height:32px;border-color:#ffd559;border-radius:5px;text-shadow:none\"> Event Website</span></a>\n<p>&nbsp;</p>",
+   "excerpt": "",
+   "slug": "neurotechnology-and-the-future-of-thought-a-cambrain-panel-discussion",
+   "all_day": false,
+   "start_date": "2026-11-04 18:00:00",
+   "start_date_details": {
+    "year": "2026",
+    "month": "11",
+    "day": "04",
+    "hour": "18",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "end_date": "2026-11-04 20:30:00",
+   "end_date_details": {
+    "year": "2026",
+    "month": "11",
+    "day": "04",
+    "hour": "20",
+    "minutes": "30",
+    "seconds": "00"
+   },
+   "utc_start_date": "2026-11-04 18:00:00",
+   "utc_start_date_details": {
+    "year": "2026",
+    "month": "11",
+    "day": "04",
+    "hour": "18",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "utc_end_date": "2026-11-04 20:30:00",
+   "utc_end_date_details": {
+    "year": "2026",
+    "month": "11",
+    "day": "04",
+    "hour": "20",
+    "minutes": "30",
+    "seconds": "00"
+   },
+   "timezone": "UTC+0",
+   "timezone_abbr": "UTC+0",
+   "cost": "Free",
+   "cost_details": {
+    "currency_symbol": "",
+    "currency_code": "",
+    "currency_position": "",
+    "values": [
+     "0"
+    ]
+   },
+   "website": "https://neuroscience.cam.ac.uk/camneuro-events/neurotechnology-and-the-future-of-thought-a-cambrain-panel-discussion/",
+   "show_map": true,
+   "show_map_link": true,
+   "hide_from_listings": false,
+   "sticky": false,
+   "featured": false,
+   "categories": [
+    {
+     "name": "Awards and External Networks",
+     "slug": "awards-and-external-networks",
+     "term_group": 0,
+     "term_taxonomy_id": 2986,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 2,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 2986,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/2986",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "CamBRAIN",
+     "slug": "cambrain",
+     "term_group": 0,
+     "term_taxonomy_id": 104,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 6,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 104,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/104",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "EDIW",
+     "slug": "ediw",
+     "term_group": 0,
+     "term_taxonomy_id": 105,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 4,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 105,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/105",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Engagement - Public",
+     "slug": "engagement-public",
+     "term_group": 0,
+     "term_taxonomy_id": 116,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 2,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 116,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/116",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Masters",
+     "slug": "masters",
+     "term_group": 0,
+     "term_taxonomy_id": 3060,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 2,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 3060,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/3060",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Open science and reproducibility",
+     "slug": "open-science-and-reproducibility",
+     "term_group": 0,
+     "term_taxonomy_id": 330,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 3,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 330,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/330",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "PNN",
+     "slug": "pnn",
+     "term_group": 0,
+     "term_taxonomy_id": 106,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 4,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 106,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/106",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Postgraduate",
+     "slug": "postgraduate",
+     "term_group": 0,
+     "term_taxonomy_id": 3058,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 2,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 3058,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/3058",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Research",
+     "slug": "research",
+     "term_group": 0,
+     "term_taxonomy_id": 3056,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 7,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 3056,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/3056",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Undergraduate",
+     "slug": "undergraduate",
+     "term_group": 0,
+     "term_taxonomy_id": 3059,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 2,
+     "filter": "raw",
+     "term_order": "0",
+     "id": 3059,
+     "urls": {
+      "self": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories/3059",
+      "collection": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/categories"
+     }
+    }
+   ],
+   "tags": [],
+   "venue": [],
+   "organizer": [],
+   "custom_fields": [],
+   "ticketed": [
+    "rsvp"
+   ],
+   "is_virtual": false,
+   "virtual_url": null,
+   "virtual_video_source": ""
+  }
+ ],
+ "rest_url": "https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/events/?page=1&per_page=10&start_date=2026-10-30 00:00:00&end_date=2028-10-31 23:59:59&status=publish",
+ "total": 1,
+ "total_pages": 1,
+ "_fixture": "Recorded from https://neuroscience.cam.ac.uk/wp-json/tribe/events/v1/events (fetched 2026-10-31 by camsocs-bot); image fields removed"
+}

@@ -15,6 +15,7 @@ pixi run pipeline -- sync --dry-run      # every stage, no credentials needed, n
 pixi run pipeline -- sync                # health → runs/start → stages → runs/finish
 pixi run pipeline -- sync --stages term_dates,load --limit 20
 pixi run pipeline -- sync --group events # the daily run (below); --group full = harvest
+pixi run pipeline -- sync --group talks  # the talks pillar alone (below); add --dry-run to post nothing
 pixi run pipeline -- derive              # re-derive statuses / term weeks / stale flags now
 pixi run pipeline -- purge-dev --yes     # empty pipeline tables on the DEV deployment only
 pixi run pipeline -- worklist            # rank societies for mailing-list sign-up → var/reports/
@@ -40,18 +41,23 @@ work — a cron that sees success because most of it worked is how a broken sour
 and `--summary-json PATH`, which writes the run's outcome for a scheduler: per-stage counts, one
 line per stage, warnings, and the `report` stage's coverage numbers.
 
-### Scheduled runs: `--group events` and `--group full`
+### Scheduled runs: `--group events`, `--group full` (and `--group talks` by hand)
 
 `sync --group <name>` runs one entry of `GROUPS` (`stages/__init__.py`, which lists what each
 daily stage reads). The VPS host runs both under systemd timers (decision D5,
 `docs/ops-vps.md`):
 
 - **events**, daily (`pixi run harvest-events`): `term_dates`, every events stage but the
-  University's, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
+  University's, `talks`, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
   organisation, so it reads what the last full run staged — `_resolved`, `society_website`,
   `su_profile` — and stops before any request when one was never staged ("run the full group
   first"); older than eight days, they still serve and the run carries a warning.
 - **full**, weekly (`pixi run harvest`): every stage, then the re-derivation.
+- **talks**, by hand: the `talks` stage alone (below). The daily group runs it too, since
+  talks change daily (cancellations) and the VPS timers run only `events` and `full`; its run
+  time is bounded (at most 120 talks.cam pages at Crawl-delay 10 and 30 minutes of wall time
+  for talks.cam, and 20 minutes for the department sites), so the daily run stays inside its
+  2-hour limit.
 
 ### The full harvest: `pixi run harvest`
 
@@ -165,6 +171,37 @@ meta and last-failure note go together, once all are older), LLM replies under
   because Camdram and CUCBC also feed harvest stages. Stages that read the network say
   `fetches=True` in the registry. Times, the window, recurrence and the bogus-time-zone
   heuristic are documented in `events/common.py` and `events/ics.py`.
+- **talks** (decision D7, `camsocs_pipeline/talks/`, docs/talks-redesign-spec.md §2–§4) is
+  the academic talks pillar. It is **parser-only, zero-LLM**: every talk source type
+  (`talks_cam`, `dept_*`) is in `claims.NO_LLM_SOURCE_TYPES`, and talks never pass through
+  claims, redaction or the noise model. It does not go through `load` either; it posts its own
+  tables:
+  1. the registry (`talks/departments.json`, `talks/registry.py`);
+  2. **talks.cam** (`talks/talkscam.py`): `GET /api/v1alpha1/talks/` for the window (London
+     midnight yesterday → 70 days ahead) in 7-day slices, each following `next` (talks.cam
+     only, ≤ 40 pages) and checked against `count`; general purpose, robots.txt for our
+     User-Agent, ≥ 10 s between requests, ≤ 120 pages and 30 minutes a run. Ex-directory talks are left out.
+     Speakers, cancellation, online and kind are rules (`talks/text.py`); the department comes
+     from the series id, then whole-word name/alias matches, then venue hints
+     (`talks/mapping.py`);
+  3. every registry **department source** through the parser hook
+     `talks.sites.collect(dept, source, client, window) -> list[TalkRecord]` (general
+     purpose: robots.txt always holds). No `talks.sites` module, or `NotImplementedError` for
+     a kind: the source is skipped; any other exception: it failed (the note names the
+     exception type only). Department sources share a 20-minute budget;
+  4. cross-source **dedupe** (`talks/dedupe.py`: same talks.cam id, or same normalised title
+     and London start minute; talks.cam wins, department keys are united; placeholder titles
+     never match);
+  5. `var/staging/talks/<run>.jsonl`, one posted `TalkWire` per line (not read by `load`;
+     `prune-cache` keeps the latest);
+  6. unless `--dry-run`, `talks/push.py`: `talks/departments` → `talks/batch` (≤ 200 a call,
+     `runId`) → `talks/sweep` (the window and the sources read completely with at least one
+     talk; never after a failed batch) → `talks/runs` (the run summary, also after a failure).
+
+  Its notes and the run summary hold counts, department keys, source indexes and exception
+  types only — never a title, a speaker or an abstract (talks.cam content must never reach a
+  model, and run notes are read by agents too). `--limit N` reads N talks.cam slices and N
+  department sources, and then sweeps nothing of talks.cam.
 - **load** posts every keyed observation from the latest file of each directory —
   `_resolved` first, since it creates the organisations later stages add fields to — through
   `ConvexLoader.post_observations`: sources → (images) → claims → orgInternal → relationships →
@@ -255,7 +292,7 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
 | `LLM_BASE_URL`, `LLM_API_KEY` | OpenAI-compatible endpoint |
 | `LLM_MODEL_BULK`, `LLM_MODEL_STRONG` | Model ids; any id starting with `claude` is refused |
 | `LLM_CONCURRENCY` | Parallel LLM calls (default 8) |
-| `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL, `camsocs-bot/0.1 (+https://camsocs.vercel.app/about)`; browser-like strings and any email address are refused |
+| `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL, `camsocs-bot/0.1 (+https://camsocs.uk/about)`; browser-like strings and any email address are refused |
 | `CAMSOCS_CACHE_DIR` | Raw response cache (default `<repo>/var/cache`) |
 | `CAMSOCS_STAGING_DIR` | Staged observations (default `<repo>/var/staging`) |
 | `CAMSOCS_STATE_PATH` | Run state file (default `<repo>/.camsocs-state.json`) |

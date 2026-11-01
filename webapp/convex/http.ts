@@ -227,6 +227,44 @@ ingestionRoute("purge", internal.ingest.purge.purge)
 readRoute("events/scan", internal.ingest.cleanup.eventsPage)
 ingestionRoute("events/remove", internal.ingest.cleanup.removeEvents)
 
+// The talks pillar (D7, convex/ingest/talks.ts): the department registry, talk
+// batches and the run summary; `talks/sweep` is below.
+ingestionRoute("talks/departments", internal.ingest.talks.departmentsUpsert)
+ingestionRoute("talks/batch", internal.ingest.talks.batch)
+ingestionRoute("talks/runs", internal.ingest.talks.runs)
+
+/** Sweep calls one request makes at most (each reads ≤ 1000 talks); far above
+ * a run's sources, so a request normally finishes the sweep. */
+const SWEEP_CALLS_PER_REQUEST = 200
+
+/**
+ * `POST /api/pipeline/talks/sweep` — `{ runId, from, to, sources, cursor? }` →
+ * `{ missing, done, cursor }`. The mutation is bounded per call
+ * (`ingest/talks.ts` `sweep`), so this repeats it with its cursor until done
+ * and sums `missing`. Should a request ever stop first, it answers `done:
+ * false` with the cursor to send back with the same body.
+ */
+http.route({
+  path: "/api/pipeline/talks/sweep",
+  method: "POST",
+  handler: pipelineRoute(async (ctx, request) => {
+    const body = await readJsonBody(request)
+    type SweepArgs = FunctionArgs<typeof internal.ingest.talks.sweep>
+    let cursor = (body.cursor ?? null) as SweepArgs["cursor"]
+    let missing = 0
+    for (let call = 0; call < SWEEP_CALLS_PER_REQUEST; call++) {
+      const page = await ctx.runMutation(
+        internal.ingest.talks.sweep,
+        asArgs<SweepArgs>({ ...body, cursor }),
+      )
+      missing += page.missing
+      if (page.done) return json({ missing, done: true, cursor: null }, 200)
+      cursor = page.cursor
+    }
+    return json({ missing, done: false, cursor }, 200)
+  }),
+})
+
 /**
  * `POST /api/pipeline/files` — `{ data: <base64>, contentType }` → the
  * `storageId` of our own copy (logos, event images, termcards: never

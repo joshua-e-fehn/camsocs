@@ -117,7 +117,7 @@ fi
 # For a build going nowhere, .env.example's development value is the honest
 # default. A deploying build that leaves it unset gets no default here:
 # lib/site.ts then falls back to the production origin
-# (https://camsocs.vercel.app), never to localhost — a shipped sitemap full of
+# (https://camsocs.uk), never to localhost — a shipped sitemap full of
 # http://localhost:3000 links would be served without complaint.
 if [ "$deploying" = false ]; then
   : "${NEXT_PUBLIC_SITE_URL:=http://localhost:3000}"

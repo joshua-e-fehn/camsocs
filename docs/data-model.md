@@ -246,7 +246,7 @@ An event row is created by its first claims, which must include `title`, `starts
 
 **Indexes:** `by_key`, `by_startsAt`, `by_visibility_startsAt`, `by_visibility_spanEndsAt`, `by_sweepGroup_lastSeenAt`, `by_imageStorageId` (`image.storageId`, for retention). A title search filters the window's events (every word in the title). Events are deleted, with their claims and organiser links, a year after they ended (`convex/retention.ts`, retention.md R3).
 
-`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, spanEndsAt?, visibility, hosting? }` (the last four denormalised from the event and kept in step; `hosting` absent on rows from before 2026-10-10 means the event says, and the daily re-derivation fills it in — so `lastActiveAt` skips the events an organisation only takes part in without reading them, however many CTFs a feed imports), with indexes `by_org_startsAt`, `by_org_spanEndsAt` and `by_event`. It exists for "events of organisation X". The pipeline sends an event's organiser set whole (`replace`), or — when the source names organisers it could not resolve — as `merge`, which adds and never removes.
+`eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, spanEndsAt?, visibility, hosting? }` (the last four denormalised from the event and kept in step; `hosting` absent on rows from before 2026-10-10 means the event says, and the daily re-derivation fills it in — so `lastActiveAt` skips the events an organisation only takes part in without reading them, however many CTFs a feed imports), with indexes `by_org_startsAt`, `by_org_spanEndsAt`, `by_visibility_startsAt` and `by_event`. It exists for "events of organisation X", and for counting activity without reading the events (the directory's "Most active" order, `orgs.list` `sort: "active"`, ranks by the public rows of the term). The pipeline sends an event's organiser set whole (`replace`), or — when the source names organisers it could not resolve — as `merge`, which adds and never removes.
 
 ### venues
 
@@ -284,6 +284,24 @@ Graph edges between organisations.
 | sourceUrl | the official page |
 
 The table is seeded from the University's published Full Term dates (source-research §19) and is used for `termWeekLabel`.
+
+## 2a. The talks pillar (decision D7)
+
+Academic talks across the departments (`docs/talks-redesign-spec.md` §2–§4). They are **not** claims: one talk listing is the provenance unit (`sourceUrl`, `retrievedAt` per talk), so rows are written whole by `convex/ingest/talks.ts` behind `POST /api/pipeline/talks/{departments,batch,sweep,runs}`, never field by field, and need no D1 redaction (speakers are the point of a listing; talks.cam titles are works). Vocabularies: `TALK_SCHOOLS`, `TALK_KINDS`, `TALK_SOURCE_TYPES`, `TALK_LISTINGS`, `TALK_RUN_STATUSES`.
+
+| Table | Fields | Indexes |
+|---|---|---|
+| departments | `key` (`dept-<slug>`), `slug`, `name`, `shortName`, `school`, `website`, `aliases[]`, `createdAt`, `updatedAt`. Never deleted; slugs never reused | `by_key`, `by_slug`, `by_school` |
+| talks (public, ~1 KB) | `key` (`talk-` + sha1(`sourceType:externalId`)[:20]), `sourceType`, `source` (sweep scope: `talks_cam` or `<deptKey>#<i>`), `externalId`, `url`, `sourceUrl`, `retrievedAt`, `title` ≤ 500, `speakers` ≤ 10, `series?` ≤ 300, `departmentKeys[]` (first = primary), derived `primaryDepartmentKey \| null`, `school \| null` (the primary department's) and `searchText`, `startsAt`, `endsAt \| null`, `allDay`, `venue \| null` ≤ 300, `online`, `kind`, `cancelled`, `listing` (`listed \| missing`), `firstSeenAt`, `lastSeenAt`, `lastRunId`, `updatedAt` (content changes only) | `by_key`, `by_listing_startsAt`, `by_listing_school_startsAt`, `by_listing_dept_startsAt`, `by_source_startsAt`; search `search_text` (filters `listing`, `school`, `primaryDepartmentKey`) |
+| talkDetails | `talkKey`, `abstract?` ≤ 4000, `specialMessage?` ≤ 1000. Only `talks.get` returns them | `by_talkKey` |
+| talkRuns (internal) | `runId`, `status` (`ok \| partial \| error`), `startedAt`, `finishedAt`, `sourcesOk`, `sourcesFailed`, `talksReceived`, `inserted`, `updated`, `unchanged`, `missing`, `errors[]` (≤ 50 × 500 chars) | `by_runId`, `by_finishedAt` |
+| talkStats | one row (`scope: "talks"`): `thisWeek`, `next28Days`, `byDepartment[key] = {upcomingCount, nextStartsAt}`, `otherSeries`, `departmentsTotal`, `startedAt`, `computedAt` | `by_scope` |
+
+- **Sweep.** A source read completely in a run marks its talks in `[from, to)` that the run did not post and that have not started yet `missing` (never deleted; a talk that already started stays listed until retention, since many sources list upcoming talks only); a later post lists them again. Public queries return `listed` rows only.
+- **Start day only.** `talks.list` and `talks.dayCounts` select by `startsAt`: a talk spanning several days (a workshop or conference; `endsAt` may be up to 31 days after the start) shows on its first day only, and not in a window that starts after it. Unlike events there is no `spanEndsAt`.
+- **Counts** (non-cancelled, primary department) live in `talkStats`, refreshed after a finished sweep and daily, so no public query scans `talks`.
+- **Retention.** A daily cron deletes talks and their details 30 days after `endsAt ?? startsAt`.
+- **Suppressions** (§3 `suppressions`, scopes `name` and `contact`). Talks are not claims, so they are enforced on the talk itself (`lib/talks.ts` `scrubTalkText`): `talks/batch` drops a speaker whose name is suppressed (by its hash, whatever its case, or a suppressed name inside it) and cuts suppressed names (`[name removed]`) and addresses (`[address removed]`) out of the title, series, venue, affiliations, abstract and special message before storing, so `searchText` never holds them and no run brings them back. Accepting such a suppression schedules `ingest/talks:scrubStored`, a page-at-a-time rewrite of the stored talks and details. Until it has run, `talks.get`, `list` (and so the `.ics` feeds) and `search` apply the same scrub, and `search` leaves out a talk whose stored text still carries the name or address. Lifting one needs no walk back: the next run posts the talk as its source lists it. There is no per-talk scope yet: removing a whole talk durably is not possible.
 
 ## 3. Pipeline-owned internal tables
 

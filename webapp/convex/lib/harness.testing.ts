@@ -27,6 +27,7 @@ const appModules = {
   "./orgs.ts": () => import("../orgs"),
   "./retention.ts": () => import("../retention"),
   "./runs.ts": () => import("../runs"),
+  "./talks.ts": () => import("../talks"),
   "./termDates.ts": () => import("../termDates"),
   "./venues.ts": () => import("../venues"),
   "./broker/graph.ts": () => import("../broker/graph"),
@@ -48,6 +49,7 @@ const appModules = {
   "./ingest/relationships.ts": () => import("../ingest/relationships"),
   "./ingest/sources.ts": () => import("../ingest/sources"),
   "./ingest/suppressions.ts": () => import("../ingest/suppressions"),
+  "./ingest/talks.ts": () => import("../ingest/talks"),
   "./ingest/termDates.ts": () => import("../ingest/termDates"),
 }
 

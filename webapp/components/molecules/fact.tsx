@@ -6,17 +6,21 @@ import { cn } from "@/lib/utils"
  * One fact on a public page: a label, its value and the SourceLine beneath.
  * Render inside a `<dl>`. A field that does not apply (`not_applicable`) is
  * left out entirely; a missing one keeps its row and says so — unknown is
- * shown as unknown, never as an empty space.
+ * shown as unknown, never as an empty space. With `showSource={false}` the
+ * SourceLine is left to the section's "Sourced" chip (SourcedChip), which
+ * lists every fact's source in one place.
  */
 export function Fact({
   label,
   meta,
   children,
+  showSource = true,
   className,
 }: {
   label: string
   meta: PublicFieldMeta | undefined
   children?: React.ReactNode
+  showSource?: boolean
   className?: string
 }) {
   if (meta?.status === "not_applicable") return null
@@ -29,7 +33,7 @@ export function Fact({
         {known && children !== undefined && children !== null && children !== false && (
           <div className="text-sm leading-relaxed">{children}</div>
         )}
-        <SourceLine meta={meta} />
+        {(showSource || !known) && <SourceLine meta={meta} />}
       </dd>
     </div>
   )

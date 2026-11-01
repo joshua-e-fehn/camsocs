@@ -28,7 +28,10 @@ export function ProseSection({
         className,
       )}
     >
-      <h2 id={`${id}-title`} className="text-xl font-semibold tracking-tight text-foreground">
+      <h2
+        id={`${id}-title`}
+        className="font-serif text-2xl font-normal tracking-[-0.01em] text-foreground"
+      >
         {title}
       </h2>
       {children}

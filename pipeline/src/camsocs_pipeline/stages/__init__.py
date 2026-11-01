@@ -1,6 +1,6 @@
 """The ordered stage registry — the one list `sync` runs.
 
-    seed → harvest → resolve → enrich → classify → events → inbox → load → report
+    seed → harvest → resolve → enrich → classify → events → talks → inbox → load → report
 
 ## Convention for adding a stage (parallel agents: read this)
 
@@ -38,6 +38,8 @@ still holds):
 
 - ``full`` — every stage, then the server's re-derivation; weekly
   (`pixi run harvest`, the VPS's Sunday timer).
+- ``talks`` — the `talks` stage alone, for a run by hand (`sync --group
+  talks`); the daily group runs it too.
 - ``events`` — the day's events; daily (`pixi run harvest-events`, the VPS's
   04:30 timer). It harvests no organisation itself, so it reads what the
   last full run left in `var/staging` and `var/cache`:
@@ -54,6 +56,17 @@ still holds):
     cached pages);
   - termcards, instagram, inbox: termcard URLs, Instagram handles, lists,
     addresses and domains — su_directory, resolve and enrich;
+  - talks: nothing earlier runs left (the department registry is in the
+    repo); it posts its own tables (`talks/*`, decision D7) rather than
+    through load. It is in the daily group because talks change daily
+    (cancellations, new dates) and the VPS timers run only ``events`` and
+    ``full``. It runs after load, so a slow talks.cam day can only delay
+    its own tables, never the day's events. Its run time is bounded: talks.cam at most
+    `talkscam.MAX_TOTAL_PAGES` pages at Crawl-delay 10 (20 minutes; a normal
+    day is a few minutes) and `talkscam.READ_BUDGET` (30 minutes, for timeouts
+    and retries) plus the slice in flight, the department sites
+    `stage.DEPARTMENT_BUDGET` (20 minutes) plus the source in flight — about an
+    hour in the worst case, inside the 2-hour limit.
   - load: the latest file of every staging directory.
 
   So it ``needs`` ``_resolved``, ``society_website`` and ``su_profile``: a
@@ -158,6 +171,16 @@ STAGES: list[Stage] = [
     # ── load: every keyed observation → Convex ──────────────────────────────────
     Stage("load", requires=("resolve",), description="staged observations → Convex"),
     #
+    # ── talks (D7): the academic talks pillar; posts its own tables ───────────
+    # talks.cam API + department sites → talks/* routes (talks-redesign-spec §2–§4).
+    # After load: it needs nothing load does, and a slow talks.cam day must
+    # never keep the day's events from reaching Convex before the time limit.
+    Stage(
+        "talks",
+        fetches=True,
+        description="talks.cam + department sites → talks (parser only, posts itself)",
+    ),
+    #
     # ── report (T14): coverage report ───────────────────────────────────────────
     # Reads the directory back from Convex → var/reports/coverage-<date>.md.
     Stage("report", description="coverage → var/reports/coverage-<date>.md (read-only)"),
@@ -181,6 +204,7 @@ GROUPS: dict[str, StageGroup] = {
             "instagram",
             "termcards",
             "load",
+            "talks",
             "report",
         ),
         needs=(RESOLVED, "society_website", "su_profile"),
@@ -191,6 +215,11 @@ GROUPS: dict[str, StageGroup] = {
         "full",
         derive=True,
         description="weekly: every stage in registry order, then the re-derivation",
+    ),
+    "talks": StageGroup(
+        "talks",
+        stages=("talks",),
+        description="the talks pillar alone: talks.cam + department sites → talks/*",
     ),
 }
 

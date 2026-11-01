@@ -1,8 +1,8 @@
 # Legitimate interests assessment (UK GDPR Art 6(1)(f))
 
-Controller: Joshua Fehn (individual). Assessed 2026-10-07; review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
+Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, 2026-11-01); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
 
-The ICO three-part test — purpose, necessity, balance — is applied to two processing activities separately, because their risk differs: **A** the public directory and calendar, and **B** the private broker CRM. Activity numbers (P1…) refer to `record-of-processing.md`.
+The ICO three-part test — purpose, necessity, balance — is applied to three processing activities separately, because their risk differs: **A** the public directory and calendar, **B** the private broker CRM, and **C** the talks pillar. Activity numbers (P1…) refer to `record-of-processing.md`.
 
 ## A. Public directory and events calendar (P1, P2, P3, P5, P8)
 
@@ -58,6 +58,33 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 
 **Conclusion:** legitimate interests applies to B only with every safeguard above, and only while the data stays private. Publishing any of it, selling it, or sending marketing without consent would fail the balance test.
 
+## C. Talks pillar (P10, decision D7)
+
+### Purpose
+
+- Public academic talks are spread over talks.cam and about 111 department and institute sites, each with its own format; a student or researcher cannot see in one place what is on across the University this week.
+- Organisers publish talks so that people come to them; the speaker is the point of a talk listing.
+
+### Necessity
+
+- The talk's own facts (title, time, place, series, abstract) and its speakers' names and affiliations exactly as the organiser published them. Speakers are not replaced by roles (D1 does not apply): a talk without its speaker is not useful, and the listing is public for that purpose.
+- Nothing is inferred or added about a speaker, and speakers are not matched across talks or sources into a profile: there is no speaker page, index or search by person beyond the talk text itself.
+- Parser code only: no LLM reads talks.cam or a department's pages, which also keeps their robots.txt AI opt-outs intact; camsocs's own robots.txt asks AI crawlers to keep off `/talks` and its feeds.
+- Short retention: a talk and its details are deleted 30 days after it ended (`retention.md` R11). A talk its source no longer lists is marked `missing` and is not shown.
+- Less intrusive alternatives considered: linking out without the speaker (rejected: the speaker is what a reader chooses a talk by); copying only talks.cam (rejected: many departments do not use it).
+
+### Balance
+
+| Factor | Assessment |
+|---|---|
+| Nature of the data | Professional names and affiliations of speakers at public academic events; abstracts are the organisers' own words. No special category data sought or inferred |
+| Reasonable expectations | A speaker announced on a public University listing expects the talk to be advertised, including in calendars and aggregators; talks.cam itself publishes an API and calendar feeds for that purpose |
+| Source | Public listings only; talks.cam at most one request every 10 s; department sites only where their robots.txt allows (the society override, D3, never applies); nothing behind Raven |
+| Impact | Low: wider notice of a talk the speaker agreed to give in public. Republication is limited to what the organiser published, for at most 30 days after the talk |
+| Safeguards | Each talk links to its source and says when it was read; parser-only reading; 30-day deletion; removal or correction through the request form, honoured by a name or contact suppression that the talks ingestion and the stored talks both apply (`retention.md` R8, R11); AI crawlers disallowed on `/talks` |
+
+**Conclusion:** legitimate interests applies to C, provided speakers stay as published, nothing is inferred or aggregated about them, and the 30-day deletion and suppression stay automated.
+
 ## Objection handling
 
-An objection from a society to its listing (A) is honoured by removing the listing; one from a person to a role address that identifies them is honoured by removing that address. An objection to B is honoured by deleting the person's rows and suppressing re-collection. Direct-marketing objections are absolute (Art 21(3)).
+An objection from a society to its listing (A) is honoured by removing the listing; one from a speaker to a talk (C) by suppressing their name, which removes it from every stored and future talk; one from a person to a role address that identifies them is honoured by removing that address. An objection to B is honoured by deleting the person's rows and suppressing re-collection. Direct-marketing objections are absolute (Art 21(3)).

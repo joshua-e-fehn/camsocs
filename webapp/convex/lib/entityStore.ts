@@ -4,6 +4,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { isWithdrawn, type TermDates } from "./derived"
 import { sameFields } from "./ingest"
 import { type DeriveContext, type LatestEvent, materialise } from "./materialise"
+import { runKeyOf } from "./orgActivity"
 import type { FieldMeta } from "./resolve"
 
 /**
@@ -179,45 +180,60 @@ export async function refreshOrganisation(
   return true
 }
 
-/** The fields `eventOrganisers` rows copy from their event. */
-export type EventOrganiserCopy = Pick<
+/** What an `eventOrganisers` row copies from its event. */
+export type EventOrganiserSource = Pick<
   Doc<"events">,
-  "startsAt" | "spanEndsAt" | "visibility" | "hosting"
+  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "title" | "cancelled"
 >
 
-export function eventOrganiserCopy(event: EventOrganiserCopy): EventOrganiserCopy {
+/** The fields `eventOrganisers` rows hold copied from their event. */
+export type EventOrganiserCopy = Pick<
+  Doc<"eventOrganisers">,
+  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "runKey" | "cancelled"
+>
+
+export function eventOrganiserCopy(event: EventOrganiserSource): EventOrganiserCopy {
   return {
     startsAt: event.startsAt,
     spanEndsAt: event.spanEndsAt,
     visibility: event.visibility,
     hosting: event.hosting ?? "hosts",
+    runKey: runKeyOf(event.title),
+    cancelled: event.cancelled,
   }
 }
 
-/** Whether an event's copied fields changed between two versions; a row or
- * event without `hosting` hosts (every row from before decision D6). */
-export function organiserCopyChanged(before: EventOrganiserCopy, after: EventOrganiserCopy) {
+/** Whether a row's copy differs from `copy`; a row without `hosting` hosts
+ * (every row from before decision D6), and one without `runKey` or
+ * `cancelled` predates those copies (so it differs, and is filled in). */
+function copyDiffers(row: EventOrganiserCopy, copy: EventOrganiserCopy): boolean {
   return (
-    before.startsAt !== after.startsAt ||
-    before.spanEndsAt !== after.spanEndsAt ||
-    before.visibility !== after.visibility ||
-    (before.hosting ?? "hosts") !== (after.hosting ?? "hosts")
+    row.startsAt !== copy.startsAt ||
+    row.spanEndsAt !== copy.spanEndsAt ||
+    row.visibility !== copy.visibility ||
+    (row.hosting ?? "hosts") !== (copy.hosting ?? "hosts") ||
+    row.runKey !== copy.runKey ||
+    row.cancelled !== copy.cancelled
   )
+}
+
+/** Whether an event's copied fields changed between two versions. */
+export function organiserCopyChanged(before: EventOrganiserSource, after: EventOrganiserSource) {
+  return copyDiffers(eventOrganiserCopy(before), eventOrganiserCopy(after))
 }
 
 /** Keeps the event's denormalised copies on `eventOrganisers` in step. */
 export async function syncEventOrganiserRows(
   ctx: MutationCtx,
-  event: Pick<Doc<"events">, "key"> & EventOrganiserCopy,
+  event: Pick<Doc<"events">, "key"> & EventOrganiserSource,
 ): Promise<string[]> {
   const rows = await ctx.db
     .query("eventOrganisers")
     .withIndex("by_event", (q) => q.eq("eventKey", event.key))
     .take(200)
+  const copy = eventOrganiserCopy(event)
   for (const row of rows) {
-    if (organiserCopyChanged(row, event)) {
-      await ctx.db.patch("eventOrganisers", row._id, eventOrganiserCopy(event))
-    }
+    if (copyDiffers(row, copy)) await ctx.db.patch("eventOrganisers", row._id, copy)
   }
   return rows.map((row) => row.orgKey)
 }

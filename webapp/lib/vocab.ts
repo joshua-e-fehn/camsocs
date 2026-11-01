@@ -364,6 +364,46 @@ export type EventOrganiserRole = (typeof EVENT_ORGANISER_ROLES)[number]
 export const EVENT_HOSTING = ["hosts", "takes_part"] as const
 export type EventHosting = (typeof EVENT_HOSTING)[number]
 
+// --- talks (talks-redesign-spec §2–§4, decision D7) ---------------------------------
+
+/** The University School a department belongs to (`departments.school`;
+ * `talks.school` is its primary department's). `other` covers non-School
+ * institutions, museums, college lecture series and partner institutes. */
+export const TALK_SCHOOLS = [
+  "arts_humanities",
+  "humanities_social_sciences",
+  "biological_sciences",
+  "clinical_medicine",
+  "physical_sciences",
+  "technology",
+  "other",
+] as const
+export type TalkSchool = (typeof TALK_SCHOOLS)[number]
+
+export const TALK_KINDS = ["seminar", "lecture", "workshop", "conference", "other"] as const
+export type TalkKind = (typeof TALK_KINDS)[number]
+
+/** Which parser read a talk: talks.cam's API or one kind of department feed or
+ * page. Every one is parser-only (no model reads them). */
+export const TALK_SOURCE_TYPES = [
+  "talks_cam",
+  "dept_ics",
+  "dept_rss",
+  "dept_json",
+  "dept_jsonld",
+  "dept_drupal",
+] as const
+export type TalkSourceType = (typeof TALK_SOURCE_TYPES)[number]
+
+/** `missing`: a source read completely no longer lists the talk (the sweep);
+ * public queries return `listed` talks only. */
+export const TALK_LISTINGS = ["listed", "missing"] as const
+export type TalkListing = (typeof TALK_LISTINGS)[number]
+
+/** The outcome of one talks harvest (`talkRuns.status`), as the pipeline posts it. */
+export const TALK_RUN_STATUSES = ["ok", "partial", "error"] as const
+export type TalkRunStatus = (typeof TALK_RUN_STATUSES)[number]
+
 // --- relationships ---------------------------------------------------------------
 
 export const RELATIONSHIP_TYPES = [
@@ -700,6 +740,24 @@ export const EVENT_SOURCE_LABELS: Record<EventSource, string> = {
   termcard: "Termcard",
   website: "Society website",
   manual: "Added by hand",
+}
+
+export const TALK_SCHOOL_LABELS: Record<TalkSchool, string> = {
+  arts_humanities: "Arts and Humanities",
+  humanities_social_sciences: "Humanities and Social Sciences",
+  biological_sciences: "Biological Sciences",
+  clinical_medicine: "Clinical Medicine",
+  physical_sciences: "Physical Sciences",
+  technology: "Technology",
+  other: "Other institutions",
+}
+
+export const TALK_KIND_LABELS: Record<TalkKind, string> = {
+  seminar: "Seminar",
+  lecture: "Lecture",
+  workshop: "Workshop",
+  conference: "Conference",
+  other: "Other",
 }
 
 export const ROLE_LABELS: Record<Role, string> = {

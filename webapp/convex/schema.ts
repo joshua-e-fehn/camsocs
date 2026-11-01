@@ -40,6 +40,11 @@ import {
   ROBOTS_VERDICTS,
   SOURCE_TYPES,
   SUPPRESSION_SCOPES,
+  TALK_KINDS,
+  TALK_LISTINGS,
+  TALK_RUN_STATUSES,
+  TALK_SCHOOLS,
+  TALK_SOURCE_TYPES,
   TERM_SCOPES,
   TERMS,
 } from "../lib/vocab"
@@ -86,7 +91,7 @@ import { literalUnion } from "./lib/validators"
  *     (convex/lib/projections.ts). The internal tables (`fieldClaims`,
  *     `sources`, `orgInternal`, `harvestRuns`, `inboundEmails`,
  *     `listingRequests`, `storedFiles`, `suppressions`,
- *     `coverageSnapshots`) and the broker tables (`people`,
+ *     `coverageSnapshots`, `talkRuns`) and the broker tables (`people`,
  *     `orgBrokerProfiles`, `interactions`, `introductions`) are never
  *     returned by a public query; broker functions call `requireBrokerUser`.
  *     `cam_only` events need a verified @cam.ac.uk session; `members_only`
@@ -406,6 +411,115 @@ export const termDateFields = {
   /** The official page the dates were taken from. */
   sourceUrl: v.string(),
   ...stamps,
+}
+
+// --- talks pillar (talks-redesign-spec §4, decision D7) ----------------------------------
+//
+// Not claims: one talk listing is one provenance unit (`sourceUrl`,
+// `retrievedAt`), written whole by convex/ingest/talks.ts.
+
+/** A University department or institution that lists talks (the pipeline's
+ * `talks/departments.json` registry). Never deleted: keys and slugs are
+ * stable and never reused. */
+export const departmentFields = {
+  /** `dept-<slug>`. */
+  key: v.string(),
+  slug: v.string(),
+  name: v.string(),
+  shortName: v.string(),
+  school: literalUnion(TALK_SCHOOLS),
+  website: v.string(),
+  aliases: v.array(v.string()),
+  ...stamps,
+}
+
+/** One talk, kept light (about 1 KB): the abstract lives in `talkDetails`. */
+export const talkFields = {
+  /** `talk-` + sha1(`sourceType:externalId`)[:20] (pipeline talks/model.py). */
+  key: v.string(),
+  sourceType: literalUnion(TALK_SOURCE_TYPES),
+  /** The sweep scope: `talks_cam` or `<departmentKey>#<sourceIndex>`. */
+  source: v.string(),
+  externalId: v.string(),
+  /** The talk's public page. */
+  url: v.string(),
+  /** Where it was read (API page or feed). */
+  sourceUrl: v.string(),
+  retrievedAt: v.number(),
+  title: v.string(),
+  speakers: v.array(speakerValidator),
+  series: v.optional(v.string()),
+  /** First entry = primary; empty for an unmapped talks.cam series. */
+  departmentKeys: v.array(v.string()),
+  /** Derived: `departmentKeys[0]`, or null ("Other series"). */
+  primaryDepartmentKey: v.union(v.string(), v.null()),
+  /** Derived: the primary department's School. */
+  school: v.union(literalUnion(TALK_SCHOOLS), v.null()),
+  startsAt: v.number(),
+  endsAt: v.union(v.number(), v.null()),
+  allDay: v.boolean(),
+  venue: v.union(v.string(), v.null()),
+  online: v.boolean(),
+  kind: literalUnion(TALK_KINDS),
+  cancelled: v.boolean(),
+  listing: literalUnion(TALK_LISTINGS),
+  firstSeenAt: v.number(),
+  lastSeenAt: v.number(),
+  lastRunId: v.string(),
+  /** Stamped when what the talk says changed (not on a re-sighting). */
+  updatedAt: v.number(),
+  /** Derived, lower case: title, speakers and affiliations, series, venue and
+   * department short names. */
+  searchText: v.string(),
+}
+
+export const talkDetailFields = {
+  talkKey: v.string(),
+  /** Plain text, at most 4000 characters. */
+  abstract: v.optional(v.string()),
+  specialMessage: v.optional(v.string()),
+}
+
+/** One talks harvest, as the pipeline summarises it (`talks/runs`). */
+export const talkRunFields = {
+  runId: v.string(),
+  status: literalUnion(TALK_RUN_STATUSES),
+  startedAt: v.number(),
+  finishedAt: v.number(),
+  sourcesOk: v.number(),
+  sourcesFailed: v.number(),
+  talksReceived: v.number(),
+  inserted: v.number(),
+  updated: v.number(),
+  unchanged: v.number(),
+  missing: v.number(),
+  /** At most 50, each at most 500 characters (aggregates, never page text). */
+  errors: v.array(v.string()),
+  ...stamps,
+}
+
+/** Upcoming talks of one department (or of no department). */
+export const talkDepartmentCountValidator = v.object({
+  upcomingCount: v.number(),
+  nextStartsAt: v.union(v.number(), v.null()),
+})
+
+/** The one precomputed counts row the talks index and the home page read, so
+ * no public query scans the talks (convex/ingest/talks.ts `refreshStats`). */
+export const talkStatsFields = {
+  scope: v.literal("talks"),
+  /** Listed, not cancelled, starting in the London week of `computedAt`. */
+  thisWeek: v.number(),
+  /** Listed, not cancelled, starting in the 28 days after `computedAt`. */
+  next28Days: v.number(),
+  /** Per department key, over the same 28 days; departments with none are absent. */
+  byDepartment: v.record(v.string(), talkDepartmentCountValidator),
+  /** Talks with no department. */
+  otherSeries: talkDepartmentCountValidator,
+  /** Rows in `departments`. */
+  departmentsTotal: v.number(),
+  startedAt: v.number(),
+  computedAt: v.number(),
 }
 
 // --- pipeline-owned internal tables (data-model §3) --------------------------------------
@@ -800,9 +914,18 @@ export default defineSchema({
      * events without reading them; absent on rows written before it (read
      * from the event then; the daily re-derivation fills it in). */
     hosting: v.optional(literalUnion(EVENT_HOSTING)),
+    /** A hash of the event's normalised title (lib/orgActivity.ts `runKeyOf`):
+     * a show's nights share it, so a theatre run counts once a week, not per
+     * night. Absent on rows written before it (counted per event then; the
+     * daily re-derivation fills it in). */
+    runKey: v.optional(v.string()),
+    /** The event's `cancelled`, so activity counts skip cancelled events
+     * without reading them; absent as above (counted then). */
+    cancelled: v.optional(v.boolean()),
   })
     .index("by_org_startsAt", ["orgKey", "startsAt"])
     .index("by_org_spanEndsAt", ["orgKey", "spanEndsAt"])
+    .index("by_visibility_startsAt", ["visibility", "startsAt"])
     .index("by_event", ["eventKey"]),
   venues: defineTable(venueFields).index("by_key", ["key"]),
   relationships: defineTable(relationshipFields)
@@ -810,6 +933,27 @@ export default defineSchema({
     .index("by_from", ["fromKey", "type"])
     .index("by_to", ["toKey", "type"]),
   termDates: defineTable(termDateFields).index("by_year_term", ["academicYear", "term"]),
+
+  // public, pipeline-owned: the talks pillar (D7)
+  departments: defineTable(departmentFields)
+    .index("by_key", ["key"])
+    .index("by_slug", ["slug"])
+    .index("by_school", ["school"]),
+  talks: defineTable(talkFields)
+    .index("by_key", ["key"])
+    .index("by_listing_startsAt", ["listing", "startsAt"])
+    .index("by_listing_school_startsAt", ["listing", "school", "startsAt"])
+    .index("by_listing_dept_startsAt", ["listing", "primaryDepartmentKey", "startsAt"])
+    .index("by_source_startsAt", ["source", "startsAt"])
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["listing", "school", "primaryDepartmentKey"],
+    }),
+  talkDetails: defineTable(talkDetailFields).index("by_talkKey", ["talkKey"]),
+  talkRuns: defineTable(talkRunFields)
+    .index("by_runId", ["runId"])
+    .index("by_finishedAt", ["finishedAt"]),
+  talkStats: defineTable(talkStatsFields).index("by_scope", ["scope"]),
 
   // internal, pipeline-owned
   fieldClaims: defineTable(fieldClaimFields)

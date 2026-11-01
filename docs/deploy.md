@@ -7,7 +7,7 @@ How the production site goes live: a **Convex production deployment** (separate 
 **Never export `CONVEX_DEPLOY_KEY`** in a shell (AGENTS.md). It overrides `.env.local`, and has deployed one project's functions onto another project's production before. A key belongs in Vercel's production environment, or on the one command line that uses it.
 
 ```
-browser ──► Vercel (camsocs.vercel.app, root dir webapp/) ──► Convex prod  ◄── pipeline --env prod
+browser ──► Vercel (camsocs.uk, root dir webapp/) ──► Convex prod  ◄── pipeline --env prod
                                                                                  (VPS timers, docs/ops-vps.md;
                                                                                   by hand from the laptop until then)
                  │ build: convex-deploy-if-key.sh → bunx convex deploy (prod functions + schema)
@@ -59,7 +59,7 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    |---|---|---|---|
    | `NEXT_PUBLIC_CONVEX_URL` | `https://<prod>.convex.cloud` | `https://hushed-rhinoceros-215.convex.cloud` | Required: a Vercel build without both Convex URLs fails on purpose (`scripts/build-env-defaults.sh`) |
    | `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://<prod>.convex.site` | `https://hushed-rhinoceros-215.convex.site` | Same deployment as the line above (`lib/convex-url.ts` checks) |
-   | `NEXT_PUBLIC_SITE_URL` | `https://camsocs.vercel.app` | unset | Unset, `lib/site.ts` falls back to `https://camsocs.vercel.app` (never localhost on Vercel) — previews keep canonical links on production |
+   | `NEXT_PUBLIC_SITE_URL` | `https://camsocs.uk` | unset | Unset, `lib/site.ts` falls back to `https://camsocs.uk` (never localhost on Vercel) — previews keep canonical links on production |
    | `CONVEX_DEPLOY_KEY` | the production deploy key | **never** | Production only; a preview with it would deploy previews' code to production |
 
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
@@ -74,8 +74,9 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | Variable | Needed for | Value |
 |---|---|---|
 | `BETTER_AUTH_SECRET` | any sign-in | `openssl rand -base64 32` — a new one, not dev's |
-| `SITE_URL` | Better Auth's base URL and trusted origin | `https://camsocs.vercel.app` |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | admin sign-in (J2) | the OAuth client whose callbacks include `https://camsocs.vercel.app/api/auth/callback/google` |
+| `SITE_URL` | Better Auth's base URL and trusted origin | `https://camsocs.uk` |
+| `EXTRA_TRUSTED_ORIGINS` | further trusted origins, comma-separated (the old host while it redirects) | `https://camsocs.vercel.app` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | admin sign-in (J2) | the OAuth client whose callbacks include `https://camsocs.uk/api/auth/callback/google` |
 | `BROKER_EMAILS` | the private `/dashboard` | your Google address; unset = nobody |
 | `PIPELINE_API_KEY` | `/api/pipeline/*` | `openssl rand -hex 32` — a new one; the same value goes into `pipeline/.env.prod` |
 | `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3) | optional; both unset = the option shows as off |
@@ -109,16 +110,32 @@ Guards: a missing `pipeline/.env.prod` is an error, not a fall-back to dev. `CON
 
 ## 5. After the first deploy
 
-1. `https://camsocs.vercel.app/`, `/societies`, a profile, `/events` render with production data (empty until the first `--env prod sync`).
-2. `/robots.txt` names `https://camsocs.vercel.app/sitemap.xml`; `/sitemap.xml` lists the listings; `/opengraph-image` is the wordmark.
+1. `https://camsocs.uk/`, `/societies`, `/talks`, `/talks/departments`, a profile, `/events` render with production data (empty until the first `--env prod sync`; `/talks` until the first talks sync, §5 "Upgrading").
+2. `/robots.txt` names `https://camsocs.uk/sitemap.xml`; `/sitemap.xml` lists the listings; `/opengraph-image` is the wordmark.
 3. Sign in with Google → `/dashboard` opens (your address is in `BROKER_EMAILS`).
 4. The read-only e2e smoke suite runs against any URL, production included: it never lets a mutation through (`webapp/e2e/fixtures.ts`).
 
    ```bash
-   cd webapp && E2E_BASE_URL=https://camsocs.vercel.app bun run e2e
+   cd webapp && E2E_BASE_URL=https://camsocs.uk bun run e2e
    ```
 
    Its profile slugs are dev's listings; on production they exist only after the first harvest.
+
+### Upgrading production to the talks pillar (decision D7)
+
+For a production that already holds societies and events, deployed before the talks pillar. The order matters: the VPS pulls main at the start of every run, and its `talks` stage posts to routes that exist only once the functions are deployed.
+
+1. **Deploy first** (§1–§2): the build's `convex deploy` adds the talks tables (additive), the `/api/pipeline/talks/*` routes and the crons `talks-retention-daily` (04:30 UTC, retention R11) and `talks-stats-daily` (00:10). `/talks` shows its empty state, and the home page has no talks figure, until the first talks sync.
+2. **Then merge to main.** The next scheduled run (daily 04:30, or Sunday 02:00) runs `talks` with the other events stages (`docs/ops-vps.md` §1). Merged before the deploy, that run's `talks` stage fails against the old functions (the other stages still finish).
+3. **First talks sync — optional, on the host, under the lock**, so two hosts never read talks.cam at once; well away from 04:30 and Sunday 02:00:
+
+   ```bash
+   sudo -u camsocs -H bash -lc 'cd /opt/camsocs && flock -n /var/lib/camsocs/harvest.lock pixi run pipeline -- --env prod sync --group talks'
+   ```
+
+   Or simply wait for the next daily run. Not from the laptop while the VPS timers are on (§4).
+4. **Never seed production with demo talks.** `talks-demo-seed` is for dev only and refuses any `--env`.
+5. **Check** (§5): `/talks`, `/talks/departments` and `/talks.ics` (200, `text/calendar`) render; an unknown `/talks/talk-00000000000000000000` is a 404; `/robots.txt` disallows `/talks` for the AI crawlers. The smoke suite covers these.
 
 ## 6. Rolling back
 

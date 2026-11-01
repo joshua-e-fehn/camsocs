@@ -20,3 +20,9 @@ export type EventListItem = FunctionReturnType<typeof api.events.list>[number]
 /** One event with its details and provenance (`events.get`, the details sheet). */
 export type EventPublic = NonNullable<FunctionReturnType<typeof api.events.get>>
 export type VenuePublic = FunctionReturnType<typeof api.venues.list>[number]
+/** The "Busy this week" shelf (`orgs.busy`). */
+export type OrgBusy = FunctionReturnType<typeof api.orgs.busy>
+/** A profile's related listings (`orgs.related`). */
+export type OrgRelated = FunctionReturnType<typeof api.orgs.related>
+/** A talk in a list, agenda or search (`talks.list`, `talks.search`). */
+export type TalkListItem = FunctionReturnType<typeof api.talks.search>[number]

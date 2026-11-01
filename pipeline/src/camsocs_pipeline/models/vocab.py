@@ -370,6 +370,44 @@ EVENT_HOSTING: tuple[str, ...] = (
     "takes_part",
 )
 
+TALK_SCHOOLS: tuple[str, ...] = (
+    "arts_humanities",
+    "humanities_social_sciences",
+    "biological_sciences",
+    "clinical_medicine",
+    "physical_sciences",
+    "technology",
+    "other",
+)
+
+TALK_KINDS: tuple[str, ...] = (
+    "seminar",
+    "lecture",
+    "workshop",
+    "conference",
+    "other",
+)
+
+TALK_SOURCE_TYPES: tuple[str, ...] = (
+    "talks_cam",
+    "dept_ics",
+    "dept_rss",
+    "dept_json",
+    "dept_jsonld",
+    "dept_drupal",
+)
+
+TALK_LISTINGS: tuple[str, ...] = (
+    "listed",
+    "missing",
+)
+
+TALK_RUN_STATUSES: tuple[str, ...] = (
+    "ok",
+    "partial",
+    "error",
+)
+
 RELATIONSHIP_TYPES: tuple[str, ...] = (
     "sponsors",
     "co_hosted",

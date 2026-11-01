@@ -77,9 +77,9 @@ describe("views", () => {
     expect(viewWindow("month", "2027-02-10").days.length).toBe(28)
   })
 
-  test("the list view runs four weeks from its anchor", () => {
+  test("the list view runs one week from its anchor", () => {
     const window = viewWindow("list", "2026-10-08")
-    expect(window.days.length).toBe(28)
+    expect(window.days.length).toBe(7)
     expect(window.days[0]).toBe("2026-10-08")
   })
 
@@ -87,7 +87,7 @@ describe("views", () => {
     expect(shiftAnchor("week", "2026-10-08", 1)).toBe("2026-10-12")
     expect(shiftAnchor("month", "2026-01-31", 1)).toBe("2026-02-01")
     expect(shiftAnchor("month", "2026-01-15", -1)).toBe("2025-12-01")
-    expect(shiftAnchor("list", "2026-10-08", -1)).toBe("2026-09-10")
+    expect(shiftAnchor("list", "2026-10-08", -1)).toBe("2026-10-01")
     expect(addMonths("2026-12-05", 1)).toBe("2027-01-01")
   })
 })

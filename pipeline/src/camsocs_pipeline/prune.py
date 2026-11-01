@@ -8,6 +8,7 @@ all of them are older than the cutoff (a page re-fetched last week keeps its
 body). LLM replies (``var/cache/llm/<prompt>/…``) are one file each.
 
 Superseded staging files go too: ``var/staging/<dir>/<run>--<part>.jsonl``
+(and the talks stage's ``var/staging/talks/<run>.jsonl``)
 older than the cutoff, **except the latest file of each part**, which the
 next `load` still reads — staged observations hold names and addresses from
 public pages. Until the cutoff, `enrich` reads its older copies to restate
@@ -44,6 +45,8 @@ MAIL_AGE = timedelta(days=30)
 MAIL_PROMPTS = frozenset(
     {"email_events_v1", "image_events_v1", "event_noise_v2.mail", "redact_names_v2.mail"}
 )
+#: The talks stage's staging directory (`talks.stage.STAGING_DIRECTORY`).
+TALKS_STAGING = "talks"
 #: Staging that holds what was read from list mail.
 MAIL_STAGING = frozenset({"mailing_list_email", "mailing_list_email.events"})
 
@@ -149,6 +152,14 @@ def prune_staging(
                 result.kept += 1
                 continue
             _delete([path], "staging", result, dry_run)
+    # The talks stage's record of what it posted (`talks.stage`): not an
+    # observation directory, same rule — the latest file stays.
+    talks = sorted((staging_dir / TALKS_STAGING).glob("*.jsonl"))
+    for path in talks:
+        if path == talks[-1] or _mtime(path) >= cutoff:
+            result.kept += 1
+            continue
+        _delete([path], "staging", result, dry_run)
     return result
 
 

@@ -227,6 +227,25 @@ def test_retry_after_is_honoured(tmp_path: Path, net) -> None:
     assert 7.0 in clock.sleeps
 
 
+def test_a_retry_never_comes_sooner_than_the_crawl_delay(tmp_path: Path, net) -> None:
+    net.get("https://talks.example/robots.txt").respond(
+        200, text="User-agent: *\nCrawl-delay: 10\nAllow: /\n"
+    )
+    net.get("https://talks.example/").mock(
+        side_effect=[
+            httpx.Response(503, headers={"Retry-After": "1"}),
+            httpx.Response(200, text="back"),
+        ]
+    )
+    clock = FakeClock()
+
+    result = make_client(tmp_path, clock, min_interval=0.0).fetch("https://talks.example/")
+
+    assert result.outcome == "fetched"
+    # robots → page waits the delay, and the retry waits it again (not 1 s).
+    assert clock.sleeps == [pytest.approx(10.0), pytest.approx(10.0)]
+
+
 def test_transient_failures_back_off_then_give_up(tmp_path: Path, net) -> None:
     allow_all(net, "https://soc.example")
     page = net.get("https://soc.example/").respond(503)

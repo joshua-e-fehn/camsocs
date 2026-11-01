@@ -59,13 +59,24 @@ async function hiddenEventCount(orgKey: string, token: string | undefined) {
   }
 }
 
+/** Related listings for the profile; empty when they cannot be read — the
+ * page must not fail over a list of suggestions. */
+async function relatedOrgs(slug: string) {
+  try {
+    return await fetchQuery(api.orgs.related, { slug, limit: 6 })
+  } catch {
+    return []
+  }
+}
+
 export default async function SocietyPage({ params }: Props) {
   const page = await loadOrg((await params).slug)
   if (!page) notFound()
   const token = await getToken()
-  const [colleges, hiddenEvents] = await Promise.all([
+  const [colleges, hiddenEvents, related] = await Promise.all([
     fetchQuery(api.orgs.colleges, {}),
     hiddenEventCount(page.org.key, token),
+    relatedOrgs(page.org.slug),
   ])
   const collegeNames = Object.fromEntries(colleges.map((college) => [college.key, college.name]))
 
@@ -91,7 +102,12 @@ export default async function SocietyPage({ params }: Props) {
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD; `<` is escaped below
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
-      <OrgProfile page={page} collegeNames={collegeNames} hiddenEvents={hiddenEvents} />
+      <OrgProfile
+        page={page}
+        collegeNames={collegeNames}
+        hiddenEvents={hiddenEvents}
+        related={related}
+      />
     </>
   )
 }

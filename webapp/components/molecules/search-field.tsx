@@ -16,19 +16,22 @@ const DEBOUNCE_MS = 350
  * A search box that reports its text after a pause in typing (or at once on
  * Enter), so a URL-driven page re-queries once per thought, not per key. It
  * follows `value` when the URL changes underneath it (back button, a cleared
- * filter).
+ * filter). `size="lg"` is the directory's large rounded field (16 px text, so
+ * iOS does not zoom).
  */
 export function SearchField({
   value,
   onSearch,
   label,
   placeholder,
+  size = "md",
   className,
 }: {
   value: string
   onSearch: (q: string) => void
   label: string
   placeholder?: string
+  size?: "md" | "lg"
   className?: string
 }) {
   const [text, setText] = useState(value)
@@ -61,12 +64,19 @@ export function SearchField({
           schedule(text, 0)
         }}
       >
-        <InputGroup className="h-10">
+        <InputGroup
+          className={cn(
+            "h-10",
+            size === "lg" &&
+              "h-12 rounded-full bg-card pl-1.5 shadow-xs has-[input:focus]:shadow-sm",
+          )}
+        >
           <InputGroupAddon>
             <SearchIcon aria-hidden />
           </InputGroupAddon>
           <InputGroupInput
             type="search"
+            className={cn(size === "lg" && "text-base")}
             aria-label={label}
             placeholder={placeholder}
             value={text}
@@ -81,6 +91,8 @@ export function SearchField({
               <InputGroupButton
                 aria-label="Clear search"
                 size="icon-xs"
+                // 24 px to look at; a 44 px target on phones (DESIGN.md).
+                className="relative after:absolute after:-inset-2.5 sm:after:hidden"
                 onClick={() => {
                   setText("")
                   schedule("", 0)
