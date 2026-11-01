@@ -12,6 +12,7 @@ itself is checked here.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -21,7 +22,9 @@ import respx
 from pydantic import BaseModel
 
 from camsocs_pipeline import telemetry as telemetry_module
+from camsocs_pipeline.extract.event_noise import classifier_for
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
+from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.pipeline.context import Stage, StageContext
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.sync import run_sync
@@ -209,6 +212,26 @@ def test_a_transport_failure_has_no_status(net: respx.MockRouter) -> None:
     assert_private(client)
 
 
+def test_an_interrupted_call_is_an_error_not_a_success() -> None:
+    def interrupted(**_kwargs: Any) -> Any:
+        raise KeyboardInterrupt
+
+    openai_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=interrupted))
+    )
+    client = FakeClient()
+
+    with pytest.raises(KeyboardInterrupt):
+        llm(client=openai_client, telemetry=enabled(client)).complete_json(
+            schema=Society, messages=messages(), prompt_version="org_v1"
+        )
+
+    (generation,) = generations(client)
+    assert generation["$ai_is_error"] is True and generation["errorType"] == "KeyboardInterrupt"
+    assert "$ai_http_status" not in generation
+    assert_private(client)
+
+
 def test_only_a_model_id_of_the_allowed_shape_is_sent() -> None:
     client = FakeClient()
     enabled(client).generation(
@@ -220,6 +243,14 @@ def test_only_a_model_id_of_the_allowed_shape_is_sent() -> None:
     )
     (generation,) = generations(client)
     assert "$ai_model" not in generation and "promptVersion" not in generation
+    # A gateway id may carry a slash; a URL may not pass as a model id.
+    for model, sent in (("openai/gpt-6-luna", True), ("https://llm.example/v1", False)):
+        client = FakeClient()
+        enabled(client).generation(
+            model=model, tier="bulk", prompt_version="org_v1", latency_s=0.1, attempts=1
+        )
+        (generation,) = generations(client)
+        assert ("$ai_model" in generation) is sent
 
 
 # --- never in the way ----------------------------------------------------------
@@ -318,9 +349,17 @@ def test_close_also_ends_the_active_run() -> None:
 
 
 def test_the_tripwire_catches_every_way_to_a_model(
-    llm_tripwire: list[str], net: respx.MockRouter
+    llm_tripwire: list[str], net: respx.MockRouter, make_settings
 ) -> None:
     route = net.post(COMPLETIONS).mock(return_value=completion("{}"))
+    # The usual way in, `LLMClient(settings.require_llm())`, trips before the
+    # unconfigured settings' `ConfigError` could reach a rules-only fallback.
+    with pytest.raises(ModelReached):
+        make_settings().require_llm()
+    with pytest.raises(ModelReached):
+        classifier_for(make_settings(), dry_run=False)
+    with pytest.raises(ModelReached):
+        redactor_for(make_settings(), dry_run=False)
     with pytest.raises(ModelReached):
         LLMClient(llm_settings())
     with pytest.raises(ModelReached):
@@ -331,5 +370,5 @@ def test_the_tripwire_catches_every_way_to_a_model(
         )
     with pytest.raises(ModelReached):
         LLMClient.complete_json(object(), schema=Society, messages=[], prompt_version="v")  # type: ignore[arg-type]
-    assert len(llm_tripwire) == 4 and not route.called
+    assert len(llm_tripwire) == 7 and not route.called
     assert telemetry_module.active_telemetry() is None

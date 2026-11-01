@@ -191,8 +191,10 @@ _RUN_KEY = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{6}")  # report.mint_run_key
 
 #: The shape each string property must have; a string under any other key, or
 #: one that does not match, is dropped. No shape allows a space (beyond the
-#: fixed `sync --group` form), a slash or a quote, so titles, names, URLs and
-#: server messages cannot pass.
+#: fixed `sync --group` form) or a quote, and none but `$ai_model` a slash, so
+#: titles, names, URLs and server messages cannot pass. `$ai_model` admits a
+#: single slash for gateway ids (``openai/gpt-…``) but never ``//``, so it
+#: cannot hold a URL either; its value only ever comes from config.
 _SHAPES: Mapping[str, re.Pattern[str]] = {
     "environment": re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,31}"),
     "runKey": _RUN_KEY,
@@ -207,7 +209,7 @@ _SHAPES: Mapping[str, re.Pattern[str]] = {
     "$ai_trace_id": _RUN_KEY,
     "$ai_span_name": _STAGE,
     # A model id as `extract.llm.assert_model_allowed` admits it, from config.
-    "$ai_model": re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/\-]{0,99}"),
+    "$ai_model": re.compile(r"(?!.*//)[A-Za-z0-9][A-Za-z0-9._:@/\-]{0,99}"),
     "$ai_provider": re.compile(r"[a-z][a-z0-9_\-]{0,31}"),
     "tier": re.compile(r"bulk|strong"),
     "promptVersion": _STAGE,  # `email_events_v1`, `redact_names_v2`

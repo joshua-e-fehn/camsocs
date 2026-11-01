@@ -322,7 +322,7 @@ class LLMClient:
             status = 200
             text = response.choices[0].message.content or ""
             usage = response.usage.model_dump() if response.usage is not None else None
-        except Exception as error:
+        except BaseException as error:  # an interrupted call is an error too
             error_type = type(error).__name__
             status = getattr(error, "status_code", status)  # openai.APIStatusError
             raise

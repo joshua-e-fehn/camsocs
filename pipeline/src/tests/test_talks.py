@@ -42,6 +42,7 @@ from camsocs_pipeline.talks.text import (
     plain_text,
 )
 
+FIXTURES = Path(__file__).parent / "fixtures"
 SITE = "https://happy-otter-123.convex.site"
 CAM = "https://talks.cam.ac.uk"
 API = f"{CAM}/api/v1alpha1/talks/"
@@ -97,6 +98,78 @@ REGISTRY = parse_registry(
     ]
 )
 MAPPER = DepartmentMapper(REGISTRY)
+
+#: One department with a source of every kind, for the model tripwire test.
+DEPT = "https://tripwire.example.org"
+TRIPWIRE_REGISTRY = parse_registry(
+    [
+        {
+            "key": "dept-tripwire",
+            "slug": "tripwire",
+            "name": "Department of Tripwire Studies",
+            "shortName": "Tripwire Studies",
+            "school": "technology",
+            "website": DEPT,
+            "sources": [
+                {"kind": kind, "url": f"{DEPT}{path}", "label": kind}
+                for kind, path in (
+                    ("ics", "/talks.ics"),
+                    ("rss", "/seminars/feed"),
+                    ("json_api", "/events.json"),
+                    ("json_ld", "/lectures"),
+                    ("drupal_uis", "/seminars"),
+                )
+            ],
+        }
+    ]
+)
+_LECTURE = {
+    "@type": "Event",
+    "name": "Tripwire Lecture: an invented talk",
+    "startDate": "2026-11-12T17:00:00",
+    "endDate": "2026-11-12T18:00:00",
+    "url": "/lectures/1",
+}
+#: Each source's listing: invented content, or a synthetic fixture
+#: (fixtures/talks/README.md) in the markup its parser reads.
+TRIPWIRE_PAGES: dict[str, tuple[bytes, str]] = {
+    "/talks.ics": (
+        b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//camsocs test//EN\r\n"
+        b"BEGIN:VEVENT\r\nUID:synthetic-1@tripwire.example.org\r\n"
+        b"DTSTART:20261105T130000Z\r\nDTEND:20261105T140000Z\r\n"
+        b"SUMMARY:Tripwire Seminar: an invented talk\r\n"
+        b"LOCATION:Example Building\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        "text/calendar",
+    ),
+    "/seminars/feed": (
+        (FIXTURES / "talks" / "rss_cst_seminars.xml").read_bytes(),
+        "application/rss+xml",
+    ),
+    "/events.json": (
+        json.dumps(
+            [
+                {
+                    "slug": "tripwire-colloquium",
+                    "title": "Tripwire Colloquium: an invented talk",
+                    "url": "/events/tripwire-colloquium/",
+                    "event_date": "2026-11-19",
+                }
+            ]
+        ).encode(),
+        "application/json",
+    ),
+    "/lectures": (
+        (
+            '<html><head><script type="application/ld+json">'
+            f"{json.dumps([_LECTURE])}</script></head><body></body></html>"
+        ).encode(),
+        "text/html",
+    ),
+    "/seminars": (
+        (FIXTURES / "talks" / "views_cst_seminars.html").read_bytes(),
+        "text/html",
+    ),
+}
 
 
 @pytest.fixture(autouse=True)
@@ -975,37 +1048,38 @@ class TestStage:
         assert "1/11 slices, incomplete" in notes and "dry run: 2 talks not posted" in notes
 
     def test_the_stage_never_reaches_a_model(
-        self, stage_ctx, net: respx.MockRouter, llm_tripwire: list[str]
+        self,
+        stage_ctx,
+        net: respx.MockRouter,
+        monkeypatch: pytest.MonkeyPatch,
+        llm_tripwire: list[str],
     ) -> None:
         """Hard rule (AGENTS.md, source-research §6): talks.cam content never
-        reaches a model. The whole stage runs — talks.cam, the real department
-        parsers, dedupe, staging, the push — with every way to a model wired to
-        fail the test (`llm_tripwire`), on invented data only."""
+        reaches a model. The whole stage runs, not as a dry run — talks.cam,
+        every department parser (one source of each kind, each answering with
+        a listing it reads), dedupe, staging, the push — with every way to a
+        model wired to fail the test (`llm_tripwire`), on invented data only."""
+        monkeypatch.setattr(stage, "load_registry", lambda: TRIPWIRE_REGISTRY)
         net.get(f"{CAM}/robots.txt").respond(200, text=ROBOTS)
         net.get(url__startswith=API).mock(side_effect=fake_api(cam_talks()))
-        net.get("https://widgets.example.org/robots.txt").respond(404)
-        net.get("https://history.example.org/robots.txt").respond(404)
-        net.get("https://widgets.example.org/talks.ics").respond(
-            200,
-            content=(
-                b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//camsocs test//EN\r\n"
-                b"BEGIN:VEVENT\r\nUID:synthetic-1@widgets.example.org\r\n"
-                b"DTSTART:20261105T130000Z\r\nDTEND:20261105T140000Z\r\n"
-                b"SUMMARY:Widget Studies Seminar: invented talk\r\n"
-                b"LOCATION:Example Building\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
-            ),
-            headers={"content-type": "text/calendar"},
-        )
-        net.get("https://widgets.example.org/feed").respond(404)
-        net.get(url__startswith="https://history.example.org/").respond(404)
+        net.get(f"{DEPT}/robots.txt").respond(404)
+        for path, (body, content_type) in TRIPWIRE_PAGES.items():
+            net.get(f"{DEPT}{path}").respond(
+                200, content=body, headers={"content-type": content_type}
+            )
         routes = convex(net)
         ctx = stage_ctx()
 
         stage.run(ctx, now=NOW)
 
         assert llm_tripwire == []
-        assert routes["batch"].called and ctx.report.inserted >= 2
-        assert "dept sources: 1 ok, 2 failed, 0 skipped" in "\n".join(ctx.report.notes)
+        assert not ctx.dry_run and routes["batch"].called
+        notes = "\n".join(ctx.report.notes)
+        assert "dept sources: 5 ok, 0 failed, 0 skipped" in notes
+        # Swept only when read whole with at least one talk: every parser ran
+        # and kept something.
+        (sweep,) = bodies(routes["sweep"])
+        assert sweep["sources"] == [*(f"dept-tripwire#{i}" for i in range(5)), "talks_cam"]
 
     def test_department_budget_and_limit_skip_sources(self) -> None:
         calls: list[str] = []

@@ -111,13 +111,21 @@ class ModelReached(BaseException):
 
 @pytest.fixture
 def llm_tripwire(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Every way a stage could reach a model, wired to fail the test: building
-    an `LLMClient` or an OpenAI client, asking either for a completion, or
-    reporting a generation. Each raises `ModelReached` and is recorded in the
-    returned list, which the test asserts is empty."""
+    """Every way a stage could reach a model, wired to fail the test: asking
+    the settings for the LLM configuration, building an `LLMClient` or an
+    OpenAI client, asking either for a completion, or reporting a generation.
+    Each raises `ModelReached` and is recorded in the returned list, which the
+    test asserts is empty.
+
+    `Settings.require_llm` is wired because every call site builds its client
+    as ``LLMClient(settings.require_llm())``: test settings have no LLM
+    configured, so without it the `ConfigError` raised there (an ordinary
+    `Exception`, which a stage or a rules-only fallback catches) would hide
+    the attempt before `LLMClient.__init__` is reached."""
     import openai
     import openai.resources.chat.completions as completions
 
+    from camsocs_pipeline.config import Settings
     from camsocs_pipeline.extract.llm import LLMClient
     from camsocs_pipeline.telemetry import HarvestTelemetry
 
@@ -132,6 +140,7 @@ def llm_tripwire(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
         monkeypatch.setattr(owner, name, trip)
 
+    wire(Settings, "require_llm")
     for name in ("__init__", "complete_json", "_complete"):
         wire(LLMClient, name)
     wire(openai.OpenAI, "__init__")

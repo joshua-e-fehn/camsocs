@@ -241,9 +241,12 @@ class TestTalksCam:
         llm_tripwire: list[str],
     ) -> None:
         """Hard rule (AGENTS.md, source-research §6): talks.cam content never
-        reaches a model. The stage runs end to end on the synthetic list with
-        every way to a model wired to fail the test (`llm_tripwire`)."""
+        reaches a model. The stage runs end to end on the synthetic list, not
+        as a dry run (a dry run skips the model on purpose), with every way to
+        a model wired to fail the test (`llm_tripwire`)."""
         from camsocs_pipeline.events import seeds
+
+        ctx.dry_run = False
 
         monkeypatch.setattr(
             talks_cam,
