@@ -25,8 +25,10 @@ serialises payloads and discards them, and no run row or state file is written.
 Run telemetry (`camsocs_pipeline.telemetry`, off without POSTHOG_KEY) is
 reported at the same three points: the run's start, each stage's end (with
 its wall-clock time) and the run's end, including a run that a failed health
-check or `runs.start` ended early. It sends counts only and can never fail a
-run; the caller (`cli._run`) owns the client and closes it.
+check or `runs.start` ended early. While the run lasts it is the process's
+active telemetry, so each LLM request a stage makes is reported as a
+generation tagged with the run key and the stage (ENG-9). It sends counts only
+and can never fail a run; the caller (`cli._run`) owns the client and closes it.
 """
 
 from __future__ import annotations
@@ -242,6 +244,7 @@ def _run_stages(
             dry_run=loader.dry_run,
             limit=limit,
         )
+        telemetry.stage_started(stage.name)  # the stage its LLM generations carry
         started = time.monotonic()
         error_type = _guard(stage_report, lambda stage=stage, ctx=context: stage.resolve()(ctx))
         telemetry.stage_completed(

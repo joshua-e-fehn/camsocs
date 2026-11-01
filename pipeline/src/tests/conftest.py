@@ -15,6 +15,9 @@ Two safety properties hold for every test:
 - **No real configuration.** Every variable the pipeline reads is removed from
   the environment, and `settings()` builds `Settings` with `_env_file=None`, so
   `pipeline/.env` (real keys) is never read by a test.
+- **No telemetry carried over.** A test that starts a run makes its telemetry
+  the process's active one (LLM generations go there); it is cleared after
+  every test.
 """
 
 from __future__ import annotations
@@ -92,6 +95,13 @@ def _no_requests(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("Network access through requests is disabled in tests")
 
     monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", refuse)
+
+
+@pytest.fixture(autouse=True)
+def _no_active_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from camsocs_pipeline import telemetry
+
+    monkeypatch.setattr(telemetry, "_active", None)
 
 
 #: What every host name resolves to in tests: a public address.

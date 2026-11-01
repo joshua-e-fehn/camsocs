@@ -22,6 +22,13 @@ the shape here follows the pipeline's own rules:
   own retries are disabled so there is exactly one retry policy.
 - **Provenance per call.** Every `LLMCall` records the `model` and the
   `prompt_version` it was made with, for storing beside each extracted claim.
+- **Analytics per generation (ENG-9).** Each request — retries included, and
+  the corrective retry as a second one — is reported to the run's telemetry
+  (`camsocs_pipeline.telemetry`, off without POSTHOG_KEY) as one
+  `$ai_generation`: model, tier, prompt version, token counts, the final
+  attempt's latency, HTTP status, attempts and an exception's class name.
+  Never the messages, the reply or error text; reporting can never fail or
+  change the call.
 
 LLM output is never trusted on its own: `extract.evidence` checks that each
 claim's quoted evidence actually appears in the source text and downgrades
@@ -54,6 +61,7 @@ from tenacity import (
 
 from camsocs_pipeline.config import LLMSettings
 from camsocs_pipeline.sources.policy import NEVER_OVERRIDE_HOSTS
+from camsocs_pipeline.telemetry import HarvestTelemetry, active_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +189,10 @@ def _wait(state: RetryCallState) -> float:
 
 
 class LLMClient:
-    """A thread-safe extraction client. Share one per run across worker threads."""
+    """A thread-safe extraction client. Share one per run across worker threads.
+
+    Generations go to `telemetry`, or when none is given to the run in
+    progress (`telemetry.active_telemetry()`, looked up per call)."""
 
     def __init__(
         self,
@@ -190,6 +201,7 @@ class LLMClient:
         client: openai.OpenAI | None = None,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         sleep: Callable[[float], None] = time.sleep,
+        telemetry: HarvestTelemetry | None = None,
     ) -> None:
         self._models: dict[Tier, str] = {
             "bulk": assert_model_allowed(settings.model_bulk),
@@ -207,6 +219,7 @@ class LLMClient:
         self._semaphore = threading.BoundedSemaphore(settings.concurrency)
         self._max_attempts = max_attempts
         self._sleep = sleep
+        self._telemetry = telemetry
 
     def model_for(self, tier: Tier) -> str:
         return self._models[tier]
@@ -224,7 +237,7 @@ class LLMClient:
         model = assert_model_allowed(self.model_for(tier))
         conversation: list[dict[str, Any]] = [_schema_instruction(schema), *messages]
 
-        raw = self._complete(model, conversation, temperature)
+        raw = self._complete(model, conversation, temperature, tier, prompt_version)
         try:
             value = _parse(schema, raw.text)
             return LLMCall(value, model, prompt_version, False, raw.text, raw.usage)
@@ -242,7 +255,9 @@ class LLMClient:
                 },
             ]
 
-        retry = self._complete(model, conversation, temperature)
+        retry = self._complete(
+            model, conversation, temperature, tier, prompt_version, validation_retry=True
+        )
         try:
             value = _parse(schema, retry.text)
         except (ValidationError, ValueError) as second_error:
@@ -255,8 +270,28 @@ class LLMClient:
     # -- transport -------------------------------------------------------------
 
     def _complete(
-        self, model: str, messages: list[dict[str, Any]], temperature: float
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        temperature: float,
+        tier: Tier,
+        prompt_version: str,
+        *,
+        validation_retry: bool = False,
     ) -> _RawReply:
+        """One request (with transport retries), reported as one generation."""
+        attempts = 0
+        latency = 0.0
+
+        def attempt(**kwargs: Any) -> Any:
+            nonlocal attempts, latency
+            attempts += 1
+            started = time.monotonic()
+            try:
+                return self._client.chat.completions.create(**kwargs)
+            finally:
+                latency = time.monotonic() - started
+
         retrying = Retrying(
             retry=retry_if_exception(_is_transient),
             wait=_wait,
@@ -271,16 +306,41 @@ class LLMClient:
                 state.next_action.sleep if state.next_action else 0.0,
             ),
         )
-        with self._semaphore:
-            response = retrying(
-                self._client.chat.completions.create,
-                model=model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=temperature,
-            )
-        text = response.choices[0].message.content or ""
-        usage = response.usage.model_dump() if response.usage is not None else None
+        status: int | None = None
+        usage: dict[str, Any] | None = None
+        error_type: str | None = None
+        try:
+            with self._semaphore:
+                response = retrying(
+                    attempt,
+                    model=model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=temperature,
+                )
+            # The SDK raises for any non-2xx reply, so a parsed one was a 200.
+            status = 200
+            text = response.choices[0].message.content or ""
+            usage = response.usage.model_dump() if response.usage is not None else None
+        except Exception as error:
+            error_type = type(error).__name__
+            status = getattr(error, "status_code", status)  # openai.APIStatusError
+            raise
+        finally:
+            telemetry = self._telemetry if self._telemetry is not None else active_telemetry()
+            if telemetry is not None:
+                # Never raises (`telemetry._quiet`); takes no message content.
+                telemetry.generation(
+                    model=model,
+                    tier=tier,
+                    prompt_version=prompt_version,
+                    latency_s=latency,
+                    attempts=attempts,
+                    usage=usage,
+                    http_status=status if isinstance(status, int) else None,
+                    error_type=error_type,
+                    validation_retry=validation_retry,
+                )
         return _RawReply(text, usage)
 
 
