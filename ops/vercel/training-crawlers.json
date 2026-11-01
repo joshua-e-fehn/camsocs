@@ -1,0 +1,52 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"action": {
+			"mitigate": {
+				"action": "deny"
+			}
+		},
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"op": "sub",
+						"type": "user_agent",
+						"value": "GPTBot"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"op": "sub",
+						"type": "user_agent",
+						"value": "ClaudeBot"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"op": "sub",
+						"type": "user_agent",
+						"value": "gptbot"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"op": "sub",
+						"type": "user_agent",
+						"value": "claudebot"
+					}
+				]
+			}
+		],
+		"description": "Keep ordinary users, Googlebot, Bingbot and search crawlers allowed. Block the two requested training crawler identities before compute.",
+		"name": "Block GPTBot and ClaudeBot training crawlers"
+	}
+}

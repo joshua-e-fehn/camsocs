@@ -146,3 +146,31 @@ The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles 
    ```
 
    It prints how many were removed and how many were already gone. Run the dry run again: it should list nothing. Once the VPS timers are on, run it on the host instead (`sudo -u camsocs -H bash -lc 'cd /opt/camsocs && flock -n /var/lib/camsocs/harvest.lock pixi run pipeline -- --env prod clean-events'`), never next to a harvest.
+
+
+## CPU protection: training crawlers and anonymous data (2026-11-01)
+
+The project firewall has one active deny rule for GPTBot and ClaudeBot
+(user-agent substring matches, including lowercase). Googlebot, Bingbot and
+OAI-SearchBot are not blocked. The rule runs before application compute on
+both camsocs.uk and camsocs.vercel.app. `ops/vercel/training-crawlers.json`
+is the reviewed PATCH body for `/v1/security/firewall/config?projectId=…`.
+Read the current config first and update the existing named rule; do not
+blindly insert duplicates. This project-level setting survives deployments.
+`robots.txt` also asks just those two training crawlers not to fetch the site.
+User agents can be spoofed; this is not an authentication mechanism.
+
+`lib/public-data.ts` caches anonymous events, anonymous restricted-event counts
+(counts only), and the public college list in Next's Data Cache for 60 seconds.
+The deployment URL and query arguments distinguish entries. Signed-in event
+queries bypass that cache entirely. Convex client subscriptions continue to
+update after hydration. Full HTML and authenticated responses are NOT put into
+a shared CDN cache: the root auth provider and calendar are personalized.
+No-cookie requests skip the redundant server auth lookup; cookie-bearing
+requests retain the existing auth flow. The former no-op proxy is removed;
+access checks remain in the existing Convex functions and client auth guard.
+
+This hotfix is based on the deployed commit 7df7d6c, not the in-progress redesign.
+Frontend-only deployment must not redeploy or roll back Convex: build locally
+against the pulled production public URLs with CONVEX_DEPLOY_KEY removed from
+the gitignored build environment, then deploy the prebuilt output.

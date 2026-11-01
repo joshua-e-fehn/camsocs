@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { OrgDirectory } from "@/components/organisms/org-directory"
 import { api } from "@/convex/_generated/api"
 import { pageMetadata } from "@/lib/page-metadata"
+import { preloadPublicColleges } from "@/lib/public-data"
 import {
   DIRECTORY_PAGE_SIZE,
   directoryCursor,
@@ -44,7 +45,7 @@ export default async function SocietiesPage({ searchParams }: Props) {
       paginationOpts: { numItems: DIRECTORY_PAGE_SIZE, cursor: directoryCursor(state) },
     }),
     preloadQuery(api.orgs.facets, filters),
-    preloadQuery(api.orgs.colleges, {}),
+    preloadPublicColleges(),
   ])
 
   return (

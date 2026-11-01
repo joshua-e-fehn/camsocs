@@ -1,10 +1,11 @@
-import { fetchQuery, preloadQuery } from "convex/nextjs"
+import { fetchQuery } from "convex/nextjs"
 import type { Metadata } from "next"
 import { EventsCalendar } from "@/components/organisms/events-calendar"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { londonIsoDate, viewWindow } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
+import { preloadEvents, preloadPublicColleges, preloadRestrictedCount } from "@/lib/public-data"
 import { eventListArgs, parseEventsParams, type SearchParams } from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
@@ -29,10 +30,10 @@ export default async function EventsPage({ searchParams }: Props) {
   const token = await getToken()
 
   const [preloadedEvents, preloadedColleges, preloadedRestricted, orgPage] = await Promise.all([
-    preloadQuery(api.events.list, args, { token }),
-    preloadQuery(api.orgs.colleges, {}),
+    preloadEvents(args, token),
+    preloadPublicColleges(),
     // A hint, not the page: if the count cannot be had, the calendar still renders.
-    preloadQuery(api.events.restrictedCount, args, { token }).catch(() => null),
+    preloadRestrictedCount(args, token).catch(() => null),
     state.org ? fetchQuery(api.orgs.getBySlug, { slug: state.org }) : null,
   ])
   const org = orgPage
