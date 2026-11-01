@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { addDays, londonIsoDate } from "../lib/calendar"
+import { addDays, londonIsoDate, londonMidnight, startOfWeek } from "../lib/calendar"
 import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
@@ -172,10 +172,20 @@ describe("orgs.list sort and activity", () => {
     })
     // Six nights from now, the same title (Camdram lists each as an event);
     // the week window may cut them, so the shelf is checked against itself.
+    // A run is per London week (Monday start, convex/lib/orgActivity.ts), so
+    // the nights must not straddle a Monday midnight: on a Sunday evening they
+    // move to next Monday morning, which is still in the same term week
+    // (Thursday to Wednesday) and within the next seven days out of term.
+    const firstNight = (() => {
+      const start = NOW + 60_000
+      const weekOf = (ms: number) => startOfWeek(londonIsoDate(ms))
+      if (weekOf(start) === weekOf(start + 5 * 3_600_000)) return start
+      return londonMidnight(addDays(weekOf(start), 7)) + 10 * 3_600_000
+    })()
     const nights = Array.from({ length: 6 }, (_, i) => eventKey("camdram", `top-girls-${i}`))
     await t.mutation(internal.ingest.claims.ingest, {
       claims: nights.flatMap((key, i) =>
-        event(key, i === 5 ? "TOP GIRLS" : "Top Girls", NOW + 60_000 + i * 3_600_000, {
+        event(key, i === 5 ? "TOP GIRLS" : "Top Girls", firstNight + i * 3_600_000, {
           externalId: `top-girls-${i}`,
         }),
       ),
