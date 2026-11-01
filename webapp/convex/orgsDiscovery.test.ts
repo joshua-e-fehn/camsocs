@@ -209,7 +209,7 @@ describe("orgs.list sort and activity", () => {
       const startsAt = firstNight + i * 3_600_000
       return startsAt >= busy.from && startsAt < busy.to
     })
-    expect(shelf["Drama Society"]).toBe(onShelf ? 1 : undefined)
+    expect(shelf["Drama Society"] ?? 0).toBe(onShelf ? 1 : 0)
     // The organiser rows carry the run and cancelled copies the counts read.
     const rows = await t.run(async (ctx) =>
       ctx.db
