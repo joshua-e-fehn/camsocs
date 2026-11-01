@@ -50,7 +50,8 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { ...desktop, colorScheme: "light" } },
     { name: "mobile", use: { ...mobile, colorScheme: "light" } },
-    // Both themes are first-class (DESIGN.md §8): the pages tagged @dark again in dark.
+    // The site is light only (DESIGN.md §8): the pages tagged @dark again with a dark
+    // OS preference, to check it still renders the light site.
     { name: "desktop-dark", grep: /@dark/, use: { ...desktop, colorScheme: "dark" } },
     { name: "mobile-dark", grep: /@dark/, use: { ...mobile, colorScheme: "dark" } },
   ],
