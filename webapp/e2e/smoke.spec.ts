@@ -151,6 +151,7 @@ test("robots.txt, the sitemap and the share image are served", async ({ request 
   expect(robots.status()).toBe(200)
   const robotsText = await robots.text()
   expect(robotsText).toContain("Disallow: /dashboard")
+  expect(robotsText).toContain("Disallow: /relay")
   expect(robotsText).toMatch(/Sitemap: https?:\/\/\S+\/sitemap\.xml/)
 
   const sitemap = await request.get("/sitemap.xml")

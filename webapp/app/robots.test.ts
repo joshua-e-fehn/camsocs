@@ -50,6 +50,16 @@ describe("robots.txt", () => {
     }
   })
 
+  test("no crawler may fetch the analytics relay", () => {
+    for (const agent of ["Googlebot", "Bingbot", "anthropic-ai", "CCBot", "GPTBot"]) {
+      for (const path of ["/relay", "/relay/e/", "/relay/static/array.js", "/relay/array/x"]) {
+        expect(allowed(agent, path)).toBe(false)
+      }
+    }
+    // The prefix is the relay alone, not every path that starts with it.
+    expect(allowed("Googlebot", "/societies")).toBe(true)
+  })
+
   test("GPTBot and ClaudeBot may read nothing", () => {
     for (const agent of ["GPTBot", "ClaudeBot"]) {
       for (const path of ["/", "/events", "/societies", "/talks"]) {
