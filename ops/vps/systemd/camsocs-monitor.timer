@@ -1,0 +1,15 @@
+# Hourly production checks (`camsocs monitor`, ENG-10). /opt/camsocs/docs/ops-vps.md "Monitor".
+[Unit]
+Description=camsocs hourly production checks against PostHog
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+
+[Timer]
+OnCalendar=hourly
+# Spread the four queries over the hour rather than on the dot.
+RandomizedDelaySec=15min
+# A missed hour is not caught up: the next one checks the same windows.
+Persistent=false
+Unit=camsocs-monitor.service
+
+[Install]
+WantedBy=timers.target

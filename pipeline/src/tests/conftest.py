@@ -54,6 +54,9 @@ ENV_VARS = (
     "POSTHOG_KEY",
     "POSTHOG_HOST",
     "POSTHOG_ENV",
+    "POSTHOG_PERSONAL_API_KEY",
+    "POSTHOG_PROJECT_ID",
+    "POSTHOG_APP_HOST",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"

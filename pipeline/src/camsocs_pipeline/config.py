@@ -82,6 +82,9 @@ DEFAULT_POSTHOG_HOST = "https://eu.i.posthog.com"
 #: The `environment` property on every event when POSTHOG_ENV is unset. The
 #: VPS sets `production` in pipeline/.env.prod (docs/ops-vps.md).
 DEFAULT_POSTHOG_ENV = "development"
+#: PostHog EU Cloud's app host, where the private API lives (the query API
+#: the `monitor` command calls, ENG-10) — not the ingestion host above.
+DEFAULT_POSTHOG_APP_HOST = "https://eu.posthog.com"
 
 #: A Convex deployment answers on two hosts. The generated client API is on
 #: `convex.cloud`; anything on the `httpRouter` — which `/api/pipeline/*` is — is
@@ -162,8 +165,21 @@ class Settings(BaseSettings):
     posthog_key: SecretStr = Field(default=SecretStr(""), validation_alias="POSTHOG_KEY")
     posthog_host: str = Field(default=DEFAULT_POSTHOG_HOST, validation_alias="POSTHOG_HOST")
     posthog_env: str = Field(default=DEFAULT_POSTHOG_ENV, validation_alias="POSTHOG_ENV")
+    #: Optional production checks (`monitor.py`, ENG-10): a personal API key
+    #: scoped to the camsocs project with `query:read`, and the project's
+    #: numeric id. Both unset → `monitor` says so and exits 0. Unlike the
+    #: `phc_` token this key reads the project's data: it is a real secret.
+    posthog_personal_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias="POSTHOG_PERSONAL_API_KEY"
+    )
+    posthog_project_id: str = Field(default="", validation_alias="POSTHOG_PROJECT_ID")
+    posthog_app_host: str = Field(
+        default=DEFAULT_POSTHOG_APP_HOST, validation_alias="POSTHOG_APP_HOST"
+    )
 
-    @field_validator("convex_url", "convex_http_url", "llm_base_url", "posthog_host")
+    @field_validator(
+        "convex_url", "convex_http_url", "llm_base_url", "posthog_host", "posthog_app_host"
+    )
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         # Every caller builds URLs as f"{base}/path".
@@ -176,6 +192,7 @@ class Settings(BaseSettings):
         "meta_ig_user_id",
         "meta_graph_version",
         "posthog_env",
+        "posthog_project_id",
     )
     @classmethod
     def _strip(cls, value: str) -> str:
@@ -255,6 +272,13 @@ class Settings(BaseSettings):
     def posthog_configured(self) -> bool:
         """Whether run telemetry is on (a project token is set)."""
         return bool(self.posthog_key.get_secret_value().strip())
+
+    @property
+    def posthog_query_configured(self) -> bool:
+        """Whether `monitor` can query PostHog (a personal key and a project id)."""
+        return bool(self.posthog_personal_api_key.get_secret_value().strip()) and bool(
+            self.posthog_project_id
+        )
 
     # -- crawling ------------------------------------------------------------
 

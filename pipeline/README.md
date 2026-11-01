@@ -303,6 +303,8 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
 | `META_GRAPH_VERSION` | Graph API version (default `v25.0`) |
 | `POSTHOG_KEY` | Optional PostHog project token for run telemetry (`telemetry.py`): run, stage and finish events with counts and durations only. Unset: nothing is sent. Set it in `pipeline/.env.prod` only (docs/deploy.md §4) |
 | `POSTHOG_HOST`, `POSTHOG_ENV` | Ingestion host (default `https://eu.i.posthog.com`) and the `environment` tag (default `development`; `production` on the VPS) |
+| `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` | Optional, for `camsocs monitor` (`monitor.py`, ENG-10): a personal API key scoped to the camsocs project (`query:read` is enough) and the project's numeric id. Both unset: `monitor` checks nothing and exits 0. A real secret (it reads project data), unlike the `phc_` token. On the VPS in `pipeline/.env.prod` (docs/ops-vps.md §6) |
+| `POSTHOG_APP_HOST` | The private API host `monitor` queries (default `https://eu.posthog.com`) |
 
 ## Politeness rules (enforced in `sources/base.py` and `sources/policy.py`)
 
