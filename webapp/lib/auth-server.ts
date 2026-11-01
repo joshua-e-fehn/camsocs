@@ -3,6 +3,7 @@ import { getToken as libraryGetToken } from "@convex-dev/better-auth/utils"
 import { headers as nextHeaders } from "next/headers"
 import { cache } from "react"
 import { stripConvexIngressUnsafeHeaders } from "@/lib/auth-forwarded-headers"
+import { hasNonAnalyticsCookie } from "@/lib/consent"
 import { requireConvexUrls } from "@/lib/convex-url"
 
 /**
@@ -62,8 +63,9 @@ export const {
 export const getToken = cache(async (): Promise<string | undefined> => {
   const inbound = new Headers(await nextHeaders())
   // A request with no cookies cannot carry a Better Auth session. Avoid a
-  // Convex auth round trip for anonymous users and search crawlers.
-  if (!inbound.get("cookie")) return undefined
+  // Convex auth round trip for anonymous users and search crawlers, and for
+  // consented visitors whose only cookie is PostHog's `ph_*` (ENG-4).
+  if (!hasNonAnalyticsCookie(inbound.get("cookie"))) return undefined
   // Mirrors the library's own hop-by-hop handling.
   inbound.delete("content-length")
   inbound.delete("transfer-encoding")

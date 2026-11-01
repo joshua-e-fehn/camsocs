@@ -240,6 +240,20 @@ function isAnalyticsName(name: string): boolean {
 }
 
 /**
+ * Whether a `Cookie` request header holds any cookie besides PostHog's.
+ * lib/auth-server.ts skips its Convex auth round trip without one: a
+ * consented visitor's `ph_*` cookie rides on every request but can never
+ * carry a session, so it must not cost one (docs/deploy.md "CPU protection").
+ */
+export function hasNonAnalyticsCookie(header: string | null | undefined): boolean {
+  if (!header) return false
+  return header
+    .split(";")
+    .map((pair) => pair.split("=")[0]?.trim() ?? "")
+    .some((name) => name !== "" && !isAnalyticsName(name))
+}
+
+/**
  * The `Domain` values a cookie for `hostname` may have been set with: the
  * host and each parent with at least two labels (`www.camsocs.uk` →
  * `www.camsocs.uk`, `camsocs.uk`). None for `localhost` or an IP address,

@@ -2,9 +2,10 @@ import type { MetadataRoute } from "next"
 import { AI_CRAWLERS } from "@/lib/crawlers"
 import { SITE_URL } from "@/lib/site"
 
-/** Paths no crawler needs: the private broker area, the auth endpoints and
- * the sign-in page (they hold nothing for a crawler). */
-const PRIVATE = ["/dashboard", "/api/", "/sign-in"]
+/** Paths no crawler needs: the private broker area, the auth endpoints, the
+ * sign-in page and the analytics relay (lib/relay.ts; they hold nothing for
+ * a crawler). */
+const PRIVATE = ["/dashboard", "/api/", "/sign-in", "/relay"]
 
 /** Training crawlers kept off the whole site (also denied by the Vercel
  * firewall rule in ops/vercel/training-crawlers.json): their repeated hits on

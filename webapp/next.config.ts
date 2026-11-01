@@ -34,6 +34,23 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.convex.cloud", pathname: "/api/storage/**" },
     ],
   },
+  // No `/relay` rewrites either, though PostHog's Next.js recipe uses them
+  // (research-js §2): a rewrite would forward the visitor's cookies, Better
+  // Auth's session among them, to PostHog. `app/relay/[...path]/route.ts`
+  // forwards by allow-list instead (lib/relay.ts).
+  //
+  // PostHog's endpoints end in a slash (`/e/`, `/flags/`), and the relay
+  // keeps it; Next's built-in redirect would answer each with a 308 to the
+  // slashless path first. It is switched off, and `redirects()` restores it
+  // for everything but the relay, so `/about/` still 308s to `/about` (one URL
+  // per page, as before) and `/api/auth/*/` still reaches its handler.
+  skipTrailingSlashRedirect: true,
+  async redirects() {
+    return [
+      // Next's own rule (`/:path+/` → `/:path+`, 308) minus `/relay/…`.
+      { source: "/:path((?!relay(?:/|$)).+)/", destination: "/:path", permanent: true },
+    ]
+  },
 }
 
 export default nextConfig

@@ -17,6 +17,7 @@ Folded from the template's `webapp/agents.md`. Root rules live in `/AGENTS.md`.
 | Icons              | lucide-react                                | 1.52.0             |
 | Toasts             | sonner                                      | 2.0.8              |
 | Animation          | framer-motion                               | 12.43.0            |
+| Analytics          | posthog-js (lazy, after consent only)       | 1.444.0 (pinned)   |
 | Validation         | zod                                         | 4.6.5              |
 | Lint / format      | Biome                                       | 2.4.7 (pinned)     |
 | Tests              | `bun test` + convex-test + happy-dom        | 0.0.55 / 20.14.5   |
@@ -45,10 +46,13 @@ app/                         Next.js App Router pages
                              it is closed): overview, organisations (?org=<key> opens the drawer),
                              people, interactions, introductions, graph, reports (missing data +
                              outreach CSV), requests
-  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/, /sign-in
+  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/, /sign-in,
+                             /relay
   opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
   not-found.tsx              404 outside the site frame
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
+  relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
+                             next.config rewrite: that would pass cookies on)
 
 components/                  Atomic Design
   ui/                        ATOMS — shadcn/ui primitives
@@ -120,7 +124,9 @@ lib/                         Pure logic + *.test.ts (no server imports)
   site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (D4), …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
   consent.ts                 The analytics consent store (see "Analytics consent"), UNTRACKED_PATHS,
-                             clearAnalyticsStorage()
+                             clearAnalyticsStorage(), hasNonAnalyticsCookie()
+  analytics-client.ts        The consent-gated posthog-js client: init options, before_send
+                             (sanitizeEvent), startAnalytics(), getPostHog() (see "Analytics client")
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
                              notice), force-layout, format
@@ -130,6 +136,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   resend-inbound.ts          Resend Receiving API client (body, headers, attachments; fetch injected)
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)
   auth-forwarded-headers.ts  The /api/auth hop without x-forwarded-host (Bundestracker outage fix)
+  relay.ts                   The /relay hop to PostHog: no cookie, auth, user agent or client address
+                             goes out, no PostHog cookie comes back
   convex-url.ts              Build-time check that both Convex URLs name one deployment
 scripts/
   check-codegen.ts           Committed api.d.ts lists every convex module
@@ -143,7 +151,12 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
                              ongoing strip, form
   consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen,
                              focus never hidden behind it (360px), 400% zoom (320x256)
+  analytics.spec.ts          Without a key, Accept requests nothing from /relay or PostHog and stores
+                             no ph_* cookie or storage; leftover ph_* storage is cleared on load
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
+instrumentation-client.ts    Browser start-up: startAnalytics() (see "Analytics client")
+next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
+                             /api/auth or /relay rewrite)
 ```
 
 ### Component architecture (Atomic Design)
@@ -254,8 +267,8 @@ and the ICO's consent guidance). The pieces:
 - **Withdrawal**: `setConsent("denied")`, `clearConsent()` and a refusal or withdrawal arriving from
   another tab call `clearAnalyticsStorage()` after the listeners have run, which
   deletes every `ph_*` / `__ph_*` cookie (host-only and each parent domain, path `/`) and
-  localStorage / sessionStorage key. The analytics client calls `opt_out_capturing()` /
-  `reset()` from its `onConsentChange` listener.
+  localStorage / sessionStorage key. The analytics client calls `reset()`, turns persistence off
+  and calls `opt_out_capturing()` from its `onConsentChange` listener (below).
 - **Banner, `organisms/consent-banner.tsx`**: a labelled region (not a dialog: no overlay, no focus
   trap) fixed to the bottom, mounted in the root layout and hidden on `UNTRACKED_PATHS`
   (`/dashboard*`, `/sign-in*`, never tracked). Two identical outline buttons, the PostHog EU Cloud
@@ -268,6 +281,37 @@ and the ICO's consent guidance). The pieces:
   column; each press moves focus to the banner (also while it is already open) and a choice returns
   focus to the button. A choice made without it (a first visit) hands focus to `<main id="main">`
   (`tabIndex={-1}`), not `<body>`.
+
+## Analytics client
+
+`instrumentation-client.ts` (Next runs it in the browser before hydration) calls `startAnalytics()`
+from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocked;
+`e2e/analytics.spec.ts`). Full behaviour and settings: `docs/deploy.md` "PostHog (monitoring)".
+
+- **Gate**: posthog-js is a lazy `import()` that runs only once `getConsent()` is "granted", with
+  `NEXT_PUBLIC_POSTHOG_KEY` set and `navigator.webdriver` false. Any other state (including every
+  page load without a grant) ends in `withdraw()`: `reset()`, persistence off, `opt_out_capturing()`,
+  `clearAnalyticsStorage()`. A new grant on the same page opts the instance back in (posthog-js
+  initialises once per page).
+- **`before_send` = `sanitizeEvent`**: drops everything unless consent is granted at that moment, on
+  `UNTRACKED_PATHS`, SDK events other than `$pageview` / `$pageleave` (`SDK_EVENTS`), and custom
+  events without an allow-list entry; strips query strings and fragments, titles, element text,
+  the user-agent string, the search keyword, campaign parameters, window size, device model and
+  previous-page duration (each also as its `$initial_…` / `$session_entry_…` copy); sets
+  `environment` and `$geoip_disable`. A throw drops the event (posthog-js), so it fails closed.
+  At the source: `save_referrer` and `save_campaign_params` off (no URL in PostHog's cookie),
+  `disable_capture_url_hashes`, `disable_scroll_properties`.
+- **For ENG-5 / ENG-6**: `getPostHog()` returns the instance only while it may send, else null;
+  call it at the moment of use. Custom events need an entry in the `customEvents` allow-list
+  (`startAnalytics({ customEvents })`, event name → allowed property names); `$exception` must be
+  added to `SDK_EVENTS`.
+- **Proxy**: `app/relay/[...path]/route.ts` (`lib/relay.ts`) forwards `/relay/static|array/*` to
+  `eu-assets.i.posthog.com` and every other `/relay/*` to `eu.i.posthog.com`, by allow-list:
+  only `content-type`, `content-encoding` and `accept` go out (no cookie: Better Auth's session
+  and `convex_jwt` would otherwise reach PostHog), only `content-type` and `cache-control` come
+  back. Not PostHog's `next.config` rewrites, which forward every header and cannot filter.
+  `skipTrailingSlashRedirect` plus a `redirects()` rule keep Next's trailing-slash 308 for every
+  path but `/relay`.
 
 ## Environments
 
