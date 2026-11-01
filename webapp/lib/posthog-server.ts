@@ -51,12 +51,19 @@ export function serverEnvironment(env: Env = process.env): "production" | "devel
 }
 
 /**
- * Our own server events, each with the properties it may carry (ENG-7 fills
- * it: `ics_feed_fetched: ["feed", "key"]`, …). An event not listed is never
- * sent; a property not listed is dropped. Values must be IDs, enums, numbers
- * or booleans, never free text.
+ * Our own server events, each with the properties it may carry. An event not
+ * listed is never sent; a property not listed is dropped. Values must be IDs,
+ * enums, numbers or booleans, never free text.
+ *
+ *  - `ics_feed_fetched` (ENG-7, `lib/ics-telemetry.ts`): `feed` is `talks`,
+ *    `event` or `talk`; `key` the event or talk key, never the feed filters.
+ *
+ * (`listing_request_received` is sent by Convex, `convex/analytics.ts`, not
+ * from here.)
  */
-export const SERVER_EVENTS: Readonly<Record<string, readonly string[]>> = {}
+export const SERVER_EVENTS: Readonly<Record<string, readonly string[]>> = {
+  ics_feed_fetched: ["feed", "key"],
+}
 
 /** Request facts an error report may carry (spec "Errors"), as PostHog /
  * `@posthog/next` name them. */

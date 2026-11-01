@@ -43,7 +43,8 @@ query or fragment, browser and OS name and version, language, time zone, device 
 size, random identifiers); `before_send` strips everything else, as `/privacy` lists.
 
 Server-side counts without consent (`ics_feed_fetched`, `listing_request_received`, ENG-7) and
-errors (ENG-6) are separate: see `docs/compliance/record-of-processing.md` P12.
+errors (ENG-6) are separate: see `docs/webapp.md` "Server counts" and
+`docs/compliance/record-of-processing.md` P12.
 
 ## Privacy rules
 

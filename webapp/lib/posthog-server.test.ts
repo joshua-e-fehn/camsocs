@@ -10,6 +10,7 @@ import {
   reportKey,
   requestErrorContext,
   SERVER_DISTINCT_ID,
+  SERVER_EVENTS,
   sanitizeServerEvent,
   serverEnvironment,
   serverEventProperties,
@@ -283,8 +284,49 @@ describe("server events (for ENG-7)", () => {
 
   test("captureServerEvent sends nothing for an unlisted event", async () => {
     const { sent } = recordingClient()
-    await captureServerEvent("ics_feed_fetched", { feed: "talks" })
+    await captureServerEvent("page_viewed", { feed: "talks" })
     expect(sent).toHaveLength(0)
+  })
+})
+
+describe("SERVER_EVENTS (ENG-7)", () => {
+  test("lists ics_feed_fetched with feed and key only", () => {
+    expect(SERVER_EVENTS).toEqual({ ics_feed_fetched: ["feed", "key"] })
+  })
+
+  test("ics_feed_fetched goes out with its allow-listed properties and nothing else", async () => {
+    const { sent } = recordingClient()
+    await captureServerEvent("ics_feed_fetched", {
+      feed: "event",
+      key: "ev-123",
+      q: "jane doe",
+      ip: "203.0.113.7",
+    })
+    expect(sent).toHaveLength(1)
+    const [event] = events(sent)
+    expect(event?.event).toBe("ics_feed_fetched")
+    expect(event?.distinct_id).toBe(SERVER_DISTINCT_ID)
+    const props = event?.properties as Record<string, unknown>
+    // `$lib`, `$lib_version` and `$is_server` are the SDK's own.
+    expect(Object.keys(props).sort()).toEqual(
+      [
+        "$geoip_disable",
+        "$is_server",
+        "$lib",
+        "$lib_version",
+        "$process_person_profile",
+        "environment",
+        "feed",
+        "key",
+      ].sort(),
+    )
+    expect(props).toMatchObject({
+      feed: "event",
+      key: "ev-123",
+      environment: "development",
+      $process_person_profile: false,
+      $geoip_disable: true,
+    })
   })
 })
 

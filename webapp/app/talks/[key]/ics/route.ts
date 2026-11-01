@@ -3,13 +3,16 @@ import type { FunctionReturnType } from "convex/server"
 import type { NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { talkIcsFile } from "@/lib/ics"
+import { countIcsFetch } from "@/lib/ics-telemetry"
 import { isTalkKey } from "@/lib/talks-url-state"
 
 /**
  * `GET /talks/<key>/ics` — one talk as an `.ics` file ("Add to calendar" →
  * Apple Calendar / Outlook on the desktop). The same VEVENT as the
  * `/talks.ics` feed (UID `<key>@camsocs.uk`), as a one-off event rather than
- * a feed. An unknown or unlisted talk is a 404.
+ * a feed. An unknown or unlisted talk is a 404. A served file is counted
+ * after the response (`ics_feed_fetched { feed: "talk", key }`; ENG-7,
+ * lib/ics-telemetry.ts).
  */
 
 export const dynamic = "force-dynamic"
@@ -35,6 +38,7 @@ export async function GET(
   }
   if (!talk) return plain("This talk is no longer listed.", 404)
   const { body, filename } = talkIcsFile(talk, Date.now())
+  countIcsFetch("talk", talk.key)
   return new Response(body, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

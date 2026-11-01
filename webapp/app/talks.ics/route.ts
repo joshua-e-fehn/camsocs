@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { type IcsTalk, parseTalkFeedParams, talkFeedName, talksCalendar } from "@/lib/ics"
+import { countIcsFetch } from "@/lib/ics-telemetry"
 
 /**
  * `GET /talks.ics` — the talks calendar feed (talks-redesign-spec §4): the
@@ -12,7 +13,9 @@ import { type IcsTalk, parseTalkFeedParams, talkFeedName, talksCalendar } from "
  * modal links it as `webcal://`.
  *
  * Cached at the edge for an hour per URL: subscribers poll, and the talks
- * change at most with each harvest.
+ * change at most with each harvest. A served feed is counted after the
+ * response (`ics_feed_fetched { feed: "talks" }`, never its filters; ENG-7,
+ * lib/ics-telemetry.ts), so edge-cache hits are not counted.
  */
 
 /** Rendered per request: the feed changes with every harvest, and a build
@@ -90,6 +93,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         .find((department) => department.slug === filters.department)?.shortName)
     : undefined
   const body = talksCalendar(talks, { name: talkFeedName(filters, departmentName), now })
+  countIcsFetch("talks")
   return new Response(body, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

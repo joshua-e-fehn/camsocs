@@ -77,6 +77,8 @@ convex/
                              into `coverageSnapshots` (after each run, daily 04:45 UTC, on request);
                              the same fold page by page for the pipeline's coverage report
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
+  analytics.ts               internal captureListingRequest: listing_request_received { kind } to
+                             PostHog (lib/posthog.ts; see "Server counts")
   auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)
   authEmail.ts               internal throttle for the @cam.ac.uk sign-in link
   broker/                    PRIVATE CRM functions — every one calls requireBrokerUser (see "Broker API")
@@ -133,7 +135,10 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              track() and before_send; analyticsAttrs()/analyticsContext() markup
   analytics.ts               track() and the click tracker (see "Analytics client", docs/analytics.md)
   posthog-server.ts          The server's PostHog sender (posthog-node): onRequestError reports,
-                             captureServerException(), captureServerEvent() (see "Error tracking")
+                             captureServerException(), captureServerEvent(), SERVER_EVENTS (see
+                             "Error tracking", "Server counts")
+  ics-telemetry.ts           countIcsFetch(): the .ics routes' ics_feed_fetched count, in after()
+                             (see "Server counts")
   error-scrub.ts             What an error report may say: no query string, fragment or email in
                              messages and stacks, frame paths only (browser and server)
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
@@ -355,6 +360,28 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
   unless the client runs, for errors without a `digest` (a server error was already reported by
   the server). `sanitizeEvent` scrubs `$exception` (`lib/error-scrub.ts`).
 
+## Server counts
+
+Aggregate PostHog events from server code, without consent (nothing touches the visitor's device;
+record of processing P12). Full table, settings and caveats: `docs/deploy.md` "PostHog
+(monitoring)", "Server counts". Fixed distinct id `camsocs-server`, no person profile, no GeoIP,
+`environment`; IDs and enums only.
+
+| Event | Properties | Sender |
+|---|---|---|
+| `ics_feed_fetched` | `feed` (`talks` / `event` / `talk`), `key?` (a valid event or talk key) | the three `.ics` route handlers → `countIcsFetch` (`lib/ics-telemetry.ts`) in `after()` → `captureServerEvent` |
+| `listing_request_received` | `kind` (`LISTING_REQUEST_KINDS`) | `listingRequests.submit` schedules `internal.analytics.captureListingRequest` → capture API (`convex/lib/posthog.ts`) |
+
+- A new server event needs an entry in `SERVER_EVENTS` (Next) or its own internal action (Convex),
+  a row in both tables, and a check against P12 and `/privacy`.
+- `ics_feed_fetched` is a lower bound: edge-cached `.ics` responses (one hour per URL) never reach
+  the function.
+- Neither can change or fail what it counts: the `.ics` response is complete before `after()` runs,
+  and the Convex action swallows PostHog failures after the request is stored.
+- Tests: `lib/ics-telemetry.test.ts`, `app/ics-routes.test.ts` (the route handlers with stubbed
+  Convex, `after()` and sender, in their own process), `lib/posthog-server.test.ts`,
+  `convex/analytics.test.ts` (convex-test, stubbed `fetch`).
+
 ## Environments
 
 Dev and prod are separate Convex deployments of the `camsocs` project with independent data.
@@ -367,7 +394,8 @@ Production setup, step by step (Convex prod, Vercel, the pipeline's `--env prod`
   uses `https://camsocs.uk`.
 - Convex env (`bunx convex env set [--prod] …`): `BETTER_AUTH_SECRET`, `SITE_URL`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PIPELINE_API_KEY`, `BROKER_EMAILS`,
-  `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link).
+  `RESEND_API_KEY`, `RESEND_FROM` (the last two switch on the `@cam.ac.uk` sign-in link),
+  `POSTHOG_KEY`, `POSTHOG_HOST` (production only: the listing-request count, "Server counts").
 - Inbound list mail (all optional; each unset means that sender is denied):
   `RESEND_WEBHOOK_SECRET` (the Resend webhook's `whsec_…` signing secret),
   `RESEND_INBOUND_API_KEY` (full-access key for the Receiving API; falls back to `RESEND_API_KEY`),
