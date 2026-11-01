@@ -233,6 +233,36 @@ class TestTalksCam:
         assert any(s > 9 for s in ctx.sleeps)  # type: ignore[attr-defined]
         assert any("654321" in note for note in ctx.report.notes)
 
+    def test_the_stage_never_reaches_a_model(
+        self,
+        ctx: StageContext,
+        net: respx.MockRouter,
+        monkeypatch: pytest.MonkeyPatch,
+        llm_tripwire: list[str],
+    ) -> None:
+        """Hard rule (AGENTS.md, source-research §6): talks.cam content never
+        reaches a model. The stage runs end to end on the synthetic list, not
+        as a dry run (a dry run skips the model on purpose), with every way to
+        a model wired to fail the test (`llm_tripwire`)."""
+        from camsocs_pipeline.events import seeds
+
+        ctx.dry_run = False
+
+        monkeypatch.setattr(
+            talks_cam,
+            "TALKS_SEEDS",
+            (seeds.TalksSeed("123456", IdentityHints(name="Test Society"), "https://x", "d"),),
+        )
+        allow(net, "https://talks.cam.ac.uk")
+        net.get(url__startswith="https://talks.cam.ac.uk/show/xml/123456").respond(
+            200, content=fixture("talks_list.xml")
+        )
+
+        talks_cam.run(ctx, window=WINDOW, now=NOW)
+
+        assert llm_tripwire == []
+        assert [e.external_id for e in staged(ctx, "talks_list.events")] == ["900001", "900002"]
+
 
 # --- CUCBC (§7) -------------------------------------------------------------------------------
 

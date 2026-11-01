@@ -15,6 +15,9 @@ Two safety properties hold for every test:
 - **No real configuration.** Every variable the pipeline reads is removed from
   the environment, and `settings()` builds `Settings` with `_env_file=None`, so
   `pipeline/.env` (real keys) is never read by a test.
+- **No telemetry carried over.** A test that starts a run makes its telemetry
+  the process's active one (LLM generations go there); it is cleared after
+  every test.
 """
 
 from __future__ import annotations
@@ -92,6 +95,58 @@ def _no_requests(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("Network access through requests is disabled in tests")
 
     monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", refuse)
+
+
+@pytest.fixture(autouse=True)
+def _no_active_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from camsocs_pipeline import telemetry
+
+    monkeypatch.setattr(telemetry, "_active", None)
+
+
+class ModelReached(BaseException):
+    """Raised by `llm_tripwire`. A `BaseException`, so a stage's broad
+    `except Exception` cannot swallow it."""
+
+
+@pytest.fixture
+def llm_tripwire(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every way a stage could reach a model, wired to fail the test: asking
+    the settings for the LLM configuration, building an `LLMClient` or an
+    OpenAI client, asking either for a completion, or reporting a generation.
+    Each raises `ModelReached` and is recorded in the returned list, which the
+    test asserts is empty.
+
+    `Settings.require_llm` is wired because every call site builds its client
+    as ``LLMClient(settings.require_llm())``: test settings have no LLM
+    configured, so without it the `ConfigError` raised there (an ordinary
+    `Exception`, which a stage or a rules-only fallback catches) would hide
+    the attempt before `LLMClient.__init__` is reached."""
+    import openai
+    import openai.resources.chat.completions as completions
+
+    from camsocs_pipeline.config import Settings
+    from camsocs_pipeline.extract.llm import LLMClient
+    from camsocs_pipeline.telemetry import HarvestTelemetry
+
+    reached: list[str] = []
+
+    def wire(owner: object, name: str) -> None:
+        label = f"{getattr(owner, '__name__', owner)}.{name}"
+
+        def trip(*_args: Any, **_kwargs: Any) -> Any:
+            reached.append(label)
+            raise ModelReached(label)
+
+        monkeypatch.setattr(owner, name, trip)
+
+    wire(Settings, "require_llm")
+    for name in ("__init__", "complete_json", "_complete"):
+        wire(LLMClient, name)
+    wire(openai.OpenAI, "__init__")
+    wire(completions.Completions, "create")
+    wire(HarvestTelemetry, "generation")
+    return reached
 
 
 #: What every host name resolves to in tests: a public address.

@@ -45,6 +45,28 @@ dropped. `cli._run` closes the client in a
 the VPS status file and the Slack alert already report those runs
 (docs/ops-vps.md), and are the record of truth for them.
 
+**LLM generations (ENG-9).** Every model call made through
+`extract/llm.py` is one `$ai_generation` event (PostHog LLM analytics),
+captured by hand rather than through the SDK's `posthog.ai.openai` wrapper:
+the wrapper would replace the pipeline's OpenAI client, sends the prompt and
+reply unless privacy mode is on, and still sends `$ai_base_url`, model
+parameters and an `$ai_error` object; a manual capture sends only what this
+module allow-lists. A generation carries the model id, `$ai_provider`
+`cliproxy`, the token counts the proxy reported, the final attempt's latency,
+the HTTP status (when there was one), `$ai_is_error`, the run key as
+`$ai_trace_id`, the stage as `$ai_span_name`, the tier, the prompt version, the
+attempt count and, on failure, the exception's class name. **Never** the
+messages (`$ai_input`), the reply (`$ai_output_choices`), error text
+(`$ai_error`), the base URL or any scraped text — the messages hold scraped
+pages and mail. The client has no notion of a run: `run_started` makes this
+instance the process's *active* telemetry (`active_telemetry`), stages run
+one after another, and `stage_started` names the stage the calls belong to;
+the stages' worker threads read it from there. talks.cam stages never call the
+model at all (the `llm_tripwire` tests prove it), so they report no
+generations. PostHog prices a generation from `$ai_provider` + `$ai_model`;
+cliproxy's models are behind a subscription and match no public price list, so
+any cost PostHog shows for them is indicative at best.
+
 The SDK uses `requests`, which respx does not intercept: tests inject a fake
 client (`HarvestTelemetry(client=…)`) and never build a real one, and
 conftest refuses any `requests` transport (tests/conftest.py).
@@ -68,7 +90,7 @@ from camsocs_pipeline.config import (
     REPO_ROOT,
     Settings,
 )
-from camsocs_pipeline.pipeline.report import RunReport, StageReport
+from camsocs_pipeline.pipeline.report import RunReport, StageReport, mint_run_key
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +100,11 @@ DISTINCT_ID = "camsocs-harvester"
 RUN_STARTED = "harvest_run_started"
 STAGE_COMPLETED = "harvest_stage_completed"
 RUN_FINISHED = "harvest_run_finished"
+AI_GENERATION = "$ai_generation"
+
+#: `$ai_provider` on every generation: the OpenAI-compatible local proxy
+#: (`LLM_BASE_URL`) the pipeline talks to, whatever serves it upstream.
+AI_PROVIDER = "cliproxy"
 
 #: Upload timeout (s) and retries per batch. The SDK defaults (15 s, 3
 #: retries) could hold a run's exit for a minute when PostHog is unreachable.
@@ -134,20 +161,43 @@ ALLOWED: Mapping[str, frozenset[str]] = {
         "errorType",
         "coverage",
     },
+    # No `$ai_input`, `$ai_output_choices`, `$ai_error`, `$ai_base_url` or
+    # `$ai_request_url`, ever: tests assert this set leaves them out.
+    AI_GENERATION: _COMMON
+    | {
+        "$ai_trace_id",
+        "$ai_span_name",
+        "$ai_model",
+        "$ai_provider",
+        "$ai_input_tokens",
+        "$ai_output_tokens",
+        "$ai_latency",
+        "$ai_http_status",
+        "$ai_is_error",
+        "stage",
+        "tier",
+        "promptVersion",
+        "attempts",
+        "validationRetry",
+        "errorType",
+    },
 }
 
 _STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 #: A metric or coverage name: camelCase, as the stages write them.
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
 _REVISION = re.compile(r"[0-9a-f]{7,40}")
+_RUN_KEY = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{6}")  # report.mint_run_key
 
 #: The shape each string property must have; a string under any other key, or
 #: one that does not match, is dropped. No shape allows a space (beyond the
-#: fixed `sync --group` form), a slash or a quote, so titles, names, URLs and
-#: server messages cannot pass.
+#: fixed `sync --group` form) or a quote, and none but `$ai_model` a slash, so
+#: titles, names, URLs and server messages cannot pass. `$ai_model` admits a
+#: single slash for gateway ids (``openai/gpt-…``) but never ``//``, so it
+#: cannot hold a URL either; its value only ever comes from config.
 _SHAPES: Mapping[str, re.Pattern[str]] = {
     "environment": re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,31}"),
-    "runKey": re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{6}"),  # report.mint_run_key
+    "runKey": _RUN_KEY,
     "group": _STAGE,
     "command": re.compile(r"sync(?: --group [a-z][a-z0-9_]{0,31})?"),
     "stage": _STAGE,
@@ -156,6 +206,13 @@ _SHAPES: Mapping[str, re.Pattern[str]] = {
     "errorType": re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,79}"),
     "pipelineVersion": re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_\-]{0,39}"),
     "revision": _REVISION,
+    "$ai_trace_id": _RUN_KEY,
+    "$ai_span_name": _STAGE,
+    # A model id as `extract.llm.assert_model_allowed` admits it, from config.
+    "$ai_model": re.compile(r"(?!.*//)[A-Za-z0-9][A-Za-z0-9._:@/\-]{0,99}"),
+    "$ai_provider": re.compile(r"[a-z][a-z0-9_\-]{0,31}"),
+    "tier": re.compile(r"bulk|strong"),
+    "promptVersion": _STAGE,  # `email_events_v1`, `redact_names_v2`
 }
 
 
@@ -284,6 +341,35 @@ def _posthog_client(settings: Settings) -> _Client:
     )
 
 
+def _count(usage: Mapping[str, object] | None, key: str) -> int | None:
+    """A token count from the OpenAI-shaped `usage`, if it is one."""
+    value = usage.get(key) if usage is not None else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+_active_lock = threading.Lock()
+_active: HarvestTelemetry | None = None
+
+
+def active_telemetry() -> HarvestTelemetry | None:
+    """The telemetry of the run in progress in this process, if any — where
+    `extract.llm.LLMClient` sends its generations."""
+    return _active
+
+
+def _activate(telemetry: HarvestTelemetry) -> None:
+    global _active
+    with _active_lock:
+        _active = telemetry
+
+
+def _deactivate(telemetry: HarvestTelemetry) -> None:
+    global _active
+    with _active_lock:
+        if _active is telemetry:
+            _active = None
+
+
 def _sum(stages: Iterable[StageReport], field: str) -> int:
     return sum(getattr(stage, field) for stage in stages)
 
@@ -308,6 +394,10 @@ class HarvestTelemetry:
         self._started: float | None = None
         self._common: dict[str, object] = {}
         self._finished = False
+        #: The stage now running (for generations), and the trace id a
+        #: generation outside any run would carry.
+        self._stage: str | None = None
+        self._trace_id = mint_run_key()
 
     @classmethod
     def from_settings(
@@ -354,6 +444,7 @@ class HarvestTelemetry:
         stages: Sequence[str],
         limit: int | None = None,
     ) -> None:
+        _activate(self)
         self._started = self._clock()
         self._common = {"runKey": report.run_key, "group": group, "dryRun": report.dry_run}
         self._capture(
@@ -369,9 +460,15 @@ class HarvestTelemetry:
         )
 
     @_quiet
+    def stage_started(self, name: str) -> None:
+        """Name the stage that the generations from now on belong to."""
+        self._stage = name
+
+    @_quiet
     def stage_completed(
         self, stage: StageReport, *, duration_s: float, error_type: str | None = None
     ) -> None:
+        self._stage = None
         self._capture(
             STAGE_COMPLETED,
             {
@@ -390,7 +487,9 @@ class HarvestTelemetry:
     @_quiet
     def run_finished(self, report: RunReport, *, error_type: str | None = None) -> None:
         """The run's outcome. `error_type` is the class of an exception that
-        ended the run early (health, `runs.start`); sent at most once."""
+        ended the run early (health, `runs.start`); sent at most once. The
+        instance stops being the active telemetry."""
+        _deactivate(self)
         if self._finished:
             return
         self._finished = True
@@ -426,6 +525,7 @@ class HarvestTelemetry:
         """A failed `harvest_run_finished` for a run that ended before
         `run_finished` could be sent — a bad `--stages`, a group's missing
         inputs, missing credentials. A no-op once the run reported itself."""
+        _deactivate(self)
         if self._finished:
             return
         self._finished = True
@@ -441,6 +541,45 @@ class HarvestTelemetry:
         )
 
     @_quiet
+    def generation(
+        self,
+        *,
+        model: str,
+        tier: str,
+        prompt_version: str,
+        latency_s: float,
+        attempts: int,
+        usage: Mapping[str, object] | None = None,
+        http_status: int | None = None,
+        error_type: str | None = None,
+        validation_retry: bool = False,
+    ) -> None:
+        """One `$ai_generation`: an `LLMClient` request, retries included.
+        `latency_s` is the final attempt's; `error_type` the class name of the
+        exception that ended it (never its message). Takes no messages, reply
+        or error text, so it cannot send them."""
+        self._capture(
+            AI_GENERATION,
+            {
+                "$ai_trace_id": self._common.get("runKey") or self._trace_id,
+                "$ai_span_name": self._stage,
+                "stage": self._stage,
+                "$ai_model": model,
+                "$ai_provider": AI_PROVIDER,
+                "$ai_input_tokens": _count(usage, "prompt_tokens"),
+                "$ai_output_tokens": _count(usage, "completion_tokens"),
+                "$ai_latency": round(latency_s, 3),
+                "$ai_http_status": http_status,
+                "$ai_is_error": error_type is not None,
+                "tier": tier,
+                "promptVersion": prompt_version,
+                "attempts": attempts,
+                "validationRetry": validation_retry,
+                "errorType": error_type,
+            },
+        )
+
+    @_quiet
     def close(self) -> None:
         """Deliver what is queued, then stop the SDK's workers — returning
         within `CLOSE_TIMEOUT` seconds whatever PostHog does. Idempotent; the
@@ -452,6 +591,7 @@ class HarvestTelemetry:
         at the deadline is abandoned; the SDK's consumers are daemon threads
         and its atexit hook returns at once while this one owns shutdown, so
         the process still exits."""
+        _deactivate(self)
         client, self._client = self._client, None
         if client is None:
             return
@@ -484,6 +624,8 @@ def _run_status(report: RunReport, error_type: str | None) -> str:
 
 
 __all__ = [
+    "AI_GENERATION",
+    "AI_PROVIDER",
     "ALLOWED",
     "CLOSE_TIMEOUT",
     "DISTINCT_ID",
@@ -492,5 +634,6 @@ __all__ = [
     "RUN_STARTED",
     "STAGE_COMPLETED",
     "HarvestTelemetry",
+    "active_telemetry",
     "clean_properties",
 ]
