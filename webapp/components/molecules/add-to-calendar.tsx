@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { track } from "@/lib/analytics"
 import { cn } from "@/lib/utils"
 
 export type CalendarLinks = {
@@ -26,7 +27,9 @@ export type CalendarLinks = {
  * "Add to calendar ▾": one talk or event into the viewer's own calendar — Google,
  * Apple or desktop Outlook (an `.ics` download), or Outlook on the web
  * (personal, or a University Microsoft 365 account). Nothing is stored and
- * nobody signs in here: each choice is a plain link.
+ * nobody signs in here: each choice is a plain link. Choosing one sends
+ * `calendar_subscribe_clicked` with the item's key (only with analytics
+ * consent, lib/analytics.ts).
  */
 export function AddToCalendar({
   links,
@@ -35,6 +38,7 @@ export function AddToCalendar({
   label = "Add to calendar",
   accent = "talks",
   noun = "talk",
+  item,
 }: {
   links: CalendarLinks
   primary?: boolean
@@ -44,8 +48,13 @@ export function AddToCalendar({
   accent?: "talks" | "events"
   /** What is being added, for the menu's heading ("Add this event to…"). */
   noun?: string
+  /** The talk or event, for `calendar_subscribe_clicked` (its key only). */
+  item?: { feed: "event" | "talk"; key: string }
 }) {
   const external = { target: "_blank", rel: "noopener noreferrer nofollow" } as const
+  const onChoose = () => {
+    if (item) track("calendar_subscribe_clicked", item)
+  }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -72,27 +81,27 @@ export function AddToCalendar({
           Add this {noun} to…
         </DropdownMenuLabel>
         <DropdownMenuItem asChild className="min-h-11 sm:min-h-10">
-          <a href={links.google} {...external}>
+          <a href={links.google} {...external} onClick={onChoose}>
             Google Calendar
             <span className="sr-only"> (opens in a new tab)</span>
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="min-h-11 sm:min-h-10">
-          <a href={links.ics} download>
+          <a href={links.ics} download onClick={onChoose}>
             <DownloadIcon aria-hidden />
             Apple Calendar or Outlook (.ics)
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild className="min-h-11 sm:min-h-10">
-          <a href={links.outlook} {...external}>
+          <a href={links.outlook} {...external} onClick={onChoose}>
             Outlook.com
             <span className="sr-only"> (opens in a new tab)</span>
           </a>
         </DropdownMenuItem>
         {links.office365 && (
           <DropdownMenuItem asChild className="min-h-11 sm:min-h-10">
-            <a href={links.office365} {...external}>
+            <a href={links.office365} {...external} onClick={onChoose}>
               Microsoft 365 (University account)
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
