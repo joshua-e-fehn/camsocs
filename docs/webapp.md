@@ -18,6 +18,7 @@ Folded from the template's `webapp/agents.md`. Root rules live in `/AGENTS.md`.
 | Toasts             | sonner                                      | 2.0.8              |
 | Animation          | framer-motion                               | 12.43.0            |
 | Analytics          | posthog-js (lazy, after consent only)       | 1.444.0 (pinned)   |
+| Error tracking     | posthog-node + @posthog/nextjs-config       | 5.61.1 / 1.12.0    |
 | Validation         | zod                                         | 4.6.5              |
 | Lint / format      | Biome                                       | 2.4.7 (pinned)     |
 | Tests              | `bun test` + convex-test + happy-dom        | 0.0.55 / 20.14.5   |
@@ -126,10 +127,15 @@ lib/                         Pure logic + *.test.ts (no server imports)
   consent.ts                 The analytics consent store (see "Analytics consent"), UNTRACKED_PATHS,
                              clearAnalyticsStorage(), hasNonAnalyticsCookie()
   analytics-client.ts        The consent-gated posthog-js client: init options, before_send
-                             (sanitizeEvent), startAnalytics(), getPostHog() (see "Analytics client")
+                             (sanitizeEvent), startAnalytics(), getPostHog(), posthogReady(),
+                             captureBrowserException() (see "Analytics client")
   analytics-events.ts        The ENG-5 event taxonomy (event → property → value rule), shared by
                              track() and before_send; analyticsAttrs()/analyticsContext() markup
   analytics.ts               track() and the click tracker (see "Analytics client", docs/analytics.md)
+  posthog-server.ts          The server's PostHog sender (posthog-node): onRequestError reports,
+                             captureServerException(), captureServerEvent() (see "Error tracking")
+  error-scrub.ts             What an error report may say: no query string, fragment or email in
+                             messages and stacks, frame paths only (browser and server)
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
                              notice), force-layout, format
@@ -158,8 +164,10 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
                              no ph_* cookie or storage; leftover ph_* storage is cleared on load
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
+instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
 next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
-                             /api/auth or /relay rewrite)
+                             /api/auth or /relay rewrite); PostHog source map upload on Vercel
+                             production builds only (withSourceMapUpload, + next.config.test.ts)
 ```
 
 ### Component architecture (Atomic Design)
@@ -306,7 +314,8 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
   `disable_capture_url_hashes`, `disable_scroll_properties`.
 - **For ENG-6**: `getPostHog()` returns the instance only while it may send, else null; call it
   at the moment of use (`posthogReady()` waits for a package load under way first). `$exception`
-  must be added to `SDK_EVENTS`.
+  is already in `SDK_EVENTS` and goes through `sanitizeEvent`'s scrub; error boundaries report
+  through `captureBrowserException()` (see "Error tracking" below).
 - **Product events (ENG-5)**: `lib/analytics-events.ts` is the taxonomy, one table of event →
   property → value rule (key shapes, enums, bounded counts), read by both `track()`
   (`lib/analytics.ts`) and `sanitizeEvent` (the default `customEvents`). `track()` is a no-op
@@ -324,6 +333,27 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
   back. Not PostHog's `next.config` rewrites, which forward every header and cannot filter.
   `skipTrailingSlashRedirect` plus a `redirects()` rule keep Next's trailing-slash 308 for every
   path but `/relay`.
+
+## Error tracking
+
+PostHog error tracking (ENG-6); full behaviour, settings and the source map upload:
+`docs/deploy.md` "PostHog (monitoring)", "Error tracking".
+
+- **Server**: `instrumentation.ts` `onRequestError` (Node.js runtime only) → `reportRequestError`
+  in `lib/posthog-server.ts`, which returns at once and sends in the background (`waitUntil`).
+  Fixed distinct id `camsocs-server`, no person profile, no GeoIP; only the path without query
+  string, the method, Next's router facts and `environment` go with the exception, and the
+  client's `before_send` (`sanitizeServerEvent`) drops everything else. Headers are never read.
+  Nothing for `/dashboard*` / `/sign-in*` (path or route pattern); at most 10 reports per error
+  and route per instance, then one per 10 s; nothing at all without `NEXT_PUBLIC_POSTHOG_KEY`.
+  `captureServerEvent(event, props)` is the allow-listed sender for server counts (ENG-7 adds its
+  events to `SERVER_EVENTS`). Tests: `lib/posthog-server.test.ts` (real posthog-node, recording
+  `fetch`).
+- **Browser**: `capture_exceptions: true` in the consent-gated client, with PostHog's
+  exception-autocapture extension bundled into its lazy chunk (no external script);
+  `app/(site)/error.tsx` and `app/global-error.tsx` call `captureBrowserException(error)`, a no-op
+  unless the client runs, for errors without a `digest` (a server error was already reported by
+  the server). `sanitizeEvent` scrubs `$exception` (`lib/error-scrub.ts`).
 
 ## Environments
 
