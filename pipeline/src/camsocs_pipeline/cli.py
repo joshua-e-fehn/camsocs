@@ -13,6 +13,8 @@
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
     camsocs clean-events [--titles] [--apply]   stored events no reader restates; --apply
                                          only with --env prod (docs/deploy.md §7)
+    camsocs monitor [--status-json PATH] production checks against PostHog (ENG-10);
+                                         exits 1 when one fails (docs/ops-vps.md)
 
 `sync` and `harvest` also take `--env NAME` after the command, as `pixi run
 harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
@@ -51,6 +53,14 @@ from camsocs_pipeline.config import (
 from camsocs_pipeline.coverage_report import report_path
 from camsocs_pipeline.events.common import london_today
 from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
+from camsocs_pipeline.monitor import (
+    PostHogQueryClient,
+    assess,
+    read_status,
+    run_checks,
+    safe_invocation_id,
+    summary,
+)
 from camsocs_pipeline.pipeline.coverage import (
     format_coverage,
     quarantine_counts,
@@ -202,6 +212,8 @@ def status(ctx: click.Context) -> None:
         ("Meta token", secret(settings.meta_access_token)),
         ("PostHog key", ("set" if settings.posthog_configured else "(unset)") + " (run telemetry)"),
         ("PostHog host", f"{settings.posthog_host or '(unset)'} ({settings.posthog_env})"),
+        ("PostHog personal key", secret(settings.posthog_personal_api_key) + " (monitor)"),
+        ("PostHog project", settings.posthog_project_id or "(unset)"),
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
@@ -521,6 +533,50 @@ def clean_events(ctx: click.Context, apply: bool, titles: bool) -> None:
     except ConvexError as error:
         raise click.ClickException(str(error)) from error
     click.echo(f"removed {len(result['removed'])}; already gone {len(result['missing'])}")
+
+
+@cli.command()
+@click.option(
+    "--status-json",
+    type=click.Path(path_type=Path, dir_okay=False),
+    metavar="PATH",
+    help=(
+        "Read the previous run's verdict from PATH and write this one there (the Slack "
+        "alert reads it); a check already paged for reminds only every 6 h."
+    ),
+)
+@_env_option
+@click.pass_context
+def monitor(ctx: click.Context, status_json: Path | None) -> None:
+    """Production checks against PostHog (monitor.py): an error spike, a stale
+    harvest, a high zero-result search rate, no pageviews. Exits 1 when a
+    check fails; a query PostHog cannot answer is `unknown` and never fails
+    the run. Prints counts and thresholds only."""
+    settings = _settings(ctx)
+    if not settings.posthog_query_configured:
+        click.echo(
+            "monitor: POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID are not set; nothing checked."
+        )
+        return
+    try:
+        client = PostHogQueryClient.from_settings(settings)
+    except ConfigError as error:
+        raise click.ClickException(str(error)) from error
+    with client:
+        results = run_checks(client)
+    verdict = assess(results, read_status(status_json), now=datetime.now(UTC))
+    for line in summary(verdict):
+        click.echo(f"monitor: {line}")
+    if verdict.unknown:
+        click.echo(
+            f"warning: not checked, PostHog did not answer: {', '.join(verdict.unknown)} "
+            "(not a failure: an outage must not page)",
+            err=True,
+        )
+    invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
+    _write_summary(status_json, verdict.status_payload(invocation))
+    if verdict.page:
+        raise click.ClickException(f"check failed: {', '.join(verdict.failed)}")
 
 
 @cli.command()
