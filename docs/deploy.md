@@ -120,6 +120,13 @@ pixi run posthog-dashboards -- --apply            # create or update the four da
 unset POSTHOG_PERSONAL_API_KEY
 ```
 
+The dashboards as applied on 2026-11-01 (EU Cloud, project 330133; PostHog login required):
+
+- [camsocs: Traffic](https://eu.posthog.com/project/330133/dashboard/1075489)
+- [camsocs: Content](https://eu.posthog.com/project/330133/dashboard/1075490)
+- [camsocs: Search](https://eu.posthog.com/project/330133/dashboard/1075491)
+- [camsocs: Reliability](https://eu.posthog.com/project/330133/dashboard/1075492)
+
 `POSTHOG_APP_HOST` defaults to `https://eu.posthog.com`. The browser numbers count only visitors who accepted analytics; content insights break down by `orgKey`, `eventKey` and `talkKey` (names are resolved in camsocs, never sent). The hourly production checks that alert on Slack are the VPS monitor (`camsocs monitor`, `docs/ops-vps.md` §6 "Monitor"), not PostHog alerts: the project's keys have no alert scopes.
 
 ## 4. The pipeline against production
