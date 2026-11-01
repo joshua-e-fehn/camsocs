@@ -14,7 +14,8 @@ export default async function SiteLayout({ children }: Readonly<{ children: Reac
         Skip to content
       </a>
       <PublicHeader />
-      <main id="main" className="flex-1">
+      {/* Focusable so the skip link and the consent banner can hand focus here. */}
+      <main id="main" tabIndex={-1} className="flex-1 outline-none">
         {children}
       </main>
       <SiteFooter clock={clock} termSourceUrl={sourceUrl} />

@@ -122,6 +122,42 @@ describe("the consent banner", () => {
     expect(document.activeElement).toBe(settings)
   })
 
+  test("Cookie settings focuses it even while it is already open", async () => {
+    await render(
+      <>
+        <CookieSettingsButton />
+        <ConsentBanner />
+      </>,
+    )
+    expect(banner()).not.toBeNull()
+    const settings = button("Cookie settings")
+    settings.focus()
+    await click(settings)
+    expect(document.activeElement).toBe(banner())
+    await click(button("Reject"))
+    expect(document.activeElement).toBe(settings)
+  })
+
+  test("a first-visit choice hands focus to <main>, not <body>", async () => {
+    const main = document.createElement("main")
+    main.id = "main"
+    main.tabIndex = -1
+    document.body.append(main)
+    await render(<ConsentBanner />)
+    button("Accept analytics").focus()
+    await click(button("Accept analytics"))
+    expect(banner()).toBeNull()
+    expect(document.activeElement).toBe(main)
+  })
+
+  test("reserves its height on <html> while open, and gives it back", async () => {
+    const html = document.documentElement
+    await render(<ConsentBanner />)
+    expect(html.style.getPropertyValue("--consent-inset")).toMatch(/^\d+px$/)
+    await click(button("Reject"))
+    expect(html.style.getPropertyValue("--consent-inset")).toBe("")
+  })
+
   test("still works for the page when storage throws", async () => {
     const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage")
     Object.defineProperty(window, "localStorage", {
