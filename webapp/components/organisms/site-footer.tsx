@@ -1,5 +1,6 @@
 import { ArrowUpRightIcon } from "lucide-react"
 import Link from "next/link"
+import { CookieSettingsButton } from "@/components/molecules/cookie-settings-button"
 import { Crest } from "@/components/molecules/crest"
 import { formatDayShort } from "@/lib/calendar"
 import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
@@ -38,7 +39,8 @@ const LINK =
 
 /**
  * The footer (DESIGN.md "River & ink"): the sky band again, the crest and a
- * line about the site, three short link columns with the contact address,
+ * line about the site, three short link columns with the contact address
+ * (and "Cookie settings", which reopens the consent banner),
  * then the non-affiliation disclaimer and where we are in the term.
  */
 export function SiteFooter({
@@ -79,6 +81,7 @@ export function SiteFooter({
                 {link.label}
               </Link>
             ))}
+            {column.title === "camsocs" && <CookieSettingsButton className={LINK} />}
             {column.title === "camsocs" && (
               <p className="mt-3 flex flex-col gap-0.5 text-sm text-muted-foreground">
                 Missing a society or a talk series?
