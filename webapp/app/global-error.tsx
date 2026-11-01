@@ -17,9 +17,10 @@ import { captureBrowserException } from "@/lib/analytics-client"
 /**
  * The last-resort boundary: the root layout itself failed, so this replaces
  * it, `<html>` and `<body>` included, without the providers, header or
- * fonts. Kept to plain markup and a retry. The error goes to PostHog only for
- * a visitor who accepted analytics (ENG-6); its details stay in the server
- * log.
+ * fonts. Kept to plain markup and a retry. A browser-side error goes to
+ * PostHog only for a visitor who accepted analytics (ENG-6); a server error
+ * (one with a `digest`) was already reported by the server, so it is not sent
+ * again as React's placeholder. Its details stay in the server log.
  */
 export default function GlobalError({
   error,
@@ -29,7 +30,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    captureBrowserException(error)
+    if (!error.digest) captureBrowserException(error)
   }, [error])
 
   return (

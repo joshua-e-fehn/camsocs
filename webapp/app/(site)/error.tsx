@@ -15,8 +15,10 @@ import {
 import { captureBrowserException } from "@/lib/analytics-client"
 
 /** A public page failed to load its data. Says so plainly and offers a retry;
- * the error's details stay in the server log, and go to PostHog only for a
- * visitor who accepted analytics (ENG-6; the server reports its own side). */
+ * the error's details stay in the server log. A browser-side error goes to
+ * PostHog only for a visitor who accepted analytics (ENG-6). A server error
+ * (one with a `digest`) is not sent again from here: the server already
+ * reported the real error, and the browser only sees React's placeholder. */
 export default function SiteError({
   error,
   reset,
@@ -25,7 +27,7 @@ export default function SiteError({
   reset: () => void
 }) {
   useEffect(() => {
-    captureBrowserException(error)
+    if (!error.digest) captureBrowserException(error)
   }, [error])
 
   return (

@@ -20,6 +20,9 @@ import { scrubErrorText, scrubExceptionProps, stripUrlTail } from "@/lib/error-s
  *    carry only their allow-listed properties (`SERVER_EVENTS`).
  *  - `/dashboard*` and `/sign-in*` (hard rule 3) report nothing: they are
  *    never tracked, and a broker-area error can quote a person's name.
+ *  - Each instance sends at most a burst of reports per error and route, then
+ *    one per ten seconds (`takeReportToken`), so an outage costs a handful of
+ *    reports, not one per failing request.
  *  - No `NEXT_PUBLIC_POSTHOG_KEY` (local runs, CI, previews) → no client, and
  *    every call is a no-op. The key and host are the public ones the browser
  *    build also reads (already set on Vercel Production); the server needs
@@ -97,12 +100,16 @@ export function errorContextProperties(
   context: ServerErrorContext,
   env: Env = process.env,
 ): Record<string, string> | null {
-  const props: Record<string, string> = { environment: serverEnvironment(env) }
-  if (context.path !== undefined) {
-    const path = stripUrlTail(context.path)
-    if (isUntrackedPath(path)) return null
-    props.$pathname = shortValue(path)
+  // Both the requested path and the route Next matched it to are checked, so
+  // a report without a path, or with a path spelled differently from what the
+  // router matched, still never comes from the broker area or sign-in.
+  const path = context.path === undefined ? undefined : stripUrlTail(context.path)
+  if (path !== undefined && isUntrackedPath(path)) return null
+  if (context.routePath !== undefined && isUntrackedPath(stripUrlTail(context.routePath))) {
+    return null
   }
+  const props: Record<string, string> = { environment: serverEnvironment(env) }
+  if (path !== undefined) props.$pathname = shortValue(path)
   const facts: [string, string | undefined][] = [
     ["$http_method", context.method],
     ["nextjs_router_kind", context.routerKind],
@@ -214,6 +221,49 @@ export function createPostHogServer(
   })
 }
 
+/**
+ * How many reports of one error on one route an instance sends: a burst of
+ * `REPORT_BURST`, then one per `REPORT_REFILL_MS` (posthog-js's browser
+ * defaults). posthog-node's own limiter only guards its autocapture path, not
+ * `captureExceptionImmediate`, so without this an outage that fails every
+ * render (Convex down) would send one PostHog request per failing request:
+ * quota spent, function time added, one issue copied thousands of times.
+ */
+export const REPORT_BURST = 10
+export const REPORT_REFILL_MS = 10_000
+/** Keys remembered at once; past this the oldest is forgotten. */
+const MAX_REPORT_KEYS = 500
+
+type Bucket = { tokens: number; at: number }
+const buckets = new Map<string, Bucket>()
+
+/** Whether a report under `key` may go now, taking one token if so. */
+export function takeReportToken(key: string, now: number = Date.now()): boolean {
+  const previous = buckets.get(key)
+  const refilled = previous
+    ? Math.min(REPORT_BURST, previous.tokens + (now - previous.at) / REPORT_REFILL_MS)
+    : REPORT_BURST
+  buckets.delete(key)
+  if (buckets.size >= MAX_REPORT_KEYS) {
+    const oldest = buckets.keys().next().value
+    if (oldest !== undefined) buckets.delete(oldest)
+  }
+  const allowed = refilled >= 1
+  buckets.set(key, { tokens: allowed ? refilled - 1 : refilled, at: now })
+  return allowed
+}
+
+/** The rate-limit key for an error: where it happened and what it is (the
+ * digest Next gives a server error, else its type). */
+export function reportKey(error: unknown, context: ServerErrorContext): string {
+  const where = context.routePath ?? stripUrlTail(context.path ?? "")
+  const digest =
+    typeof error === "object" && error !== null && "digest" in error ? error.digest : undefined
+  const what =
+    typeof digest === "string" ? digest : error instanceof Error ? error.name : typeof error
+  return `${where.slice(0, MAX_VALUE)}|${what.slice(0, MAX_VALUE)}`
+}
+
 /** undefined until first use; null when there is no key. */
 let client: PostHog | null | undefined
 
@@ -223,16 +273,18 @@ export function getPostHogServer(): PostHog | null {
   return client
 }
 
-/** Replaces the shared client (tests only). */
+/** Replaces the shared client and forgets the rate limits (tests only). */
 export function setPostHogServerForTests(next: PostHog | null | undefined): void {
   client = next
+  buckets.clear()
 }
 
 /**
  * Reports a server error to PostHog: the error's type, message and stack
  * plus the request facts in `context` (see `errorContextProperties`). Sends
  * at once; resolves when PostHog answered or gave up, never rejects. A no-op
- * without a key or on an untracked route.
+ * without a key, on an untracked route, or past the rate limit for this
+ * error on this route (`takeReportToken`).
  */
 export async function captureServerException(
   error: unknown,
@@ -243,6 +295,7 @@ export async function captureServerException(
     if (!posthog) return
     const props = errorContextProperties(context)
     if (!props) return
+    if (!takeReportToken(reportKey(error, context))) return
     await posthog.captureExceptionImmediate(error, SERVER_DISTINCT_ID, {
       ...props,
       $process_person_profile: false,

@@ -331,14 +331,16 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
   Fixed distinct id `camsocs-server`, no person profile, no GeoIP; only the path without query
   string, the method, Next's router facts and `environment` go with the exception, and the
   client's `before_send` (`sanitizeServerEvent`) drops everything else. Headers are never read.
-  Nothing for `/dashboard*` / `/sign-in*`; nothing at all without `NEXT_PUBLIC_POSTHOG_KEY`.
+  Nothing for `/dashboard*` / `/sign-in*` (path or route pattern); at most 10 reports per error
+  and route per instance, then one per 10 s; nothing at all without `NEXT_PUBLIC_POSTHOG_KEY`.
   `captureServerEvent(event, props)` is the allow-listed sender for server counts (ENG-7 adds its
   events to `SERVER_EVENTS`). Tests: `lib/posthog-server.test.ts` (real posthog-node, recording
   `fetch`).
 - **Browser**: `capture_exceptions: true` in the consent-gated client, with PostHog's
   exception-autocapture extension bundled into its lazy chunk (no external script);
   `app/(site)/error.tsx` and `app/global-error.tsx` call `captureBrowserException(error)`, a no-op
-  unless the client runs. `sanitizeEvent` scrubs `$exception` (`lib/error-scrub.ts`).
+  unless the client runs, for errors without a `digest` (a server error was already reported by
+  the server). `sanitizeEvent` scrubs `$exception` (`lib/error-scrub.ts`).
 
 ## Environments
 

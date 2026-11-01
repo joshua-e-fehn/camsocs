@@ -7,10 +7,17 @@
  * a request carried: a URL with its query string (a search someone typed), or
  * an email address (a sign-in, a request form). Both go, wherever they appear:
  *
- *  - every URL loses its query string and fragment (`https://x/a?q=1#b` →
- *    `https://x/a`, `/talks?q=1` → `/talks`);
- *  - every email address becomes `[email]`;
- *  - text is capped at `MAX_TEXT` characters.
+ *  - every query string and fragment goes, up to the next whitespace
+ *    (`https://x/a?q=1#b` → `https://x/a`, `/talks?q=1` → `/talks`,
+ *    `talks?q=a(b)` → `talks`). This fails closed: whatever follows a `?` in
+ *    the same word goes with it, quotes and brackets included, because a
+ *    browser leaves `(`, `)`, `[`, `]` and `'` unencoded in a query. A `#`
+ *    stays at the start of a word or after a `.` (`#x`, `Foo.#bar`: private
+ *    fields in stack lines), where it is not a fragment;
+ *  - every email address, `@` or URL-encoded `%40`, becomes `[email]`;
+ *  - text is capped at `MAX_TEXT` characters. Only the first `MAX_TEXT` plus
+ *    a small margin is scanned at all, so a long message or path costs
+ *    linear time at worst (no regex backtracking over megabytes).
  *
  * In a PostHog exception list (`$exception_list`, posthog's own format,
  * @posthog/core `ErrorProperties`) the type and message are scrubbed, frame
@@ -23,20 +30,33 @@
 /** Longest message, type or stack line kept, in characters. */
 export const MAX_TEXT = 2000
 
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g
+const EMAIL = /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/gi
 
-/** A URL (`scheme://…`) or a path (`/…`) up to its query string or fragment,
- * then the query string / fragment itself, which goes. */
-const URL_TAIL = /((?:[a-z][a-z0-9+.-]*:\/\/|\/)[^\s?#"'`<>()[\]]*)[?#][^\s"'`<>()[\]]*/gi
+/** A query string: `?` and the rest of its word. */
+const QUERY = /\?\S+/g
+
+/** A fragment: `#` and the rest of its word, unless the `#` starts the word
+ * or follows a `.` (a private field such as `Foo.#bar`). */
+const FRAGMENT = /([^\s.])#\S+/g
+
+/** Characters scanned beyond `MAX_TEXT`, so an email address or query string
+ * that straddles the cap is still recognised whole before the cut. */
+const SCAN_MARGIN = 256
 
 /** `text` without query strings, fragments or email addresses, capped. */
 export function scrubErrorText(text: string): string {
-  return text.replace(URL_TAIL, "$1").replace(EMAIL, "[email]").slice(0, MAX_TEXT)
+  return text
+    .slice(0, MAX_TEXT + SCAN_MARGIN)
+    .replace(QUERY, "")
+    .replace(FRAGMENT, "$1")
+    .replace(EMAIL, "[email]")
+    .slice(0, MAX_TEXT)
 }
 
 /** A frame's file name or URL with its path only (no query string or fragment). */
 export function stripUrlTail(value: string): string {
-  return value.split(/[?#]/)[0] ?? ""
+  const cut = value.search(/[?#]/)
+  return cut === -1 ? value : value.slice(0, cut)
 }
 
 /** Frame fields dropped: source lines around the frame and local variables. */

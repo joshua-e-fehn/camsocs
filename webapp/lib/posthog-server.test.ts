@@ -5,12 +5,16 @@ import {
   captureServerException,
   createPostHogServer,
   errorContextProperties,
+  REPORT_BURST,
+  REPORT_REFILL_MS,
+  reportKey,
   requestErrorContext,
   SERVER_DISTINCT_ID,
   sanitizeServerEvent,
   serverEnvironment,
   serverEventProperties,
   setPostHogServerForTests,
+  takeReportToken,
 } from "./posthog-server"
 
 /**
@@ -168,6 +172,31 @@ describe("an onRequestError report", () => {
     expect(sent).toHaveLength(0)
   })
 
+  test("the matched route is checked too, with or without a path", async () => {
+    const { sent } = recordingClient()
+    await captureServerException(new Error("Jane Doe is already listed"), {
+      routePath: "/dashboard/people",
+    })
+    await captureServerException(new Error("x"), { path: "/x", routePath: "/sign-in" })
+    expect(sent).toHaveLength(0)
+    expect(errorContextProperties({ routePath: "/dashboard/people" }, {})).toBeNull()
+  })
+
+  test("one error on one route is sent at most a burst at a time", async () => {
+    const { sent } = recordingClient()
+    const context = { path: "/talks/a", routePath: "/talks/[key]" }
+    for (let i = 0; i < REPORT_BURST + 5; i++) {
+      await captureServerException(Object.assign(new Error("down"), { digest: "123" }), context)
+    }
+    expect(events(sent)).toHaveLength(REPORT_BURST)
+    // A different error, or the same error on another route, has its own budget.
+    await captureServerException(new TypeError("other"), context)
+    await captureServerException(Object.assign(new Error("down"), { digest: "123" }), {
+      routePath: "/events/[key]",
+    })
+    expect(events(sent)).toHaveLength(REPORT_BURST + 2)
+  })
+
   test("onRequestError returns at once and still sends in the background", async () => {
     const { sent } = recordingClient()
     const previous = process.env.NEXT_RUNTIME
@@ -206,6 +235,29 @@ describe("an onRequestError report", () => {
     }
     setPostHogServerForTests(createPostHogServer({ NEXT_PUBLIC_POSTHOG_KEY: KEY }, { fetch }))
     await expect(captureServerException(new Error("x"), { path: "/" })).resolves.toBeUndefined()
+  })
+})
+
+describe("the report rate limit", () => {
+  test("refills one report per interval up to the burst", () => {
+    const now = 1_000_000
+    for (let i = 0; i < REPORT_BURST; i++) expect(takeReportToken("k", now)).toBe(true)
+    expect(takeReportToken("k", now)).toBe(false)
+    expect(takeReportToken("k", now + REPORT_REFILL_MS - 1)).toBe(false)
+    expect(takeReportToken("k", now + REPORT_REFILL_MS)).toBe(true)
+    expect(takeReportToken("k", now + REPORT_REFILL_MS)).toBe(false)
+    // A long quiet spell refills the whole burst, never more.
+    const later = now + 100 * REPORT_REFILL_MS
+    for (let i = 0; i < REPORT_BURST; i++) expect(takeReportToken("k", later)).toBe(true)
+    expect(takeReportToken("k", later)).toBe(false)
+  })
+
+  test("is keyed by the route and the error's digest or type", () => {
+    expect(reportKey(Object.assign(new Error("x"), { digest: "42" }), { routePath: "/a" })).toBe(
+      "/a|42",
+    )
+    expect(reportKey(new TypeError("x"), { path: "/b?q=secret" })).toBe("/b|TypeError")
+    expect(reportKey("boom", {})).toBe("|string")
   })
 })
 
