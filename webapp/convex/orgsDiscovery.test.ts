@@ -203,7 +203,13 @@ describe("orgs.list sort and activity", () => {
     expect(page.map((card) => card.name).slice(0, 2)).toEqual(["Chess Club", "Drama Society"])
     const busy = await t.query(api.orgs.busy, {})
     const shelf = Object.fromEntries(busy.orgs.map(({ card, count }) => [card.name, count]))
-    expect(shelf["Drama Society"]).toBe(1)
+    // The shelf's own window decides: in the last minute before a term week
+    // ends (Wednesday 23:59 London) every night already falls in the next one.
+    const onShelf = nights.some((_, i) => {
+      const startsAt = firstNight + i * 3_600_000
+      return startsAt >= busy.from && startsAt < busy.to
+    })
+    expect(shelf["Drama Society"]).toBe(onShelf ? 1 : undefined)
     // The organiser rows carry the run and cancelled copies the counts read.
     const rows = await t.run(async (ctx) =>
       ctx.db

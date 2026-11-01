@@ -61,11 +61,11 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://<prod>.convex.site` | `https://hushed-rhinoceros-215.convex.site` | Same deployment as the line above (`lib/convex-url.ts` checks) |
    | `NEXT_PUBLIC_SITE_URL` | `https://camsocs.uk` | unset | Unset, `lib/site.ts` falls back to `https://camsocs.uk` (never localhost on Vercel) — previews keep canonical links on production |
    | `CONVEX_DEPLOY_KEY` | the production deploy key | **never** | Production only; a preview with it would deploy previews' code to production |
-   | `NEXT_PUBLIC_POSTHOG_KEY` | the PostHog project token (`phc_…`) | unset | Public by design (it ships to the browser). Unset, analytics is a no-op. 1Password Mya vault, item `PostHog` |
-   | `NEXT_PUBLIC_POSTHOG_HOST` | `https://eu.i.posthog.com` | unset | EU Cloud ingestion host; the browser sends to the `/ingest` proxy, which forwards here |
-   | `NEXT_PUBLIC_POSTHOG_ENV` | `production` | unset | Tags every event's `environment`; local runs use `development`, which the project's internal/test filter hides |
-   | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | Source map upload at build time (error tracking) |
-   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | Source map upload only; scoped to the camsocs project. The build skips the upload when it is unset |
+   | `NEXT_PUBLIC_POSTHOG_KEY` | the PostHog project token (`phc_…`) | unset | Public by design (it ships to the browser). Read by the PostHog client (ENG-4), which is meant to stay off when it is unset. 1Password Mya vault, item `PostHog` |
+   | `NEXT_PUBLIC_POSTHOG_HOST` | `https://eu.i.posthog.com` | unset | EU Cloud ingestion host; the planned `/ingest` proxy (ENG-4) forwards browser events here |
+   | `NEXT_PUBLIC_POSTHOG_ENV` | `production` | unset | Meant to tag each browser event's `environment` (ENG-4); local runs use `development`, which the project's internal/test filter hides (configured) |
+   | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the planned source map upload at build time (error tracking, ENG-6) |
+   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project. The build is meant to skip the upload when it is unset |
 
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
@@ -86,14 +86,13 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `PIPELINE_API_KEY` | `/api/pipeline/*` | `openssl rand -hex 32` — a new one; the same value goes into `pipeline/.env.prod` |
 | `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3) | optional; both unset = the option shows as off |
 | `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS`, `INBOUND_EMAIL_SECRET` | forwarded list mail (J3, J4) | optional; see `docs/setup/inbox-instagram.md`. Point the Resend webhook at the **production** site URL (`https://<prod>.convex.site/api/inbound/email`) once production is the one that should receive mail |
-
-| `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog events from Convex (listing requests) | the project token (`phc_…`) and `https://eu.i.posthog.com`; both unset = no events |
+| `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog events from Convex (listing requests, ENG-7) | the project token (`phc_…`) and `https://eu.i.posthog.com`; set on **production only**, so dev never sends untagged events. Both unset = no events once the sender exists |
 
 `bunx convex env list --prod` prints values; use `bunx convex env list --prod --names-only` to check what is set.
 
 ### PostHog (monitoring)
 
-One PostHog project, `camsocs`, on **EU Cloud** (the free plan allows one project). Production and local development share it: every event carries `environment` (`production` or `development`, from `NEXT_PUBLIC_POSTHOG_ENV`), and the project's "Filter out internal and test users" setting hides `development`. Tests and e2e run with no key, so they send nothing. Project settings: client IP data discarded, session replay off, timezone Europe/London; PostHog AI must stay off at organisation level (talks.cam content must never reach a model, so events carry talk IDs only). The project token, project id and the personal API key live in the 1Password Mya vault, item `PostHog`. The VPS harvester gets `POSTHOG_KEY` and `POSTHOG_HOST` in `/etc/camsocs` when its telemetry ships (`docs/ops-vps.md`).
+The variables above are provisioned (2026-11-01); the code that reads them lands with the PostHog monitoring tickets (ENG-4 onwards), so until then they change nothing. One PostHog project, `camsocs`, on **EU Cloud** (the free plan allows one project). Production and local development share it: browser events are to carry `environment` (`production` or `development`, from `NEXT_PUBLIC_POSTHOG_ENV`), and the project's "Filter out internal and test users" setting already excludes `environment = development`. Server-side senders (Convex, the VPS harvester) tag their own events and run with a key on production only. Unit tests (`bun test`) never send anything; e2e starts `next dev`, which reads `.env.local`, so keep the PostHog key out of `.env.local` while running it, and never point the e2e suite at `https://camsocs.uk` with analytics on. Project settings: client IP data discarded, session replay off, timezone Europe/London; PostHog AI must stay off at organisation level (talks.cam content must never reach a model, so talk events are to carry IDs only). The project token, project id and the personal API key live in the 1Password Mya vault, item `PostHog`. Where the VPS harvester keeps its PostHog values is decided with its telemetry (ENG-8, `docs/ops-vps.md`).
 
 ## 4. The pipeline against production
 
