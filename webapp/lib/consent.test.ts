@@ -7,6 +7,7 @@ import {
   getConsent,
   getConsentRecord,
   getConsentSettingsRequests,
+  hasNonAnalyticsCookie,
   isConsentBannerOpen,
   isUntrackedPath,
   onConsentChange,
@@ -347,5 +348,22 @@ describe("untracked routes", () => {
     for (const path of ["/", "/events", "/talks/talk-1", "/privacy", "/societies/dashboard"]) {
       expect(isUntrackedPath(path)).toBe(false)
     }
+  })
+})
+
+describe("a request's cookies", () => {
+  /** lib/auth-server.ts: only a cookie that could be a session costs a Convex
+   * auth round trip; PostHog's own never does (docs/deploy.md "CPU protection"). */
+  test("count only when something besides PostHog's is there", () => {
+    expect(hasNonAnalyticsCookie(null)).toBe(false)
+    expect(hasNonAnalyticsCookie(undefined)).toBe(false)
+    expect(hasNonAnalyticsCookie("")).toBe(false)
+    expect(hasNonAnalyticsCookie("ph_phc_x_posthog=%7B%7D")).toBe(false)
+    expect(hasNonAnalyticsCookie("ph_phc_x_posthog=1; __ph_opt_in_out_phc_x=1")).toBe(false)
+    expect(hasNonAnalyticsCookie("better-auth.session_token=abc")).toBe(true)
+    expect(hasNonAnalyticsCookie("ph_phc_x_posthog=1; __Secure-better-auth.session_token=a")).toBe(
+      true,
+    )
+    expect(hasNonAnalyticsCookie("graph_ph=1")).toBe(true)
   })
 })
