@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Figtree, JetBrains_Mono, Young_Serif } from "next/font/google"
 
 import "./globals.css"
+import { ConsentBanner } from "@/components/organisms/consent-banner"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -84,6 +85,8 @@ export default async function RootLayout({
       <body>
         <ConvexClientProvider initialToken={token}>
           <AuthGuard>{children}</AuthGuard>
+          {/* Every page but /dashboard* and /sign-in* (it hides itself there). */}
+          <ConsentBanner />
           <Toaster />
         </ConvexClientProvider>
       </body>

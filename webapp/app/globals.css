@@ -194,9 +194,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Room for the consent banner while it is open (organisms/consent-banner.tsx
+       sets the variable to its height): the end of the page scrolls clear. */
+    padding-bottom: var(--consent-inset, 0px);
   }
   html {
     @apply font-sans;
+    /* …and a focused control is scrolled above it, never hidden (SC 2.4.11). */
+    scroll-padding-bottom: var(--consent-inset, 0px);
   }
   /* Young Serif has one weight and no italic: never fake either. */
   .font-serif {

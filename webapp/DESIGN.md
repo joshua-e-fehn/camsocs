@@ -270,7 +270,11 @@ Never show a blank area. Provide:
   header box, or `openPalette()` (`lib/palette.ts`).
 - **Footer** (`site-footer.tsx`): the sky band; crest and one line about the site, Browse / For
   societies / camsocs columns with the contact address, then the disclaimer and the term
-  (`loadTermClock`, lib/term-dates.ts).
+  (`loadTermClock`, lib/term-dates.ts). "Cookie settings" in the camsocs column reopens the
+  consent banner.
+- **Consent banner** (`organisms/consent-banner.tsx`): paper, not sky, fixed to the bottom with a
+  hairline and a shadow; "Accept analytics" and "Reject" as two identical outline buttons (equal
+  prominence is a legal requirement, so neither is primary).
 - **Reveal** never ships `opacity:0` in server HTML: it only tucks content away after mount, when
   motion is allowed and the block is still below the fold.
 - Ruled rows with hairlines; a 2px ink rule over each column or section head.
