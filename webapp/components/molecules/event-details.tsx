@@ -10,6 +10,7 @@ import { RichText } from "@/components/molecules/rich-text"
 import { ShareAction } from "@/components/molecules/share-action"
 import { SourcedChip, type SourcedFact } from "@/components/molecules/sourced-chip"
 import { TermDateBlock } from "@/components/molecules/term-date-block"
+import { analyticsAttrs, analyticsContext } from "@/lib/analytics-events"
 import { formatEventTime, formatInstantDate, londonIsoDate } from "@/lib/calendar"
 import { eventGoogleCalendarUrl, eventOutlookCalendarUrl, spokenTitle } from "@/lib/events"
 import { formatEventPrice } from "@/lib/format"
@@ -64,6 +65,11 @@ function ownPage(event: EventPublic): { url: string; host: string } | undefined 
     event.hosting === "takes_part" ? (event.externalUrl ?? event.sourceUrl) : event.sourceUrl
   const host = url ? displayHost(url) : null
   return url && host ? { url, host } : undefined
+}
+
+/** The first organiser that is not a sponsor, for outbound-link events. */
+function leadOrgKey(event: EventPublic): string | undefined {
+  return event.organisers.find((organiser) => organiser.role !== "sponsor")?.key
 }
 
 /** The type and who runs it over the title, in the events brick:
@@ -228,7 +234,10 @@ export function EventDetails({
   ]
 
   return (
-    <div className={cn("flex flex-col gap-7", className)}>
+    <div
+      className={cn("flex flex-col gap-7", className)}
+      {...analyticsContext({ orgKey: leadOrgKey(event) })}
+    >
       {showTitle && (
         <header className="flex flex-col gap-3">
           <EventEyebrow event={event} />
@@ -371,12 +380,14 @@ export function EventDetails({
             links={eventCalendarLinks(event, pageUrl, venueName)}
             accent="events"
             noun="event"
+            item={{ feed: "event", key: event.key }}
           />
           {event.bookingUrl && (
             <a
               href={event.bookingUrl}
               target="_blank"
               rel="noopener noreferrer nofollow"
+              {...analyticsAttrs("outbound_link_clicked", { kind: "other" })}
               className="inline-flex h-11 items-center gap-1.5 rounded-full border border-events px-4 text-sm font-medium text-events transition-colors duration-150 hover:bg-events-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
             >
               <TicketIcon aria-hidden className="size-4" />
@@ -389,6 +400,7 @@ export function EventDetails({
               href={page.url}
               target="_blank"
               rel="noopener noreferrer nofollow"
+              {...analyticsAttrs("outbound_link_clicked", { kind: "source" })}
               className="inline-flex h-11 items-center gap-1.5 rounded-full border bg-card px-4 text-sm font-medium transition-colors duration-150 hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
             >
               {event.hosting === "takes_part" ? "The event’s own page" : "Read at source"}
@@ -409,7 +421,11 @@ export function EventDetails({
           {event.sourceUrl && sourceHost ? (
             <>
               <span aria-hidden>·</span>
-              <ExternalLink href={event.sourceUrl} className="font-mono text-foreground/80">
+              <ExternalLink
+                href={event.sourceUrl}
+                className="font-mono text-foreground/80"
+                outbound={{ kind: "source" }}
+              >
                 {sourceHost}
               </ExternalLink>
             </>
@@ -448,6 +464,7 @@ export function EventActionBar({
           links={eventCalendarLinks(event, pageUrl, venueName)}
           accent="events"
           noun="event"
+          item={{ feed: "event", key: event.key }}
           className="flex-1"
         />
         {page && (
@@ -455,6 +472,10 @@ export function EventActionBar({
             href={page.url}
             target="_blank"
             rel="noopener noreferrer nofollow"
+            {...analyticsAttrs("outbound_link_clicked", {
+              kind: "source",
+              orgKey: leadOrgKey(event),
+            })}
             className="flex flex-col items-center gap-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span className="flex size-11 items-center justify-center rounded-full border bg-card">

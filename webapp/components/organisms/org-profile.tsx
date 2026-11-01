@@ -29,6 +29,7 @@ import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { UnknownFacts } from "@/components/molecules/unknown-facts"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { analyticsContext } from "@/lib/analytics-events"
 import {
   dayName,
   formatDateOrText,
@@ -268,7 +269,11 @@ function Socials({ socials }: { socials: OrgPublic["socials"] }) {
     <ul className="flex flex-col gap-1">
       {unique.map((social) => (
         <li key={social.url} className="min-w-0">
-          <ExternalLink href={social.url} className={cn("max-w-full", PHONE_TARGET)}>
+          <ExternalLink
+            href={social.url}
+            className={cn("max-w-full", PHONE_TARGET)}
+            outbound={{ kind: "social" }}
+          >
             <span className="shrink-0">{SOCIAL_PLATFORM_LABELS[social.platform]}</span>
             {social.handle && (
               <span className="ml-1 min-w-0 truncate font-mono text-xs text-muted-foreground">
@@ -495,7 +500,7 @@ export function OrgProfile({
     {
       label: "Join link",
       meta: meta.joinUrl,
-      value: org.joinUrl && <ExternalLink href={org.joinUrl} />,
+      value: org.joinUrl && <ExternalLink href={org.joinUrl} outbound={{ kind: "other" }} />,
     },
     {
       label: "Membership",
@@ -533,7 +538,11 @@ export function OrgProfile({
     {
       label: "Termcard",
       meta: meta.termcardUrl,
-      value: org.termcardUrl && <ExternalLink href={org.termcardUrl}>Termcard</ExternalLink>,
+      value: org.termcardUrl && (
+        <ExternalLink href={org.termcardUrl} outbound={{ kind: "other" }}>
+          Termcard
+        </ExternalLink>
+      ),
     },
   ]
 
@@ -566,7 +575,9 @@ export function OrgProfile({
     {
       label: "Website",
       meta: meta.website,
-      value: org.website && <ExternalLink href={org.website} className={PHONE_TARGET} />,
+      value: org.website && (
+        <ExternalLink href={org.website} className={PHONE_TARGET} outbound={{ kind: "website" }} />
+      ),
     },
     {
       label: "General email",
@@ -596,7 +607,9 @@ export function OrgProfile({
       value: org.mailingList && (org.mailingList.signupUrl || org.mailingList.platform) && (
         <span className="flex flex-wrap items-baseline gap-x-2">
           {org.mailingList.signupUrl && (
-            <ExternalLink href={org.mailingList.signupUrl}>Sign up</ExternalLink>
+            <ExternalLink href={org.mailingList.signupUrl} outbound={{ kind: "other" }}>
+              Sign up
+            </ExternalLink>
           )}
           {org.mailingList.platform && (
             <span className="text-muted-foreground">
@@ -613,7 +626,7 @@ export function OrgProfile({
           {
             label: "Contact form",
             meta: meta.contactFormUrl,
-            value: <ExternalLink href={org.contactFormUrl} />,
+            value: <ExternalLink href={org.contactFormUrl} outbound={{ kind: "other" }} />,
           },
         ]
       : []),
@@ -666,7 +679,8 @@ export function OrgProfile({
   ]
 
   return (
-    <article>
+    // Every tracked link inside carries the listing's key (ENG-5).
+    <article {...analyticsContext({ orgKey: org.key })}>
       <header className="border-b bg-card/40">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-6 pb-7 sm:px-6 sm:pt-8">
           <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
@@ -774,7 +788,14 @@ export function OrgProfile({
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="grid w-full auto-cols-fr grid-flow-col gap-1 sm:flex sm:w-auto sm:flex-wrap sm:gap-2">
               {joinHref && (
-                <QuickAction href={joinHref} icon={UserPlusIcon} label="Join" external primary />
+                <QuickAction
+                  href={joinHref}
+                  icon={UserPlusIcon}
+                  label="Join"
+                  external
+                  primary
+                  outbound={{ kind: "other" }}
+                />
               )}
               {org.website && (
                 <QuickAction
@@ -783,10 +804,17 @@ export function OrgProfile({
                   label="Website"
                   external
                   primary={!joinHref}
+                  outbound={{ kind: "website" }}
                 />
               )}
               {instagram && (
-                <QuickAction href={instagram.url} icon={AtSignIcon} label="Instagram" external />
+                <QuickAction
+                  href={instagram.url}
+                  icon={AtSignIcon}
+                  label="Instagram"
+                  external
+                  outbound={{ kind: "social" }}
+                />
               )}
               {email && <QuickAction href={`mailto:${email}`} icon={MailIcon} label="Email" />}
               <QuickAction href={calendarHref} icon={CalendarDaysIcon} label="Calendar" />
@@ -1012,7 +1040,7 @@ export function OrgProfile({
                       </p>
                       <p className="flex flex-wrap items-center gap-x-2 font-mono text-xs text-muted-foreground">
                         {evidenceUrls(edge).map((url) => (
-                          <ExternalLink key={url} href={url} />
+                          <ExternalLink key={url} href={url} outbound={{ kind: "source" }} />
                         ))}
                         <span>last seen {formatInstantDate(edge.lastSeenAt)}</span>
                         <span>{Math.round(edge.confidence * 100)}%</span>

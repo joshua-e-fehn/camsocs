@@ -54,6 +54,7 @@ import {
   useTalkDayCounts,
   useTalkSearchResults,
 } from "@/hooks/convex/talks"
+import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import { addDays, DAY_MS, formatDayShort, londonIsoDate, startOfWeek } from "@/lib/calendar"
 import { availablePresets, currentTermEnd } from "@/lib/date-presets"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
@@ -251,6 +252,7 @@ export function TalksBrowser({
     : agenda.talks
   const loading = state.q ? search.data === undefined : agenda.status === "LoadingFirstPage"
   const stale = state.q ? search.stale : agenda.stale
+  useTrackSearch("talks", state.q, loading || stale ? undefined : talks.length)
 
   const count = talksCountArgs(state, span)
   const totals = useTalkDayCounts(state.q ? "skip" : count.args, preloadedTotal)
@@ -318,6 +320,12 @@ export function TalksBrowser({
   const openKey = state.talk
   const openTalkData = useTalk(openKey, preloadedTalk)
   const openPlaceholder = talks.find((talk) => talk.key === openKey)
+  useTrackView(
+    "talk_viewed",
+    openTalkData
+      ? { talkKey: openTalkData.key, departmentKey: openTalkData.departments[0]?.key }
+      : null,
+  )
 
   // --- filters ---------------------------------------------------------------------------
   const setSchool = (school: TalksState["school"]) =>
@@ -490,6 +498,7 @@ export function TalksBrowser({
     <TalksSubscribeDialog
       state={base}
       departmentName={department?.shortName}
+      departmentKey={department?.key}
       trigger={
         <button
           type="button"

@@ -52,6 +52,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
 import { useEventWindow, useRestrictedCount } from "@/hooks/convex/events"
+import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import {
   addDays,
   type CalendarView,
@@ -320,6 +321,7 @@ export function EventsCalendar({
   )
   const shownCount = agenda.reduce((sum, [, events]) => sum + events.length, 0)
   const loading = loaded.data === undefined
+  useTrackSearch("events", state.q, loading || stale ? undefined : shownCount)
 
   // --- the week strip ----------------------------------------------------------------------
   const pages = stripPages(window_.days)
@@ -420,6 +422,18 @@ export function EventsCalendar({
   const venues = useVenues(Boolean(openData?.venueKey && !openData.venueText))
   const openVenue = venues?.find((venue) => venue.key === openData?.venueKey)?.name
   const openPlaceholder = all.find((event) => event.key === openKey)
+  useTrackView(
+    "event_viewed",
+    openData
+      ? {
+          eventKey: openData.key,
+          orgKeys: openData.organisers
+            .filter((organiser) => organiser.role !== "sponsor")
+            .map((organiser) => organiser.key),
+          hosting: openData.hosting,
+        }
+      : null,
+  )
 
   // --- filters ---------------------------------------------------------------------------
   const filterCount = activeEventFilterCount(state)

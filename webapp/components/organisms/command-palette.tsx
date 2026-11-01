@@ -26,6 +26,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { useColleges, useEventSearch, useOrgSearch, useTalkSearch } from "@/hooks/convex"
+import { useTrackSearch } from "@/hooks/use-analytics"
 import { formatEventTime, londonIsoDate, monthShort } from "@/lib/calendar"
 import { monogram } from "@/lib/monogram"
 import {
@@ -189,6 +190,26 @@ export function CommandPalette() {
   const orgRows = (orgs?.page ?? []).slice(0, SOCIETY_ROWS)
   const eventRows = (events ?? []).slice(0, EVENT_ROWS)
   const talkRows = (talks ?? []).slice(0, scope === "talks" ? TALK_ROWS_SCOPED : TALK_ROWS)
+
+  // Settled once every shown group that queries has answered; the count is
+  // the rows shown, not the "see all" links. Only queries of two or more
+  // characters count (events and talks skip a shorter one, so a scoped
+  // palette would report a search that never ran as finding nothing). Only
+  // the length of the query is sent.
+  const searchable = query.length >= 2
+  const settled =
+    open &&
+    (!show("societies") || orgs !== undefined) &&
+    (!show("events") || !searchable || events !== undefined) &&
+    (!show("talks") || !searchable || talks !== undefined) &&
+    (!show("colleges") || colleges !== undefined)
+  const shownRows =
+    (show("societies") ? orgRows.length : 0) +
+    (show("events") ? eventRows.length : 0) +
+    (show("talks") ? talkRows.length : 0) +
+    (show("colleges") ? localColleges.length : 0) +
+    (scope === "all" ? localCategories.length + localPages.length : 0)
+  useTrackSearch("palette", open && searchable ? query : undefined, settled ? shownRows : undefined)
 
   // Each shown group's row values in render order; the first one is
   // highlighted whenever it changes (lib/palette.ts `firstPaletteValue`).

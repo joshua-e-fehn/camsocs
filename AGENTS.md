@@ -74,6 +74,8 @@ pixi run harvest -- --env prod           # arguments after `--` follow the comma
 pixi run prune-cache                     # retention R7: var/cache + superseded staging older than 90 days
 pixi run pipeline -- --env prod clean-events [--apply]   # stored events no reader restates; --apply on prod only (docs/deploy.md §7)
 pixi run pipeline -- --env prod status   # pipeline/.env.prod on top of pipeline/.env (docs/deploy.md §4)
+pixi run pipeline -- --env prod monitor  # the VPS's hourly PostHog checks, once (docs/ops-vps.md §6 "Monitor")
+pixi run posthog-dashboards -- --dry-run # PostHog dashboards as code; --validate / --apply need the personal key (docs/deploy.md)
 cd webapp && bun run e2e                 # Playwright smoke + screenshots → var/screenshots/<date>/ (read-only guard)
 cd webapp && unset CONVEX_DEPLOY_KEY && bunx convex dev --once   # push to dev and regenerate convex/_generated (commit it)
 cd webapp && bunx convex env list                                # add --prod for production

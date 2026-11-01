@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useSignInOptions } from "@/hooks/convex"
+import { withSignInMarker } from "@/lib/analytics-events"
 import { authClient } from "@/lib/auth-client"
 import { isCamEmail, normaliseCamEmail } from "@/lib/cam-email"
 import { cn } from "@/lib/utils"
@@ -144,7 +145,8 @@ function CamEmailForm({
     try {
       const result = await authClient.signIn.magicLink({
         email: address,
-        callbackURL: next ?? "/",
+        // The marker lets the landing page count the sign-in (method only).
+        callbackURL: withSignInMarker(next ?? "/", "cam"),
         errorCallbackURL: "/sign-in?cam=1",
       })
       if (result.error) setError(result.error.message ?? "The link could not be sent")

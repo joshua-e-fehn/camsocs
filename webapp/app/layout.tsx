@@ -5,6 +5,7 @@ import "./globals.css"
 import { ConsentBanner } from "@/components/organisms/consent-banner"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider"
+import { SignInTracker } from "@/components/providers/sign-in-tracker"
 import { Toaster } from "@/components/ui/sonner"
 import { getToken } from "@/lib/auth-server"
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
@@ -85,6 +86,8 @@ export default async function RootLayout({
       <body>
         <ConvexClientProvider initialToken={token}>
           <AuthGuard>{children}</AuthGuard>
+          {/* Counts a finished Cambridge sign-in (method only, with consent). */}
+          <SignInTracker />
           {/* Every page but /dashboard* and /sign-in* (it hides itself there). */}
           <ConsentBanner />
           <Toaster />
