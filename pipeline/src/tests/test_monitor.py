@@ -24,6 +24,7 @@ from camsocs_pipeline.config import ConfigError
 from camsocs_pipeline.monitor import (
     CHECK_NAMES,
     ERROR_SPIKE_MAX,
+    NOT_INTERNAL,
     REALERT_AFTER,
     ZERO_RESULT_MIN_SEARCHES,
     CheckResult,
@@ -89,6 +90,9 @@ def test_every_query_counts_production_events_only() -> None:
         assert query.startswith("SELECT count")
         # Counts only: no property is selected, so none can be printed.
         assert "SELECT properties" not in query
+        # Visitor-side checks leave out internal traffic (the Claude browser),
+        # as the dashboards' test-account filter does; the harvester has none.
+        assert (NOT_INTERNAL in query) == (_name != "camsocs monitor stale_harvest"), _name
 
 
 @pytest.mark.parametrize(
@@ -198,6 +202,41 @@ def test_recovery_forgets_the_last_page() -> None:
     verdict = assess(run_checks(FakeQueryClient({})), previous, now=NOW)
     assert not verdict.page and verdict.alerted == [] and verdict.last_alert_at is None
     assert assess(failing("error_spike"), verdict.status_payload(), now=NOW).page
+
+
+def test_a_posthog_blip_during_a_lasting_failure_does_not_page_twice() -> None:
+    first = assess(failing("stale_harvest"), {}, now=NOW - timedelta(hours=2))
+    assert first.page
+    blip = {"stale_harvest": QueryFailed("HTTP 503")}
+    second = assess(
+        run_checks(FakeQueryClient(blip)), first.status_payload(), now=NOW - timedelta(hours=1)
+    )
+    assert not second.page and second.result == "unknown"
+    assert second.alerted == ["stale_harvest"], "an unknown check is not a recovery"
+    assert second.last_alert_at == NOW - timedelta(hours=2)
+    third = assess(failing("stale_harvest"), second.status_payload(), now=NOW)
+    assert not third.page
+
+
+def test_a_check_that_recovers_and_fails_again_pages_while_another_still_fails() -> None:
+    first = assess(failing("error_spike", "stale_harvest"), {}, now=NOW - timedelta(hours=2))
+    assert first.page
+    second = assess(failing("stale_harvest"), first.status_payload(), now=NOW - timedelta(hours=1))
+    assert not second.page and second.alerted == ["stale_harvest"]
+    third = assess(failing("error_spike", "stale_harvest"), second.status_payload(), now=NOW)
+    assert third.page and third.alerted == ["error_spike", "stale_harvest"]
+
+
+def test_a_new_page_keeps_a_paged_check_that_is_unknown_in_memory() -> None:
+    first = assess(failing("stale_harvest"), {}, now=NOW - timedelta(hours=2))
+    mixed = run_checks(
+        FakeQueryClient({"stale_harvest": QueryFailed("HTTP 503"), "error_spike": [[50]]})
+    )
+    second = assess(mixed, first.status_payload(), now=NOW - timedelta(hours=1))
+    assert second.page and second.alerted == ["error_spike", "stale_harvest"]
+    assert not assess(
+        failing("error_spike", "stale_harvest"), second.status_payload(), now=NOW
+    ).page
 
 
 def test_unknown_checks_never_page() -> None:

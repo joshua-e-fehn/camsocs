@@ -92,13 +92,20 @@ Comparison = Literal["gt", "lt"]
 
 _PROJECT_ID = re.compile(r"\d{1,12}")
 
+#: Leaves out the in-app Claude browser, which the project's internal/test
+#: filter (the dashboards' `filterTestAccounts`) also hides: an agent's QA
+#: session on camsocs.uk must neither page as an error spike nor keep the
+#: heartbeat alive. Server events carry no `$browser`, so they still count.
+NOT_INTERNAL = " AND ifNull(properties.$browser, '') != 'Claude'"
+
 #: The HogQL of each check. Counts only; `properties.environment` restricts
 #: them to production. Event names are compared exactly ('$exception' and
 #: '$pageview' were verified against the live project on 2026-11-01).
 ERROR_SPIKE_QUERY = (
     "SELECT count() FROM events WHERE event = '$exception'"
     " AND properties.environment = 'production'"
-    f" AND timestamp > now() - INTERVAL {ERROR_SPIKE_MINUTES} MINUTE"
+    + NOT_INTERNAL
+    + f" AND timestamp > now() - INTERVAL {ERROR_SPIKE_MINUTES} MINUTE"
 )
 STALE_HARVEST_QUERY = (
     f"SELECT countIf(timestamp > now() - INTERVAL {HARVEST_STALE_HOURS} HOUR),"
@@ -113,12 +120,14 @@ ZERO_RESULT_QUERY = (
     "SELECT countIf(event = 'search_performed'), countIf(event = 'search_zero_results')"
     " FROM events WHERE event IN ('search_performed', 'search_zero_results')"
     " AND properties.environment = 'production'"
-    f" AND timestamp > now() - INTERVAL {ZERO_RESULT_HOURS} HOUR"
+    + NOT_INTERNAL
+    + f" AND timestamp > now() - INTERVAL {ZERO_RESULT_HOURS} HOUR"
 )
 HEARTBEAT_QUERY = (
     "SELECT count() FROM events WHERE event = '$pageview'"
     " AND properties.environment = 'production'"
-    f" AND timestamp > now() - INTERVAL {HEARTBEAT_HOURS} HOUR"
+    + NOT_INTERNAL
+    + f" AND timestamp > now() - INTERVAL {HEARTBEAT_HOURS} HOUR"
 )
 
 
@@ -390,16 +399,23 @@ class Assessment:
 def assess(results: list[CheckResult], previous: Mapping[str, Any], *, now: datetime) -> Assessment:
     """Whether `results` page, given the previous run's status file
     (`previous`, `{}` when there is none): only failures that were not
-    already paged for within `REALERT_AFTER` do."""
+    already paged for within `REALERT_AFTER` do.
+
+    A paged check is forgotten only once it is seen `ok` again: a run where
+    PostHog did not answer for it (`unknown`) keeps the page in memory, so a
+    query blip during a lasting failure does not page twice, and a check that
+    recovered and fails again counts as new and pages at once."""
     failed = {r.name for r in results if r.status == "failed"}
-    if not failed:
-        return Assessment(results, now, False, [], None)
+    unknown = {r.name for r in results if r.status == "unknown"}
     alerted = previous.get("alertedChecks")
     before = {n for n in alerted if isinstance(n, str)} if isinstance(alerted, list) else set()
     last = _instant(previous.get("lastAlertAt"))
-    if failed <= before and last is not None and timedelta(0) <= now - last < REALERT_AFTER:
-        return Assessment(results, now, False, sorted(before), last)
-    return Assessment(results, now, True, sorted(failed), now)
+    held = before & (failed | unknown)
+    if not failed:
+        return Assessment(results, now, False, sorted(held), last if held else None)
+    if failed <= held and last is not None and timedelta(0) <= now - last < REALERT_AFTER:
+        return Assessment(results, now, False, sorted(held), last)
+    return Assessment(results, now, True, sorted(failed | held), now)
 
 
 def read_status(path: Path | None) -> dict[str, Any]:
@@ -437,6 +453,7 @@ __all__ = [
     "ERROR_SPIKE_MINUTES",
     "HARVEST_STALE_HOURS",
     "HEARTBEAT_HOURS",
+    "NOT_INTERNAL",
     "REALERT_AFTER",
     "ZERO_RESULT_HOURS",
     "ZERO_RESULT_MAX_RATE",
