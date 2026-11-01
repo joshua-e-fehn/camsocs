@@ -4,8 +4,11 @@
     camsocs-alert.py [--dry-run] <group>
 
 Run by ``camsocs-alert@<group>.service``, which ``camsocs-harvest@<group>.service``
-names in ``OnFailure=``. Modelled on the host's ``mya-backup`` ``send_alert``: it
-posts through Mya's Slack bot with the Slack Web API. Installed root-owned in
+names in ``OnFailure=``; ``camsocs-monitor.service`` names
+``camsocs-alert@monitor.service`` (the hourly PostHog checks, ENG-10), whose
+message is built from the monitor's own status file instead (below). Modelled
+on the host's ``mya-backup`` ``send_alert``: it posts through Mya's Slack bot
+with the Slack Web API. Installed root-owned in
 ``/usr/local/lib/camsocs-ops/`` from a reviewed commit (``install.sh``), never run
 from the checkout the harvest can write.
 
@@ -29,6 +32,11 @@ from the checkout the harvest can write.
   of defence: Slack, OpenAI-style, GitHub and Google keys, ``Bearer …``,
   ``NAME=value`` for secret-looking names, credentials in URLs, secret-looking
   query parameters and long opaque strings.
+- **The monitor** (``<group>`` ``monitor``): from ``status-monitor.json``,
+  which ``camsocs monitor --status-json`` writes, only the failing checks'
+  names (of a check name's shape) and their numbers — value, threshold,
+  window and named counts, each a number — and the names of the checks
+  PostHog could not answer. No event property is in that file to begin with.
 - ``--dry-run`` prints the message instead of sending it.
 
 Standard library only (the host's python3). Exit 0 when the message was sent
@@ -69,6 +77,13 @@ _LOG_FILE = re.compile(r"/var/log/camsocs/\d{4}-\d{2}-\d{2}-[a-z]+\.log")
 _MONITOR = re.compile(r"[A-Za-z0-9_-]{1,40}")
 #: Failed stages named at most.
 MAX_STAGES = 12
+#: The pseudo-group of the hourly PostHog checks (camsocs-monitor.service).
+MONITOR_GROUP = "monitor"
+#: A monitor check's name, and a name of one of its counts.
+_CHECK = re.compile(r"[a-z][a-z_]{0,39}")
+_COUNT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]{0,39}")
+#: Checks named at most.
+MAX_CHECKS = 8
 
 #: An environment-style name that says it holds a secret (LLM_API_KEY, SLACK_BOT_TOKEN).
 _SECRET_ENV_NAME = r"[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL)[A-Z0-9_]*"
@@ -202,6 +217,10 @@ def build_message(
 ) -> str:
     """The alert text (Slack mrkdwn): structured facts only (module
     docstring), masked as a whole."""
+    if group == MONITOR_GROUP:
+        return build_monitor_message(
+            environ=environ, status=status, host=host, known_secrets=known_secrets
+        )
     result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
     exit_code = _shaped(environ.get("MONITOR_EXIT_CODE"), _MONITOR) or ""
     exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR)
@@ -243,6 +262,81 @@ def build_message(
         f"status: {DEFAULT_STATE_DIR}/status-{group}.json · "
         f"journalctl -u camsocs-harvest@{group} · docs/ops-vps.md"
     )
+    return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
+
+
+def _number(value: Any) -> str | None:
+    """`value` as text when it is a plain number (not a bool), else None."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def _check_line(check: Mapping[str, Any]) -> str | None:
+    """`• error_spike: 34 (fails when > 20, last 1 h)`, from numbers only."""
+    name = _shaped(check.get("name"), _CHECK)
+    value, threshold = _number(check.get("value")), _number(check.get("threshold"))
+    window = _number(check.get("windowHours"))
+    sign = {"gt": ">", "lt": "<"}.get(check.get("op"))
+    if name is None or value is None or threshold is None or sign is None:
+        return f"• {name}" if name else None
+    line = f"• {name}: {value} (fails when {sign} {threshold}" + (
+        f", last {window} h)" if window is not None else ")"
+    )
+    detail = check.get("detail")
+    counts = [
+        f"{key} {shown}"
+        for key, raw in (detail.items() if isinstance(detail, dict) else [])
+        if _shaped(key, _COUNT_NAME) and (shown := _number(raw)) is not None
+    ]
+    return line + (f" · {', '.join(counts[:4])}" if counts else "")
+
+
+def build_monitor_message(
+    *,
+    environ: Mapping[str, str],
+    status: Mapping[str, Any],
+    host: str,
+    known_secrets: Iterable[str] = (),
+) -> str:
+    """The monitor's alert: which checks failed, with their numbers, from the
+    status file of this run; when the run wrote none (pixi or Python failed,
+    a timeout), that the monitor itself failed."""
+    invocation = environ.get("MONITOR_INVOCATION_ID")
+    current = (
+        status.get("kind") == "monitor"
+        and isinstance(status.get("checks"), list)
+        and (not invocation or status.get("invocationId") in (None, invocation))
+    )
+    failed = [
+        check
+        for check in (status.get("checks") if current else None) or []
+        if isinstance(check, dict) and check.get("status") == "failed"
+    ]
+    tail = (
+        f"status: {DEFAULT_STATE_DIR}/status-monitor.json · "
+        "journalctl -u camsocs-monitor · docs/ops-vps.md"
+    )
+    if not failed:
+        exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR) or "?"
+        result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
+        body = [
+            f":rotating_light: camsocs monitor failed on {host}",
+            f"exit status {exit_status} ({result}): no check results from this run, "
+            "the monitor itself did not finish",
+            tail,
+        ]
+        return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
+    lines = [line for check in failed[:MAX_CHECKS] if (line := _check_line(check))]
+    noun = "check" if len(failed) == 1 else "checks"
+    body = [f":rotating_light: camsocs monitor: {len(failed)} {noun} failing on {host}", *lines]
+    unknown = status.get("unknownChecks")
+    names = [n for n in (unknown if isinstance(unknown, list) else []) if _shaped(n, _CHECK)]
+    if names:
+        body.append(f"not checked (PostHog did not answer): {', '.join(names[:MAX_CHECKS])}")
+    if checked := _shaped(status.get("checkedAt"), _INSTANT):
+        body.append(f"checked {checked}; a check still failing reminds every 6 h")
+    body.append(tail)
     return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
 
 

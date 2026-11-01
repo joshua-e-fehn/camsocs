@@ -187,6 +187,69 @@ def test_a_run_that_could_not_have_the_lock_says_so() -> None:
     assert "phase: lock" in text
 
 
+# --- the monitor's message (ENG-10) -------------------------------------------------------
+
+
+def monitor_status(**overrides) -> dict:
+    """A status file as `camsocs monitor --status-json` writes it."""
+    from datetime import UTC, datetime
+
+    from camsocs_pipeline.monitor import CheckResult, assess
+
+    results = [
+        CheckResult("error_spike", "failed", 34, 20, "gt", 1.0),
+        CheckResult("stale_harvest", "ok", 1, 1, "lt", 26, {"hoursSinceLastSuccess": 3.5}),
+        CheckResult("zero_result_rate", "unknown", None, 0.5, "gt", 24, {}, "HTTP 503"),
+        CheckResult("pageview_heartbeat", "failed", 0, 1, "lt", 48),
+    ]
+    verdict = assess(results, {}, now=datetime(2026, 11, 1, 12, 0, tzinfo=UTC))
+    return verdict.status_payload("f" * 32) | overrides
+
+
+def monitor_message(status: dict, **environ: str) -> str:
+    return alert.build_message(
+        "monitor",
+        environ={"MONITOR_INVOCATION_ID": "f" * 32, "MONITOR_EXIT_STATUS": "1"} | environ,
+        status=status,
+        host="srv1608974",
+        today="2026-11-01",
+        known_secrets=[TOKEN],
+    )
+
+
+def test_the_monitor_alert_lists_the_failing_checks_with_their_numbers() -> None:
+    text = monitor_message(monitor_status())
+    assert "camsocs monitor: 2 checks failing on srv1608974" in text
+    assert "• error_spike: 34 (fails when > 20, last 1 h)" in text
+    assert "• pageview_heartbeat: 0 (fails when < 1, last 48 h)" in text
+    assert "stale_harvest" not in text, "a passing check is not listed"
+    assert "not checked (PostHog did not answer): zero_result_rate" in text
+    assert "status-monitor.json" in text and "journalctl -u camsocs-monitor" in text
+    assert "harvest" not in text.split("\n")[0]
+
+
+def test_the_monitor_alert_shows_only_shaped_names_and_numbers() -> None:
+    status = monitor_status()
+    status["checks"][0] |= {
+        "value": "34 — see https://evil.example",
+        "detail": {"Jane Example": 3, "searches": "many <@U123>", "zeroResults": 14},
+    }
+    status["checks"][3]["name"] = "pageview heartbeat (Jane's booking)"
+    status["unknownChecks"] = ["zero_result_rate", "<@U123> ping"]
+    text = monitor_message(status)
+    for leaked in ("evil", "Jane", "<@U123>", "many"):
+        assert leaked not in text
+    assert "• error_spike" in text, "the name stays; the bad value goes"
+
+
+def test_a_monitor_that_wrote_no_status_this_run_says_it_failed_itself() -> None:
+    for status in ({}, monitor_status(invocationId="0" * 32)):
+        text = monitor_message(status, MONITOR_SERVICE_RESULT="exit-code")
+        assert "camsocs monitor failed on srv1608974" in text
+        assert "exit status 1 (exit-code)" in text and "no check results" in text
+        assert "error_spike" not in text
+
+
 # --- sending ----------------------------------------------------------------------------
 
 
@@ -401,6 +464,41 @@ def test_the_alert_unit_runs_root_owned_code_with_the_three_slack_values_only() 
         assert path in hidden
 
 
+def test_the_monitor_unit_runs_the_pipeline_as_camsocs_hardened() -> None:
+    monitor = unit("camsocs-monitor.service")
+    assert monitor["Service.Type"] == ["oneshot"]
+    assert monitor["Service.User"] == ["camsocs"]
+    assert monitor["Unit.OnFailure"] == ["camsocs-alert@monitor.service"]
+    [command] = monitor["Service.ExecStart"]
+    # Never installs (the harvest does, under its lock); production's env file.
+    assert command.startswith("/usr/local/bin/pixi run --as-is --manifest-path /opt/camsocs/")
+    assert command.endswith(
+        "pipeline -- --env prod monitor --status-json /var/lib/camsocs/status-monitor.json"
+    )
+    # The status file is where the alert looks for the `monitor` group.
+    assert f"{alert.DEFAULT_STATE_DIR}/status-{alert.MONITOR_GROUP}.json" in command
+    assert monitor["Service.TimeoutStartSec"] == ["10min"]
+    assert monitor["Service.UMask"] == ["0027"], "the alert reads the file as group camsocs"
+    assert monitor["Service.ProtectSystem"] == ["strict"]
+    assert monitor["Service.NoNewPrivileges"] == ["yes"]
+    writable = monitor["Service.ReadWritePaths"][0].split()
+    assert writable == ["/var/lib/camsocs", "-/opt/camsocs/.pixi"], "not the whole checkout"
+    hidden = monitor["Service.InaccessiblePaths"][0].split()
+    for path in ("-/docker", "-/root", "-/etc/camsocs"):
+        assert path in hidden
+    harvest = unit("camsocs-harvest@.service")
+    assert monitor["Service.IPAddressDeny"] == harvest["Service.IPAddressDeny"]
+    assert monitor["Service.SystemCallFilter"] == harvest["Service.SystemCallFilter"]
+
+
+def test_the_monitor_timer_runs_hourly_spread_out() -> None:
+    values = unit("camsocs-monitor.timer")
+    assert values["Timer.OnCalendar"] == ["hourly"]
+    assert values["Timer.RandomizedDelaySec"] == ["15min"]
+    assert values["Timer.Unit"] == ["camsocs-monitor.service"]
+    assert values["Install.WantedBy"] == ["timers.target"]
+
+
 @pytest.mark.parametrize(
     "timer, calendar, group",
     [
@@ -443,8 +541,19 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     assert 'OPS_DIR="/usr/local/lib/camsocs-ops"' in text
     for timer in ("camsocs-harvest-events.timer", "camsocs-harvest-full.timer"):
         assert timer in text
-    # A re-run leaves the timers as the operator left them.
+    # A re-run leaves the timers as the operator left them …
     assert '"$enable" == "auto" && $first_install -eq 1' in text
+    # … but turns on one it installs for the first time (the monitor's).
+    assert (
+        "TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer)"
+        in text
+    )
+    assert '"$enable" == "auto" && ${#new_timers[@]} -gt 0' in text
+    assert 'systemctl enable --now "${new_timers[@]}"' in text
+    # The monitor runs from the checkout as camsocs: no script of its own for root.
+    assert "OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py install.sh)" in text
+    # Names only, never values, for the monitor's optional key.
+    assert "for name in POSTHOG_PERSONAL_API_KEY POSTHOG_PROJECT_ID; do" in text
     # The warm-up waits for, and holds, the harvest's lock.
     assert 'flock -E 75 -w 600 "$HOME_DIR/harvest.lock"' in text
     # It leaves Docker, Mya's container and cliproxy alone.
@@ -455,6 +564,12 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     assert "config.yaml" not in text and "8317" not in " ".join(
         line for line in commands if "LLM_BASE_URL" not in line
     )
+
+
+def test_the_installers_usage_is_its_whole_header() -> None:
+    lines = (OPS / "install.sh").read_text().splitlines()
+    header_end = next(i for i, line in enumerate(lines[1:], 2) if not line.startswith("#")) - 1
+    assert f"sed -n '2,{header_end}p'" in "\n".join(lines)
 
 
 def test_the_installer_copies_only_the_three_slack_values(tmp_path: Path) -> None:

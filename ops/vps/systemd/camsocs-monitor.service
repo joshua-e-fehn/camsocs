@@ -1,0 +1,65 @@
+# The hourly production checks against PostHog (`camsocs monitor`, ENG-10):
+# an error spike, a stale harvest, a high zero-result search rate, no
+# pageviews. Started by camsocs-monitor.timer, or by hand:
+# `systemctl start camsocs-monitor.service`. Runbook:
+# /opt/camsocs/docs/ops-vps.md "Monitor". Installed by install.sh from a
+# reviewed commit; like the harvest it runs the checkout's pipeline as camsocs.
+[Unit]
+Description=camsocs production checks against PostHog
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+# A failed check (exit 1) or a broken monitor DMs the operator; a PostHog
+# outage does not (the checks are `unknown` and the run exits 0).
+OnFailure=camsocs-alert@monitor.service
+
+[Service]
+Type=oneshot
+User=camsocs
+Group=camsocs
+WorkingDirectory=/opt/camsocs
+# --as-is: run in the environment the harvest installed, never install or
+# update it — the harvest does that under its lock, and an hourly run must not
+# race it. POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID come from
+# /opt/camsocs/pipeline/.env.prod; without them the run checks nothing.
+ExecStart=/usr/local/bin/pixi run --as-is --manifest-path /opt/camsocs/pixi.toml pipeline -- --env prod monitor --status-json /var/lib/camsocs/status-monitor.json
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Four queries of at most 30 s each, plus starting Python.
+TimeoutStartSec=10min
+# /var/lib/camsocs holds the status file the alert reads (0640, group camsocs).
+StateDirectory=camsocs
+StateDirectoryMode=0750
+UMask=0027
+Nice=10
+
+# --- hardening: it reads the checkout and talks to eu.posthog.com -------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# The status file (and pixi's cache in the camsocs home), and the checkout's
+# .pixi: `pixi run` records a task cache there after every run and exits 1
+# when it cannot (seen with pixi 0.73.0). The rest of the checkout stays
+# read-only for this unit.
+ReadWritePaths=/var/lib/camsocs -/opt/camsocs/.pixi
+ProtectHome=yes
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/etc/camsocs
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ProtectProc=invisible
+# As the harvest: no private, CGNAT, link-local or multicast range; the
+# loopback stays open for the host's DNS stub (127.0.0.53).
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

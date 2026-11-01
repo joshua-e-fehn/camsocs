@@ -20,11 +20,15 @@
 #                        settings (LLM_BASE_URL=http://127.0.0.1:8317/v1 and the
 #                        camsocs cliproxy key, models, User-Agent, Camdram, Meta).
 #   --prod-env FILE      installed as /opt/camsocs/pipeline/.env.prod: production's
-#                        CONVEX_HTTP_URL and PIPELINE_API_KEY.
-#   --enable             turn the two timers on (and start them).
+#                        CONVEX_HTTP_URL and PIPELINE_API_KEY (and the PostHog
+#                        values: run telemetry, and the monitor's personal key).
+#   --enable             turn the timers on (and start them): the two harvests'
+#                        and the hourly monitor's.
 #   --no-enable          on a first install, leave the timers off.
 #                        Without either, a first install turns them on and a
-#                        later run leaves each timer as the operator left it.
+#                        later run turns on only a timer it installs for the
+#                        first time (the monitor's, on an upgrade), leaving
+#                        each other timer as the operator left it.
 #   --diff               show what installing SHA would change, change nothing.
 #   --refresh-alert-env  copy the three Slack values from Mya's env file into
 #                        /etc/camsocs/alert.env again (after Mya's token
@@ -52,7 +56,8 @@
 #      revision in REVISION; /var/lib/camsocs, /var/log/camsocs and
 #      /etc/logrotate.d/camsocs
 #  10. the systemd units → /etc/systemd/system, daemon-reload; the timers on
-#      for a first install (unless --no-enable) or with --enable, else as they were
+#      for a first install (unless --no-enable) or with --enable; a timer new to
+#      this host on too (unless --no-enable); else each as it was
 #  11. `pixi install --locked` as camsocs, holding the harvest lock (it waits up
 #      to 10 minutes for a running harvest), so the first run starts warm
 set -euo pipefail
@@ -66,7 +71,7 @@ LOG_DIR="/var/log/camsocs"
 KEY_PATH="$HOME_DIR/.ssh/camsocs_deploy"
 KNOWN_HOSTS="$HOME_DIR/.ssh/known_hosts"
 UNIT_DIR="/etc/systemd/system"
-TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer)
+TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer)
 MYA_ENV="/docker/hermes-agent-vspa/data/.env"
 # Root's own: the installed runner, its keys and its mirror of the repository.
 OPS_DIR="/usr/local/lib/camsocs-ops"
@@ -99,7 +104,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,57p' "$0"
+  sed -n '2,62p' "$0"
   exit 0
 }
 
@@ -395,6 +400,11 @@ install_runner() {
     for name in CONVEX_HTTP_URL PIPELINE_API_KEY; do
       grep -q "^$name=." "$ROOT/pipeline/.env.prod" || warn "pipeline/.env.prod: $name is not set"
     done
+    # Optional: without them the hourly monitor runs but checks nothing.
+    for name in POSTHOG_PERSONAL_API_KEY POSTHOG_PROJECT_ID; do
+      grep -q "^$name=." "$ROOT/pipeline/.env.prod" ||
+        warn "pipeline/.env.prod: $name is not set (the monitor checks nothing)"
+    done
   else
     warn "no $ROOT/pipeline/.env.prod yet: runs fail until --prod-env installs it"
   fi
@@ -416,9 +426,13 @@ install_runner() {
   install -m 0644 -o root -g root "$REV_DIR/logrotate/camsocs" /etc/logrotate.d/camsocs
 
   # --- 10. systemd ------------------------------------------------------------------------
-  local first_install=1 timer
+  local first_install=1 timer new_timers=()
   for timer in "${TIMERS[@]}"; do
-    [[ -f "$UNIT_DIR/$timer" ]] && first_install=0
+    if [[ -f "$UNIT_DIR/$timer" ]]; then
+      first_install=0
+    else
+      new_timers+=("$timer")
+    fi
   done
   say "installing systemd units"
   local unit
@@ -432,8 +446,13 @@ install_runner() {
   elif [[ $first_install -eq 1 ]]; then
     say "timers left off (--no-enable): systemctl enable --now ${TIMERS[*]}"
   else
+    # A timer this host never had (the monitor's, on an upgrade) starts on.
+    if [[ "$enable" == "auto" && ${#new_timers[@]} -gt 0 ]]; then
+      systemctl enable --now "${new_timers[@]}"
+      say "new timers enabled: ${new_timers[*]}"
+    fi
     for timer in "${TIMERS[@]}"; do
-      say "$timer: $(systemctl is-enabled "$timer" 2>/dev/null || true), as it was"
+      say "$timer: $(systemctl is-enabled "$timer" 2>/dev/null || true)"
     done
   fi
 

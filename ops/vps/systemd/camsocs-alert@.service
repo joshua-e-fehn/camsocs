@@ -1,11 +1,12 @@
 # The Slack DM for a failed camsocs harvest; %i is the group. Started by
 # camsocs-harvest@%i.service's OnFailure=, or by hand to test the alert path:
-# `systemctl start camsocs-alert@events.service` (sends a real DM).
+# `systemctl start camsocs-alert@events.service` (sends a real DM). %i is
+# `monitor` for camsocs-monitor.service's failed checks (ENG-10).
 # Decision D5 and the runbook: /opt/camsocs/docs/ops-vps.md "Alerts". Installed
 # by install.sh from a reviewed commit; the script is root-owned in
 # /usr/local/lib/camsocs-ops/, never run from the checkout the harvest writes.
 [Unit]
-Description=camsocs harvest failure alert (%i group)
+Description=camsocs failure alert (%i)
 Documentation=file:/opt/camsocs/docs/ops-vps.md
 Wants=network-online.target
 After=network-online.target
