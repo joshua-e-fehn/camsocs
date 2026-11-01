@@ -44,7 +44,19 @@ describe("Privacy notice", () => {
     expect(cookies).toContain("“Accept analytics”")
     expect(cookies).toContain("“Reject”")
     expect(cookies).toContain("ph_")
-    expect(cookies).toContain("180 days")
+    expect(cookies).toContain("__ph_")
+    expect(cookies).toContain("session storage")
+    expect(cookies).toContain("180 days from your last visit")
+  })
+
+  test("the browsing section names every kind of event and the browser data sent", async () => {
+    const what = section(await render(<PrivacyPage />), "what")
+    expect(what).toContain("request form (only its kind")
+    expect(what).toContain("signing in (only how, never who)")
+    expect(what).toContain("language and time zone")
+    expect(what).toContain("never identify you when you are signed in")
+    expect(what).not.toContain("never stored")
+    expect(what).toContain("built to contain no personal data")
   })
 
   test("no section still says the site has no analytics", async () => {
@@ -58,13 +70,19 @@ describe("Privacy notice", () => {
     const sharing = section(page, "sharing")
     expect(sharing).toContain("PostHog")
     expect(sharing).toContain("Frankfurt")
-    expect(sharing).toContain("1 November 2026")
+    expect(sharing).not.toMatch(/accepted on/)
+    expect(page.querySelector('a[href="https://posthog.com/dpa"]')).not.toBeNull()
     const why = section(page, "why")
     expect(why).toContain("Site analytics in your browser")
     expect(why).toContain("Article 6(1)(a)")
     expect(why).toContain("Error reports and anonymous counts from our servers")
-    expect(section(page, "retention")).toContain("up to one year")
-    expect(section(page, "rights")).toContain("withdraw your consent")
+    const retention = section(page, "retention")
+    expect(retention).toContain("up to one year")
+    expect(retention).not.toContain("deleted by PostHog")
+    const rights = section(page, "rights")
+    expect(rights).toContain("withdraw your consent")
+    expect(rights).toContain("does not make the processing before it unlawful")
+    expect(rights).toContain("Article 20")
   })
 
   test("shows the date the notice last changed", async () => {
