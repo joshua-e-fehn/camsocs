@@ -51,6 +51,8 @@ app/                         Next.js App Router pages
   opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
   not-found.tsx              404 outside the site frame
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
+  relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
+                             next.config rewrite: that would pass cookies on)
 
 components/                  Atomic Design
   ui/                        ATOMS — shadcn/ui primitives
@@ -134,6 +136,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   resend-inbound.ts          Resend Receiving API client (body, headers, attachments; fetch injected)
   auth-routes.ts             PUBLIC_PATHS / PRIVATE_PATHS (test asserts every page is classified)
   auth-forwarded-headers.ts  The /api/auth hop without x-forwarded-host (Bundestracker outage fix)
+  relay.ts                   The /relay hop to PostHog: no cookie, auth, user agent or client address
+                             goes out, no PostHog cookie comes back
   convex-url.ts              Build-time check that both Convex URLs name one deployment
 scripts/
   check-codegen.ts           Committed api.d.ts lists every convex module
@@ -151,8 +155,8 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
                              no ph_* cookie or storage; leftover ph_* storage is cleared on load
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 instrumentation-client.ts    Browser start-up: startAnalytics() (see "Analytics client")
-next.config.ts               Turbopack root, image hosts, the /relay rewrites to PostHog, trailing-slash
-                             redirect (and why there is no /api/auth rewrite)
+next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
+                             /api/auth or /relay rewrite)
 ```
 
 ### Component architecture (Atomic Design)
@@ -292,14 +296,22 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
 - **`before_send` = `sanitizeEvent`**: drops everything unless consent is granted at that moment, on
   `UNTRACKED_PATHS`, SDK events other than `$pageview` / `$pageleave` (`SDK_EVENTS`), and custom
   events without an allow-list entry; strips query strings and fragments, titles, element text,
-  the user-agent string, campaign parameters; sets `environment` and `$geoip_disable`. A throw
-  drops the event (posthog-js), so it fails closed.
+  the user-agent string, the search keyword, campaign parameters, window size, device model and
+  previous-page duration (each also as its `$initial_…` / `$session_entry_…` copy); sets
+  `environment` and `$geoip_disable`. A throw drops the event (posthog-js), so it fails closed.
+  At the source: `save_referrer` and `save_campaign_params` off (no URL in PostHog's cookie),
+  `disable_capture_url_hashes`, `disable_scroll_properties`.
 - **For ENG-5 / ENG-6**: `getPostHog()` returns the instance only while it may send, else null;
   call it at the moment of use. Custom events need an entry in the `customEvents` allow-list
   (`startAnalytics({ customEvents })`, event name → allowed property names); `$exception` must be
   added to `SDK_EVENTS`.
-- **Proxy**: `next.config.ts` rewrites `/relay/*` to PostHog's EU hosts; `skipTrailingSlashRedirect`
-  plus a `redirects()` rule keep Next's trailing-slash 308 for every path but `/relay`.
+- **Proxy**: `app/relay/[...path]/route.ts` (`lib/relay.ts`) forwards `/relay/static|array/*` to
+  `eu-assets.i.posthog.com` and every other `/relay/*` to `eu.i.posthog.com`, by allow-list:
+  only `content-type`, `content-encoding` and `accept` go out (no cookie: Better Auth's session
+  and `convex_jwt` would otherwise reach PostHog), only `content-type` and `cache-control` come
+  back. Not PostHog's `next.config` rewrites, which forward every header and cannot filter.
+  `skipTrailingSlashRedirect` plus a `redirects()` rule keep Next's trailing-slash 308 for every
+  path but `/relay`.
 
 ## Environments
 
