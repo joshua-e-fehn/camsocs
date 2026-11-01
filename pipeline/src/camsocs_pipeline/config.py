@@ -76,6 +76,13 @@ DEFAULT_REPORTS_DIR = REPO_ROOT / "var" / "reports"
 #: v25.0 was the latest on 2026-10-07). Override with META_GRAPH_VERSION.
 DEFAULT_META_GRAPH_VERSION = "v25.0"
 
+#: PostHog EU Cloud ingestion (run telemetry, `telemetry.py`). The project
+#: lives in the EU region; the SDK's own default is the US host.
+DEFAULT_POSTHOG_HOST = "https://eu.i.posthog.com"
+#: The `environment` property on every event when POSTHOG_ENV is unset. The
+#: VPS sets `production` in pipeline/.env.prod (docs/ops-vps.md).
+DEFAULT_POSTHOG_ENV = "development"
+
 #: A Convex deployment answers on two hosts. The generated client API is on
 #: `convex.cloud`; anything on the `httpRouter` — which `/api/pipeline/*` is — is
 #: on `convex.site`. Posting to the cloud host returns a 404 that looks exactly
@@ -149,14 +156,26 @@ class Settings(BaseSettings):
         default=DEFAULT_META_GRAPH_VERSION, validation_alias="META_GRAPH_VERSION"
     )
 
-    @field_validator("convex_url", "convex_http_url", "llm_base_url")
+    #: Optional run telemetry (`telemetry.py`): the PostHog project token.
+    #: Unset → no client is built and nothing is sent. The `phc_` token is
+    #: ingest-only and public by design, but SecretStr keeps it out of logs.
+    posthog_key: SecretStr = Field(default=SecretStr(""), validation_alias="POSTHOG_KEY")
+    posthog_host: str = Field(default=DEFAULT_POSTHOG_HOST, validation_alias="POSTHOG_HOST")
+    posthog_env: str = Field(default=DEFAULT_POSTHOG_ENV, validation_alias="POSTHOG_ENV")
+
+    @field_validator("convex_url", "convex_http_url", "llm_base_url", "posthog_host")
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         # Every caller builds URLs as f"{base}/path".
         return value.strip().rstrip("/")
 
     @field_validator(
-        "llm_model_bulk", "llm_model_strong", "user_agent", "meta_ig_user_id", "meta_graph_version"
+        "llm_model_bulk",
+        "llm_model_strong",
+        "user_agent",
+        "meta_ig_user_id",
+        "meta_graph_version",
+        "posthog_env",
     )
     @classmethod
     def _strip(cls, value: str) -> str:
@@ -229,6 +248,13 @@ class Settings(BaseSettings):
     def meta_configured(self) -> bool:
         """Whether Instagram Business Discovery can run (both values set)."""
         return bool(self.meta_ig_user_id and self.meta_access_token.get_secret_value())
+
+    # -- PostHog ---------------------------------------------------------------
+
+    @property
+    def posthog_configured(self) -> bool:
+        """Whether run telemetry is on (a project token is set)."""
+        return bool(self.posthog_key.get_secret_value().strip())
 
     # -- crawling ------------------------------------------------------------
 

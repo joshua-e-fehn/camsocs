@@ -31,7 +31,7 @@ range `>=1.6.11 <1.7.0`, and a caret resolves to 1.7.x.
 
 ```
 app/                         Next.js App Router pages
-  layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster;
+  layout.tsx                 Root layout: ConvexClientProvider + AuthGuard + Toaster (light only);
                              site-wide metadata (metadataBase, Open Graph)
   (site)/                    The public site (route group: header + footer frame, error, not-found)
     page.tsx                 Home: search, category tiles, this week's public events, explainer
