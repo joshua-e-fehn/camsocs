@@ -31,8 +31,8 @@ range `>=1.6.11 <1.7.0`, and a caret resolves to 1.7.x.
 
 ```
 app/                         Next.js App Router pages
-  layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard + Toaster;
-                             site-wide metadata (metadataBase, Open Graph)
+  layout.tsx                 Root layout: ConvexClientProvider + ThemeProvider + AuthGuard +
+                             ConsentBanner + Toaster; site-wide metadata (metadataBase, Open Graph)
   (site)/                    The public site (route group: header + footer frame, error, not-found)
     page.tsx                 Home: search, category tiles, this week's public events, explainer
     societies/page.tsx       Directory: URL-synced filters + facet counts + search + pages
@@ -93,6 +93,7 @@ convex/
   _generated/                COMMITTED codegen (see .gitignore note)
 
 hooks/convex/index.ts        Thin useQuery/useMutation wrappers ("skip" pattern)
+hooks/use-consent.ts         useConsent() / useConsentBannerOpen() over lib/consent.ts
 hooks/convex/broker.ts       The broker area's hooks (mounted only inside BrokerGate) + runWithToast
 lib/                         Pure logic + *.test.ts (no server imports)
   vocab.ts                   Controlled vocabularies (as-const tuples), mirrored by the pipeline,
@@ -117,6 +118,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   page-metadata.ts           A page's title, description, share card (with the share image) and canonical
   site.ts                    Site facts: name, URL, controller, CONTACT_EMAIL (D4), …
   cam-email.ts               The one @cam.ac.uk rule (sign-in link, getViewer, the form)
+  consent.ts                 The analytics consent store (see "Analytics consent"), UNTRACKED_PATHS,
+                             clearAnalyticsStorage()
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
                              notice), force-layout, format
@@ -137,6 +140,7 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
   fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
   smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, the
                              ongoing strip, form
+  consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 ```
 
@@ -183,6 +187,10 @@ opens the mobile filter sheet, an event's details and the calendar's "N ongoing"
 when nothing began before today), and submits the request form. `E2E_PORT` picks another port
 (another worktree's server on 3100 would otherwise be reused).
 
+Every test starts with a stored analytics refusal (the `consent` fixture option), so the consent
+banner neither covers what a test clicks nor sits in its screenshot; `e2e/consent.spec.ts` sets
+`test.use({ consent: null })` to meet the banner as a first visitor.
+
 **Read-only by construction** (`e2e/fixtures.ts`): the Convex WebSocket is routed through
 Playwright and every `Mutation` / `Action` message is answered by the guard instead of the server
 (the test fails if any page tries one); the request-form test registers a mock result for
@@ -225,6 +233,29 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
 - OAuth callback (Google console): `<SITE_URL>/api/auth/callback/google`, dev and prod.
 - Never re-export the library's `handler`/`getToken` from `lib/auth-server.ts`, and never add a
   `next.config` rewrite for `/api/auth/*` (see next.config.ts).
+
+## Analytics consent
+
+Nothing of PostHog loads, runs or stores before a visitor clicks "Accept analytics" (UK PECR reg 6
+and the ICO's consent guidance). The pieces:
+
+- **Store, `lib/consent.ts`** (pure TS, `lib/consent.test.ts`): localStorage `camsocs-consent` =
+  `{"v":1,"choice":"granted"|"denied","at":"<ISO>"}`, in force for 180 days. Anything missing,
+  malformed, of another version, expired or future-dated reads as no choice. Storage that throws
+  reads as no choice, and a choice made on the page then holds in memory until it closes.
+  `getConsent()`, `setConsent()`, `clearConsent()`, `subscribe()` (the `useSyncExternalStore`
+  contract), `onConsentChange(cb)` (only real changes of choice; listeners hear a refusal before
+  storage is cleared), `openConsentSettings()` (the reopen signal) and `isConsentBannerOpen()`.
+- **Withdrawal**: `setConsent("denied")` and `clearConsent()` call `clearAnalyticsStorage()`, which
+  deletes every `ph_*` / `__ph_*` cookie (host-only and each parent domain, path `/`) and
+  localStorage / sessionStorage key. The analytics client calls `opt_out_capturing()` /
+  `reset()` from its `onConsentChange` listener.
+- **Banner, `organisms/consent-banner.tsx`**: a labelled region (not a dialog: no overlay, no focus
+  trap) fixed to the bottom, mounted in the root layout and hidden on `UNTRACKED_PATHS`
+  (`/dashboard*`, `/sign-in*`, never tracked). Two identical outline buttons, the PostHog EU Cloud
+  disclosure and a link to `/privacy#cookies`. Not in server HTML; appears after hydration.
+- **Reopen, `molecules/cookie-settings-button.tsx`**: "Cookie settings" in the footer's camsocs
+  column; focus moves to the banner and returns to the button after a choice.
 
 ## Environments
 
