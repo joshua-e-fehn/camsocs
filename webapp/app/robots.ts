@@ -3,7 +3,7 @@ import { AI_CRAWLERS } from "@/lib/crawlers"
 import { SITE_URL } from "@/lib/site"
 
 /** Paths no crawler needs: the private broker area, the auth endpoints, the
- * sign-in page and the analytics relay (next.config.ts; they hold nothing for
+ * sign-in page and the analytics relay (lib/relay.ts; they hold nothing for
  * a crawler). */
 const PRIVATE = ["/dashboard", "/api/", "/sign-in", "/relay"]
 

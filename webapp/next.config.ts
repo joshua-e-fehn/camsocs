@@ -34,31 +34,16 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.convex.cloud", pathname: "/api/storage/**" },
     ],
   },
-  // The PostHog reverse proxy (ENG-4, lib/analytics-client.ts `RELAY_PATH`):
-  // the browser sends analytics to our own origin, which forwards to PostHog's
-  // EU Cloud (research-js §2). Unrelated to the `/api/auth` lesson above:
-  // `/relay` has no filesystem route for a rewrite to shadow, and PostHog's
-  // ingestion is not routed by `x-forwarded-host`. Order matters: the asset
-  // rules come before the catch-all. Only consented visitors' browsers ever
-  // call it; robots.ts disallows it.
-  async rewrites() {
-    return [
-      {
-        source: "/relay/static/:path*",
-        destination: "https://eu-assets.i.posthog.com/static/:path*",
-      },
-      {
-        source: "/relay/array/:path*",
-        destination: "https://eu-assets.i.posthog.com/array/:path*",
-      },
-      { source: "/relay/:path*", destination: "https://eu.i.posthog.com/:path*" },
-    ]
-  },
-  // PostHog's endpoints end in a slash (`/e/`, `/flags/`); Next's built-in
-  // redirect would answer each with a 308 to the slashless path first. It is
-  // switched off, and `redirects()` restores it for everything but the relay,
-  // so `/about/` still 308s to `/about` (one URL per page, as before) and
-  // `/api/auth/*/` still reaches its handler.
+  // No `/relay` rewrites either, though PostHog's Next.js recipe uses them
+  // (research-js §2): a rewrite would forward the visitor's cookies, Better
+  // Auth's session among them, to PostHog. `app/relay/[...path]/route.ts`
+  // forwards by allow-list instead (lib/relay.ts).
+  //
+  // PostHog's endpoints end in a slash (`/e/`, `/flags/`), and the relay
+  // keeps it; Next's built-in redirect would answer each with a 308 to the
+  // slashless path first. It is switched off, and `redirects()` restores it
+  // for everything but the relay, so `/about/` still 308s to `/about` (one URL
+  // per page, as before) and `/api/auth/*/` still reaches its handler.
   skipTrailingSlashRedirect: true,
   async redirects() {
     return [
