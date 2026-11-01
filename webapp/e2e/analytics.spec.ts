@@ -61,6 +61,24 @@ test("without a key, Accept sends nothing to PostHog and stores nothing", async 
   expect(await analyticsStorage(page), "PostHog cookies and storage").toEqual([])
 })
 
+test("without a key, taxonomy events (search, page views) send nothing", async ({ page }) => {
+  // ENG-5: the search hook and the view islands run (the click tracker too),
+  // but `track()` has no client to send through.
+  const seen = watchAnalytics(page)
+  await page.goto("/societies")
+  await page
+    .getByRole("region", { name: "Analytics cookies" })
+    .getByRole("button", { name: "Accept analytics" })
+    .click()
+  await page.getByRole("searchbox", { name: "Search societies and clubs" }).fill("zzzzqx")
+  await expect(page).toHaveURL(/[?&]q=zzzzqx/)
+  await page.waitForLoadState("networkidle")
+  await page.goto("/talks")
+  await page.waitForLoadState("networkidle")
+  expect(seen, "requests to the relay or PostHog").toEqual([])
+  expect(await analyticsStorage(page), "PostHog cookies and storage").toEqual([])
+})
+
 test("a page without a grant clears PostHog storage left from before", async ({
   page,
   context,

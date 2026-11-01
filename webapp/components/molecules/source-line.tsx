@@ -72,7 +72,7 @@ function Source({ source }: { source: SourceRef }) {
     )
   }
   return (
-    <ExternalLink href={source.url} className="text-foreground/80">
+    <ExternalLink href={source.url} className="text-foreground/80" outbound={{ kind: "source" }}>
       <span className="sr-only">Source: </span>
       {source.host}
     </ExternalLink>

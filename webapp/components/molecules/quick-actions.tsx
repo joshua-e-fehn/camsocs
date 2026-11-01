@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react"
+import { analyticsAttrs, type OutboundLink } from "@/lib/analytics-events"
 import { cn } from "@/lib/utils"
 
 /**
@@ -31,18 +32,22 @@ export function QuickAction({
   label,
   external = false,
   primary = false,
+  outbound,
 }: {
   href: string
   icon: LucideIcon
   label: string
   external?: boolean
   primary?: boolean
+  /** For `outbound_link_clicked` (ENG-5): the link's kind, never its address. */
+  outbound?: OutboundLink
 }) {
   return (
     <a
       href={href}
       className={quickActionClass(primary)}
       {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}
+      {...(outbound ? analyticsAttrs("outbound_link_clicked", outbound) : {})}
     >
       <span className={quickActionIconClass(primary)}>
         <Icon aria-hidden />

@@ -31,6 +31,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { useSubmitListingRequest } from "@/hooks/convex"
+import { track } from "@/lib/analytics"
 import {
   CORRECTABLE_FIELDS,
   type DraftErrors,
@@ -114,6 +115,8 @@ export function RequestForm({
     try {
       const { key } = await submit(result.args)
       setDone({ reference: key, kind: draft.kind })
+      // Only the kind: never the listing, the address or anything written.
+      track("listing_request_submitted", { kind: draft.kind })
     } catch (error) {
       setServerError(
         error instanceof ConvexError && typeof error.data === "string"

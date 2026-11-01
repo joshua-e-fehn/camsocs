@@ -5,6 +5,7 @@ import { ClampedText } from "@/components/molecules/clamped-text"
 import { ShareAction } from "@/components/molecules/share-action"
 import { SourcedChip } from "@/components/molecules/sourced-chip"
 import { TermDateBlock } from "@/components/molecules/term-date-block"
+import { analyticsAttrs } from "@/lib/analytics-events"
 import { formatInstantDate, londonIsoDate } from "@/lib/calendar"
 import { displayHost } from "@/lib/source-line"
 import {
@@ -302,11 +303,15 @@ export function TalkDetails({
             actions === "from-sm" ? "hidden sm:flex" : "flex",
           )}
         >
-          <AddToCalendar links={talkCalendarLinks(talk, pageUrl)} />
+          <AddToCalendar
+            links={talkCalendarLinks(talk, pageUrl)}
+            item={{ feed: "talk", key: talk.key }}
+          />
           <a
             href={talk.url}
             target="_blank"
             rel="noopener noreferrer nofollow"
+            {...analyticsAttrs("outbound_link_clicked", { kind: "source" })}
             className="inline-flex h-11 items-center gap-1.5 rounded-full border bg-card px-4 text-sm font-medium transition-colors duration-150 hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
           >
             Read at source
@@ -350,11 +355,16 @@ export function TalkActionBar({ talk, pageUrl }: { talk: TalkPublic; pageUrl: st
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur supports-backdrop-filter:bg-background/85 sm:hidden">
       <div className="flex items-center gap-3">
-        <AddToCalendar links={talkCalendarLinks(talk, pageUrl)} className="flex-1" />
+        <AddToCalendar
+          links={talkCalendarLinks(talk, pageUrl)}
+          item={{ feed: "talk", key: talk.key }}
+          className="flex-1"
+        />
         <a
           href={talk.url}
           target="_blank"
           rel="noopener noreferrer nofollow"
+          {...analyticsAttrs("outbound_link_clicked", { kind: "source" })}
           className="flex flex-col items-center gap-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <span className="flex size-11 items-center justify-center rounded-full border bg-card">

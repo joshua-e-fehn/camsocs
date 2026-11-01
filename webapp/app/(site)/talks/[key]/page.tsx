@@ -5,7 +5,9 @@ import Link from "next/link"
 import { notFound, unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { TalkActionBar, TalkDetails } from "@/components/molecules/talk-details"
+import { TrackView } from "@/components/molecules/track-view"
 import { api } from "@/convex/_generated/api"
+import { analyticsAttrs } from "@/lib/analytics-events"
 import { londonIsoDate } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
@@ -99,6 +101,10 @@ export default async function TalkPage({ params }: Props) {
 
       <div className="mx-auto grid w-full max-w-7xl gap-x-16 gap-y-10 px-4 pt-8 pb-32 sm:px-6 sm:pt-12 sm:pb-20 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <article className="max-w-3xl">
+          <TrackView
+            event="talk_viewed"
+            props={{ talkKey: talk.key, departmentKey: department?.key }}
+          />
           <TalkDetails
             talk={talk}
             pageUrl={pageUrl}
@@ -132,6 +138,10 @@ export default async function TalkPage({ params }: Props) {
                 </Link>
                 <a
                   href={`webcal://${new URL(SITE_URL).host}/talks.ics${feed}`}
+                  {...analyticsAttrs("calendar_subscribe_clicked", {
+                    feed: "talks",
+                    key: department.key,
+                  })}
                   className="inline-flex h-11 items-center justify-between gap-2 rounded-full border border-talks px-4 text-sm font-medium text-talks transition-colors hover:bg-talks-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
                 >
                   Subscribe to its talks

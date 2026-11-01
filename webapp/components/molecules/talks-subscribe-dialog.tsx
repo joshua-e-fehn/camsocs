@@ -12,12 +12,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { track } from "@/lib/analytics"
 import { SITE_URL } from "@/lib/site"
 import { feedSentence } from "@/lib/talks"
 import { type TalksState, talksFeedQuery } from "@/lib/talks-url-state"
 import { cn } from "@/lib/utils"
 
-function CopyField({ label, value }: { label: string; value: string }) {
+function CopyField({
+  label,
+  value,
+  onCopied,
+}: {
+  label: string
+  value: string
+  onCopied?: () => void
+}) {
   const [copied, setCopied] = useState(false)
   const id = `copy-${label.replace(/\W+/g, "-").toLowerCase()}`
   return (
@@ -39,6 +48,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
             try {
               await navigator.clipboard.writeText(value)
               setCopied(true)
+              onCopied?.()
               toast.success("Link copied")
               setTimeout(() => setCopied(false), 2000)
             } catch {
@@ -100,15 +110,20 @@ const STEPS: Record<"google" | "apple" | "outlook", { name: string; steps: React
  * sentence says what the feed holds ("All talks in Computer Science"), then
  * an Open in Calendar button (`webcal://`), the https link with Copy, and
  * three short provider guides. The feed carries the filters, not the dates.
+ * Opening or copying a link sends `calendar_subscribe_clicked` with the
+ * department's key, if one is chosen (only with analytics consent).
  */
 export function TalksSubscribeDialog({
   state,
   departmentName,
+  departmentKey,
   trigger,
 }: {
   state: TalksState
   /** The chosen department's short name, for the sentence. */
   departmentName?: string
+  /** The chosen department's key, for `calendar_subscribe_clicked`. */
+  departmentKey?: string
   trigger: React.ReactNode
 }) {
   // The canonical origin, as the talk pages use it, not the address this tab
@@ -118,6 +133,8 @@ export function TalksSubscribeDialog({
   const https = `${SITE_URL}/talks.ics${query}`
   const webcal = `webcal://${new URL(SITE_URL).host}/talks.ics${query}`
   const sentence = feedSentence(state, departmentName)
+  const onSubscribe = () =>
+    track("calendar_subscribe_clicked", { feed: "talks", key: departmentKey })
 
   return (
     <Dialog>
@@ -151,6 +168,7 @@ export function TalksSubscribeDialog({
 
         <a
           href={webcal}
+          onClick={onSubscribe}
           className={cn(
             "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-talks px-5 text-sm font-medium text-talks-foreground transition-colors hover:bg-talks/90",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
@@ -161,8 +179,8 @@ export function TalksSubscribeDialog({
         </a>
 
         <div className="flex flex-col gap-3">
-          <CopyField label="Feed link" value={https} />
-          <CopyField label="Subscription link (webcal)" value={webcal} />
+          <CopyField label="Feed link" value={https} onCopied={onSubscribe} />
+          <CopyField label="Subscription link (webcal)" value={webcal} onCopied={onSubscribe} />
         </div>
 
         <Tabs defaultValue="google" className="gap-3">
