@@ -4,7 +4,7 @@ The scheduled harvests run on the VPS host (`srv1608974`, Ubuntu 24.04, systemd)
 
 Everything here lives in `ops/vps/` and is installed by Joshua's operator; nothing in this repo deploys it. Until it is installed, production is harvested by hand from the laptop (docs/deploy.md §4).
 
-**Secrets.** Never paste a value into a chat, a commit or a log. On the host each secret lives in one place: `pipeline/.env` (LLM key, Camdram, Meta), `pipeline/.env.prod` (production's `PIPELINE_API_KEY`, and the PostHog project token for run telemetry), both `0600` and owned by `camsocs`; the deploy key in `/var/lib/camsocs/.ssh/` (the harvest's) and `/etc/camsocs/deploy_key` (root's, for the installer's mirror); the three Slack values the alert needs in `/etc/camsocs/alert.env` (`0600` root), copied from Mya's env file by the installer — nothing else of that file leaves it.
+**Secrets.** Never paste a value into a chat, a commit or a log. On the host each secret lives in one place: `pipeline/.env` (LLM key, Camdram, Meta), `pipeline/.env.prod` (production's `PIPELINE_API_KEY`, the PostHog project token for run telemetry, and the PostHog personal API key the hourly monitor queries with), both `0600` and owned by `camsocs`; the deploy key in `/var/lib/camsocs/.ssh/` (the harvest's) and `/etc/camsocs/deploy_key` (root's, for the installer's mirror); the three Slack values the alert needs in `/etc/camsocs/alert.env` (`0600` root), copied from Mya's env file by the installer — nothing else of that file leaves it.
 
 **Who runs what (review 2026-10-10).** Root runs only code it installed itself from a commit the operator reviewed: `install.sh` fetches that commit into root's own mirror (`/var/lib/camsocs-ops/camsocs.git`) and installs the runner's scripts root-owned in `/usr/local/lib/camsocs-ops/` and the units and logrotate config from there. Nothing root runs or installs ever comes from `/opt/camsocs`, which the harvest writes (its own `git pull`, `pixi install`, `var/`). The harvest unit runs the root-owned `camsocs-harvest.sh` as `camsocs`; the pipeline it starts is the checkout's (main, pulled each run). The alert runs as a user of its own (`DynamicUser`), never as `camsocs`.
 
@@ -25,6 +25,11 @@ VPS host srv1608974 (systemd)
 │        └─► Convex production /api/pipeline/* (cheerful-bandicoot-511)
 │    OnFailure= ─► camsocs-alert@<group>.service (DynamicUser, /etc/camsocs/alert.env)
 │                    ─► Slack DM (Mya's bot): structured facts only
+├─ camsocs-monitor.timer          hourly (+ up to 15 min)
+│  camsocs-monitor.service   user camsocs, /opt/camsocs read-only, sandboxed
+│    pixi run --as-is pipeline -- --env prod monitor → /var/lib/camsocs/status-monitor.json
+│      └─► PostHog EU query API (four HogQL counts, personal key, §6 "Monitor")
+│    OnFailure= ─► camsocs-alert@monitor.service ─► Slack DM: failing checks' numbers
 └─ Docker: Mya's Hermes container, cliproxy, … — never touched by the runner
 ```
 
@@ -36,9 +41,9 @@ VPS host srv1608974 (systemd)
 | Root's mirror of the repository | `/var/lib/camsocs-ops/camsocs.git` (`0700` root) |
 | Run state of production | `/opt/camsocs/.camsocs-state.prod.json` |
 | User home, deploy key, pixi cache | `/var/lib/camsocs` (`.ssh/camsocs_deploy`, `.ssh/known_hosts`, `.cache/rattler`) |
-| Status, lock, pin, last good commit | `/var/lib/camsocs/status.json`, `status-<group>.json`, `run-<group>.json`, `harvest.lock`, `pin`, `last-good-commit` |
+| Status, lock, pin, last good commit | `/var/lib/camsocs/status.json`, `status-<group>.json`, `run-<group>.json`, `harvest.lock`, `pin`, `last-good-commit`; the monitor's `status-monitor.json` |
 | Logs | `/var/log/camsocs/<London date>-<group>.log`, removed after 90 days (`/etc/logrotate.d/camsocs`); the script's own lines also in the journal |
-| Units | `/etc/systemd/system/camsocs-harvest@.service`, `camsocs-alert@.service`, `camsocs-harvest-events.timer`, `camsocs-harvest-full.timer` |
+| Units | `/etc/systemd/system/camsocs-harvest@.service`, `camsocs-alert@.service`, `camsocs-harvest-events.timer`, `camsocs-harvest-full.timer`, `camsocs-monitor.service`, `camsocs-monitor.timer` |
 | pixi | `/usr/local/bin/pixi` (0.73.0, the version CI pins) |
 
 ### The two groups
@@ -75,7 +80,7 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
 2. **Deploy key** (*laptop*): `ssh-keygen -t ed25519 -N '' -C camsocs-vps-deploy -f ~/camsocs_deploy`. GitHub → `joshua-e-fehn/camsocs` → Settings → Deploy keys → Add: paste `~/camsocs_deploy.pub`, **Allow write access off**.
 3. **Env files** (*laptop*), never committed:
    - `vps.env` → becomes `pipeline/.env` on the host: `LLM_BASE_URL=http://127.0.0.1:8317/v1`, `LLM_API_KEY=<the camsocs cliproxy key>`, `LLM_MODEL_BULK=gpt-6-luna`, `LLM_MODEL_STRONG=gpt-6.1-sol`, `CAMSOCS_USER_AGENT=camsocs-bot/0.1 (+https://camsocs.uk/about)`, and, if used, `CAMDRAM_API_KEY`, `META_IG_USER_ID`, `META_ACCESS_TOKEN`. No `CONVEX_*` and no `PIPELINE_API_KEY`: the host never targets dev.
-   - the laptop's `pipeline/.env.prod` (production's `CONVEX_HTTP_URL` and `PIPELINE_API_KEY`), as is. For run telemetry (§6, optional) it also carries `POSTHOG_KEY=<the project token, phc_…>`, `POSTHOG_HOST=https://eu.i.posthog.com` and `POSTHOG_ENV=production` (1Password Mya vault, item `PostHog`); without `POSTHOG_KEY` the harvest sends nothing.
+   - the laptop's `pipeline/.env.prod` (production's `CONVEX_HTTP_URL` and `PIPELINE_API_KEY`), as is. For run telemetry (§6, optional) it also carries `POSTHOG_KEY=<the project token, phc_…>`, `POSTHOG_HOST=https://eu.i.posthog.com` and `POSTHOG_ENV=production` (1Password Mya vault, item `PostHog`); without `POSTHOG_KEY` the harvest sends nothing. For the hourly monitor (§6 "Monitor", optional) it also carries `POSTHOG_PERSONAL_API_KEY=<a personal API key, phx_…>` and `POSTHOG_PROJECT_ID=<the numeric project id>`; without them the monitor runs and checks nothing.
 4. **The revision** (*laptop*): review `ops/vps/` at the commit of main to install (`git log -p origin/main -- ops/vps`), and note its full id: `git rev-parse origin/main`. Every install and upgrade names one; root installs the runner from nothing else.
 5. **Copy** (*laptop*, over Tailscale): `ssh mya-ts 'install -d -m 700 /root/camsocs-setup'` then `scp ops/vps/install.sh ~/camsocs_deploy vps.env pipeline/.env.prod mya-ts:/root/camsocs-setup/` (`install.sh` from that commit).
 6. **Install, timers off:**
@@ -93,16 +98,16 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
 10. **Checks that need the host** (not runnable on the laptop, which has no systemd):
 
     ```bash
-    systemd-analyze verify /etc/systemd/system/camsocs-harvest@.service /etc/systemd/system/camsocs-alert@.service /etc/systemd/system/camsocs-harvest-*.timer
-    systemd-analyze security camsocs-harvest@events.service camsocs-alert@events.service
-    systemd-analyze calendar '*-*-* 04:30:00 Europe/London' 'Sun *-*-* 02:00:00 Europe/London'
+    systemd-analyze verify /etc/systemd/system/camsocs-harvest@.service /etc/systemd/system/camsocs-alert@.service /etc/systemd/system/camsocs-harvest-*.timer /etc/systemd/system/camsocs-monitor.*
+    systemd-analyze security camsocs-harvest@events.service camsocs-alert@events.service camsocs-monitor.service
+    systemd-analyze calendar '*-*-* 04:30:00 Europe/London' 'Sun *-*-* 02:00:00 Europe/London' hourly
     logrotate -d /etc/logrotate.d/camsocs
     resolvectl status | head -5   # DNS through the loopback stub: the unit denies private ranges
     ```
 
     The harvest unit denies the private, CGNAT and link-local ranges (`IPAddressDeny`) and filters system calls (`SystemCallFilter=@system-service`, refused calls answer `EPERM`); if the first run fails on DNS or a refused call, the journal says which.
 11. **Alerts:** §6 "Testing".
-12. **Timers on:** `systemctl enable --now camsocs-harvest-events.timer camsocs-harvest-full.timer`, then `systemctl list-timers 'camsocs-*'`.
+12. **Timers on:** `systemctl enable --now camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer`, then `systemctl list-timers 'camsocs-*'`. Run the monitor once by hand first (§6 "Monitor": `systemctl start camsocs-monitor.service`); until the first harvest has finished, `stale_harvest` fails and alerts.
 
 ## 3. Upgrade
 
@@ -115,14 +120,14 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
   bash /usr/local/lib/camsocs-ops/install.sh --revision <commit>          # install it
   ```
 
-  The installed (root-owned) installer fetches the commit into root's mirror, checks it is on main, and installs from it (running that commit's own installer first if it changed). It changes only what differs, refreshes `alert.env`, leaves each timer enabled or disabled as you left it (`--enable` turns them on), and waits for a running harvest before it warms the pixi environment. `cat /usr/local/lib/camsocs-ops/REVISION` is what is installed.
+  The installed (root-owned) installer fetches the commit into root's mirror, checks it is on main, and installs from it (running that commit's own installer first if it changed). It changes only what differs, refreshes `alert.env`, leaves each timer enabled or disabled as you left it (`--enable` turns them on) except a timer the host never had, which it turns on unless `--no-enable` is given (the monitor's, on the upgrade that adds it: put the monitor's key in `pipeline/.env.prod` first, §6 "Monitor"), and waits for a running harvest before it warms the pixi environment. `cat /usr/local/lib/camsocs-ops/REVISION` is what is installed.
 - **A new pixi:** bump `PIXI_VERSION` and `PIXI_SHA256` in `ops/vps/install.sh` (the hash from the release's own `pixi-x86_64-unknown-linux-musl.tar.gz.sha256`) together with CI's `pixi-version`, then upgrade the runner as above.
 
 ## 4. Rollback
 
 - **Pin a commit:** `echo <commit> | sudo -u camsocs tee /var/lib/camsocs/pin`. The next run fetches and checks out that commit (detached) instead of pulling main. `/var/lib/camsocs/last-good-commit` is the last commit whose run ended with exit 0. `rm /var/lib/camsocs/pin` follows main again from the next run. (The runner itself: install an earlier reviewed commit with `install.sh --revision`.)
 - **Data:** every pipeline write is an upsert of claims; the next good run repairs what a bad one wrote. Function and site rollbacks are docs/deploy.md §6.
-- **Stop:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer`; a run in progress: `systemctl stop camsocs-harvest@full.service` (recorded as `stopped`, exit 143, which alerts). Re-running the installer keeps them off.
+- **Stop:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer` (and `camsocs-monitor.timer`, or the monitor alerts on the stale harvest); a run in progress: `systemctl stop camsocs-harvest@full.service` (recorded as `stopped`, exit 143, which alerts). Re-running the installer keeps them off.
 - **Uninstall:** stop as above, then `rm /etc/systemd/system/camsocs-* /etc/logrotate.d/camsocs && systemctl daemon-reload`; `userdel camsocs`; `rm -rf /opt/camsocs /var/lib/camsocs /var/log/camsocs /usr/local/lib/camsocs-ops /var/lib/camsocs-ops /etc/camsocs` (the cache and logs go with it); remove the deploy key in GitHub and the camsocs key from cliproxy.
 
 ## 5. Running by hand
@@ -166,7 +171,29 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
 - **Destination.** `SLACK_HOME_CHANNEL` when set; otherwise the first user in `SLACK_ALLOWED_USERS`, whose DM `conversations.open` opens; then `chat.postMessage` (Slack Web API, Bearer token).
 - **Message: structured facts only.** Group, exit status and how the unit ended (systemd's `MONITOR_SERVICE_RESULT` / `MONITOR_EXIT_CODE` / `MONITOR_EXIT_STATUS`), and — only if the status file is this run's (its `invocationId` must match `MONITOR_INVOCATION_ID`) and only values of a known shape — the phase, commit, run key, start and finish times and the failed stages' names, then the log's path on the host. The status file is the harvest's and so untrusted: a value of any other shape is not shown. No log line, no error text and no warning is sent: those carry scraped titles and server errors, which must not reach Slack (or Mya's channel). The message is still masked as a last line of defence (Slack, OpenAI-style, GitHub and Google keys, `Bearer …`, secret-looking `NAME=value`, credentials in URLs, long opaque strings).
 - **Not alerted:** a skipped daily tick, and a run's warnings (stale inputs) — those are in the status file and the run log.
+- **The monitor's alerts** (`camsocs-alert@monitor.service`, from `camsocs-monitor.service`'s `OnFailure=`) are built from `status-monitor.json` instead: the failing checks' names with their value, threshold, window and named counts (numbers only, shape-checked), the checks PostHog could not answer, and where to look. When the monitor wrote no status this run (pixi or Python failed, a timeout), the message says the monitor itself failed, with the exit status.
 - **Testing.** Print the message without sending (no credential needed): `sudo -u camsocs python3 -I /usr/local/lib/camsocs-ops/camsocs-alert.py --dry-run events`. Send a real DM: `systemctl start camsocs-alert@events.service` (it reports the last events run as failed; say so in Slack if anyone else reads the channel). If nothing arrives: `journalctl -u camsocs-alert@events` shows Slack's error code (`not_in_channel`, `missing_scope` — `conversations.open` needs `im:write`, posting needs `chat:write`) and never the token.
+
+### Monitor
+
+`camsocs-monitor.timer` starts `camsocs-monitor.service` hourly (at a random point in the first 15 minutes): `pixi run --as-is … pipeline -- --env prod monitor --status-json /var/lib/camsocs/status-monitor.json` as `camsocs` (`pipeline/src/camsocs_pipeline/monitor.py`, ENG-10). It runs four HogQL counts through PostHog's query API with the personal key from `pipeline/.env.prod` and exits 1 when a check fails, which `OnFailure=camsocs-alert@monitor.service` turns into a Slack DM. The key has no alert scopes, so PostHog's own alerts are not used. Production events only (`environment = 'production'`):
+
+| Check | Fails when | Constant (`monitor.py`) |
+|---|---|---|
+| `error_spike` | more than 20 `$exception` events (browser and server) in the last 60 minutes | `ERROR_SPIKE_MAX`, `ERROR_SPIKE_MINUTES` |
+| `stale_harvest` | no `harvest_run_finished` with status `success` or `partial` (dry runs excluded) in the last 26 hours | `HARVEST_STALE_HOURS` |
+| `zero_result_rate` | over the last 24 hours, at least 20 `search_performed` and more than 50 % of that many `search_zero_results` | `ZERO_RESULT_HOURS`, `ZERO_RESULT_MAX_RATE`, `ZERO_RESULT_MIN_SEARCHES` |
+| `pageview_heartbeat` | no `$pageview` in 48 hours (only consented visitors send one, hence the long window) | `HEARTBEAT_HOURS` |
+
+- **Facts only.** The queries select counts; the output (journal) and the status file hold check names, counts, thresholds and windows, never an event property.
+- **PostHog trouble does not page.** A query that fails (network, timeout, HTTP error, rate limit) makes its check `unknown`: a warning in the journal, `unknownChecks` in the status file, exit 0. The price: a revoked or wrong key (HTTP 401/403 on every check) shows only there, so look at `journalctl -u camsocs-monitor` after a key change.
+- **Reminders.** A check that keeps failing alerts again only every 6 hours (`REALERT_AFTER`); a newly failing check alerts at once. Meanwhile the run exits 0 and the status file says `"result": "failed", "paged": false`.
+- **Without the key** (`POSTHOG_PERSONAL_API_KEY` and `POSTHOG_PROJECT_ID` unset) it prints "nothing checked" and exits 0.
+- **The key.** A personal API key is a user's key, not the ingest-only `phc_` token: it can read the project's events. Create one for the host alone (PostHog → Settings → Personal API keys), **scoped to the camsocs project only** and with the `query:read` scope only, label it `camsocs VPS monitor`, and keep it in the 1Password Mya vault, item `PostHog`. It lives only in `/opt/camsocs/pipeline/.env.prod` (`0600 camsocs`); `status` shows it as `set`. Never reuse the key with write scopes that `ops/posthog/dashboards.py` needs (docs/deploy.md "PostHog").
+- **Sandbox.** Like the harvest (same address and system-call restrictions), but the checkout is read-only for it except `.pixi` (pixi records a task cache there and fails without it); it writes only `/var/lib/camsocs`. `--as-is` runs in the environment the harvest installed and never installs, so it cannot race a harvest's `pixi install`; on the rare run right after a pull that changed dependencies it may fail once (and alert as "the monitor itself failed").
+- **Status file** `/var/lib/camsocs/status-monitor.json` (`0640`, group `camsocs`): `checkedAt`, `invocationId`, `result` (`ok`, `failed`, `unknown`), `paged`, `failedChecks`, `unknownChecks`, `alertedChecks`, `lastAlertAt`, and `checks` (name, status, value, threshold, `op` `gt`/`lt`, `windowHours`, `detail` counts, `reason` for an unknown).
+- **By hand:** `systemctl start camsocs-monitor.service` (blocks; the result in `journalctl -u camsocs-monitor -n 20`), or without the unit `sudo -u camsocs -H bash -lc 'cd /opt/camsocs && pixi run pipeline -- --env prod monitor'`. The alert's text without sending it: `sudo -u camsocs python3 -I /usr/local/lib/camsocs-ops/camsocs-alert.py --dry-run monitor`.
+- **Changing a threshold** is a code change in `monitor.py` (a reviewed commit on main). The monitor never pulls: it runs the checkout as the last harvest left it, so a merged change reaches it after the next harvest.
 
 ## 7. Rotating keys
 
@@ -178,6 +205,7 @@ Do it outside the run windows (not 02:00–08:00 on Sundays, not 04:30–06:30 d
 - **Slack:** the bot token is Mya's; after it changes in her env file, `bash /usr/local/lib/camsocs-ops/install.sh --refresh-alert-env` copies the three values again.
 - **Meta token** (about every 60 days) and **Camdram key:** in `/opt/camsocs/pipeline/.env`.
 - **PostHog project token** (`POSTHOG_KEY`): after rotating it in PostHog, `sudoedit /opt/camsocs/pipeline/.env.prod` (it stays `0600 camsocs`) and update the laptop's `pipeline/.env.prod` and the 1Password item. Removing the line turns run telemetry off.
+- **The monitor's personal API key** (`POSTHOG_PERSONAL_API_KEY`): create the new key (camsocs project only, `query:read`), `sudoedit /opt/camsocs/pipeline/.env.prod`, run `systemctl start camsocs-monitor.service` and check `journalctl -u camsocs-monitor -n 10` shows no `unknown`, then delete the old key in PostHog and update the 1Password item. Removing the two lines turns the checks off.
 
 ## 8. The cliproxy change (operator)
 
@@ -204,6 +232,6 @@ The runner calls cliproxy on the host's loopback, `http://127.0.0.1:8317/v1`, wi
 - touch Docker, Mya's container, her data (`/docker` is inaccessible to the harvest unit) or cliproxy's configuration;
 - deploy anything: no `vercel`, no `convex deploy`; it only posts to `/api/pipeline/*` with production's pipeline key;
 - target the dev deployment (the host has no dev key);
-- run as root: the harvest runs as `camsocs` (the alert as a dynamic user of its own) with `NoNewPrivileges`, `ProtectSystem=strict` (writable: `/opt/camsocs` — the run's own `git pull` and `pixi install` write the checkout — `/var/lib/camsocs`, `/var/log/camsocs`), `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `ProtectProc=invisible`, a system-call filter and an empty capability set;
+- run as root: the harvest and the monitor run as `camsocs` (the alert as a dynamic user of its own; the monitor writes only `/var/lib/camsocs` and the checkout's `.pixi`) with `NoNewPrivileges`, `ProtectSystem=strict` (writable: `/opt/camsocs` — the run's own `git pull` and `pixi install` write the checkout — `/var/lib/camsocs`, `/var/log/camsocs`), `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `ProtectProc=invisible`, a system-call filter and an empty capability set;
 - reach the host's private networks: the fetcher refuses any URL whose host resolves to a loopback, private, link-local, CGNAT or other non-public address, at every redirect and again when it connects (pipeline `sources/base.py`), and the unit denies the private, CGNAT and link-local ranges (`IPAddressDeny`); cliproxy is reached by the LLM client on the loopback, which no scraped URL can use;
 - let root run anything from the checkout: the installer, units, logrotate config, alert and harvest script come from a reviewed commit in root's own mirror.

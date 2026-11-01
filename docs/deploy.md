@@ -65,7 +65,7 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `NEXT_PUBLIC_POSTHOG_HOST` | `https://eu.i.posthog.com` | unset | EU Cloud ingestion host. The browser does not read it: it sends to the site's own `/relay` path, which `app/relay/[...path]/route.ts` forwards to the EU hosts (fixed in `lib/relay.ts`). For server-side senders (ENG-6) |
    | `NEXT_PUBLIC_POSTHOG_ENV` | `production` | unset | Tags each browser event's `environment`; unset means `development`, which the project's internal/test filter hides (configured) |
    | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the planned source map upload at build time (error tracking, ENG-6) |
-   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project. The build is meant to skip the upload when it is unset |
+   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project. The build is meant to skip the upload when it is unset. (The same name, with a separate read-only key, configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below) |
 
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
@@ -103,6 +103,19 @@ The variables above are provisioned (2026-11-01). One PostHog project, `camsocs`
 
 The relay is not blocked or cached by the CPU protection below: the firewall rule denies only the GPTBot and ClaudeBot user agents, the anonymous Data Cache covers three Convex queries (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
 
+**Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item, never the host's read-only monitor key — read into the environment without echoing it:
+
+```bash
+pixi run posthog-dashboards -- --dry-run          # the JSON it would send; no key needed
+export POSTHOG_PERSONAL_API_KEY="$(mya-op read 'op://Mya/PostHog/personal API key')"
+export POSTHOG_PROJECT_ID="$(mya-op read 'op://Mya/PostHog/project id')"
+pixi run posthog-dashboards -- --validate         # runs every insight's query once, read-only
+pixi run posthog-dashboards -- --apply            # create or update the four dashboards
+unset POSTHOG_PERSONAL_API_KEY
+```
+
+`POSTHOG_APP_HOST` defaults to `https://eu.posthog.com`. The browser numbers count only visitors who accepted analytics; content insights break down by `orgKey`, `eventKey` and `talkKey` (names are resolved in camsocs, never sent). The hourly production checks that alert on Slack are the VPS monitor (`camsocs monitor`, `docs/ops-vps.md` §6 "Monitor"), not PostHog alerts: the project's keys have no alert scopes.
+
 ## 4. The pipeline against production
 
 The pipeline reads `pipeline/.env` (dev) and, for another environment, a second file on top of it (`pipeline/src/camsocs_pipeline/config.py`):
@@ -123,6 +136,15 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    POSTHOG_HOST=https://eu.i.posthog.com
    POSTHOG_ENV=production
    ```
+
+   Optional, for the hourly production checks (`camsocs monitor`, `pipeline/src/camsocs_pipeline/monitor.py`, ENG-10; on the VPS only, `docs/ops-vps.md` §6 "Monitor"):
+
+   ```dotenv
+   POSTHOG_PERSONAL_API_KEY=<a personal API key scoped to the camsocs project, query:read only>
+   POSTHOG_PROJECT_ID=<the numeric project id; 1Password Mya vault, item PostHog>
+   ```
+
+   Both unset, `monitor` checks nothing and exits 0. `pixi run pipeline -- --env prod monitor` runs the four checks once from the laptop.
 
    Unset `POSTHOG_KEY` (the default, and `pipeline/.env`'s) means nothing is sent and the SDK is not loaded. `POSTHOG_HOST` defaults to the EU host and `POSTHOG_ENV` to `development`. Events: `harvest_run_started`, `harvest_stage_completed`, `harvest_run_finished`, as `camsocs-harvester` without a person profile, carrying counts, durations, statuses, stage names and exception class names only (plus the SDK's library name and version; the host's OS and Python version are stripped). With the key set, each cliproxy request is also an `$ai_generation` (LLM analytics, ENG-9): model, provider `cliproxy`, token counts, latency, HTTP status, error flag and class name, run key as trace id and stage, never the prompt, the reply, error text or the base URL; talks stages make none. Any cost PostHog shows for those generations is indicative only (cliproxy's models match no public price list; no custom pricing is set). Details: `docs/ops-vps.md` §6. Closing the client at the end of a run waits at most about 6 s, so PostHog trouble never stretches a harvest. On the VPS host the file is `/opt/camsocs/pipeline/.env.prod` (`0600`, owned by `camsocs`; `docs/ops-vps.md` §2, §6, §7): the harvest reads it there like `PIPELINE_API_KEY`, so no unit or installer change is involved.
 2. Run with `--env prod` (or `CAMSOCS_ENV_FILE=pipeline/.env.prod`, relative to the repo root; the flag wins):
