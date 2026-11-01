@@ -1,8 +1,10 @@
 # Legitimate interests assessment (UK GDPR Art 6(1)(f))
 
-Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, 2026-11-01); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
+Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, and D, server-side monitoring, 2026-11-01); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
 
-The ICO three-part test — purpose, necessity, balance — is applied to three processing activities separately, because their risk differs: **A** the public directory and calendar, **B** the private broker CRM, and **C** the talks pillar. Activity numbers (P1…) refer to `record-of-processing.md`.
+The ICO three-part test — purpose, necessity, balance — is applied to four processing activities separately, because their risk differs: **A** the public directory and calendar, **B** the private broker CRM, **C** the talks pillar, and **D** server-side error tracking and aggregate counts. Activity numbers (P1…) refer to `record-of-processing.md`.
+
+Browser analytics (P11) rests on consent (Art 6(1)(a)), not on this assessment: PECR reg 6 requires consent for the analytics SDK, and where consent is required legitimate interests must not be used in its place ([ICO](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guidance-on-the-use-of-storage-and-access-technologies/how-do-the-pecr-rules-relate-to-the-uk-gdpr/); record-of-processing, "Storage and access"). The harvester's telemetry and LLM usage metrics (ENG-8, ENG-9) hold no personal data, so they need no basis.
 
 ## A. Public directory and events calendar (P1, P2, P3, P5, P8)
 
@@ -85,6 +87,32 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 
 **Conclusion:** legitimate interests applies to C, provided speakers stay as published, nothing is inferred or aggregated about them, and the 30-day deletion and suppression stay automated.
 
+## D. Server-side error tracking and aggregate counts (P12)
+
+### Purpose
+
+- Keep the site working: see at once when a page, a calendar feed or the request form fails on the server, with enough detail (route, error type, stack) to fix it.
+- Know whether calendar feeds and the request form are used, and how much, to decide what to maintain. Feed counts are lower bounds: cached responses never reach the server.
+- These are the operator's interests, and visitors' in a site that works. Real, specific, lawful.
+
+### Necessity
+
+- No personal data is wanted, and the events are built so none goes in: a fixed distinct id `camsocs-server`, `$process_person_profile: false`; errors carry the route path without query string, method, route type, error type, message and stack, and `environment`; counts carry a feed kind and a talk or event key, or a request kind. No IP address, user agent, referrer, other header, cookie, body, form field, or hash of any of them.
+- Nothing is stored on or read from the visitor's device, so no consent mechanism is involved and PECR reg 6 is not engaged ([ICO: what are storage and access technologies](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guidance-on-the-use-of-storage-and-access-technologies/what-are-storage-and-access-technologies/), on server-side processing).
+- Alternatives considered: the hosts' own logs (Vercel, Convex) are short-lived, per-request and include IP addresses, so they are not less intrusive; counting in Convex tables would hold the same data with more code. One PostHog project keeps all monitoring under one processor agreement.
+
+### Balance
+
+| Factor | Assessment |
+|---|---|
+| Nature of the data | Technical events about the site, not about people. The residual risk is an exception message or stack quoting a value from a request; request data is never attached, and the stack names our code |
+| Reasonable expectations | A site operator watching for errors and counting calendar downloads is expected; it is stated in `/privacy` |
+| Source | The server's own handling of requests it already serves. Nothing from request headers is stored, which keeps clear of the open question whether headers are information "automatically emitted" by the device (PECR reg 6(2)(b); **unverified**, no ICO text on it) |
+| Impact | None on individuals: an event cannot be tied to a visitor |
+| Safeguards | EU Cloud (Frankfurt), PostHog as processor under its DPA (transfers per record-of-processing); IP discarded at project level; up to 1 year in PostHog (`retention.md` R12); PostHog AI off (DPIA-lite R-16 todo); the senders are no-ops without a key, and only production has one |
+
+**Conclusion:** legitimate interests applies to D, provided the events keep to the fields above. Adding any request data (headers, query strings, bodies, user ids) needs this assessment redone first.
+
 ## Objection handling
 
-An objection from a society to its listing (A) is honoured by removing the listing; one from a speaker to a talk (C) by suppressing their name, which removes it from every stored and future talk; one from a person to a role address that identifies them is honoured by removing that address. An objection to B is honoured by deleting the person's rows and suppressing re-collection. Direct-marketing objections are absolute (Art 21(3)).
+An objection from a society to its listing (A) is honoured by removing the listing; one from a speaker to a talk (C) by suppressing their name, which removes it from every stored and future talk; one from a person to a role address that identifies them is honoured by removing that address. An objection to B is honoured by deleting the person's rows and suppressing re-collection. Direct-marketing objections are absolute (Art 21(3)). An objection to D is answered by explaining that no server event can be tied to a person. Browser analytics (P11) is not objected to but withdrawn: "Cookie settings", then "Reject", which stops it at once and deletes the `ph_*` identifier.
