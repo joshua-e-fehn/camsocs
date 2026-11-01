@@ -64,7 +64,7 @@ from camsocs_pipeline.pipeline.load import (
 )
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
-from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
+from camsocs_pipeline.pipeline.sync import GROUPS, STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
@@ -200,7 +200,7 @@ def status(ctx: click.Context) -> None:
         ("LLM concurrency", str(settings.llm_concurrency)),
         ("Meta IG user", settings.meta_ig_user_id or "(unset)"),
         ("Meta token", secret(settings.meta_access_token)),
-        ("PostHog key", secret(settings.posthog_key) + " (run telemetry)"),
+        ("PostHog key", ("set" if settings.posthog_configured else "(unset)") + " (run telemetry)"),
         ("PostHog host", f"{settings.posthog_host or '(unset)'} ({settings.posthog_env})"),
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
@@ -377,8 +377,10 @@ def _run(
     except BaseException as error:
         # The ClickException above wraps the real failure; send its class.
         cause = error.__cause__ if isinstance(error, click.ClickException) else None
-        command = "sync" if group is None else f"sync --group {group}"
-        telemetry.run_aborted(cause or error, group=group, command=command)
+        # An unknown --group is operator-typed text: never sent.
+        known = group if group in GROUPS else None
+        command = "sync" if known is None else f"sync --group {known}"
+        telemetry.run_aborted(cause or error, group=known, command=command)
         raise
     finally:
         telemetry.close()

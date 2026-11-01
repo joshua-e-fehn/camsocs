@@ -115,7 +115,7 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    POSTHOG_ENV=production
    ```
 
-   Unset `POSTHOG_KEY` (the default, and `pipeline/.env`'s) means nothing is sent and the SDK is not loaded. `POSTHOG_HOST` defaults to the EU host and `POSTHOG_ENV` to `development`. Events: `harvest_run_started`, `harvest_stage_completed`, `harvest_run_finished`, as `camsocs-harvester` without a person profile, carrying counts, durations, statuses, stage names and exception class names only. On the VPS host the file is `/opt/camsocs/pipeline/.env.prod` (`0600`, owned by `camsocs`; `docs/ops-vps.md` §2, §6, §7): the harvest reads it there like `PIPELINE_API_KEY`, so no unit or installer change is involved.
+   Unset `POSTHOG_KEY` (the default, and `pipeline/.env`'s) means nothing is sent and the SDK is not loaded. `POSTHOG_HOST` defaults to the EU host and `POSTHOG_ENV` to `development`. Events: `harvest_run_started`, `harvest_stage_completed`, `harvest_run_finished`, as `camsocs-harvester` without a person profile, carrying counts, durations, statuses, stage names and exception class names only (plus the SDK's library name and version; the host's OS and Python version are stripped). Closing the client at the end of a run waits at most about 6 s, so PostHog trouble never stretches a harvest. On the VPS host the file is `/opt/camsocs/pipeline/.env.prod` (`0600`, owned by `camsocs`; `docs/ops-vps.md` §2, §6, §7): the harvest reads it there like `PIPELINE_API_KEY`, so no unit or installer change is involved.
 2. Run with `--env prod` (or `CAMSOCS_ENV_FILE=pipeline/.env.prod`, relative to the repo root; the flag wins):
 
    ```bash

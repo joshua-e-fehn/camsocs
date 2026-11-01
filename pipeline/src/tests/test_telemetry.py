@@ -7,6 +7,8 @@ with `requests`, which respx cannot see (conftest refuses its transport).
 from __future__ import annotations
 
 import json
+import threading
+import time
 from typing import Any
 
 import pytest
@@ -23,6 +25,7 @@ from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.telemetry import (
     ALLOWED,
+    CLOSE_TIMEOUT,
     DISTINCT_ID,
     FLUSH_TIMEOUT,
     RUN_FINISHED,
@@ -177,6 +180,27 @@ def test_the_real_client_is_configured_for_eu_and_short_timeouts(
     assert seen["host"] == "https://eu.i.posthog.com"
     assert seen["disable_geoip"] is True
     assert seen["timeout"] <= 5 and seen["max_retries"] <= 1
+    assert seen["before_send"] is telemetry_module._strip_sdk_context
+
+
+def test_the_real_client_sends_no_os_or_python_version(make_settings) -> None:
+    """The SDK merges its system context into every event; `before_send`
+    (which runs after that merge) takes the host's OS and Python out."""
+    client = telemetry_module._posthog_client(make_settings(posthog_key=KEY))
+    seen: list[dict[str, Any]] = []
+    hook = client.before_send
+    client.before_send = lambda message: seen.append(hook(message)) or seen[-1]
+    client.send = False  # build the wire message, queue nothing
+    try:
+        client.capture("probe", distinct_id=DISTINCT_ID, properties={"stage": "load"})
+    finally:
+        client.shutdown()
+
+    (message,) = seen
+    properties = message["properties"]
+    assert properties["stage"] == "load" and properties["$geoip_disable"] is True
+    for key in ("$os", "$os_version", "$os_distro", "$python_runtime", "$python_version"):
+        assert key not in properties
 
 
 # --- what is sent ------------------------------------------------------------
@@ -220,7 +244,7 @@ def test_a_run_sends_start_each_stage_and_finish_with_counts_only(make_settings,
     assert stages["load"]["status"] == "not_run"
 
     (finished,) = client.named(RUN_FINISHED)
-    assert finished["status"] == "failed"
+    assert finished["status"] == "partial", "as deriveRunStatus: some stages ok"
     assert finished["stagesOk"] == 2 and finished["stagesFailed"] == 1
     assert finished["stagesNotRun"] == 1 and finished["failedStages"] == ["resolve"]
     assert finished["inserted"] == 4 and finished["runError"] is False
@@ -241,7 +265,7 @@ def test_a_successful_dry_run_reports_ok_and_the_coverage(make_settings) -> None
 
     assert_safe(client)
     (finished,) = client.named(RUN_FINISHED)
-    assert finished["status"] == "ok" and finished["dryRun"] is True
+    assert finished["status"] == "success" and finished["dryRun"] is True
     assert finished["coverage"] == {"listed": 10, "counterparts": 2, "upcomingEvents": 7}
 
 
@@ -284,6 +308,31 @@ def test_clean_properties_drops_unknown_keys_and_free_text() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("stage", "Quantum gravity and the black hole information paradox"),
+        ("errorType", "Joshua Fehn"),
+        ("status", "Dr Example"),
+        ("group", "my secret group"),
+        ("runKey", "Talk title 2026"),
+    ],
+)
+def test_title_like_strings_are_dropped_from_every_identifier(key: str, value: str) -> None:
+    assert clean_properties(STAGE_COMPLETED, {key: value}) == {}
+
+
+def test_a_run_where_every_stage_failed_is_failed(make_settings) -> None:
+    client = FakeClient()
+    run_sync(
+        settings=make_settings(),
+        dry_run=True,
+        registry=[Stage("discover", failing_stage)],
+        telemetry=telemetry(client),
+    )
+    assert client.named(RUN_FINISHED)[0]["status"] == "failed"
+
+
 # --- never in the way ---------------------------------------------------------
 
 
@@ -314,6 +363,35 @@ def test_unexpected_report_shapes_are_swallowed() -> None:
     tracked.run_finished(object())  # type: ignore[arg-type]
     tracked.stage_completed(None, duration_s=1.0)  # type: ignore[arg-type]
     assert client.events == []
+
+
+def test_close_returns_by_its_deadline_when_shutdown_hangs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SDK's shutdown drains with no timeout (a slow host, a 429 with
+    Retry-After); close() must still return within CLOSE_TIMEOUT."""
+    assert CLOSE_TIMEOUT <= FLUSH_TIMEOUT + 1
+    deadline = 0.3
+    monkeypatch.setattr(telemetry_module, "CLOSE_TIMEOUT", deadline)
+    release = threading.Event()
+
+    class HangingClient(FakeClient):
+        def shutdown(self) -> None:
+            super().shutdown()
+            release.wait(60)
+
+    client = HangingClient()
+    tracked = telemetry(client)
+    started = time.monotonic()
+    try:
+        tracked.close()
+        elapsed = time.monotonic() - started
+    finally:
+        release.set()
+
+    assert deadline <= elapsed < deadline + 1
+    assert client.flushes == [FLUSH_TIMEOUT] and client.shutdowns == 1
+    assert not tracked.enabled
 
 
 def test_close_is_idempotent_and_disables(make_settings) -> None:
@@ -351,7 +429,7 @@ def test_the_cli_flushes_after_a_successful_run(
     assert result.exit_code == 0, result.output
     assert fake_client.flushes == [FLUSH_TIMEOUT] and fake_client.shutdowns == 1
     assert [name for name, _ in fake_client.events] == [RUN_STARTED, STAGE_COMPLETED, RUN_FINISHED]
-    assert fake_client.named(RUN_FINISHED)[0]["status"] == "ok"
+    assert fake_client.named(RUN_FINISHED)[0]["status"] == "success"
 
 
 def test_the_cli_flushes_after_a_failing_stage(
@@ -389,8 +467,24 @@ def test_a_run_that_never_started_is_reported_failed_and_flushed(
     assert set(finished) <= ALLOWED[RUN_FINISHED]
 
 
+def test_an_unknown_group_is_not_sent(make_settings, fake_client) -> None:
+    result = invoke(make_settings(posthog_key=KEY), "sync", "--group", "Dr Example", "--dry-run")
+
+    assert result.exit_code == 1
+    (finished,) = fake_client.named(RUN_FINISHED)
+    assert "group" not in finished and finished["command"] == "sync"
+    assert finished["errorType"] == "ValueError"
+    assert "Example" not in json.dumps([kwargs for _, kwargs in fake_client.events])
+
+
 def test_status_shows_the_posthog_key_only_as_set(make_settings) -> None:
     result = invoke(make_settings(posthog_key=KEY), "status")
     assert result.exit_code == 0, result.output
     assert KEY not in result.output
     assert "PostHog key:" in result.output and "https://eu.i.posthog.com" in result.output
+
+
+def test_status_shows_a_blank_posthog_key_as_unset(make_settings) -> None:
+    result = invoke(make_settings(posthog_key="   "), "status")
+    assert result.exit_code == 0, result.output
+    assert "(unset) (run telemetry)" in result.output

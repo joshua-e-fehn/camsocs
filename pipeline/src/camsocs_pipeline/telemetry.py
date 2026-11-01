@@ -10,17 +10,22 @@ Three events per run, sent as one fixed, personless distinct id
   wall-clock seconds, the four counts of `StageReport` and its named
   `metrics` (code-defined counts such as `quarantineHeld`), and for a stage
   that raised, the exception's *class name*;
-- `harvest_run_finished` — status, seconds, stages by status, the summed
-  counts and the coverage numbers the `report` stage measured.
+- `harvest_run_finished` — status (`success`/`partial`/`failed`, derived
+  like `deriveRunStatus` in webapp/convex/runs.ts), seconds, stages by
+  status, the summed counts and the coverage numbers the `report` stage
+  measured.
 
 **What is never sent.** A stage's `error`, `notes` and the run's `warnings`
 can carry scraped titles, URLs and server messages (AGENTS.md; the Slack alert
 has the same rule, ops/vps/camsocs-alert.py): only counts, durations, statuses,
 stage names and exception class names leave the process. Every event's
 properties are filtered against a per-event allow-list (`ALLOWED`) and every
-string must look like an identifier (`_TOKEN`), so a later change that passes
-free text by mistake drops it instead of sending it. talks.cam stages report
-like any other: counts only.
+string must match its key's own shape (`_SHAPES`: a stage name, a status, an
+exception class name, a run key — none allows spaces, slashes or quotes), so a
+later change that passes free text by mistake drops it instead of sending it.
+talks.cam stages report like any other: counts only. The SDK adds its own
+`$lib`, `$lib_version` and `$geoip_disable`; the OS and Python version it
+would also merge in are removed before queueing (`_strip_sdk_context`).
 
 **Off by default.** Without POSTHOG_KEY no client is built (the SDK is not
 even imported) and every method returns at once — a laptop run, CI and the
@@ -29,9 +34,12 @@ test suite send nothing.
 **Never in the way.** Every public method catches `Exception` and logs at
 debug: telemetry cannot fail or change a run. The SDK queues events for a
 background thread (async mode, research-python §1), so `capture` costs
-nothing on the run's path; uploads use a short timeout and one retry, and
-`close()` flushes with a bounded wait before `shutdown()`, so a PostHog outage
-adds seconds to a run, not minutes. `cli._run` closes the client in a
+nothing on the run's path. The SDK's own shutdown is not bounded (its queue
+drain has no timeout, and its HTTPS adapter adds urllib3 connect retries on
+top of `max_retries`), so `close()` runs flush + shutdown on a daemon thread
+and waits at most `CLOSE_TIMEOUT` seconds for it: a PostHog outage, a slow
+host or a 429 adds at most that to a run, and events still queued then are
+dropped. `cli._run` closes the client in a
 `finally`, on success and on every failure path. A run killed by `timeout(1)`
 (SIGTERM/SIGKILL, exit 124/137) skips `finally`, so its finish event is lost;
 the VPS status file and the Slack alert already report those runs
@@ -48,6 +56,7 @@ import functools
 import logging
 import re
 import subprocess
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Protocol
@@ -74,8 +83,17 @@ RUN_FINISHED = "harvest_run_finished"
 #: retries) could hold a run's exit for a minute when PostHog is unreachable.
 REQUEST_TIMEOUT = 5.0
 MAX_RETRIES = 1
-#: How long `close()` waits for the queue to drain before shutting down.
+#: How long `close()` lets the SDK's flush wait for the queue to drain.
 FLUSH_TIMEOUT = 5.0
+#: The hard limit on `close()` as a whole (flush + shutdown), enforced on the
+#: caller's thread: the SDK's `shutdown()` has no timeout of its own.
+CLOSE_TIMEOUT = FLUSH_TIMEOUT + 1.0
+
+#: Run statuses (report.RUN_STATUSES without `running`) and stage statuses.
+_STATUSES = frozenset({"success", "partial", "failed", "ok", "not_run"})
+#: What the SDK merges into every event (`posthog.utils.system_context`) that
+#: is not ours to send: the host's OS and Python version.
+_SDK_CONTEXT = ("$os", "$os_version", "$os_distro", "$python_runtime", "$python_version")
 
 #: Properties every event may carry.
 _COMMON = frozenset({"environment", "runKey", "group", "dryRun", "$process_person_profile"})
@@ -118,13 +136,27 @@ ALLOWED: Mapping[str, frozenset[str]] = {
     },
 }
 
-#: What a string property may look like: a stage name, a status, a command
-#: such as `sync --group events`, an exception class name, a run key or a
-#: version. No slashes (no URL or path), no quotes, at most 80 characters.
-_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:+\- ]{0,79}")
+_STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 #: A metric or coverage name: camelCase, as the stages write them.
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
 _REVISION = re.compile(r"[0-9a-f]{7,40}")
+
+#: The shape each string property must have; a string under any other key, or
+#: one that does not match, is dropped. No shape allows a space (beyond the
+#: fixed `sync --group` form), a slash or a quote, so titles, names, URLs and
+#: server messages cannot pass.
+_SHAPES: Mapping[str, re.Pattern[str]] = {
+    "environment": re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,31}"),
+    "runKey": re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{6}"),  # report.mint_run_key
+    "group": _STAGE,
+    "command": re.compile(r"sync(?: --group [a-z][a-z0-9_]{0,31})?"),
+    "stage": _STAGE,
+    "requestedStages": _STAGE,
+    "failedStages": _STAGE,
+    "errorType": re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,79}"),
+    "pipelineVersion": re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_\-]{0,39}"),
+    "revision": _REVISION,
+}
 
 
 class _Client(Protocol):
@@ -137,15 +169,24 @@ class _Client(Protocol):
     def shutdown(self) -> None: ...
 
 
-def _clean_value(value: object) -> object | None:
-    """`value` if it is a count, a flag or an identifier-like string (or a
-    list / name→number mapping of those), else `None` (dropped)."""
+def _string_ok(key: str, value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    if key == "status":
+        return value in _STATUSES
+    shape = _SHAPES.get(key)
+    return shape is not None and shape.fullmatch(value) is not None
+
+
+def _clean_value(key: str, value: object) -> object | None:
+    """`value` if it is a count, a flag, a string of `key`'s shape (or a list
+    of those), or a name→number mapping, else `None` (dropped)."""
     if isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
-        return value if _TOKEN.fullmatch(value) else None
+        return value if _string_ok(key, value) else None
     if isinstance(value, list | tuple):
-        items = [item for item in value if isinstance(item, str) and _TOKEN.fullmatch(item)]
+        items = [item for item in value if _string_ok(key, item)]
         return items if len(items) == len(value) else None
     if isinstance(value, Mapping):
         return {
@@ -169,12 +210,24 @@ def clean_properties(event: str, properties: Mapping[str, object]) -> dict[str, 
         if key not in allowed:
             logger.debug("telemetry: %s dropped property %s (not allow-listed)", event, key)
             continue
-        safe = _clean_value(value)
+        safe = _clean_value(key, value)
         if safe is None:
             logger.debug("telemetry: %s dropped property %s (not a count or id)", event, key)
             continue
         cleaned[key] = safe
     return cleaned
+
+
+def _logged(body: Callable[[], None]) -> Callable[[], None]:
+    """`body` for a background thread: failures logged at debug, not printed."""
+
+    def run() -> None:
+        try:
+            body()
+        except Exception:
+            logger.debug("telemetry: background close failed", exc_info=True)
+
+    return run
 
 
 def _quiet[**P](method: Callable[P, None]) -> Callable[P, None]:
@@ -207,6 +260,16 @@ def _revision() -> str | None:
     return value if result.returncode == 0 and _REVISION.fullmatch(value) else None
 
 
+def _strip_sdk_context(message: dict[str, Any]) -> dict[str, Any]:
+    """The SDK's `before_send` hook (runs after it merged its system context):
+    drop the host's OS and Python version from the event."""
+    properties = message.get("properties")
+    if isinstance(properties, dict):
+        for key in _SDK_CONTEXT:
+            properties.pop(key, None)
+    return message
+
+
 def _posthog_client(settings: Settings) -> _Client:
     # Imported here: without a key the SDK (and its threads) never load.
     from posthog import Posthog
@@ -217,6 +280,7 @@ def _posthog_client(settings: Settings) -> _Client:
         timeout=REQUEST_TIMEOUT,
         max_retries=MAX_RETRIES,
         disable_geoip=True,
+        before_send=_strip_sdk_context,
     )
 
 
@@ -334,12 +398,11 @@ class HarvestTelemetry:
         coverage = next(
             (dict(s.metrics) for s in stages if s.name == "report" and s.ok and s.metrics), None
         )
-        failed = error_type is not None or not report.ok
         self._capture(
             RUN_FINISHED,
             {
                 "command": report.command,
-                "status": "failed" if failed else "ok",
+                "status": _run_status(report, error_type),
                 "durationS": self._elapsed(),
                 "stagesOk": sum(1 for s in stages if s.status == "ok"),
                 "stagesFailed": sum(1 for s in stages if s.status == "failed"),
@@ -349,6 +412,8 @@ class HarvestTelemetry:
                 "updated": _sum(stages, "updated"),
                 "unchanged": _sum(stages, "unchanged"),
                 "skipped": _sum(stages, "skipped"),
+                # The runner's warnings only: one the CLI adds afterwards
+                # (derive not scheduled) is in the status file, not here.
                 "warningsCount": len(report.warnings),
                 "runError": report.error is not None,
                 "errorType": error_type,
@@ -377,19 +442,50 @@ class HarvestTelemetry:
 
     @_quiet
     def close(self) -> None:
-        """Deliver what is queued (bounded wait), then stop the SDK's workers.
-        Idempotent; the instance is disabled afterwards."""
+        """Deliver what is queued, then stop the SDK's workers — returning
+        within `CLOSE_TIMEOUT` seconds whatever PostHog does. Idempotent; the
+        instance is disabled afterwards.
+
+        flush + shutdown run on a daemon thread joined with that deadline:
+        `shutdown()` drains with no timeout, so a slow or rate-limiting host
+        would otherwise hold the run's exit for minutes. A thread still busy
+        at the deadline is abandoned; the SDK's consumers are daemon threads
+        and its atexit hook returns at once while this one owns shutdown, so
+        the process still exits."""
         client, self._client = self._client, None
         if client is None:
             return
-        try:
-            client.flush(timeout_seconds=FLUSH_TIMEOUT)
-        finally:
-            client.shutdown()
+
+        def drain() -> None:
+            try:
+                client.flush(timeout_seconds=FLUSH_TIMEOUT)
+            finally:
+                client.shutdown()
+
+        worker = threading.Thread(target=_logged(drain), name="posthog-close", daemon=True)
+        worker.start()
+        worker.join(CLOSE_TIMEOUT)
+        if worker.is_alive():
+            logger.debug(
+                "telemetry: close gave up after %.0fs; queued events dropped", CLOSE_TIMEOUT
+            )
+
+
+def _run_status(report: RunReport, error_type: str | None) -> str:
+    """`success`, `partial` or `failed`, as `deriveRunStatus` derives a run's
+    status server-side (webapp/convex/runs.ts), so PostHog and harvestRuns
+    agree."""
+    if error_type is not None or report.error is not None:
+        return "failed"
+    not_ok = sum(1 for stage in report.stages if stage.status != "ok")
+    if not_ok == 0:
+        return "success"
+    return "failed" if not_ok == len(report.stages) else "partial"
 
 
 __all__ = [
     "ALLOWED",
+    "CLOSE_TIMEOUT",
     "DISTINCT_ID",
     "FLUSH_TIMEOUT",
     "RUN_FINISHED",
