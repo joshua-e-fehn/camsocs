@@ -32,7 +32,10 @@ export const metadata: Metadata = pageMetadata({
  * before "Accept analytics", the choice lives in `camsocs-consent`
  * (lib/consent.ts), "Cookie settings" in the footer reopens it, and the
  * client's `before_send` (lib/analytics-client.ts) and relay (lib/relay.ts)
- * send no more than "When you browse" lists. Keep them in step; if this page
+ * send no more than "When you browse" lists. Its list of things you do names
+ * every event of the taxonomy (ENG-5, lib/analytics-events.ts,
+ * docs/analytics.md) with exactly the properties each carries: an event or a
+ * property added there is added here first. Keep them in step; if this page
  * ships on a later date than its partners, move PRIVACY_NOTICE_UPDATED to it.
  */
 export default function PrivacyPage() {
@@ -133,17 +136,55 @@ export default function PrivacyPage() {
         <h3>When you browse (analytics, only if you allow it)</h3>
         <p>
           Only if you choose “Accept analytics” (see <a href="#cookies">Cookies</a>), your browser
-          sends PostHog, our analytics provider, a record of the pages you view and a few things you
-          do on them: which society, event or talk page you opened (by its reference, never a talk’s
-          title or speaker), how long a search was and how many results it found (never what you
-          typed), when you subscribe to a calendar or follow a link off the site (the kind of link,
-          not its address), when you send the request form (only its kind, never what you wrote) or
-          finish signing in (only how, never who), and errors the page runs into (the error’s
-          message and where in our code it happened). Each record carries the page address without
-          anything after “?” or “#”, the page you came from, your browser and operating system (by
-          name and version, not the full identification string your browser sends), its language and
-          time zone, your device type and screen size, and random identifiers: one stored in your
-          browser for analytics, and others that change with each visit, browser tab and page view.
+          sends PostHog, our analytics provider, a record of the pages you view and of these things
+          you do on them, each with only the details named (a “reference” is our short code for a
+          listing, such as <InlineCode>org-chess</InlineCode>, never its name or title):
+        </p>
+        <ul>
+          <li>
+            opening a society’s page (<InlineCode>society_viewed</InlineCode>): its reference and
+            its categories;
+          </li>
+          <li>
+            opening an event (<InlineCode>event_viewed</InlineCode>): its reference, its organisers’
+            references, and whether they run it or take part in it;
+          </li>
+          <li>
+            opening a talk (<InlineCode>talk_viewed</InlineCode>): its reference and its
+            department’s reference, never its title or speaker;
+          </li>
+          <li>
+            searching (<InlineCode>search_performed</InlineCode>, and{" "}
+            <InlineCode>search_zero_results</InlineCode> when nothing matched): where you searched
+            (societies, events, talks or the search box), how long the search was and how many
+            results it found, never what you typed;
+          </li>
+          <li>
+            choosing a calendar link (<InlineCode>calendar_subscribe_clicked</InlineCode>): whether
+            it is for one event, one talk or the talks feed, and that item’s or department’s
+            reference;
+          </li>
+          <li>
+            following a link off the site (<InlineCode>outbound_link_clicked</InlineCode>): its kind
+            (website, social media, source or other) and, from a society’s or event’s page, the
+            society’s reference, never the link’s address;
+          </li>
+          <li>
+            sending the request form (<InlineCode>listing_request_submitted</InlineCode>): only its
+            kind, never the listing, your address or what you wrote;
+          </li>
+          <li>
+            finishing a Cambridge sign-in (<InlineCode>sign_in_completed</InlineCode>): only that it
+            was by email link, never who;
+          </li>
+          <li>errors the page runs into: the error’s message and where in our code it happened.</li>
+        </ul>
+        <p>
+          Each record carries the page address without anything after “?” or “#”, the page you came
+          from, your browser and operating system (by name and version, not the full identification
+          string your browser sends), its language and time zone, your device type and screen size,
+          and random identifiers: one stored in your browser for analytics, and others that change
+          with each visit, browser tab and page view.
         </p>
         <p>
           Your browser sends these records to our own site, which passes them on to PostHog without
@@ -287,9 +328,9 @@ export default function PrivacyPage() {
             plan we use; each July we check that nothing older is kept.
           </li>
           <li>
-            Your cookie choice: 180 days in your browser, then we ask again. The analytics cookie:
-            180 days from your last visit. The analytics entries in local storage: until you
-            withdraw consent, your choice runs out after 180 days (they are deleted on your next
+            Your cookie choice: 180 days in your browser, then we ask again. The two analytics
+            cookies: 180 days from your last visit. The analytics entries in local storage: until
+            you withdraw consent, your choice runs out after 180 days (they are deleted on your next
             visit) or you clear your browser’s data for this site; in session storage: until you
             close the tab.
           </li>
@@ -348,12 +389,15 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Analytics, only if you accept.</strong> If you choose “Accept analytics”,
-            PostHog’s analytics code loads from our own address and stores a first-party cookie,
-            local storage entries and session storage entries whose names begin{" "}
+            PostHog’s analytics code loads from our own address and stores two first-party cookies (
+            <InlineCode>ph_&lt;key&gt;_posthog</InlineCode>, and{" "}
+            <InlineCode>ph_&lt;key&gt;_posthog_cpm</InlineCode>, which records which entries the
+            first one holds; <InlineCode>&lt;key&gt;</InlineCode> is our PostHog project’s public
+            key), local storage entries and session storage entries whose names begin{" "}
             <InlineCode>ph_</InlineCode> or <InlineCode>__ph_</InlineCode>. They hold random
             identifiers for your browser, the current visit and the current tab, so that visits can
             be counted without knowing who you are, PostHog’s own record of your choice, and
-            settings for the current visit. The cookie lasts 180 days from your last visit, the
+            settings for the current visit. The cookies last 180 days from your last visit, the
             session storage entries until you close the tab, and the local storage entries until you
             withdraw consent, your choice runs out (they are deleted on your next visit after that)
             or you clear your browser’s data for this site. If you choose “Reject”, or choose
@@ -377,7 +421,7 @@ export default function PrivacyPage() {
         <p>
           You can change your mind at any time: choose <strong>“Cookie settings”</strong> at the
           foot of any page and choose again. Choosing “Reject” stops analytics at once and deletes
-          the <InlineCode>ph_</InlineCode> and <InlineCode>__ph_</InlineCode> cookie and storage
+          the <InlineCode>ph_</InlineCode> and <InlineCode>__ph_</InlineCode> cookies and storage
           from your browser. Records already sent stay in PostHog under the deleted random
           identifiers: we can no longer tell which of them came from your browser, and they are kept
           no longer than the rest (see <a href="#retention">How long we keep it</a>). None of this

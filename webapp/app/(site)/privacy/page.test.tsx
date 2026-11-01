@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import PrivacyPage from "@/app/(site)/privacy/page"
+import { ANALYTICS_EVENTS } from "@/lib/analytics-events"
 import { formatDate } from "@/lib/calendar"
 import { PRIVACY_NOTICE_UPDATED } from "@/lib/site"
 
@@ -11,6 +12,8 @@ import { PRIVACY_NOTICE_UPDATED } from "@/lib/site"
  * the footer's "Cookie settings" control, and no section may still claim the
  * site has no analytics. If the consent design changes (lib/consent.ts, the
  * banner, the footer control), change docs/compliance/ and this page with it.
+ * The browsing section names every event of the taxonomy (ENG-5,
+ * lib/analytics-events.ts): a new event fails here until the notice has it.
  */
 
 let root: Root | undefined
@@ -47,13 +50,21 @@ describe("Privacy notice", () => {
     expect(cookies).toContain("__ph_")
     expect(cookies).toContain("session storage")
     expect(cookies).toContain("180 days from your last visit")
+    // posthog-js writes two cookies (ENG-5 wording fix).
+    expect(cookies).toContain("two first-party cookies")
+    expect(cookies).toContain("ph_<key>_posthog")
+    expect(cookies).toContain("ph_<key>_posthog_cpm")
     expect(cookies).toContain("no longer reads or writes")
   })
 
   test("the browsing section names every kind of event and the browser data sent", async () => {
     const what = section(await render(<PrivacyPage />), "what")
-    expect(what).toContain("request form (only its kind")
-    expect(what).toContain("signing in (only how, never who)")
+    for (const event of Object.keys(ANALYTICS_EVENTS)) expect(what).toContain(event)
+    expect(what).toContain("request form (listing_request_submitted): only its kind")
+    expect(what).toContain("never what you typed")
+    expect(what).toContain("never its title or speaker")
+    expect(what).toContain("never the link’s address")
+    expect(what).toContain("never who")
     expect(what).toContain("language and time zone")
     expect(what).toContain("change with each visit, browser tab and page view")
     expect(what).not.toContain("the random identifier")
