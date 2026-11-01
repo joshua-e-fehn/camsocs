@@ -162,9 +162,10 @@ Design for 375px first, then scale up. Touch targets minimum 44px. Sidebar colla
 
 ### 8. Light Only
 
-The site has one theme, light (`components/providers/theme-provider.tsx` forces it). Always use
-semantic tokens (`bg-card`, `text-muted-foreground`, `text-brand-text`) — never hard-coded
-hex/oklch values in components.
+The site has one theme, light (`app/globals.css`: `color-scheme: light`, and no element carries
+`.dark`; the toaster is fixed to light). There is no theme provider. Always use semantic tokens
+(`bg-card`, `text-muted-foreground`, `text-brand-text`) — never hard-coded hex/oklch values in
+components.
 
 ---
 

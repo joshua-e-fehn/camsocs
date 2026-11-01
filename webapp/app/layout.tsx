@@ -5,7 +5,6 @@ import "./globals.css"
 import { ConsentBanner } from "@/components/organisms/consent-banner"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider"
-import { ThemeProvider } from "@/components/providers/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { getToken } from "@/lib/auth-server"
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
@@ -85,12 +84,10 @@ export default async function RootLayout({
     >
       <body>
         <ConvexClientProvider initialToken={token}>
-          <ThemeProvider>
-            <AuthGuard>{children}</AuthGuard>
-            {/* Every page but /dashboard* and /sign-in* (it hides itself there). */}
-            <ConsentBanner />
-            <Toaster />
-          </ThemeProvider>
+          <AuthGuard>{children}</AuthGuard>
+          {/* Every page but /dashboard* and /sign-in* (it hides itself there). */}
+          <ConsentBanner />
+          <Toaster />
         </ConvexClientProvider>
       </body>
     </html>

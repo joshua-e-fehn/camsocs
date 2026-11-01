@@ -26,6 +26,9 @@ dependencies = [
   # for the vision model, and shrink images before upload / vision.
   "pypdfium2>=4.30",
   "pillow>=11.0",
+  # Run telemetry (telemetry.py): counts and durations to PostHog EU, off
+  # without POSTHOG_KEY. 7.x: keyword-only capture(), Python >= 3.10.
+  "posthog>=7.81,<8",
 ]
 
 [project.optional-dependencies]
