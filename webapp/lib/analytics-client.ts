@@ -1,4 +1,5 @@
 import type { CaptureResult, PostHog, PostHogConfig, Properties } from "posthog-js"
+import { ANALYTICS_EVENTS, type EventRules, isAllowedProp } from "@/lib/analytics-events"
 import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } from "@/lib/consent"
 
 /**
@@ -24,8 +25,9 @@ import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } f
  *    the privacy notice's "When you browse" lists what remains).
  *
  * `instrumentation-client.ts` calls `startAnalytics()` once per page.
- * ENG-5/ENG-6 reach the instance through `getPostHog()`, which is null
- * whenever nothing may be sent.
+ * ENG-5 (`track`, lib/analytics.ts) and ENG-6 reach the instance through
+ * `getPostHog()` / `posthogReady()`, which give null whenever nothing may be
+ * sent.
  */
 
 /** Our reverse-proxy path for PostHog (lib/relay.ts, robots.ts). */
@@ -40,11 +42,12 @@ export const RELAY_PATH = "/relay"
 export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave"]
 
 /**
- * Our own events, each with the properties it may carry (spec "Event
- * taxonomy"; ENG-5 fills it from lib/analytics.ts). An event not listed is
- * dropped; a property not listed is removed.
+ * Our own events, each with the properties it may carry and the values each
+ * may hold: by default the taxonomy in lib/analytics-events.ts, the table
+ * `track()` reads too. An event not listed is dropped; a property not listed,
+ * or whose value fails its rule, is removed.
  */
-export type CustomEventProps = Readonly<Record<string, readonly string[]>>
+export type CustomEventProps = EventRules
 
 /** Properties the SDK needs on every event (`token`: a 401 without it). */
 const REQUIRED_PROPS = ["token", "distinct_id", "environment"] as const
@@ -131,7 +134,7 @@ function isStrippedProp(key: string): boolean {
  */
 export function posthogConfig(
   environment: string,
-  customEvents: CustomEventProps = {},
+  customEvents: CustomEventProps = ANALYTICS_EVENTS,
 ): Partial<PostHogConfig> {
   return {
     api_host: RELAY_PATH,
@@ -259,8 +262,9 @@ function eventPathname(props: Properties): string {
  *
  *  1. Drops events on `/dashboard*` and `/sign-in*` (hard rule 3), SDK events
  *     outside `SDK_EVENTS`, and our own events outside `customEvents`.
- *  2. Our own events keep only their allow-listed properties (plus `token`,
- *     `distinct_id`, `environment`).
+ *  2. Our own events keep only their allow-listed properties whose values
+ *     pass their rules (plus `token`, `distinct_id`, `environment` and the
+ *     SDK's own `$` context, cleaned below).
  *  3. Everywhere: deletes `STRIPPED_PROPS` and campaign parameters; strips
  *     query string and fragment from every URL and every `…pathname`; a
  *     previous page or referrer inside an untracked route is removed (the
@@ -269,21 +273,21 @@ function eventPathname(props: Properties): string {
  */
 export function sanitizeEvent(
   event: CaptureResult | null,
-  { environment, customEvents = {}, origin = currentOrigin() }: SanitizeOptions,
+  { environment, customEvents = ANALYTICS_EVENTS, origin = currentOrigin() }: SanitizeOptions,
 ): CaptureResult | null {
   if (!event) return null
   const name = event.event
   const custom = !name.startsWith("$")
-  const allowed = custom ? customEvents[name] : undefined
-  if (custom ? !allowed : !SDK_EVENTS.includes(name)) return null
+  if (custom ? !Object.hasOwn(customEvents, name) : !SDK_EVENTS.includes(name)) return null
 
   const props = event.properties ?? {}
   if (isUntrackedPath(eventPathname(props))) return null
 
-  if (allowed) {
-    const keep = new Set<string>([...REQUIRED_PROPS, ...allowed])
+  if (custom) {
+    const required: readonly string[] = REQUIRED_PROPS
     for (const key of Object.keys(props)) {
-      if (!key.startsWith("$") && !keep.has(key)) delete props[key]
+      if (key.startsWith("$") || required.includes(key)) continue
+      if (!isAllowedProp(customEvents, name, key, props[key])) delete props[key]
     }
   }
 
@@ -337,6 +341,16 @@ export function getPostHog(): PostHog | null {
   return capturing ? instance : null
 }
 
+/**
+ * The instance once a package load that is under way has finished (a grant
+ * on this page load starts it before hydration, so a view event fired on
+ * mount would otherwise find nothing yet), else at once; null whenever
+ * nothing may be sent.
+ */
+export function posthogReady(): Promise<PostHog | null> {
+  return (loading ?? Promise.resolve()).then(getPostHog)
+}
+
 function webdriver(): boolean {
   return typeof navigator !== "undefined" && navigator.webdriver === true
 }
@@ -350,7 +364,7 @@ export function startAnalytics({
   // Literal member expressions: Next inlines `NEXT_PUBLIC_*` only in this form.
   key = process.env.NEXT_PUBLIC_POSTHOG_KEY,
   environment = process.env.NEXT_PUBLIC_POSTHOG_ENV ?? "development",
-  customEvents = {},
+  customEvents = ANALYTICS_EVENTS,
   load = () => import("posthog-js"),
 }: StartOptions = {}): () => void {
   if (stopListening) return stopListening
