@@ -102,7 +102,7 @@ export function ConsentBanner() {
           </h2>
           <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
             With your permission, camsocs uses PostHog (EU Cloud, Frankfurt) to collect aggregate
-            usage statistics that help us improve the site. PostHog then keeps a first-party cookie
+            usage statistics that help us improve the site. PostHog then keeps first-party cookies
             and browser storage entries named <span className="font-mono">ph_*</span> on this device
             for {CONSENT_MAX_AGE_DAYS} days. Nothing is collected unless you accept. We remember
             your choice for {CONSENT_MAX_AGE_DAYS} days; change it any time under Cookie settings in

@@ -127,8 +127,11 @@ lib/                         Pure logic + *.test.ts (no server imports)
   consent.ts                 The analytics consent store (see "Analytics consent"), UNTRACKED_PATHS,
                              clearAnalyticsStorage(), hasNonAnalyticsCookie()
   analytics-client.ts        The consent-gated posthog-js client: init options, before_send
-                             (sanitizeEvent), startAnalytics(), getPostHog(), captureBrowserException()
-                             (see "Analytics client")
+                             (sanitizeEvent), startAnalytics(), getPostHog(), posthogReady(),
+                             captureBrowserException() (see "Analytics client")
+  analytics-events.ts        The ENG-5 event taxonomy (event → property → value rule), shared by
+                             track() and before_send; analyticsAttrs()/analyticsContext() markup
+  analytics.ts               track() and the click tracker (see "Analytics client", docs/analytics.md)
   posthog-server.ts          The server's PostHog sender (posthog-node): onRequestError reports,
                              captureServerException(), captureServerEvent() (see "Error tracking")
   error-scrub.ts             What an error report may say: no query string, fragment or email in
@@ -160,7 +163,7 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
   analytics.spec.ts          Without a key, Accept requests nothing from /relay or PostHog and stores
                              no ph_* cookie or storage; leftover ph_* storage is cleared on load
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
-instrumentation-client.ts    Browser start-up: startAnalytics() (see "Analytics client")
+instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
 instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
 next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
                              /api/auth or /relay rewrite); PostHog source map upload on Vercel
@@ -309,10 +312,20 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
   `environment` and `$geoip_disable`. A throw drops the event (posthog-js), so it fails closed.
   At the source: `save_referrer` and `save_campaign_params` off (no URL in PostHog's cookie),
   `disable_capture_url_hashes`, `disable_scroll_properties`.
-- **For ENG-5 / ENG-6**: `getPostHog()` returns the instance only while it may send, else null;
-  call it at the moment of use. Custom events need an entry in the `customEvents` allow-list
-  (`startAnalytics({ customEvents })`, event name → allowed property names). `$exception` is in
-  `SDK_EVENTS` (ENG-6, "Error tracking" below).
+- **For ENG-6**: `getPostHog()` returns the instance only while it may send, else null; call it
+  at the moment of use (`posthogReady()` waits for a package load under way first). `$exception`
+  is already in `SDK_EVENTS` and goes through `sanitizeEvent`'s scrub; error boundaries report
+  through `captureBrowserException()` (see "Error tracking" below).
+- **Product events (ENG-5)**: `lib/analytics-events.ts` is the taxonomy, one table of event →
+  property → value rule (key shapes, enums, bounded counts), read by both `track()`
+  (`lib/analytics.ts`) and `sanitizeEvent` (the default `customEvents`). `track()` is a no-op
+  unless the client runs and drops an event missing a required property. Client components call
+  `track()`, `useTrackView` or `useTrackSearch` (`hooks/use-analytics.ts`); server components render
+  `<TrackView>` (`molecules/track-view.tsx`) or spread `analyticsAttrs(...)` on a link, which the
+  click tracker (`startClickTracking()`, started by `instrumentation-client.ts`) reads, with the
+  nearest `analyticsContext({ orgKey })`. `providers/sign-in-tracker.tsx` sends
+  `sign_in_completed` from the `?signed_in=cam` marker on the magic link's callback. Taxonomy,
+  rules and how to add an event: `docs/analytics.md`.
 - **Proxy**: `app/relay/[...path]/route.ts` (`lib/relay.ts`) forwards `/relay/static|array/*` to
   `eu-assets.i.posthog.com` and every other `/relay/*` to `eu.i.posthog.com`, by allow-list:
   only `content-type`, `content-encoding` and `accept` go out (no cookie: Better Auth's session

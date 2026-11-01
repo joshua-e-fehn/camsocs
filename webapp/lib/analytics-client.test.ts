@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import type { CaptureResult, PostHogConfig } from "posthog-js"
+import { ANALYTICS_EVENTS, type EventRules } from "./analytics-events"
 import { clearConsent, setConsent } from "./consent"
 
 /**
@@ -139,7 +140,7 @@ function beforeSend(config: Partial<PostHogConfig>) {
   return config.before_send as (event: CaptureResult) => CaptureResult | null
 }
 
-function clean(event: CaptureResult | null, customEvents = {}) {
+function clean(event: CaptureResult | null, customEvents: EventRules = {}) {
   return sanitizeEvent(event, { environment: "test", customEvents, origin: ORIGIN })
 }
 
@@ -313,15 +314,104 @@ describe("before_send", () => {
     const event = (props: Record<string, unknown>) =>
       ({ ...pageview(props), event: "search_performed" }) as CaptureResult
     expect(clean(event({ queryLength: 4 }))).toBeNull()
-    const out = clean(event({ queryLength: 4, resultCount: 2, query: "my name", email: "a@b.c" }), {
-      search_performed: ["queryLength", "resultCount"],
-    })
+    const out = clean(
+      event({
+        surface: "societies",
+        queryLength: 4,
+        resultCount: 2,
+        query: "my name",
+        email: "a@b.c",
+      }),
+      ANALYTICS_EVENTS,
+    )
     expect(out?.properties.queryLength).toBe(4)
     expect(out?.properties.resultCount).toBe(2)
     expect(out?.properties).not.toHaveProperty("query")
     expect(out?.properties).not.toHaveProperty("email")
     expect(out?.properties.token).toBe(KEY)
     expect(out?.properties.$pathname).toBe("/societies")
+  })
+
+  test("an allowed property whose value fails its rule is removed", () => {
+    const talk = (props: Record<string, unknown>) =>
+      ({ ...pageview(props), event: "talk_viewed" }) as CaptureResult
+    const out = clean(
+      talk({
+        talkKey: "talk-05f9cb992668bbf0c8dc",
+        departmentKey: "Department of Engineering",
+        title: "Single-cell atlases",
+        speaker: "Luca Demo",
+      }),
+      ANALYTICS_EVENTS,
+    )
+    expect(out?.properties.talkKey).toBe("talk-05f9cb992668bbf0c8dc")
+    expect(out?.properties).not.toHaveProperty("departmentKey")
+    expect(out?.properties).not.toHaveProperty("title")
+    expect(out?.properties).not.toHaveProperty("speaker")
+  })
+
+  test("our own event missing a valid required property is dropped, as by track()", () => {
+    const talk = (props: Record<string, unknown>) =>
+      ({ ...pageview(props), event: "talk_viewed" }) as CaptureResult
+    expect(clean(talk({ talkKey: "Quantum talk by Dr Smith" }), ANALYTICS_EVENTS)).toBeNull()
+    expect(clean(talk({ departmentKey: "dept-engineering" }), ANALYTICS_EVENTS)).toBeNull()
+  })
+
+  test("our own events keep only the SDK context the notice names, and no person properties", () => {
+    const event = {
+      ...pageview({
+        talkKey: "talk-05f9cb992668bbf0c8dc",
+        $session_id: "s",
+        $device_id: "d",
+        $browser: "Firefox",
+        $process_person_profile: false,
+        $session_entry_referrer: "https://www.google.com/search?q=jane",
+        $search_query: "john.doe@cam.ac.uk",
+        $set: { email: "a@b.c" },
+        $set_once: { name: "Jane" },
+        $unset: ["x"],
+        $groups: { company: "Jane Ltd" },
+        $sdk_debug_retry_queue_size: 0,
+      }),
+      event: "talk_viewed",
+      $set: { name: "Jane Smith" },
+      $set_once: { email: "a@b.c" },
+    } as CaptureResult
+    const out = clean(event, ANALYTICS_EVENTS)
+    expect(out?.properties).toMatchObject({
+      talkKey: "talk-05f9cb992668bbf0c8dc",
+      $session_id: "s",
+      $device_id: "d",
+      $browser: "Firefox",
+      $process_person_profile: false,
+      $session_entry_referrer: "https://www.google.com/search",
+      $pathname: "/societies",
+    })
+    for (const key of [
+      "$search_query",
+      "$set",
+      "$set_once",
+      "$unset",
+      "$groups",
+      "$sdk_debug_retry_queue_size",
+    ]) {
+      expect(out?.properties).not.toHaveProperty(key)
+    }
+    expect(out).not.toHaveProperty("$set")
+    expect(out).not.toHaveProperty("$set_once")
+    expect(JSON.stringify(out)).not.toMatch(/john|Jane|a@b/)
+  })
+
+  test("by default the taxonomy of lib/analytics-events.ts is the allow-list", () => {
+    const search = {
+      ...pageview({ surface: "talks", queryLength: 5, resultCount: 0, query: "smith" }),
+      event: "search_performed",
+    } as CaptureResult
+    const out = sanitizeEvent(search, { environment: "test", origin: ORIGIN })
+    expect(out?.properties.resultCount).toBe(0)
+    expect(out?.properties).not.toHaveProperty("query")
+    const unknown = { ...pageview({}), event: "talk_title_viewed" } as CaptureResult
+    expect(sanitizeEvent(unknown, { environment: "test", origin: ORIGIN })).toBeNull()
   })
 
   test("tags environment and turns GeoIP off on every event", () => {

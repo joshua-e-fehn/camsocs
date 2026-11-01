@@ -1,4 +1,5 @@
 import type { CaptureResult, PostHog, PostHogConfig, Properties } from "posthog-js"
+import { ANALYTICS_EVENTS, allowedProps, type EventRules } from "@/lib/analytics-events"
 import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } from "@/lib/consent"
 import { scrubExceptionProps } from "@/lib/error-scrub"
 
@@ -30,8 +31,9 @@ import { scrubExceptionProps } from "@/lib/error-scrub"
  *    and stacks (lib/error-scrub.ts).
  *
  * `instrumentation-client.ts` calls `startAnalytics()` once per page.
- * ENG-5/ENG-6 reach the instance through `getPostHog()`, which is null
- * whenever nothing may be sent. (Server errors are lib/posthog-server.ts.)
+ * ENG-5 (`track`, lib/analytics.ts) and ENG-6 reach the instance through
+ * `getPostHog()` / `posthogReady()`, which give null whenever nothing may be
+ * sent. (Server errors are lib/posthog-server.ts.)
  */
 
 /** Our reverse-proxy path for PostHog (lib/relay.ts, robots.ts). */
@@ -46,14 +48,63 @@ export const RELAY_PATH = "/relay"
 export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave", "$exception"]
 
 /**
- * Our own events, each with the properties it may carry (spec "Event
- * taxonomy"; ENG-5 fills it from lib/analytics.ts). An event not listed is
- * dropped; a property not listed is removed.
+ * Our own events, each with the properties it may carry and the values each
+ * may hold: by default the taxonomy in lib/analytics-events.ts, the table
+ * `track()` reads too. An event not listed is dropped; a property not listed,
+ * or whose value fails its rule, is removed.
  */
-export type CustomEventProps = Readonly<Record<string, readonly string[]>>
+export type CustomEventProps = EventRules
 
 /** Properties the SDK needs on every event (`token`: a 401 without it). */
-const REQUIRED_PROPS = ["token", "distinct_id", "environment"] as const
+const REQUIRED_PROPS: readonly string[] = ["token", "distinct_id", "environment"]
+
+/**
+ * The SDK context our own events keep besides their allow-listed properties:
+ * exactly what the privacy notice ("When you browse") and record of
+ * processing P11 name (page, referrer, browser and OS, language, time zone,
+ * device type, screen size, the random identifiers), plus the flags that
+ * keep a person profile and GeoIP off and the library's name and version.
+ * Any other `$` key on one of our events goes: a `$set` / `$set_once` /
+ * `$unset` person payload, the SDK's debug and server-side flags, and free
+ * text under a `$` name (posthog-js `calculateEventProperties` and
+ * `getEventProperties`, 1.444.0). `$session_entry_…` copies are cleaned by
+ * the URL rules below.
+ */
+const SDK_CONTEXT_PROPS = new Set([
+  "$current_url",
+  "$host",
+  "$pathname",
+  "$referrer",
+  "$referring_domain",
+  "$browser",
+  "$browser_version",
+  "$browser_language",
+  "$browser_language_prefix",
+  "$os",
+  "$os_version",
+  "$device_type",
+  "$screen_height",
+  "$screen_width",
+  "$timezone",
+  "$timezone_offset",
+  "$device_id",
+  "$session_id",
+  "$window_id",
+  "$pageview_id",
+  "$insert_id",
+  "$time",
+  "$is_identified",
+  "$process_person_profile",
+  "$geoip_disable",
+  "$config_defaults",
+  "$lib",
+  "$lib_version",
+  "$lib_custom_api_host",
+])
+
+function isSdkContextProp(key: string): boolean {
+  return SDK_CONTEXT_PROPS.has(key) || key.startsWith("$session_entry_")
+}
 
 /**
  * Removed at every level of an event, also as `$initial_…` / `$session_entry_…`
@@ -137,7 +188,7 @@ function isStrippedProp(key: string): boolean {
  */
 export function posthogConfig(
   environment: string,
-  customEvents: CustomEventProps = {},
+  customEvents: CustomEventProps = ANALYTICS_EVENTS,
 ): Partial<PostHogConfig> {
   return {
     api_host: RELAY_PATH,
@@ -268,8 +319,10 @@ function eventPathname(props: Properties): string {
  *
  *  1. Drops events on `/dashboard*` and `/sign-in*` (hard rule 3), SDK events
  *     outside `SDK_EVENTS`, and our own events outside `customEvents`.
- *  2. Our own events keep only their allow-listed properties (plus `token`,
- *     `distinct_id`, `environment`).
+ *  2. Our own events are dropped if a required property is missing or fails
+ *     its rule, and keep only their allow-listed properties whose values pass
+ *     their rules, plus `token`, `distinct_id`, `environment` and the SDK
+ *     context in `SDK_CONTEXT_PROPS` (cleaned below); no person properties.
  *  3. Everywhere: deletes `STRIPPED_PROPS` and campaign parameters; strips
  *     query string and fragment from every URL and every `…pathname`; a
  *     previous page or referrer inside an untracked route is removed (the
@@ -281,22 +334,28 @@ function eventPathname(props: Properties): string {
  */
 export function sanitizeEvent(
   event: CaptureResult | null,
-  { environment, customEvents = {}, origin = currentOrigin() }: SanitizeOptions,
+  { environment, customEvents = ANALYTICS_EVENTS, origin = currentOrigin() }: SanitizeOptions,
 ): CaptureResult | null {
   if (!event) return null
   const name = event.event
   const custom = !name.startsWith("$")
-  const allowed = custom ? customEvents[name] : undefined
-  if (custom ? !allowed : !SDK_EVENTS.includes(name)) return null
+  if (custom ? !Object.hasOwn(customEvents, name) : !SDK_EVENTS.includes(name)) return null
 
   const props = event.properties ?? {}
   if (isUntrackedPath(eventPathname(props))) return null
 
-  if (allowed) {
-    const keep = new Set<string>([...REQUIRED_PROPS, ...allowed])
+  if (custom) {
+    // The same rule as `track()`: a required property missing or failing its
+    // rule stops the event; other properties keep only valid values.
+    const own = allowedProps(customEvents, name, props)
+    if (!own) return null
     for (const key of Object.keys(props)) {
-      if (!key.startsWith("$") && !keep.has(key)) delete props[key]
+      if (REQUIRED_PROPS.includes(key) || Object.hasOwn(own, key) || isSdkContextProp(key)) continue
+      delete props[key]
     }
+    // Nobody is identified: our events write no person properties.
+    delete event.$set
+    delete event.$set_once
   }
 
   // The previous page's numbers describe it: they go with its path.
@@ -364,6 +423,16 @@ export function getPostHog(): PostHog | null {
 }
 
 /**
+ * The instance once a package load that is under way has finished (a grant
+ * on this page load starts it before hydration, so a view event fired on
+ * mount would otherwise find nothing yet), else at once; null whenever
+ * nothing may be sent.
+ */
+export function posthogReady(): Promise<PostHog | null> {
+  return (loading ?? Promise.resolve()).then(getPostHog)
+}
+
+/**
  * Reports an error an error boundary caught (`app/(site)/error.tsx`,
  * `app/global-error.tsx`): those never reach the uncaught-error hook. Only
  * while the client runs (consent granted, key set); otherwise nothing
@@ -390,7 +459,7 @@ export function startAnalytics({
   // Literal member expressions: Next inlines `NEXT_PUBLIC_*` only in this form.
   key = process.env.NEXT_PUBLIC_POSTHOG_KEY,
   environment = process.env.NEXT_PUBLIC_POSTHOG_ENV ?? "development",
-  customEvents = {},
+  customEvents = ANALYTICS_EVENTS,
   load = loadPostHog,
 }: StartOptions = {}): () => void {
   if (stopListening) return stopListening
