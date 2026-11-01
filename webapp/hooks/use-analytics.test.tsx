@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { AddToCalendar } from "@/components/molecules/add-to-calendar"
-import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
+import { resetSearchTrackingForTests, useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import { analyticsLoading, resetAnalyticsForTests, startAnalytics } from "@/lib/analytics-client"
 import type { SearchSurface } from "@/lib/analytics-events"
 import { clearConsent, setConsent } from "@/lib/consent"
@@ -77,6 +77,7 @@ afterEach(async () => {
   root = undefined
   setWebdriver(undefined)
   resetAnalyticsForTests()
+  resetSearchTrackingForTests()
   clearConsent()
   window.localStorage.clear()
 })
@@ -131,6 +132,17 @@ describe("useTrackSearch", () => {
     await rerender(<Search query="" count={undefined} />)
     await rerender(<Search query="chess" count={2} />)
     expect(captured.map(({ props }) => props.queryLength)).toEqual([5, 10, 5])
+  })
+
+  test("a box mounting again with the same query (Back, a shared link) does not count again", async () => {
+    await grant()
+    await render(<Search surface="societies" query="chess" count={0} />)
+    await act(async () => root?.unmount())
+    await render(<Search surface="societies" query="chess" count={0} />)
+    expect(captured.map(({ event }) => event)).toEqual(["search_performed", "search_zero_results"])
+    // Another surface is another search box.
+    await rerender(<Search surface="talks" query="chess" count={1} />)
+    expect(captured).toHaveLength(3)
   })
 
   test("sends nothing without consent", async () => {
