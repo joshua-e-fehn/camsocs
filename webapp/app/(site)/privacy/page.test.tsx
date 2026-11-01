@@ -72,6 +72,8 @@ describe("Privacy notice", () => {
     expect(what).toContain("never identify you when you are signed in")
     expect(what).not.toContain("never stored")
     expect(what).toContain("built to contain no personal data")
+    expect(what).toContain("which feed, and which event or talk")
+    expect(what).toContain("could match the two")
   })
 
   test("no section still says the site has no analytics", async () => {

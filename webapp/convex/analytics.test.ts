@@ -203,9 +203,9 @@ describe("lib/posthog", () => {
           })
         })) as typeof fetch
       const started = Date.now()
-      await sendCapture(config, "x", {}, hang)
+      await sendCapture(config, "x", {}, hang, 20)
       expect(aborted).toBe(true)
-      expect(Date.now() - started).toBeLessThan(5_000)
+      expect(Date.now() - started).toBeLessThan(1_000)
       expect(logged.mock.calls[0]?.join(" ")).toBe("PostHog capture of x failed (AbortError)")
     } finally {
       logged.mockRestore()

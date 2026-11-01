@@ -82,9 +82,10 @@ export async function sendCapture(
   event: string,
   props: CaptureProps,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = CAPTURE_TIMEOUT_MS,
 ): Promise<void> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), CAPTURE_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetchImpl(`${config.host}${CAPTURE_PATH}`, {
       method: "POST",
