@@ -1,4 +1,5 @@
 import path from "node:path"
+import { withPostHogConfig } from "@posthog/nextjs-config"
 import type { NextConfig } from "next"
 
 /**
@@ -53,4 +54,51 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+/**
+ * Source maps for PostHog error tracking (ENG-6, research-errors §4-§5):
+ * `@posthog/nextjs-config` uploads the build's source maps to PostHog and
+ * then deletes every `.map` from the output (`deleteAfterUpload`), so stacks
+ * are readable in PostHog while the public site serves no maps.
+ *
+ * Only for a Vercel production build that has both `POSTHOG_PERSONAL_API_KEY`
+ * and `POSTHOG_PROJECT_ID` (set on Production only). Anything else (local
+ * builds, `next dev`, CI, previews, e2e) gets `config` back exactly as it
+ * is: the plugin throws at config load without a key, and under Turbopack a
+ * failed release lookup or upload fails the build, so it must never run
+ * where it cannot succeed.
+ */
+export function sourceMapUploadOptions(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Parameters<typeof withPostHogConfig>[1] | null {
+  const personalApiKey = env.POSTHOG_PERSONAL_API_KEY?.trim()
+  const projectId = env.POSTHOG_PROJECT_ID?.trim()
+  if (!personalApiKey || !projectId || env.VERCEL_ENV !== "production") return null
+  return {
+    personalApiKey,
+    projectId,
+    // The EU app host (not the ingestion host `eu.i.posthog.com`), as the
+    // upload docs say for EU Cloud.
+    host: "https://eu.posthog.com",
+    logLevel: "warn",
+    sourcemaps: {
+      enabled: true,
+      releaseName: "camsocs",
+      releaseVersion: env.VERCEL_GIT_COMMIT_SHA?.trim() || undefined,
+      deleteAfterUpload: true,
+    },
+  }
+}
+
+/** `config` wrapped for the source map upload when `sourceMapUploadOptions`
+ * allows it (the PostHog wrapper must be the outermost), else `config`
+ * itself. */
+export function withSourceMapUpload(
+  config: NextConfig,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): NextConfig {
+  const options = sourceMapUploadOptions(env)
+  return options ? withPostHogConfig(config, options) : config
+}
+
+export { nextConfig }
+export default withSourceMapUpload(nextConfig)
