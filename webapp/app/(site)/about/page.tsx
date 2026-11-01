@@ -2,6 +2,7 @@ import { fetchQuery } from "convex/nextjs"
 import { CircleDashedIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
+import { InlineCode } from "@/components/molecules/inline-code"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { StatusChip } from "@/components/molecules/source-line"
 import { api } from "@/convex/_generated/api"
@@ -89,10 +90,7 @@ export default async function AboutPage() {
             <li>
               <strong>Public sources only.</strong> An automated harvester reads publicly accessible
               pages and feeds. It identifies itself honestly as{" "}
-              <code className="rounded bg-muted px-1 font-mono text-xs text-foreground">
-                {BOT_USER_AGENT}
-              </code>
-              .
+              <InlineCode>{BOT_USER_AGENT}</InlineCode>.
             </li>
             <li>
               <strong>robots.txt, with one exception.</strong> The harvester follows robots.txt on
@@ -228,7 +226,8 @@ export default async function AboutPage() {
               </>
             ) : null}
             . A person reads every request. See the <Link href="/privacy">privacy notice</Link> for
-            your rights.
+            your rights, and its <Link href="/privacy#cookies">cookies section</Link> for the visit
+            statistics we collect only if you allow them.
           </p>
         </ProseSection>
       </div>

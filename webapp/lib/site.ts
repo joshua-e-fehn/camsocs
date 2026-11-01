@@ -33,7 +33,7 @@ export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-10-31"
+export const PRIVACY_NOTICE_UPDATED = "2026-11-01"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.uk/about)"
