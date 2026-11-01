@@ -177,8 +177,21 @@ export const test = base.extend<{ guard: Guard; problems: PageProblems }>({
   problems: [
     async ({ page }, use) => {
       const problems: PageProblems = { console: [], uncaught: [] }
+      // Chromium logs a page's own error status ("Failed to load resource: …
+      // 404") as a console error. The tests assert that status themselves (a
+      // 404 page must be one), so only the main document's line is dropped;
+      // a failing image, script or fetch still counts.
+      const documents = new Set<string>()
+      page.on("request", (request) => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+          documents.add(request.url())
+      })
       page.on("console", (message) => {
-        if (message.type() === "error") problems.console.push(message.text())
+        if (message.type() !== "error") return
+        const ownStatus =
+          message.text().startsWith("Failed to load resource:") &&
+          documents.has(message.location().url)
+        if (!ownStatus) problems.console.push(message.text())
       })
       page.on("pageerror", (error) => problems.uncaught.push(error.message))
       await use(problems)
