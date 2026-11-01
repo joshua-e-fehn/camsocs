@@ -5,7 +5,10 @@ import { SITE_URL } from "@/lib/site"
  * endpoints and the sign-in page may not (they hold nothing for a crawler). */
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/dashboard", "/api/", "/sign-in"] },
+    rules: [
+      { userAgent: "*", allow: "/", disallow: ["/dashboard", "/api/", "/sign-in"] },
+      { userAgent: ["GPTBot", "ClaudeBot"], disallow: "/" },
+    ],
     sitemap: `${SITE_URL}/sitemap.xml`,
   }
 }

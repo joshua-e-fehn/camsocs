@@ -61,6 +61,9 @@ export const {
  */
 export const getToken = cache(async (): Promise<string | undefined> => {
   const inbound = new Headers(await nextHeaders())
+  // A request with no cookies cannot carry a Better Auth session. Avoid a
+  // Convex auth round trip for anonymous users and search crawlers.
+  if (!inbound.get("cookie")) return undefined
   // Mirrors the library's own hop-by-hop handling.
   inbound.delete("content-length")
   inbound.delete("transfer-encoding")
