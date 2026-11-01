@@ -2,6 +2,7 @@
 
 import { RotateCwIcon, TriangleAlertIcon } from "lucide-react"
 import Link from "next/link"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -11,15 +12,24 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { captureBrowserException } from "@/lib/analytics-client"
 
 /** A public page failed to load its data. Says so plainly and offers a retry;
- * the error's details stay in the server log. */
+ * the error's details stay in the server log. A browser-side error goes to
+ * PostHog only for a visitor who accepted analytics (ENG-6). A server error
+ * (one with a `digest`) is not sent again from here: the server already
+ * reported the real error, and the browser only sees React's placeholder. */
 export default function SiteError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  useEffect(() => {
+    if (!error.digest) captureBrowserException(error)
+  }, [error])
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
       <Empty className="rounded-xl border border-dashed py-16">

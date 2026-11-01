@@ -39,6 +39,7 @@ const fakePostHog = {
   has_opted_out_capturing: () => optedOut,
   reset: () => calls.push(["reset"]),
   set_config: (config: unknown) => calls.push(["set_config", config]),
+  captureException: (error: unknown) => calls.push(["captureException", error]),
 }
 
 mock.module("posthog-js", () => ({ default: fakePostHog, posthog: fakePostHog }))
@@ -52,6 +53,7 @@ const load = () => {
 
 const {
   analyticsLoading,
+  captureBrowserException,
   getPostHog,
   posthogConfig,
   resetAnalyticsForTests,
@@ -298,11 +300,12 @@ describe("before_send", () => {
     ).toBe("https://example.org/dashboard")
   })
 
-  test("only pageview and pageleave of the SDK's own events get through", () => {
+  test("only pageview, pageleave and exception of the SDK's own events get through", () => {
     for (const event of ["$autocapture", "$rageclick", "$snapshot", "$web_vitals", "$identify"]) {
       expect(clean({ ...pageview({}), event })).toBeNull()
     }
     expect(clean({ ...pageview({}), event: "$pageleave" })).not.toBeNull()
+    expect(clean({ ...pageview({}), event: "$exception" })).not.toBeNull()
     expect(clean(null)).toBeNull()
   })
 
@@ -328,6 +331,126 @@ describe("before_send", () => {
   })
 })
 
+/** A browser error as posthog-js builds it (`$exception_list`, @posthog/core
+ * `ErrorProperties`), on a page with a query string. */
+function exception(extra: Record<string, unknown> = {}) {
+  return {
+    uuid: "u",
+    event: "$exception",
+    properties: {
+      token: KEY,
+      distinct_id: "d",
+      $current_url: `${ORIGIN}/talks?q=jane+doe#top`,
+      $pathname: "/talks",
+      $exception_level: "error",
+      $exception_list: [
+        {
+          type: "TypeError",
+          value: "Failed for jane@cam.ac.uk loading https://camsocs.uk/talks?q=jane+doe",
+          mechanism: { handled: true, synthetic: false },
+          stacktrace: {
+            type: "raw",
+            frames: [
+              {
+                platform: "web:javascript",
+                filename: `${ORIGIN}/_next/static/chunks/app.js?dpl=dpl_abc#frag`,
+                function: "TalksPage",
+                lineno: 1,
+                colno: 42,
+                in_app: true,
+                chunk_id: "debug-id",
+              },
+            ],
+          },
+        },
+      ],
+      $exception_steps: [{ $message: "typed jane" }],
+      ...extra,
+    },
+  } as CaptureResult
+}
+
+describe("before_send for browser errors (ENG-6)", () => {
+  test("lets $exception through with URLs and emails scrubbed", () => {
+    const out = clean(exception())
+    expect(out?.event).toBe("$exception")
+    const props = out?.properties ?? {}
+    expect(props.$current_url).toBe(`${ORIGIN}/talks`)
+    expect(props.$exception_level).toBe("error")
+    expect(props).not.toHaveProperty("$exception_steps")
+    const [error] = props.$exception_list as Record<string, unknown>[]
+    expect(error?.type).toBe("TypeError")
+    expect(error?.value).toBe("Failed for [email] loading https://camsocs.uk/talks")
+    const [frame] = (error?.stacktrace as { frames: Record<string, unknown>[] }).frames
+    expect(frame).toEqual({
+      platform: "web:javascript",
+      filename: `${ORIGIN}/_next/static/chunks/app.js`,
+      function: "TalksPage",
+      lineno: 1,
+      colno: 42,
+      in_app: true,
+      chunk_id: "debug-id",
+    })
+    const wire = JSON.stringify(out)
+    for (const secret of ["jane", "dpl_abc", "frag", "#top"]) expect(wire).not.toContain(secret)
+  })
+
+  test("an error on /dashboard or /sign-in is dropped", () => {
+    expect(
+      clean(
+        exception({ $current_url: `${ORIGIN}/dashboard/people`, $pathname: "/dashboard/people" }),
+      ),
+    ).toBeNull()
+    expect(
+      clean(exception({ $current_url: `${ORIGIN}/sign-in`, $pathname: "/sign-in" })),
+    ).toBeNull()
+  })
+
+  test("is still dropped without a grant in force", () => {
+    const send = beforeSend(posthogConfig("production"))
+    expect(send(exception())).toBeNull()
+    setConsent("granted")
+    expect(send(exception())?.event).toBe("$exception")
+    setConsent("denied")
+    expect(send(exception())).toBeNull()
+  })
+})
+
+describe("the exception-autocapture extension", () => {
+  /** `loadPostHog()` imports it beside posthog-js, so the SDK finds its error
+   * hooks in place at init and never fetches the script (external loading
+   * stays off). This is the real module, not the recorder. */
+  test("registers PostHog's error hooks when imported", async () => {
+    await import("posthog-js/dist/exception-autocapture")
+    const extensions = (window as unknown as Record<string, Record<string, unknown> | undefined>)
+      .__PosthogExtensions__
+    expect(extensions?.errorWrappingFunctions).toMatchObject({
+      wrapOnError: expect.any(Function),
+      wrapUnhandledRejection: expect.any(Function),
+    })
+  })
+})
+
+describe("captureBrowserException", () => {
+  test("does nothing until the client runs, then reports through it", async () => {
+    const error = new Error("boundary")
+    captureBrowserException(error)
+    startAnalytics({ key: KEY, environment: "test", load })
+    captureBrowserException(error)
+    expect(methods()).not.toContain("captureException")
+
+    setConsent("granted")
+    await settle()
+    captureBrowserException(error)
+    expect(calls).toContainEqual(["captureException", error])
+
+    calls.length = 0
+    setConsent("denied")
+    captureBrowserException(error)
+    expect(methods()).not.toContain("captureException")
+  })
+})
+
 describe("the init options", () => {
   test("match the spec", () => {
     const config = posthogConfig("production")
@@ -349,7 +472,10 @@ describe("the init options", () => {
       advanced_disable_flags: true,
       mask_all_text: true,
       mask_all_element_attributes: true,
-      capture_exceptions: false,
+      // ENG-6: uncaught errors and rejections (consented visitors only), with
+      // the extension bundled rather than fetched.
+      capture_exceptions: true,
+      disable_external_dependency_loading: true,
       save_campaign_params: false,
       // No URL in PostHog's cookie; no fragment; no scroll depth.
       save_referrer: false,
