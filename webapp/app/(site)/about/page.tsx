@@ -228,7 +228,8 @@ export default async function AboutPage() {
               </>
             ) : null}
             . A person reads every request. See the <Link href="/privacy">privacy notice</Link> for
-            your rights.
+            your rights, and its <Link href="/privacy#cookies">cookies section</Link> for the visit
+            statistics we collect only if you allow them.
           </p>
         </ProseSection>
       </div>

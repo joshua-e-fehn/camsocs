@@ -11,6 +11,9 @@ import {
   SITE_NAME,
 } from "@/lib/site"
 
+/** Inline code (storage names), styled as on the About page. */
+const CODE = "rounded bg-muted px-1 font-mono text-xs text-foreground"
+
 export const metadata: Metadata = pageMetadata({
   title: "Privacy notice",
   description:
@@ -23,6 +26,11 @@ export const metadata: Metadata = pageMetadata({
  * behind it and the private contact notes. Kept in step with
  * docs/compliance/ (record of processing, retention, LIA, DPIA-lite); change
  * those first, then this page and PRIVACY_NOTICE_UPDATED.
+ *
+ * The analytics wording (ENG-3, 2026-11-01) describes the PostHog design as it
+ * ships with ENG-2 and ENG-4 to ENG-9: nothing loads before "Accept analytics",
+ * the choice lives in `camsocs-consent` (lib/consent.ts) and "Cookie settings"
+ * in the footer reopens it. Keep the three in step.
  */
 export default function PrivacyPage() {
   const contact = CONTACT_EMAIL ? (
@@ -119,14 +127,36 @@ export default function PrivacyPage() {
           Signing in is optional. If you sign in with a @cam.ac.uk email link, we keep that address
           and a session record. The operator signs in with a Google account.
         </p>
+        <h3>When you browse (analytics, only if you allow it)</h3>
+        <p>
+          Only if you choose “Accept analytics” (see <a href="#cookies">Cookies</a>), your browser
+          sends PostHog, our analytics provider, a record of the pages you view and a few things you
+          do on them: which society, event or talk page you opened (by its reference, never a talk’s
+          title or speaker), how long a search was and how many results it found (never what you
+          typed), when you subscribe to a calendar or follow a link off the site (the kind of link,
+          not its address), and errors the page runs into. Each record carries the page address
+          without anything after “?” or “#”, the page you came from, your browser, device type and
+          screen size, and the random identifier in the analytics cookie.
+        </p>
+        <p>
+          Your IP address is discarded and never stored. We record no session replays, clicks or
+          mouse movements, never link the records to your name, email address or sign-in, and never
+          track the sign-in page or the operator’s dashboard.
+        </p>
+        <p>
+          Separately, and without storing anything in your browser, our servers report their own
+          errors to PostHog (the page path, the kind of error and where in our code it happened;
+          never your IP address, cookies or anything you sent) and count calendar-feed downloads and
+          request-form submissions by kind. These reports and counts contain no personal data.
+        </p>
         <h3>Sources</h3>
         <p>
-          Apart from what you send us, the data comes from publicly accessible sources: the
-          Cambridge SU society directory, the Proctors’ register, Sport Cambridge, Camdram, CUCBC,
-          college and JCR/MCR websites, societies’ own websites, Linktree pages and public
-          calendars, talks.cam, departments’ and institutes’ public talk listings, and Playwaze; and
-          from society mailing lists as described above. The full list and our collection rules are
-          on the <Link href="/about#data">About page</Link>.
+          Apart from what you send us, and what your browser sends if you allow analytics, the data
+          comes from publicly accessible sources: the Cambridge SU society directory, the Proctors’
+          register, Sport Cambridge, Camdram, CUCBC, college and JCR/MCR websites, societies’ own
+          websites, Linktree pages and public calendars, talks.cam, departments’ and institutes’
+          public talk listings, and Playwaze; and from society mailing lists as described above. The
+          full list and our collection rules are on the <Link href="/about#data">About page</Link>.
         </p>
       </ProseSection>
 
@@ -157,10 +187,23 @@ export default function PrivacyPage() {
             <strong>Sign-in and the Cambridge-only tier</strong>: legitimate interests, to show
             events shared on Cambridge mailing lists only to Cambridge members.
           </li>
+          <li>
+            <strong>Site analytics in your browser</strong>, to see in aggregate which pages and
+            features are used and where the site fails, so we can improve it: your consent (Article
+            6(1)(a)), given with “Accept analytics” and withdrawn at any time under “Cookie
+            settings”. The law on storing information on your device (PECR) also requires consent
+            for it, so nothing is stored or read for analytics without it.
+          </li>
+          <li>
+            <strong>Error reports and anonymous counts from our servers</strong>, to keep the site
+            working and see which features are used: our legitimate interests. They hold no IP
+            addresses, cookies or anything you typed, and nothing is stored on your device for them.
+          </li>
         </ul>
         <p>
           We do not infer anyone’s religion, politics, ethnicity, health or sexuality, and we make
-          no automated decisions about people.
+          no automated decisions about people. Analytics is not used to profile or identify anyone,
+          and signed-in visitors are never identified in it.
         </p>
       </ProseSection>
 
@@ -179,10 +222,21 @@ export default function PrivacyPage() {
             extracts facts from public pages and mailing-list messages and replaces names in
             descriptions with roles. Talk listings are never sent to it.
           </li>
+          <li>
+            PostHog (analytics and error reports), on its EU Cloud: the data is stored in the EU, in
+            Frankfurt. PostHog, Inc. acts as our processor under its data processing agreement,
+            which we accepted on 1 November 2026. It also receives the harvester’s run statistics
+            and the AI model’s usage figures (counts, durations, token numbers), which contain no
+            personal data and none of the text read.
+          </li>
         </ul>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
           Where they do, we rely on the safeguards each provider offers for transfers from the UK.
+          PostHog, a US company, stores analytics in the EU; where it or its subprocessors handle
+          the data elsewhere, its agreement applies the UK’s International Data Transfer Addendum to
+          the EU standard contractual clauses and the UK Extension to the EU–US Data Privacy
+          Framework.
         </p>
       </ProseSection>
 
@@ -212,6 +266,14 @@ export default function PrivacyPage() {
           </li>
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
+          <li>
+            Analytics and error records in PostHog: up to one year (the retention of PostHog’s plan
+            we use), then deleted by PostHog.
+          </li>
+          <li>
+            Your cookie choice: 180 days in your browser, then we ask again. The analytics cookie:
+            180 days, or until you withdraw consent.
+          </li>
         </ul>
       </ProseSection>
 
@@ -226,6 +288,10 @@ export default function PrivacyPage() {
           <li>ask for a copy of personal data we hold about you;</li>
           <li>have it corrected, or deleted;</li>
           <li>ask us to restrict its use while a question is resolved;</li>
+          <li>
+            <strong>withdraw your consent</strong> to analytics at any time, as easily as you gave
+            it, under “Cookie settings” at the foot of any page (Article 7(3));
+          </li>
           <li>complain to us, and to the Information Commission.</li>
         </ul>
         <p>
@@ -244,10 +310,41 @@ export default function PrivacyPage() {
 
       <ProseSection id="cookies" title="Cookies">
         <p>
-          {SITE_NAME} uses no analytics, advertising or tracking cookies. If you sign in, we set the
-          cookies needed to keep you signed in; they are strictly necessary for the service you
-          asked for. If you switch between light and dark mode, your browser remembers the choice
-          locally. Neither is used to follow you elsewhere.
+          {SITE_NAME} stores something on your device only where it is needed for what you asked
+          for, or where you have agreed to it:
+        </p>
+        <ul>
+          <li>
+            <strong>Your cookie choice.</strong> When you choose “Accept analytics” or “Reject”,
+            your browser keeps the choice and its date in local storage under the name{" "}
+            <code className={CODE}>camsocs-consent</code>, so we do not ask on every page. It is
+            strictly necessary, holds nothing else and is never sent to us. After 180 days we ask
+            again.
+          </li>
+          <li>
+            <strong>Analytics, only if you accept.</strong> If you choose “Accept analytics”,
+            PostHog’s analytics code loads from our own address and sets a first-party cookie and
+            local storage entries whose names begin <code className={CODE}>ph_</code>. They hold a
+            random identifier, so that visits can be counted without knowing who you are; the cookie
+            lasts 180 days. If you choose “Reject”, or choose nothing, the analytics code is not
+            loaded at all and nothing is stored or read for analytics.
+          </li>
+          <li>
+            <strong>Signing in.</strong> If you sign in, we set the cookies needed to keep you
+            signed in; they are strictly necessary for the service you asked for.
+          </li>
+          <li>
+            <strong>Recent searches.</strong> The search box remembers your last five searches in
+            your browser’s local storage so you can repeat them. They stay on your device.
+          </li>
+        </ul>
+        <p>
+          You can change your mind at any time: choose <strong>“Cookie settings”</strong> at the
+          foot of any page and choose again. Choosing “Reject” stops analytics at once and deletes
+          the <code className={CODE}>ph_</code> cookie and storage from your browser; records
+          already sent carry only that random identifier, so nothing then links them to you, and
+          they are deleted with the rest. None of this is used for advertising or to follow you to
+          other websites.
         </p>
       </ProseSection>
 
