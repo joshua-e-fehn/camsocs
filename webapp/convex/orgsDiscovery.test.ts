@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { addDays, londonIsoDate } from "../lib/calendar"
+import { addDays, londonIsoDate, londonMidnight, startOfWeek } from "../lib/calendar"
 import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
@@ -172,10 +172,20 @@ describe("orgs.list sort and activity", () => {
     })
     // Six nights from now, the same title (Camdram lists each as an event);
     // the week window may cut them, so the shelf is checked against itself.
+    // A run is per London week (Monday start, convex/lib/orgActivity.ts), so
+    // the nights must not straddle a Monday midnight: on a Sunday evening they
+    // move to next Monday morning, which is still in the same term week
+    // (Thursday to Wednesday) and within the next seven days out of term.
+    const firstNight = (() => {
+      const start = NOW + 60_000
+      const weekOf = (ms: number) => startOfWeek(londonIsoDate(ms))
+      if (weekOf(start) === weekOf(start + 5 * 3_600_000)) return start
+      return londonMidnight(addDays(weekOf(start), 7)) + 10 * 3_600_000
+    })()
     const nights = Array.from({ length: 6 }, (_, i) => eventKey("camdram", `top-girls-${i}`))
     await t.mutation(internal.ingest.claims.ingest, {
       claims: nights.flatMap((key, i) =>
-        event(key, i === 5 ? "TOP GIRLS" : "Top Girls", NOW + 60_000 + i * 3_600_000, {
+        event(key, i === 5 ? "TOP GIRLS" : "Top Girls", firstNight + i * 3_600_000, {
           externalId: `top-girls-${i}`,
         }),
       ),
@@ -193,7 +203,13 @@ describe("orgs.list sort and activity", () => {
     expect(page.map((card) => card.name).slice(0, 2)).toEqual(["Chess Club", "Drama Society"])
     const busy = await t.query(api.orgs.busy, {})
     const shelf = Object.fromEntries(busy.orgs.map(({ card, count }) => [card.name, count]))
-    expect(shelf["Drama Society"]).toBe(1)
+    // The shelf's own window decides: in the last minute before a term week
+    // ends (Wednesday 23:59 London) every night already falls in the next one.
+    const onShelf = nights.some((_, i) => {
+      const startsAt = firstNight + i * 3_600_000
+      return startsAt >= busy.from && startsAt < busy.to
+    })
+    expect(shelf["Drama Society"] ?? 0).toBe(onShelf ? 1 : 0)
     // The organiser rows carry the run and cancelled copies the counts read.
     const rows = await t.run(async (ctx) =>
       ctx.db
