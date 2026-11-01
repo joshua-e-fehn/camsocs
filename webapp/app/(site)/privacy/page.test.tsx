@@ -47,6 +47,7 @@ describe("Privacy notice", () => {
     expect(cookies).toContain("__ph_")
     expect(cookies).toContain("session storage")
     expect(cookies).toContain("180 days from your last visit")
+    expect(cookies).toContain("no longer reads or writes")
   })
 
   test("the browsing section names every kind of event and the browser data sent", async () => {
@@ -54,6 +55,9 @@ describe("Privacy notice", () => {
     expect(what).toContain("request form (only its kind")
     expect(what).toContain("signing in (only how, never who)")
     expect(what).toContain("language and time zone")
+    expect(what).toContain("change with each visit, browser tab and page view")
+    expect(what).not.toContain("the random identifier")
+    expect(what).toContain("without your IP address, cookies or browser identification string")
     expect(what).toContain("never identify you when you are signed in")
     expect(what).not.toContain("never stored")
     expect(what).toContain("built to contain no personal data")

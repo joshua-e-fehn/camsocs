@@ -109,7 +109,7 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 | Reasonable expectations | A site operator watching for errors and counting calendar downloads is expected; it is stated in `/privacy` |
 | Source | The server's own handling of requests it already serves. Nothing from request headers is stored, which keeps clear of the open question whether headers are information "automatically emitted" by the device (PECR reg 6(2)(b); **unverified**, no ICO text on it) |
 | Impact | None on individuals: an event cannot be tied to a visitor |
-| Safeguards | EU Cloud (Frankfurt), PostHog as processor under its DPA (transfers per record-of-processing); IP discarded at project level; up to 1 year in PostHog (`retention.md` R12); PostHog AI off (DPIA-lite R-16 todo); the senders are no-ops without a key, and only production has one |
+| Safeguards | EU Cloud (Frankfurt), PostHog as processor (its DPA and transfers per record-of-processing; signature an open item there); IP discarded at project level; up to 1 year in PostHog (`retention.md` R12); PostHog AI off at organisation level (confirmed 2026-11-01, DPIA-lite R-16); the senders are no-ops without a key, and only production has one |
 
 **Conclusion:** legitimate interests applies to D, provided the events keep to the fields above. Adding any request data (headers, query strings, bodies, user ids) needs this assessment redone first.
 

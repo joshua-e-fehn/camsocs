@@ -25,12 +25,15 @@ export const metadata: Metadata = pageMetadata({
  * docs/compliance/ (record of processing, retention, LIA, DPIA-lite); change
  * those first, then this page and PRIVACY_NOTICE_UPDATED.
  *
- * The analytics wording (ENG-3, 2026-11-01) describes the PostHog design as it
- * ships with ENG-2 and ENG-4 to ENG-9: nothing loads before "Accept analytics",
- * the choice lives in `camsocs-consent` (lib/consent.ts) and "Cookie settings"
- * in the footer reopens it. Keep the three in step, and publish this wording
- * only together with or after them (a merge to main deploys production); if it
- * ships later, move PRIVACY_NOTICE_UPDATED to that date.
+ * The analytics wording (ENG-3) describes the PostHog design as it ships: the
+ * consent banner (ENG-2, #6) and the browser client with its `/relay` hop
+ * (ENG-4, #9) merge together with this page on 1 November 2026, after the
+ * harvester and LLM telemetry (ENG-8, ENG-9) already on main. Nothing loads
+ * before "Accept analytics", the choice lives in `camsocs-consent`
+ * (lib/consent.ts), "Cookie settings" in the footer reopens it, and the
+ * client's `before_send` (lib/analytics-client.ts) and relay (lib/relay.ts)
+ * send no more than "When you browse" lists. Keep them in step; if this page
+ * ships on a later date than its partners, move PRIVACY_NOTICE_UPDATED to it.
  */
 export default function PrivacyPage() {
   const contact = CONTACT_EMAIL ? (
@@ -139,15 +142,17 @@ export default function PrivacyPage() {
           message and where in our code it happened). Each record carries the page address without
           anything after “?” or “#”, the page you came from, your browser and operating system (by
           name and version, not the full identification string your browser sends), its language and
-          time zone, your device type and screen size, and the random identifier stored in your
-          browser for analytics.
+          time zone, your device type and screen size, and random identifiers: one stored in your
+          browser for analytics, and others that change with each visit, browser tab and page view.
         </p>
         <p>
-          PostHog discards your IP address, so it is not kept with the analytics records; like any
-          visit to the site, it appears briefly in our hosting provider’s request logs. We record no
-          session replays, clicks or mouse movements, never link the records to your name, email
-          address or account, never identify you when you are signed in, and never track the sign-in
-          page or the operator’s dashboard.
+          Your browser sends these records to our own site, which passes them on to PostHog without
+          your IP address, cookies or browser identification string, so PostHog sees our server, not
+          you; it derives no location and keeps no IP address. Like any visit to the site, your IP
+          address appears briefly in our hosting provider’s request logs. We record no session
+          replays, clicks or mouse movements, never link the records to your name, email address or
+          account, never identify you when you are signed in, and never track the sign-in page or
+          the operator’s dashboard.
         </p>
         <p>
           Separately, and without storing anything in or reading anything from your browser, our
@@ -231,11 +236,11 @@ export default function PrivacyPage() {
           </li>
           <li>
             PostHog (analytics and error reports), on its EU Cloud: the data is stored in the EU, in
-            Frankfurt. PostHog, Inc. acts as our processor under its{" "}
+            Frankfurt. PostHog, Inc. acts as our processor (see its{" "}
             <a href="https://posthog.com/dpa" rel="noopener noreferrer">
               data processing agreement
             </a>
-            . It also receives the harvester’s run statistics and the AI model’s usage figures
+            ). It also receives the harvester’s run statistics and the AI model’s usage figures
             (counts, durations, token numbers), which contain no personal data and none of the text
             read.
           </li>
@@ -244,10 +249,10 @@ export default function PrivacyPage() {
           Some of these providers process data outside the UK, in particular in the United States.
           Where they do, we rely on the safeguards each provider offers for transfers from the UK.
           PostHog, a US company, stores analytics in the EU; where it or its subprocessors handle
-          the data elsewhere, its agreement applies the UK’s International Data Transfer Addendum to
-          the EU standard contractual clauses and the UK Extension to the EU–US Data Privacy
-          Framework. Ask us (see <a href="#rights">Your rights</a>) for a copy of the safeguards for
-          any provider.
+          the data elsewhere, its data processing agreement provides for the UK’s International Data
+          Transfer Addendum to the EU standard contractual clauses and the UK Extension to the EU–US
+          Data Privacy Framework. Ask us (see <a href="#rights">Your rights</a>) for a copy of the
+          safeguards for any provider.
         </p>
       </ProseSection>
 
@@ -284,8 +289,9 @@ export default function PrivacyPage() {
           <li>
             Your cookie choice: 180 days in your browser, then we ask again. The analytics cookie:
             180 days from your last visit. The analytics entries in local storage: until you
-            withdraw consent or clear your browser’s data for this site; in session storage: until
-            you close the tab.
+            withdraw consent, your choice runs out after 180 days (they are deleted on your next
+            visit) or you clear your browser’s data for this site; in session storage: until you
+            close the tab.
           </li>
         </ul>
       </ProseSection>
@@ -314,9 +320,9 @@ export default function PrivacyPage() {
         </ul>
         <p>
           To use any of these rights, use {contact}. We reply within one month. We acknowledge a
-          complaint within 30 days and tell you the outcome. Analytics records carry only a random
-          identifier, not your name, so we can find yours only if you tell us that identifier
-          (Article 11).
+          complaint within 30 days and tell you the outcome. Analytics records carry only random
+          identifiers, not your name, so we can find yours only if you tell us the identifier stored
+          in your browser (Article 11).
         </p>
         <p>
           You can also complain to the UK regulator, the Information Commission (formerly the
@@ -344,13 +350,15 @@ export default function PrivacyPage() {
             <strong>Analytics, only if you accept.</strong> If you choose “Accept analytics”,
             PostHog’s analytics code loads from our own address and stores a first-party cookie,
             local storage entries and session storage entries whose names begin{" "}
-            <InlineCode>ph_</InlineCode> or <InlineCode>__ph_</InlineCode>. They hold a random
-            identifier, so that visits can be counted without knowing who you are, PostHog’s own
-            record of your choice, and settings for the current visit. The cookie lasts 180 days
-            from your last visit, the session storage entries until you close the tab, and the local
-            storage entries until you withdraw consent or clear your browser’s data for this site.
-            If you choose “Reject”, or choose nothing, the analytics code is not loaded at all and
-            nothing is stored or read for analytics.
+            <InlineCode>ph_</InlineCode> or <InlineCode>__ph_</InlineCode>. They hold random
+            identifiers for your browser, the current visit and the current tab, so that visits can
+            be counted without knowing who you are, PostHog’s own record of your choice, and
+            settings for the current visit. The cookie lasts 180 days from your last visit, the
+            session storage entries until you close the tab, and the local storage entries until you
+            withdraw consent, your choice runs out (they are deleted on your next visit after that)
+            or you clear your browser’s data for this site. If you choose “Reject”, or choose
+            nothing, the analytics code is not loaded at all and nothing is stored or read for
+            analytics.
           </li>
           <li>
             <strong>Signing in.</strong> If you sign in, we set the cookies needed to keep you
@@ -361,10 +369,9 @@ export default function PrivacyPage() {
             your browser’s local storage so you can repeat them. They stay on your device.
           </li>
           <li>
-            <strong>An old theme setting.</strong> Earlier versions of the site remembered a light
-            or dark choice in local storage under <InlineCode>theme</InlineCode>. The site is now
-            light only and does not use it; if the entry is still in your browser, it is read when a
-            page loads but changes nothing. Clearing your browser’s data for this site removes it.
+            <strong>An old theme setting.</strong> Earlier versions of the site stored a light or
+            dark choice in local storage under <InlineCode>theme</InlineCode>, which the site no
+            longer reads or writes; you can delete it.
           </li>
         </ul>
         <p>
@@ -372,7 +379,7 @@ export default function PrivacyPage() {
           foot of any page and choose again. Choosing “Reject” stops analytics at once and deletes
           the <InlineCode>ph_</InlineCode> and <InlineCode>__ph_</InlineCode> cookie and storage
           from your browser. Records already sent stay in PostHog under the deleted random
-          identifier: we can no longer tell which of them came from your browser, and they are kept
+          identifiers: we can no longer tell which of them came from your browser, and they are kept
           no longer than the rest (see <a href="#retention">How long we keep it</a>). None of this
           is used for advertising or to follow you to other websites.
         </p>
