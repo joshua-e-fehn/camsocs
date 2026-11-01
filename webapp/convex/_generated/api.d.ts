@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as authEmail from "../authEmail.js";
 import type * as broker_graph from "../broker/graph.js";
@@ -46,6 +47,7 @@ import type * as lib_ingest from "../lib/ingest.js";
 import type * as lib_materialise from "../lib/materialise.js";
 import type * as lib_orgActivity from "../lib/orgActivity.js";
 import type * as lib_orgFilters from "../lib/orgFilters.js";
+import type * as lib_posthog from "../lib/posthog.js";
 import type * as lib_projections from "../lib/projections.js";
 import type * as lib_relationships from "../lib/relationships.js";
 import type * as lib_resolve from "../lib/resolve.js";
@@ -70,6 +72,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  analytics: typeof analytics;
   auth: typeof auth;
   authEmail: typeof authEmail;
   "broker/graph": typeof broker_graph;
@@ -108,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "lib/materialise": typeof lib_materialise;
   "lib/orgActivity": typeof lib_orgActivity;
   "lib/orgFilters": typeof lib_orgFilters;
+  "lib/posthog": typeof lib_posthog;
   "lib/projections": typeof lib_projections;
   "lib/relationships": typeof lib_relationships;
   "lib/resolve": typeof lib_resolve;

@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { getToken } from "@/lib/auth-server"
 import { eventIcsFile } from "@/lib/ics"
+import { countIcsFetch } from "@/lib/ics-telemetry"
 import { SITE_URL } from "@/lib/site"
 import { isEventKey } from "@/lib/url-state"
 
@@ -13,7 +14,8 @@ import { isEventKey } from "@/lib/url-state"
  * `<key>@camsocs.uk`, the event's page here as its URL. Read with the
  * viewer's session, so a verified Cambridge reader can add a Cambridge-only
  * event — and that file is never cached by a shared cache. An unknown or
- * hidden event is a 404.
+ * hidden event is a 404. A served file is counted after the response
+ * (`ics_feed_fetched { feed: "event", key }`; ENG-7, lib/ics-telemetry.ts).
  */
 
 export const dynamic = "force-dynamic"
@@ -49,6 +51,7 @@ export async function GET(
     `${SITE_URL}/events/${event.key}`,
     Date.now(),
   )
+  countIcsFetch("event", event.key)
   return new Response(body, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

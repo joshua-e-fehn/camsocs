@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values"
 import { sha1Hex } from "../lib/hash"
 import { LISTING_REQUEST_KINDS } from "../lib/vocab"
+import { internal } from "./_generated/api"
 import { type MutationCtx, mutation } from "./_generated/server"
 import { isEmail } from "./lib/fields"
 import { literalUnion } from "./lib/validators"
@@ -25,6 +26,11 @@ import { literalUnion } from "./lib/validators"
  * Refusals are `ConvexError`s carrying the user-readable message as `data`:
  * a production deployment replaces a plain `Error`'s message with "Server
  * Error", and the form must be able to say what was wrong.
+ *
+ * An accepted request is counted in PostHog by kind only
+ * (`listing_request_received`, `analytics.captureListingRequest`, ENG-7,
+ * record of processing P6/P12): scheduled with the insert, so a refusal is
+ * never counted, and the count can never fail the submission.
  */
 
 export const PER_EMAIL_PER_HOUR = 5
@@ -146,6 +152,7 @@ export const submit = mutation({
       status: "open",
       createdAt: now,
     })
+    await ctx.scheduler.runAfter(0, internal.analytics.captureListingRequest, { kind: args.kind })
     return { key }
   },
 })
