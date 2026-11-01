@@ -183,9 +183,7 @@ export function TalksSubscribeDialog({
                 {STEPS[provider].steps.map((step, index) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: fixed steps, in order
                   <li key={index} className="grid grid-cols-[1.5rem_1fr] gap-2">
-                    <span className="font-serif text-base leading-5 text-talks italic">
-                      {index + 1}.
-                    </span>
+                    <span className="font-serif text-base leading-5 text-talks">{index + 1}.</span>
                     <span className="leading-5 text-pretty">{step}</span>
                   </li>
                 ))}

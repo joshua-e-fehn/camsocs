@@ -1,24 +1,18 @@
 import { ArrowUpRightIcon } from "lucide-react"
 import Link from "next/link"
-import { RiverLine } from "@/components/molecules/river-line"
+import { Crest } from "@/components/molecules/crest"
 import { formatDayShort } from "@/lib/calendar"
-import { DISCLAIMER } from "@/lib/site"
+import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 
 const COLUMNS = [
   {
-    title: "Directory",
-    links: [
-      { href: "/societies", label: "Societies and clubs" },
-      { href: "/#colleges", label: "By college" },
-      { href: "/#categories", label: "By category" },
-    ],
-  },
-  {
-    title: "Calendar",
+    title: "Browse",
     links: [
       { href: "/events", label: "Events" },
       { href: "/talks", label: "Talks" },
+      { href: "/societies", label: "Societies and clubs" },
+      { href: "/talks/departments", label: "Departments" },
     ],
   },
   {
@@ -31,7 +25,7 @@ const COLUMNS = [
     ],
   },
   {
-    title: "About",
+    title: "camsocs",
     links: [
       { href: "/about", label: "How camsocs works" },
       { href: "/privacy", label: "Privacy notice" },
@@ -40,15 +34,12 @@ const COLUMNS = [
 ] as const
 
 const LINK =
-  "flex min-h-11 items-center text-sm text-foreground/85 transition-colors duration-150 hover:text-primary focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring md:min-h-8"
+  "inline-flex min-h-11 items-center text-[0.9375rem] transition-colors hover:text-brand-text hover:underline hover:underline-offset-4 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring md:min-h-8"
 
 /**
- * The editorial footer (spec §6 "Shell"): the river from Grantchester to
- * Baits Bite, link columns, where we are in the term, an oversized italic
- * wordmark and the non-affiliation disclaimer on every page.
- *
- * It is a night-river band in both themes: the `dark` class scopes the dark
- * tokens to this subtree, so it needs no colours of its own.
+ * The footer (DESIGN.md "River & ink"): the sky band again, the crest and a
+ * line about the site, three short link columns with the contact address,
+ * then the non-affiliation disclaimer and where we are in the term.
  */
 export function SiteFooter({
   clock,
@@ -59,22 +50,28 @@ export function SiteFooter({
   termSourceUrl?: string
 }) {
   return (
-    <footer className="dark relative overflow-hidden bg-card text-foreground">
-      <div className="mx-auto w-full max-w-7xl px-4 pt-10 sm:px-6">
-        <RiverLine strokeClassName="stroke-primary/70" className="h-8! sm:h-10!" />
-        <div
-          aria-hidden
-          className="mt-1 flex justify-between font-mono text-[0.625rem] tracking-[0.16em] text-muted-foreground uppercase"
-        >
-          <span>Grantchester</span>
-          <span>Baits Bite</span>
+    <footer className="mt-12 border-t border-sky-line bg-sky text-foreground">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-x-6 gap-y-8 px-4 pt-10 pb-7 sm:px-8 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] md:gap-10">
+        <div className="col-span-2 flex items-start gap-3.5 md:col-span-1">
+          <Crest className="w-10 shrink-0" />
+          <div className="flex flex-col gap-1">
+            <p className="font-serif text-2xl leading-tight">camsocs</p>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Everything on in Cambridge, in one place. Made by a student, for anyone curious.
+            </p>
+          </div>
         </div>
-      </div>
-
-      <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-x-6 gap-y-8 px-4 pt-10 pb-6 sm:px-6 md:grid-cols-5 md:gap-8">
         {COLUMNS.map((column) => (
-          <nav key={column.title} aria-label={column.title} className="flex flex-col">
-            <h2 className="mb-2 font-serif text-base text-muted-foreground italic">
+          <nav
+            key={column.title}
+            aria-label={column.title}
+            className={
+              column.title === "camsocs"
+                ? "col-span-2 flex flex-col md:col-span-1"
+                : "flex flex-col"
+            }
+          >
+            <h2 className="mb-1.5 text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {column.title}
             </h2>
             {column.links.map((link) => (
@@ -82,70 +79,56 @@ export function SiteFooter({
                 {link.label}
               </Link>
             ))}
+            {column.title === "camsocs" && (
+              <p className="mt-3 flex flex-col gap-0.5 text-sm text-muted-foreground">
+                Missing a society or a talk series?
+                <a
+                  href={`mailto:${CONTACT_EMAIL}`}
+                  className="inline-flex min-h-11 items-center font-mono text-[0.8125rem] text-foreground hover:text-brand-text hover:underline hover:underline-offset-4 md:min-h-8"
+                >
+                  {CONTACT_EMAIL}
+                </a>
+              </p>
+            )}
           </nav>
         ))}
-        <section aria-labelledby="footer-term" className="col-span-2 flex flex-col md:col-span-1">
-          <h2 id="footer-term" className="mb-2 font-serif text-base text-muted-foreground italic">
-            Term
-          </h2>
-          <TermNote clock={clock} />
-          {termSourceUrl && (
-            <a
-              href={termSourceUrl}
-              rel="noopener noreferrer"
-              target="_blank"
-              className="mt-1 inline-flex min-h-11 items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline md:min-h-8"
-            >
-              Full Term dates, from the University calendar
-              <ArrowUpRightIcon aria-hidden className="size-3" />
-              <span className="sr-only">(opens in a new tab)</span>
-            </a>
-          )}
-        </section>
       </div>
 
-      <div aria-hidden className="mx-auto w-full max-w-7xl overflow-hidden px-3 sm:px-5">
-        <p className="translate-y-[0.2em] font-serif text-[clamp(5.5rem,25vw,22rem)] leading-[0.8] font-light tracking-[-0.04em] text-foreground/90 italic select-none">
-          camsocs
-        </p>
-      </div>
-
-      <div className="border-t">
-        <p className="mx-auto w-full max-w-7xl px-4 py-5 text-xs leading-relaxed text-muted-foreground sm:px-6">
-          {DISCLAIMER}
-        </p>
+      <div className="border-t border-sky-line">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 pt-4 pb-9 text-[0.8125rem] text-muted-foreground sm:px-8 md:flex-row md:justify-between md:gap-10">
+          <p className="max-w-3xl leading-relaxed">
+            <span className="font-medium text-foreground">{DISCLAIMER}</span>
+          </p>
+          <TermNote clock={clock} sourceUrl={termSourceUrl} />
+        </div>
       </div>
     </footer>
   )
 }
 
-function TermNote({ clock }: { clock: TermClock | null }) {
-  if (!clock) {
-    return <p className="text-sm text-muted-foreground">Term dates are not available just now.</p>
-  }
-  if (clock.kind === "vacation") {
-    return (
-      <p className="flex flex-col gap-0.5 text-sm">
-        <span>Vacation</span>
-        {clock.next && (
-          <span className="text-muted-foreground">
-            {TERM_NAMES[clock.next.term]} Full Term from {formatDayShort(clock.next.fullTermStart)}
-          </span>
-        )}
-      </p>
-    )
-  }
+function TermNote({ clock, sourceUrl }: { clock: TermClock | null; sourceUrl?: string }) {
+  if (!clock) return null
+  const text =
+    clock.kind === "term"
+      ? `${TERM_NAMES[clock.term]} ${clock.fullTermStart.slice(0, 4)} · ${weekOfTerm(clock.week)} · Full Term ${formatDayShort(clock.fullTermStart)} – ${formatDayShort(clock.fullTermEnd)}`
+      : clock.next
+        ? `Vacation · ${TERM_NAMES[clock.next.term]} Full Term from ${formatDayShort(clock.next.fullTermStart)}`
+        : "Vacation"
   return (
-    <p className="flex flex-col gap-0.5 text-sm">
-      <span>
-        {TERM_NAMES[clock.term]} {clock.fullTermStart.slice(0, 4)}
-      </span>
-      <span className="font-mono text-[0.8125rem] text-primary tabular-nums">
-        {weekOfTerm(clock.week)}
-      </span>
-      <span className="text-muted-foreground">
-        Full Term {formatDayShort(clock.fullTermStart)} – {formatDayShort(clock.fullTermEnd)}
-      </span>
+    <p className="flex shrink-0 flex-col gap-0.5 font-mono tabular-nums md:items-end md:text-right">
+      <span>{text}</span>
+      {sourceUrl && (
+        <a
+          href={sourceUrl}
+          rel="noopener noreferrer"
+          target="_blank"
+          className="inline-flex min-h-11 items-center gap-1 font-sans underline-offset-4 hover:text-foreground hover:underline md:min-h-6"
+        >
+          Dates from the University calendar
+          <ArrowUpRightIcon aria-hidden className="size-3" />
+          <span className="sr-only">(opens in a new tab)</span>
+        </a>
+      )}
     </p>
   )
 }

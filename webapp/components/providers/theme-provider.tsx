@@ -4,20 +4,16 @@ import { ThemeProvider as NextThemesProvider } from "next-themes"
 import type * as React from "react"
 
 /**
- * Light / dark / system theme (next-themes), following the operating system
- * by default. Switched with the visible toggle in the header
- * (components/molecules/theme-toggle.tsx).
- *
- * There is deliberately no keyboard shortcut: the bare `d` hotkey this used to
- * install was a single-character shortcut with no way to turn it off, which
- * fails WCAG 2.1.4 (speech input types letters).
+ * The site is light only (DESIGN.md "River & ink", decided 2026-11-01): the
+ * theme is forced to light whatever the operating system prefers, and there
+ * is no toggle. next-themes stays only so the toaster reads a theme.
  */
 function ThemeProvider({ children, ...props }: React.ComponentProps<typeof NextThemesProvider>) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      forcedTheme="light"
+      enableSystem={false}
       disableTransitionOnChange
       {...props}
     >

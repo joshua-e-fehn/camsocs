@@ -787,7 +787,7 @@ export function TalksBrowser({
                         className="sticky z-20 -mx-4 flex items-baseline justify-between gap-3 border-b bg-background/95 px-4 pt-4 pb-2 backdrop-blur supports-backdrop-filter:bg-background/85 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0"
                       >
                         <span className="flex min-w-0 items-baseline gap-2">
-                          <span className="font-serif text-xl leading-tight italic sm:text-2xl">
+                          <span className="font-serif text-xl leading-tight sm:text-2xl">
                             {heading.relative ?? weekday}
                           </span>
                           <span className="truncate text-sm text-muted-foreground">

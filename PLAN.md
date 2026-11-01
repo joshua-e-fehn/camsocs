@@ -162,6 +162,7 @@ See `AGENTS.md` and `docs/research/2026-10-07-repo-conventions.md` §2. The layo
 | 2026-10-07 | Deadline: Fri 16 Oct 2026, full scope. |
 | 2026-10-07 | Name: camsocs. Domain: camsocs.vercel.app for now. |
 | 2026-11-01 | Domain: camsocs.uk (IONOS DNS → Vercel; www 308s to the apex). camsocs.vercel.app stays trusted via `EXTRA_TRUSTED_ORIGINS` and redirects to camsocs.uk. |
+| 2026-11-01 | **Design "River & ink"** replaces "Backs & limestone" (chosen from five directions, then three cleaner variants, as a mix of the original River & sunset and Monochrome): black Young Serif on white, Figtree and JetBrains Mono, one sky band (hero, footer), teal links and selection, apricot for today only. The site is **light only** (no dark theme, no toggle). The logo is our own "Three pillars" crest, also the favicon and share image; never the University's arms. Home: hero → Today / This week across Events · Talks · Societies → the week ahead → categories → talks by School. Contract: `webapp/DESIGN.md`. |
 | 2026-10-07 | Harvester: Python pipeline (Bundestracker pattern) → Convex HTTP ingestion. Target host: Mya's workspace on the VPS as Hermes cron jobs. **No VPS changes yet; it runs from the laptop.** *Host superseded on 2026-10-10 by D5.* |
 | 2026-10-07 | LLM: cliproxy, Codex models only, no throttling. Never Claude subscription credentials (Anthropic's policy prohibits proxy use). |
 | 2026-10-07 | Seeding: **scrape SU profiles fully**, descriptions included (Joshua's choice over the seed-only option; database-right risk noted). |

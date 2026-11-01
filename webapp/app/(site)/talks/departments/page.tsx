@@ -166,7 +166,7 @@ export default async function TalkDepartmentsPage({ searchParams }: Props) {
             The department index
           </p>
           <h1 className="font-serif text-[clamp(2.4rem,6.4vw,4.25rem)] leading-[1.02] font-normal tracking-[-0.025em]">
-            Talks by <span className="italic">department</span>
+            Talks by department
           </h1>
           <p className="max-w-2xl text-pretty text-muted-foreground sm:text-lg">
             {real.length > 0

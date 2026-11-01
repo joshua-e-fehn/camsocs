@@ -185,6 +185,9 @@ test("the talks feed is a calendar, and AI crawlers are kept off talks", async (
 
 test("closing the search palette returns focus to the header button", async ({ page }) => {
   await page.goto("/talks")
+  // The page streams in after the header: a palette opened before it has
+  // hydrated marks it aria-hidden, and React reports that as a mismatch.
+  await page.waitForLoadState("networkidle")
   // The header pill on desktop, the icon button on a phone: whichever shows.
   const button = page.locator("header button:visible", { hasText: "Search" }).first()
   await expect(button).toBeVisible()

@@ -1,47 +1,42 @@
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import { ImageResponse } from "next/og"
 import { SHARE_IMAGE_ALT } from "@/lib/site"
 
 /**
- * The share image for every page, in the "Backs & limestone" identity: the
- * italic wordmark and a serif line on limestone paper, the river along the
- * bottom and the three pillar colours. No crest, arms or University wording —
- * the project is unofficial (AGENTS.md). Colours are the light tokens of
- * app/globals.css in hex, because an image has no CSS variables.
+ * The share image for every page, in the "River & ink" identity: the crest
+ * and wordmark, a black serif headline on white, and the one sky band. Our own
+ * crest only — no University arms or wording, the project is unofficial
+ * (AGENTS.md). Colours are the tokens of app/globals.css in hex, because an
+ * image has no CSS variables; the crest is public/crest.svg.
  *
- * Newsreader is fetched from Google Fonts (TTF, subset to the text drawn);
+ * Young Serif is fetched from Google Fonts (TTF, subset to the text drawn);
  * if that fails the image still renders, in the default face.
  */
 export const alt = SHARE_IMAGE_ALT
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
-const PAPER = "#F7F4EC"
-const INK = "#16231F"
-const MUTED = "#5B6660"
-const SAGE = "#2E6A55"
-const BRICK = "#A8432C"
-const INDIGO = "#34407A"
-const BACKS = "#A9CDBB"
+const PAPER = "#FFFFFF"
+const INK = "#111111"
+const MUTED = "#545B5E"
+const SKY = "#E8F2F6"
+const SKY_LINE = "#D2E4EB"
+const APRICOT = "#F29E4C"
 
-const HEADLINE = ["Every society, event and talk", "in Cambridge,"] as const
-const HEADLINE_ITALIC = "sourced."
 const WORDMARK = "camsocs"
-const PILLARS = [
-  ["Societies", SAGE],
-  ["Events", BRICK],
-  ["Talks", INDIGO],
-] as const
+const HEADLINE = ["Everything on in", "Cambridge, in one place."] as const
+const PILLARS = "Events · Talks · Societies"
 const FOOTNOTE = "Unofficial · every fact sourced"
 
 /** Each font request may take this long; the image is built at `next build`,
  * where a stalled request must not hang the build. */
 const FONT_TIMEOUT_MS = 5_000
 
-async function newsreader(italic: boolean, text: string): Promise<ArrayBuffer | null> {
+async function youngSerif(text: string): Promise<ArrayBuffer | null> {
   try {
-    const family = `Newsreader:ital,opsz,wght@${italic ? 1 : 0},72,400`
     const cssResponse = await fetch(
-      `https://fonts.googleapis.com/css2?family=${family}&text=${encodeURIComponent(text)}`,
+      `https://fonts.googleapis.com/css2?family=Young+Serif&text=${encodeURIComponent(text)}`,
       { signal: AbortSignal.timeout(FONT_TIMEOUT_MS) },
     )
     if (!cssResponse.ok) return null
@@ -58,18 +53,14 @@ async function newsreader(italic: boolean, text: string): Promise<ArrayBuffer | 
 }
 
 export default async function OpengraphImage() {
-  const [roman, italic] = await Promise.all([
-    newsreader(false, [...HEADLINE, ...PILLARS.map(([label]) => label), FOOTNOTE].join(" ")),
-    newsreader(true, `${HEADLINE_ITALIC}${WORDMARK}`),
+  const [serif, crest] = await Promise.all([
+    youngSerif([WORDMARK, ...HEADLINE, PILLARS, FOOTNOTE].join(" ")),
+    readFile(join(process.cwd(), "public", "crest.svg"), "utf8"),
   ])
-  const fonts = [
-    ...(roman
-      ? [{ name: "Newsreader", data: roman, style: "normal" as const, weight: 400 as const }]
-      : []),
-    ...(italic
-      ? [{ name: "Newsreader", data: italic, style: "italic" as const, weight: 400 as const }]
-      : []),
-  ]
+  const fonts = serif
+    ? [{ name: "Young Serif", data: serif, style: "normal" as const, weight: 400 as const }]
+    : []
+  const crestSrc = `data:image/svg+xml;base64,${Buffer.from(crest).toString("base64")}`
 
   return new ImageResponse(
     <div
@@ -78,61 +69,63 @@ export default async function OpengraphImage() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "72px 80px 56px",
         background: PAPER,
         color: INK,
-        fontFamily: fonts.length > 0 ? "Newsreader" : "serif",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        <svg width="54" height="32" viewBox="0 0 20 12" aria-hidden="true">
-          <path
-            d="M1 8.5 C 4 2, 7 2, 10 6 S 16 10.5, 19 3.5"
-            fill="none"
-            stroke={SAGE}
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-        <div style={{ fontSize: 60, fontStyle: "italic", letterSpacing: -1 }}>{WORDMARK}</div>
-      </div>
-
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          fontSize: 78,
-          lineHeight: 1.04,
-          letterSpacing: -2,
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "56px 80px",
+          background: SKY,
+          borderBottom: `2px solid ${SKY_LINE}`,
         }}
       >
-        <div style={{ display: "flex" }}>{HEADLINE[0]}</div>
-        <div style={{ display: "flex", gap: 20 }}>
-          {HEADLINE[1]}
-          <span style={{ fontStyle: "italic", color: SAGE }}>{HEADLINE_ITALIC}</span>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: 34, flexShrink: 1, minWidth: 0 }}
+        >
+          <div
+            style={{
+              display: "flex",
+              fontSize: 44,
+              fontFamily: serif ? "Young Serif" : "serif",
+              letterSpacing: -0.5,
+            }}
+          >
+            {WORDMARK}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              fontSize: 68,
+              lineHeight: 1.05,
+              letterSpacing: -2,
+              fontFamily: serif ? "Young Serif" : "serif",
+            }}
+          >
+            <div style={{ display: "flex" }}>{HEADLINE[0]}</div>
+            <div style={{ display: "flex" }}>{HEADLINE[1]}</div>
+          </div>
+          <div style={{ display: "flex", width: 120, height: 7, background: APRICOT }} />
         </div>
+        {/* biome-ignore lint/performance/noImgElement: next/og draws plain <img> only. */}
+        <img src={crestSrc} width={232} height={260} alt="" style={{ flexShrink: 0 }} />
       </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-        <svg width="1040" height="40" viewBox="0 0 1200 40" aria-hidden="true">
-          <path
-            d="M0 26 C 90 8, 170 40, 280 26 S 460 6, 560 18 S 700 40, 800 30 S 960 4, 1060 16 S 1160 30, 1200 22"
-            fill="none"
-            stroke={BACKS}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        </svg>
-        <div style={{ display: "flex", alignItems: "center", gap: 28, fontSize: 26, color: MUTED }}>
-          {PILLARS.map(([label, colour]) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 14, height: 14, borderRadius: 7, background: colour }} />
-              {label}
-            </div>
-          ))}
-          <div style={{ marginLeft: "auto" }}>{FOOTNOTE}</div>
-        </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          padding: "26px 80px 30px",
+          fontSize: 26,
+          color: MUTED,
+        }}
+      >
+        <div style={{ display: "flex", color: INK }}>{PILLARS}</div>
+        <div style={{ display: "flex" }}>{FOOTNOTE}</div>
       </div>
     </div>,
     { ...size, fonts },

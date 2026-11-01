@@ -683,7 +683,7 @@ export function EventsCalendar({
               >
                 {org ? (
                   <>
-                    Events from <span className="text-events italic">{org.name}</span>
+                    Events from <span className="text-events">{org.name}</span>
                   </>
                 ) : (
                   <>
@@ -704,7 +704,7 @@ export function EventsCalendar({
             >
               <span
                 aria-hidden
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-talks font-serif text-base text-talks-foreground italic sm:size-9 sm:text-lg"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-talks font-serif text-base text-talks-foreground sm:size-9 sm:text-lg"
               >
                 T
               </span>
@@ -1043,7 +1043,7 @@ export function EventsCalendar({
                         <span className="flex min-w-0 items-baseline gap-2">
                           <span
                             className={cn(
-                              "font-serif text-xl leading-tight italic sm:text-2xl",
+                              "font-serif text-xl leading-tight sm:text-2xl",
                               day === today && "text-events",
                             )}
                           >

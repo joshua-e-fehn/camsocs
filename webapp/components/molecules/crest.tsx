@@ -1,0 +1,158 @@
+import { useId } from "react"
+import { cn } from "@/lib/utils"
+
+/** The inner edge of the shield: a wavy line, the river in the arms. */
+const RIVER_EDGE =
+  "M18.0 16.0 L19.6 14.4 L21.2 14.6 L22.8 16.4 L24.4 17.7 L26.0 17.1 L27.6 15.2 L29.2 14.2 L30.8 15.2 L32.4 17.1 L34.0 17.8 L35.6 16.5 L37.2 14.6 L38.8 14.3 L40.4 15.9 L42.0 17.6 L43.6 17.5 L45.2 15.7 L46.8 14.3 L48.4 14.8 L50.0 16.7 L51.6 17.8 L53.2 16.9 L54.8 15.0 L56.4 14.2 L58.0 15.5 L59.6 17.3 L61.2 17.7 L62.8 16.2 L64.4 14.5 L66.0 14.5 L67.6 16.2 L69.2 17.7 L70.8 17.3 L72.4 15.4 L74.0 14.2 L75.6 15.0 L77.2 17.0 L78.8 17.8 L80.4 16.6 L82.9 15.1 L83.7 17.5 L82.4 19.1 L80.6 20.6 L80.3 22.2 L81.8 23.7 L83.5 25.3 L83.6 26.8 L82.0 28.4 L80.4 29.9 L80.5 31.5 L82.2 33.0 L83.7 34.5 L83.4 36.1 L81.7 37.6 L80.3 39.2 L80.7 40.7 L82.5 42.3 L83.8 43.8 L83.1 45.4 L81.3 46.9 L80.2 48.5 L81.0 50.0 L83.5 52.3 L82.8 54.6 L80.1 56.5 L80.1 58.6 L82.0 61.1 L81.6 63.2 L78.7 64.5 L77.3 66.1 L78.5 68.8 L78.9 71.2 L76.5 72.3 L73.9 73.0 L73.6 75.1 L74.3 78.0 L73.1 79.6 L70.1 79.7 L68.2 80.6 L68.3 83.3 L68.1 85.9 L65.8 86.4 L63.0 86.1 L61.7 87.5 L61.6 90.5 L60.5 92.2 L57.8 91.8 L55.4 91.6 L54.4 93.6 L54.0 96.4 L52.3 97.3 L50.0 96.3 L49.3 94.5 L47.0 94.9 L44.3 95.5 L43.0 94.0 L42.7 91.1 L41.5 89.6 L38.8 90.0 L36.4 89.9 L35.8 87.5 L35.7 84.7 L34.0 83.8 L31.0 84.0 L29.3 82.8 L29.6 79.9 L29.4 77.7 L27.0 77.1 L24.3 76.5 L23.9 74.3 L24.9 71.5 L24.0 69.8 L21.0 69.0 L19.6 67.3 L20.8 64.7 L21.5 62.4 L19.3 60.8 L17.1 59.1 L18.2 56.7 L20.0 54.3 L18.5 52.3 L16.2 50.0 L16.8 48.5 L18.7 46.9 L19.8 45.4 L19.0 43.8 L17.2 42.3 L16.2 40.7 L17.1 39.2 L19.0 37.6 L19.8 36.1 L18.7 34.5 L16.9 33.0 L16.2 31.5 L17.5 29.9 L19.3 28.4 L19.7 26.8 L18.4 25.3 L16.6 23.7 L16.3 22.2 L17.8 20.6 L19.5 19.1 L19.6 17.5Z"
+
+/**
+ * The camsocs crest, "Three pillars" (DESIGN.md "Logo"): a quartered shield in
+ * teal and deep river, a wave border and four charges — a mask (the arts), a
+ * quill (talks), crossed oars (sport) and a knight (societies). Our own
+ * drawing; never the University's arms, a lion, an ermine cross or a book.
+ *
+ * `full` is for 28px and up; `small` keeps only the quarters and reads at
+ * favicon sizes. Colours are the `--crest-*` tokens of app/globals.css.
+ * Decorative by default; pass `title` when the crest stands alone.
+ */
+export function Crest({
+  variant = "full",
+  title,
+  className,
+}: {
+  variant?: "full" | "small"
+  title?: string
+  className?: string
+}) {
+  const id = useId()
+  return (
+    <svg
+      viewBox="0 0 100 112"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn("block h-auto", className)}
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+      focusable="false"
+    >
+      <defs>
+        <clipPath id={id}>
+          <path d={RIVER_EDGE} />
+        </clipPath>
+      </defs>
+      {variant === "full" ? <Full id={id} /> : <Small id={id} />}
+    </svg>
+  )
+}
+
+function Full({ id }: { id: string }) {
+  return (
+    <>
+      <path
+        d="M8 6H92V50C92 80 72 98 50 108C28 98 8 80 8 50Z"
+        style={{ fill: "var(--crest-wave)" }}
+      />
+      <g clipPath={`url(#${id})`}>
+        <rect x="0" y="0" width="50" height="50" style={{ fill: "var(--crest-field)" }} />
+        <rect x="50" y="0" width="50" height="50" style={{ fill: "var(--crest-chief)" }} />
+        <rect x="0" y="50" width="50" height="60" style={{ fill: "var(--crest-chief)" }} />
+        <rect x="50" y="50" width="50" height="60" style={{ fill: "var(--crest-field)" }} />
+      </g>
+      <path
+        d={RIVER_EDGE}
+        style={{ fill: "none", stroke: "var(--crest-edge)", strokeWidth: 1.4, opacity: 0.55 }}
+      />
+      <g transform="translate(24.5 24)">
+        <path
+          d="M0 0H19V8.5C19 16 14.5 20 9.5 20C4.5 20 0 16 0 8.5Z"
+          style={{ fill: "var(--crest-charge)" }}
+        />
+        <ellipse cx="5.6" cy="7" rx="2.6" ry="1.9" style={{ fill: "var(--crest-field)" }} />
+        <ellipse cx="13.4" cy="7" rx="2.6" ry="1.9" style={{ fill: "var(--crest-field)" }} />
+        <path
+          d="M5 12.6Q9.5 17 14 12.6"
+          style={{
+            fill: "none",
+            stroke: "var(--crest-field)",
+            strokeWidth: 2,
+            strokeLinecap: "round",
+          }}
+        />
+      </g>
+      <g transform="rotate(32 66 34)">
+        <path
+          d="M66 20C72.6 27.2 72 37.5 68.2 42.68L66 48L63.8 42.68C60 37.5 59.4 27.2 66 20Z"
+          style={{ fill: "var(--crest-wave)" }}
+        />
+        <path
+          d="M66 27V42.4"
+          style={{
+            fill: "none",
+            stroke: "var(--crest-chief)",
+            strokeWidth: 1.6,
+            strokeLinecap: "round",
+          }}
+        />
+        <path
+          d="M66 29.1l5 -5M66 33.3l-5.5 -5.5"
+          style={{
+            fill: "none",
+            stroke: "var(--crest-chief)",
+            strokeWidth: 1.4,
+            strokeLinecap: "round",
+          }}
+        />
+      </g>
+      <g transform="rotate(38 36 67)" style={{ fill: "var(--crest-wave)" }}>
+        <rect x="34.388" y="50" width="3.224" height="23.76" rx="1.612" />
+        <rect x="33.7432" y="49" width="4.5136" height="4.08" rx="1.9344" />
+        <path d="M33.52 71.76H38.48C40.96 77.268 40.96 82.164 38.728 84H33.272C31.04 82.164 31.04 77.268 33.52 71.76Z" />
+      </g>
+      <g transform="rotate(-38 36 67)" style={{ fill: "var(--crest-wave)" }}>
+        <rect x="34.388" y="50" width="3.224" height="23.76" rx="1.612" />
+        <rect x="33.7432" y="49" width="4.5136" height="4.08" rx="1.9344" />
+        <path d="M33.52 71.76H38.48C40.96 77.268 40.96 82.164 38.728 84H33.272C31.04 82.164 31.04 77.268 33.52 71.76Z" />
+      </g>
+      <g transform="translate(55.5 54) scale(.95)" style={{ fill: "var(--crest-charge)" }}>
+        <path d="M4 22C4 17 6.6 14.4 9 12.2L4.2 12.8C2.6 13 1.4 11.4 2 9.9L7.6 3.6C8.8 2.2 10.4 1.3 12 1.2L12.7 0L14.4 1.7C17.4 3.2 19.4 7.2 19.4 12.2C19.4 16.2 17.8 19.2 16.6 22Z" />
+        <rect x="2" y="22" width="18" height="4.5" rx="1.5" />
+      </g>
+      <circle cx="66.4" cy="58.6" r="1.1" style={{ fill: "var(--crest-field)" }} />
+      <path
+        d="M8 6H92V50C92 80 72 98 50 108C28 98 8 80 8 50Z"
+        style={{
+          fill: "none",
+          stroke: "var(--crest-edge)",
+          strokeWidth: 4,
+          strokeLinejoin: "round",
+        }}
+      />
+    </>
+  )
+}
+
+function Small({ id }: { id: string }) {
+  return (
+    <>
+      <path
+        d="M8 6H92V50C92 80 72 98 50 108C28 98 8 80 8 50Z"
+        style={{ fill: "var(--crest-wave)" }}
+      />
+      <g clipPath={`url(#${id})`}>
+        <rect x="0" y="0" width="50" height="50" style={{ fill: "var(--crest-field)" }} />
+        <rect x="50" y="0" width="50" height="50" style={{ fill: "var(--crest-chief)" }} />
+        <rect x="0" y="50" width="50" height="60" style={{ fill: "var(--crest-chief)" }} />
+        <rect x="50" y="50" width="50" height="60" style={{ fill: "var(--crest-field)" }} />
+      </g>
+      <path
+        d="M8 6H92V50C92 80 72 98 50 108C28 98 8 80 8 50Z"
+        style={{
+          fill: "none",
+          stroke: "var(--crest-edge)",
+          strokeWidth: 6,
+          strokeLinejoin: "round",
+        }}
+      />
+    </>
+  )
+}

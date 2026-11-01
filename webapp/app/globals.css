@@ -2,79 +2,104 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Light only: no element ever carries `.dark`, so leftover `dark:` classes
+ * never apply (Tailwind's default would follow the OS). */
 @custom-variant dark (&:is(.dark *));
 
 /*
- * "Backs & limestone" (docs/talks-redesign-spec.md §5, DESIGN.md). Token names
- * are part of the contract: components use these and the shadcn semantic
- * names, never raw hex. Ketton-limestone paper and ink in light mode, a night
- * river in dark; one colour per pillar — Societies sage (`--primary`), Events
- * brick (`--events`), Talks indigo (`--talks`). `--gilt` and `--backs` are
- * decoration only and never carry text. Contrast of every text pair below is
- * ≥ 4.5:1 (checked 2026-10-31); none of it is the University's palette.
+ * "River & ink" (DESIGN.md). Token names are part of the contract: components
+ * use these and the shadcn semantic names, never raw hex. Black ink on white
+ * paper, warmed in a few deliberate places by the River & sunset palette:
+ * one sky band (`--sky`) behind the home hero and the footer, teal
+ * (`--brand`) for links and the active state, apricot (`--today`) for "today"
+ * and "now" only. Light only, by decision of 2026-11-01: there is no dark
+ * theme and no toggle. Every text pair below is ≥ 4.5:1 (checked 2026-11-01);
+ * none of it is the University's palette.
  */
 :root {
-  --background: #f7f4ec;
-  --foreground: #16231f;
-  --card: #fffdf8;
-  --card-foreground: #16231f;
-  --popover: #fffdf8;
-  --popover-foreground: #16231f;
-  --primary: #2e6a55;
-  --primary-foreground: #fffdf8;
-  --secondary: #efeadd;
-  --secondary-foreground: #16231f;
-  --muted: #efeadd;
-  --muted-foreground: #5b6660;
-  --accent: #dcebe2;
-  --accent-foreground: #16231f;
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  /* Buttons are ink; teal is for links and the selected state. */
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f4f5;
+  --secondary-foreground: #111111;
+  --muted: #f4f8fa;
+  --muted-foreground: #545b5e;
+  --faint: #6e7477;
+  --accent: #e8f2f6;
+  --accent-foreground: #111111;
   --destructive: #b3261e;
-  --border: #e2dccd;
-  --input: #e2dccd;
-  --ring: #2e6a55;
+  --border: #e3e5e6;
+  --input: #d5d9db;
+  --ring: #1d7a7a;
 
-  /* Pillars. `-foreground` is text on the solid colour. */
-  --events: #a8432c;
-  --events-tint: #f3ded6;
-  --events-foreground: #fffdf8;
-  --talks: #34407a;
-  --talks-tint: #e1e4f2;
-  --talks-foreground: #fffdf8;
-  --gilt: #b8902f;
-  --backs: #a9cdbb;
+  /* River & sunset. `--brand` fills (white text on it); `--brand-text` is
+   * teal for text on white and on the sky. */
+  --brand: #1d7a7a;
+  --brand-foreground: #ffffff;
+  --brand-text: #1a6e6e;
+  --sky: #e8f2f6;
+  --sky-line: #d2e4eb;
+  --today: #f29e4c;
+  --today-text: #9a4c0e;
 
-  /* Schools (talks chips): ink on tint, ≥ 5.8:1 in both modes. */
-  --school-arts: #6b2e5f;
-  --school-arts-tint: #f1e1ec;
-  --school-hss: #8e3a26;
-  --school-hss-tint: #f4e0d8;
-  --school-bio: #2f5e2a;
-  --school-bio-tint: #e0edd9;
-  --school-clinical: #1f5f63;
-  --school-clinical-tint: #d9ecec;
-  --school-physical: #33407f;
-  --school-physical-tint: #e1e4f2;
-  --school-tech: #34506e;
-  --school-tech-tint: #dfe7ef;
-  --school-other: #6e5420;
-  --school-other-tint: #f1e8d2;
+  /* The pillars keep their token names but share the one teal: the
+   * redesign has no colour per pillar. */
+  --events: #1a6e6e;
+  --events-tint: #e8f2f6;
+  --events-foreground: #ffffff;
+  --talks: #1a6e6e;
+  --talks-tint: #e8f2f6;
+  --talks-foreground: #ffffff;
+  /* Decoration only, never text. */
+  --gilt: #f29e4c;
+  --backs: #d2e4eb;
 
-  --chart-1: #2e6a55;
-  --chart-2: #a8432c;
-  --chart-3: #34407a;
-  --chart-4: #b8902f;
-  --chart-5: #5b6b7a;
-  --radius: 0.5rem;
+  /* Schools (talks chips): ink on a quiet tint, no colour per School. */
+  --school-arts: #2b3336;
+  --school-arts-tint: #f2f4f5;
+  --school-hss: #2b3336;
+  --school-hss-tint: #f2f4f5;
+  --school-bio: #2b3336;
+  --school-bio-tint: #f2f4f5;
+  --school-clinical: #2b3336;
+  --school-clinical-tint: #f2f4f5;
+  --school-physical: #2b3336;
+  --school-physical-tint: #f2f4f5;
+  --school-tech: #2b3336;
+  --school-tech-tint: #f2f4f5;
+  --school-other: #2b3336;
+  --school-other-tint: #f2f4f5;
 
-  /* The broker dashboard: a slightly deeper limestone rail. */
-  --sidebar: #f0ebdf;
-  --sidebar-foreground: #16231f;
-  --sidebar-primary: #2e6a55;
-  --sidebar-primary-foreground: #fffdf8;
-  --sidebar-accent: #e6e0d1;
-  --sidebar-accent-foreground: #16231f;
-  --sidebar-border: #e2dccd;
-  --sidebar-ring: #2e6a55;
+  /* The crest (components/molecules/crest.tsx). */
+  --crest-field: #1d7a7a;
+  --crest-chief: #0f2a33;
+  --crest-edge: #0f2a33;
+  --crest-wave: #dcebf2;
+  --crest-charge: #ffffff;
+
+  --chart-1: #1d7a7a;
+  --chart-2: #f29e4c;
+  --chart-3: #0f2a33;
+  --chart-4: #8fb9c9;
+  --chart-5: #6e7477;
+  --radius: 0.625rem;
+
+  /* The broker dashboard: a sky-tinted rail. */
+  --sidebar: #f4f8fa;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #1d7a7a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8f2f6;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: #e3e5e6;
+  --sidebar-ring: #1d7a7a;
 
   /* Semantic status colours (DESIGN.md "Semantic Colors"): provenance chips
    * only — found / owner-confirmed (success), inferred / conflicting (warning).
@@ -83,76 +108,6 @@
   --success-foreground: oklch(0.38 0.09 160);
   --warning: oklch(0.95 0.06 85);
   --warning-foreground: oklch(0.43 0.1 65);
-
-  /* Paper grain: a fixed tile of fractal noise, a few percent strong. */
-  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.2 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-.dark {
-  --background: #0e1614;
-  --foreground: #ece8de;
-  --card: #15201d;
-  --card-foreground: #ece8de;
-  --popover: #15201d;
-  --popover-foreground: #ece8de;
-  --primary: #8cc7ae;
-  --primary-foreground: #0e1614;
-  --secondary: #1a2622;
-  --secondary-foreground: #ece8de;
-  --muted: #1a2622;
-  --muted-foreground: #9aa49e;
-  --accent: #1c3029;
-  --accent-foreground: #ece8de;
-  --destructive: #f2b8b5;
-  --border: #24302c;
-  --input: #24302c;
-  --ring: #8cc7ae;
-
-  --events: #e58b70;
-  --events-tint: #3a2019;
-  --events-foreground: #0e1614;
-  --talks: #a9b3ea;
-  --talks-tint: #1f2440;
-  --talks-foreground: #0e1614;
-  --gilt: #d9b65a;
-  --backs: #2f5446;
-
-  --school-arts: #e3b3d6;
-  --school-arts-tint: #3a2035;
-  --school-hss: #eda48e;
-  --school-hss-tint: #3b231c;
-  --school-bio: #a9d69c;
-  --school-bio-tint: #1f3320;
-  --school-clinical: #8fd3d3;
-  --school-clinical-tint: #163234;
-  --school-physical: #aeb8ee;
-  --school-physical-tint: #1f2440;
-  --school-tech: #a9c1dd;
-  --school-tech-tint: #1d2a38;
-  --school-other: #e0c27e;
-  --school-other-tint: #352b17;
-
-  --chart-1: #8cc7ae;
-  --chart-2: #e58b70;
-  --chart-3: #a9b3ea;
-  --chart-4: #d9b65a;
-  --chart-5: #9fb0c0;
-
-  --sidebar: #121c19;
-  --sidebar-foreground: #ece8de;
-  --sidebar-primary: #8cc7ae;
-  --sidebar-primary-foreground: #0e1614;
-  --sidebar-accent: #1a2622;
-  --sidebar-accent-foreground: #ece8de;
-  --sidebar-border: #24302c;
-  --sidebar-ring: #8cc7ae;
-
-  --success: oklch(0.3 0.06 160);
-  --success-foreground: oklch(0.86 0.1 160);
-  --warning: oklch(0.32 0.06 75);
-  --warning-foreground: oklch(0.88 0.11 85);
-
-  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.9 0 0 0 0 0.9 0 0 0 0 0.85 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @theme inline {
@@ -164,6 +119,15 @@
     --color-talks: var(--talks);
     --color-talks-tint: var(--talks-tint);
     --color-talks-foreground: var(--talks-foreground);
+    --font-mono: var(--font-mono);
+    --color-faint: var(--faint);
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-brand-text: var(--brand-text);
+    --color-sky: var(--sky);
+    --color-sky-line: var(--sky-line);
+    --color-today: var(--today);
+    --color-today-text: var(--today-text);
     --color-gilt: var(--gilt);
     --color-backs: var(--backs);
     --color-school-arts: var(--school-arts);
@@ -230,29 +194,17 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image: var(--paper-grain);
   }
   html {
     @apply font-sans;
   }
-  /* Newsreader's optical sizes: display cuts at headline sizes. */
+  /* Young Serif has one weight and no italic: never fake either. */
   .font-serif {
-    font-optical-sizing: auto;
+    font-weight: 400;
+    font-synthesis: none;
   }
   ::selection {
-    background: var(--accent);
+    background: var(--sky);
     color: var(--accent-foreground);
-  }
-}
-
-/* The RiverLine's slow draw, left to right (components/molecules/river-line.tsx).
- * A clip, not a dash: dashes and `non-scaling-stroke` disagree in browsers.
- * Decoration only: the line is whole without the animation. */
-@keyframes river-draw {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
   }
 }

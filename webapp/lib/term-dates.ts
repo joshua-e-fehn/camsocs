@@ -1,6 +1,8 @@
 import { fetchQuery } from "convex/nextjs"
+import { unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { api } from "@/convex/_generated/api"
+import { type TermClock, termClock } from "@/lib/term-week"
 
 /**
  * The term dates (`termDates.list`), read once per server request: the
@@ -9,3 +11,25 @@ import { api } from "@/convex/_generated/api"
  * are decoration, and a page renders without them.
  */
 export const fetchTermDates = cache(() => fetchQuery(api.termDates.list, {}))
+
+/** The term clock for now and where its dates were read, or null when Convex
+ * cannot be read: the layout's footer and the home hero both show it, and
+ * both render without it. */
+export const loadTermClock = cache(
+  async (): Promise<{ clock: TermClock | null; sourceUrl?: string }> => {
+    try {
+      const rows = await fetchTermDates()
+      const clock = termClock(Date.now(), rows)
+      const current =
+        clock.kind === "term"
+          ? rows.find((row) => row.fullTermStart === clock.fullTermStart)
+          : rows.find((row) => row.fullTermStart === clock.next?.fullTermStart)
+      return { clock: rows.length > 0 ? clock : null, sourceUrl: current?.sourceUrl }
+    } catch (error) {
+      // Next signals "this render is dynamic" by throwing; that must pass.
+      unstable_rethrow(error)
+      console.error("termDates.list failed; rendering without the term clock", error)
+      return { clock: null }
+    }
+  },
+)

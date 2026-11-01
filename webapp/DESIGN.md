@@ -61,11 +61,12 @@ Use **CSS transitions only** for:
 
 | Property        | Value                                                                        |
 | --------------- | ---------------------------------------------------------------------------- |
-| **App Name**    | camsocs (always lower case; the wordmark is Newsreader italic + river glyph) |
-| **Tagline**     | Cambridge societies, events and talks, sourced (`SITE_TAGLINE`, lib/site.ts)  |
-| **Direction**   | "Backs & limestone": Ketton-limestone paper, ink, the Cam as a line           |
+| **App Name**    | camsocs (always lower case; Young Serif, after the crest) |
+| **Logo**        | The "Three pillars" crest (`components/molecules/crest.tsx`, `public/crest.svg`, `app/icon.svg`): a quartered shield in teal and deep river with a wave border; a mask, a quill, crossed oars and a knight. Our own drawing. `small` variant (quarters only) below 28px |
+| **Tagline**     | Cambridge societies, events and talks, sourced (`SITE_TAGLINE`, lib/site.ts) |
+| **Direction**   | "River & ink" (decided 2026-11-01): black ink on white paper, warmed by River & sunset — one sky band, teal links, apricot for today |
 | **Tone**        | Plain, warm, a little wry, local — Mich/Lent/Easter, Week 0, formals, bops, supos, Sidgwick Site |
-| **Never**       | University crest, arms, shields, "University of Cambridge" as branding, Feijoa / Open Sans, the #8EE8D8-led brand palette, heritage dot/arrow patterns, implied endorsement |
+| **Never**       | The University's crest or arms or anything read as them (lions, the ermine cross, a book; no bridge, ships or castle), "University of Cambridge" as branding, Feijoa / Open Sans, the #8EE8D8-led brand palette, heritage dot/arrow patterns, implied endorsement |
 
 The site is unofficial: the disclaimer sits in every footer, and copy may refer to Cambridge
 factually ("for students in Cambridge") but never as if speaking for the University or a College.
@@ -78,29 +79,31 @@ Tokens live in `app/globals.css` (`:root` light, `.dark` dark) as hex, exposed t
 through `@theme inline`. **The token names are a contract** (spec §5): components use them and
 the shadcn semantic names, never raw hex.
 
-| Token | Light | Dark | Use |
-| --- | --- | --- | --- |
-| `--background` | #F7F4EC | #0E1614 | limestone paper / night river (with a faint CSS paper grain) |
-| `--card`, `--popover` | #FFFDF8 | #15201D | raised surfaces |
-| `--foreground` | #16231F | #ECE8DE | ink |
-| `--muted` / `--muted-foreground` | #EFEADD / #5B6660 | #1A2622 / #9AA49E | quiet fills, secondary text |
-| `--border`, `--input` | #E2DCCD | #24302C | rules |
-| `--primary` (Cam sage), `--ring` | #2E6A55 | #8CC7AE | **Societies**, primary actions, focus |
-| `--accent` | #DCEBE2 | #1C3029 | sage tint (hover, selected rows, term strip) |
-| `--events` / `--events-tint` | #A8432C / #F3DED6 | #E58B70 / #3A2019 | **Events** (Tudor brick) — `bg-events`, `text-events`, `bg-events-tint` |
-| `--talks` / `--talks-tint` | #34407A / #E1E4F2 | #A9B3EA / #1F2440 | **Talks** (lecture-hall indigo) |
-| `--gilt` | #B8902F | #D9B65A | decoration only, never text |
-| `--backs` | #A9CDBB | #2F5446 | the river line; decoration only, never text |
-| `--school-{arts,hss,bio,clinical,physical,tech,other}` + `-tint` | ink on tint, ≥ 5.8:1 | same | talk School chips |
+Light only: there is no dark theme and no toggle (decided 2026-11-01). The theme provider forces
+light; no element carries `.dark`, so a stray `dark:` class never applies.
 
-- Pillar colour coding is fixed: Societies = sage, Events = brick, Talks = indigo. Use it for
-  marks, rails, counters and active indicators — not for large backgrounds.
+| Token | Value | Use |
+| --- | --- | --- |
+| `--background`, `--card`, `--popover` | #FFFFFF | paper |
+| `--foreground` | #111111 | ink |
+| `--muted` / `--muted-foreground` | #F4F8FA / #545B5E | quiet fills and hover, secondary text |
+| `--faint` | #6E7477 | empty days, small print |
+| `--border` / `--input` | #E3E5E6 / #D5D9DB | hairlines; section heads use a 1–2px ink rule instead |
+| `--primary` | #111111 | buttons are ink |
+| `--brand` / `--brand-text` | #1D7A7A / #1A6E6E | teal: the selected state (fills) and links (text) |
+| `--ring` | #1D7A7A | focus |
+| `--sky` / `--sky-line` | #E8F2F6 / #D2E4EB | the one band: home hero and footer; `--accent` is the same sky for menus |
+| `--today` / `--today-text` | #F29E4C / #9A4C0E | apricot, for "today" and "now" only (dot, underline, the day's top bar) |
+| `--events`, `--talks` (+ `-tint`) | teal on sky | kept as names; the pillars no longer have colours of their own |
+| `--school-*` (+ `-tint`) | ink on #F2F4F5 | talk School chips, all alike |
+| `--crest-*` | teal, deep river #0F2A33, wave #DCEBF2, white | the crest only |
+| `--gilt`, `--backs` | apricot, sky line | decoration only, never text |
+
+- Colour is rare on purpose: a page is ink and hairlines, with teal where you can act and apricot
+  where something is happening today.
 - `--success` / `--warning` (+ `-foreground`) stay for provenance chips only, always with an
   icon and a word.
-- `--sidebar-*` tint the broker dashboard to match (a deeper limestone rail).
-- Every text pair above is ≥ 4.5:1 in its mode (checked 2026-10-31). Re-check when changing one.
-- The footer is a night-river band in both themes: it carries the `dark` class, which scopes the
-  dark tokens to its subtree.
+- Every text pair above is ≥ 4.5:1 (checked 2026-11-01). Re-check when changing one.
 
 ---
 
@@ -108,13 +111,12 @@ the shadcn semantic names, never raw hex.
 
 | Role | Face | Notes |
 | --- | --- | --- |
-| Display | **Newsreader** (`font-serif`, `--font-serif`) | variable with `opsz` + italic, `next/font/google`. h1/h2, the wordmark, big numerals, detail-page titles. Weight 300–400; italics for warmth ("this *term*"). |
-| UI / body | Geist Sans (`font-sans`) | rows, filters, buttons, body copy |
-| Data | Geist Mono (`font-mono`, `tabular-nums`) | times, counts, term stamps ("MICH · WK 4"), eyebrows |
+| Display | **Young Serif** (`font-serif`, `--font-serif`) | one weight, no italic (never synthesised). h1/h2, the wordmark, day numbers |
+| UI / body | Figtree (`font-sans`) | rows, filters, buttons, body copy |
+| Data | JetBrains Mono (`font-mono`, `tabular-nums`) | times, counts, date lines |
 
-- h1 `clamp(2.6rem, 7.2vw, 4.75rem)`, leading 1.02, tracking −0.025em; section h2 serif 2rem.
-- Mono eyebrows: 11px, uppercase, tracking 0.12–0.16em. Use sparingly — mono everywhere reads
-  as a dev dashboard.
+- Home h1 `clamp(2.75rem, 6.2vw, 5rem)`, leading 1.03, tracking −0.02em; section h2 serif 1.6–2.9rem.
+- Mono lines are 12–13px and sentence case; keep mono for numbers and dates.
 - Inputs are 16px on phones (no iOS zoom).
 
 ---
@@ -131,9 +133,8 @@ Information density is acceptable when organized. Use tables, grids, and metric 
 
 ### 3. Restrained Color
 
-Paper and ink are the foundation; the three pillar colours carry meaning (sage societies, brick
-events, indigo talks) and appear as marks, rails and numerals rather than fills. Gilt and the
-Backs green are decoration only.
+Paper and ink are the foundation. Teal marks what you can act on or have selected, apricot what
+is on today, and the sky band appears twice per page at most (hero, footer).
 
 ### 4. Progressive Disclosure
 
@@ -159,9 +160,11 @@ Design for 375px first, then scale up. Touch targets minimum 44px. Sidebar colla
 - Never rely on color alone to convey meaning — pair with icons or text labels
 - `prefers-reduced-motion` respected in all Framer Motion animations
 
-### 8. Both Themes Are First-Class
+### 8. Light Only
 
-The theme **follows the operating system** (`defaultTheme="system"` in `components/providers/theme-provider.tsx`), with a visible Light / Dark / System toggle in the header and the mobile menu (`components/molecules/theme-toggle.tsx`). There is no single-key shortcut (WCAG 2.1.4). Design and test every screen in both light and dark. Always use semantic tokens (`bg-card`, `text-muted-foreground`, `text-events`) — never hard-coded hex/oklch values in components.
+The site has one theme, light (`components/providers/theme-provider.tsx` forces it). Always use
+semantic tokens (`bg-card`, `text-muted-foreground`, `text-brand-text`) — never hard-coded
+hex/oklch values in components.
 
 ---
 
@@ -171,7 +174,7 @@ The theme **follows the operating system** (`defaultTheme="system"` in `componen
 
 - **Page max-width:** `max-w-7xl mx-auto` for content areas
 - **Dashboard:** Sidebar (`app-sidebar`) + header + scrollable main area
-- **Public pages:** term strip, sticky translucent `PublicHeader`, full-width sections, editorial `SiteFooter`
+- **Public pages:** sticky translucent `PublicHeader`, full-width sections, the sky-band `SiteFooter`
 - **Auth pages:** Centered card on a clean background
 - **Landing page:** Full-bleed hero, scroll-triggered sections, generous vertical spacing
 
@@ -259,38 +262,34 @@ Never show a blank area. Provide:
 
 ## Shell & motifs
 
-- **Term clock strip** (`components/molecules/term-strip.tsx`, `lib/term-week.ts`): 28px mono
-  strip above the header, "MICH · WK 4 · SAT 31 OCT" or "VACATION · LENT STARTS IN 9 WEEKS",
-  from `termDates`. Weeks follow `termWeekLabel` (Thursday to Wednesday).
-- **Header** (`public-header.tsx`): wordmark, Societies · Events · Talks · About with a
-  pillar-coloured underline on the current page, the "Search ⌘K" pill, theme toggle, account
-  menu (Sign in lives there); a right sheet with serif nav on phones.
+- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · About with a
+  teal underline on the current page, the "Search everything ⌘K" box, the account menu (Sign in
+  lives there); a right sheet on phones.
 - **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the
-  header pill, or `openPalette()` (`lib/palette.ts`). Grouped results with serif small-caps
-  headings, scope chips, recents; full screen below `sm`.
-- **RiverLine** (`molecules/river-line.tsx`): one meandering stroke in `--backs` under the hero,
-  between sections and above the footer (Grantchester → Baits Bite). It draws itself once by CSS
-  under `prefers-reduced-motion: no-preference`.
-- **Footer**: night-river band, river, link columns, the current term, an oversized italic
-  wordmark and the disclaimer.
+  header box, or `openPalette()` (`lib/palette.ts`).
+- **Footer** (`site-footer.tsx`): the sky band; crest and one line about the site, Browse / For
+  societies / camsocs columns with the contact address, then the disclaimer and the term
+  (`loadTermClock`, lib/term-dates.ts).
 - **Reveal** never ships `opacity:0` in server HTML: it only tucks content away after mount, when
   motion is allowed and the block is still below the fold.
-- Ruled, N°-numbered index rows (colleges, departments); dashed hairlines between agenda rows.
+- Ruled rows with hairlines; a 2px ink rule over each column or section head.
 
 ## Landing page
 
-Mobile-first, in this order: serif hero with a scoped search (All / Societies / Events / Talks)
-and quick chips, plus a "Next up" ledger on desktop → pillar counters in big serif numerals →
-"This week", day by day, with pillar tabs → category tiles with real example names → talks by
-School (wave 2) → by college (a ruled index with leader dots) → a footnote-style method note.
-No photography and no fake numbers: a pillar without real data renders nothing.
+In this order (`app/(site)/page.tsx`, `organisms/home-overview.tsx`): the sky-band hero (date and
+term, "What's on in Cambridge today" with an apricot underline, a greeting with today's counts,
+one search box that opens the palette, "Try" links, the large crest) → Today / This week:
+Events · Talks · Societies in three columns, five rows each (three on phones) → "The week
+ahead", seven days that switch the columns above to that day → "Find your people", the
+categories as compact rows → "Talks by School" → a one-line method note. No photography and no
+fake numbers: a pillar without real data renders nothing.
 
 ## Do NOT
 
 - Use arbitrary color values (`bg-[#1a1a2e]`) in components — always use tokens
 - Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only
 - Create components outside the Atomic Design structure (`ui/` → `molecules/` → `organisms/`)
-- Skip dark or light mode testing — the theme follows the system, both must work
+- Add a dark theme or a theme toggle back without a new decision
 - Use University marks, shields or the University's brand colours and fonts (see Branding)
 - Use `any` in TypeScript — type all props, state, and API responses
 - Add placeholder text like "Lorem ipsum" — use realistic copy

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono, Newsreader } from "next/font/google"
+import { Figtree, JetBrains_Mono, Young_Serif } from "next/font/google"
 
 import "./globals.css"
 import { AuthGuard } from "@/components/providers/auth-guard"
@@ -10,23 +10,23 @@ import { getToken } from "@/lib/auth-server"
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
 import { cn } from "@/lib/utils"
 
-const fontSans = Geist({
+// DESIGN.md "Typography": Figtree for text and UI, JetBrains Mono for times
+// and counts, Young Serif (one weight, no italic) for headings and the
+// wordmark.
+const fontSans = Figtree({
   subsets: ["latin"],
   variable: "--font-sans",
 })
 
-const fontMono = Geist_Mono({
+const fontMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
 
-// The display face (DESIGN.md "Typography"): headings, the wordmark, big
-// numerals. Variable, with its optical-size axis and the italic.
-const fontSerif = Newsreader({
+const fontSerif = Young_Serif({
   subsets: ["latin"],
+  weight: "400",
   variable: "--font-serif",
-  style: ["normal", "italic"],
-  axes: ["opsz"],
 })
 
 export const metadata: Metadata = {
