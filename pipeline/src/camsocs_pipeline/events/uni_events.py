@@ -36,9 +36,13 @@ calendar has an occurrence in the window, the programme's iCalendar export
 (``calendar/events.ics``, `read_details`) adds what the JSON lacks: the
 categories (section, audience and access tags) and the full description,
 joined on the event's uuid (the part of a ``UID`` before its first ``:``).
-Without it the event keeps the short description and an inferred type. A
-run makes one request for the programme list and at most two per programme
-(a programme with nothing in the window costs one), a second apart at least
+When the export fails or cannot be read, the programme is skipped for the
+run, with a note: read without it, its events would change their type,
+description and folding and back the next day. Skipped events are simply
+not re-sighted, which withdraws nothing (the sweep only withdraws events of
+a listing whose newest sighting moves on). A run makes one request for the
+programme list and at most two per programme (a programme with nothing in
+the window costs one), a second apart at least
 (the polite client's pacing, with the honest User-Agent), plus one per image
 not already cached (`media.IMAGE_CACHE_TTL`).
 
@@ -72,12 +76,26 @@ University's. No department, museum or college organisation is created.
 be 90 daily events. A series is one all-day event (external id
 ``<uuid>/run``) when the feed puts it under Exhibitions, or it has at least
 `FOLD_MIN_OCCURRENCES` occurrences in the window at a median gap of
-`FOLD_MAX_MEDIAN_GAP` days or less. It runs from the series' first day
-(``earliestStartDate``, when that is at most a year back; else its first
-occurrence here, inferred) to the end of its last (``latestStartDate``, when
-that is within a year and not before the last occurrence the feed lists;
-else that last occurrence, inferred). A weekly class stays one event per
-occurrence (``<uuid>/<start, UTC>``).
+`FOLD_MAX_MEDIAN_GAP` days or less, or the stage folded it on one of its
+last `FOLD_MEMORY_FILES` runs (`folded_before`). That last rule makes a
+fold stick: the calendar starts today, so a series' count in the window
+shrinks as it goes on, and a run posted earlier is never withdrawn once it
+has started (the sweep only withdraws events still to come), so unfolding
+would show the run and its single occurrences side by side. A weekly class
+stays one event per occurrence (``<uuid>/<start, UTC>``).
+
+A run starts on the series' first day (``earliestStartDate``) when that is
+less than `RUN_REACH` back (strictly inside the impossible-date check's
+year, `checks.MAX_DAYS_BEHIND`). An older one starts, inferred, on the first
+of the month 11 months back (`stable_start`), so a permanent exhibition's
+start moves once a month, not every day. Without a usable first day, the
+first occurrence listed, inferred. It ends with its last day
+(``latestStartDate``) when that is within `RUN_REACH` and not before the
+last occurrence listed. Otherwise, inferred: a series that runs on past the
+calendar's horizon (no last day, or one beyond the reach, and its last
+listed occurrence within `HORIZON_SLACK` of the programme's last listed day)
+ends with the month of that occurrence (`stable_end`), so it too moves once
+a month; any other ends with its last listed occurrence.
 """
 
 from __future__ import annotations
@@ -116,6 +134,7 @@ from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.policy import PERMISSION_AI_NOTE, PERMISSION_ROBOTS_NOTE
 from camsocs_pipeline.sources.websites.site import with_note
+from camsocs_pipeline.staging.store import events_directory
 
 HOST = "https://webservices.admin.cam.ac.uk"
 API = f"{HOST}/events/api"
@@ -161,8 +180,14 @@ IN_PERSON = "in person"
 
 FOLD_MIN_OCCURRENCES = 5
 FOLD_MAX_MEDIAN_GAP = 2
-#: How far back a run's first day, or ahead its last, is believed.
-RUN_REACH = timedelta(days=366)
+#: The stage's own last staging files whose folded runs stay folded.
+FOLD_MEMORY_FILES = 7
+#: How far back a run's first day, or ahead its last, is believed: strictly
+#: less than `checks.MAX_DAYS_BEHIND`, so a run is never dropped at the edge.
+RUN_REACH = timedelta(days=365)
+#: A series whose last listed occurrence is this close to the programme's last
+#: listed day runs on past the calendar's horizon.
+HORIZON_SLACK = timedelta(days=14)
 
 _TINY_IMAGE = re.compile(r"_tiny(\.(?:jpe?g|png|gif))$", re.IGNORECASE)
 _POUNDS = re.compile(r"£\s*(\d{1,4}(?:,\d{3})*(?:\.\d{1,2})?)")
@@ -548,14 +573,31 @@ def _median_gap(starts: Sequence[datetime]) -> float:
     return statistics.median((b - a).days for a, b in pairwise(days))
 
 
-def should_fold(occurrences: Sequence[Occurrence], categories: Sequence[str]) -> bool:
-    """Whether a series is one long run (module docstring)."""
-    if event_type_of(categories) == "exhibition":
+def should_fold(
+    occurrences: Sequence[Occurrence], categories: Sequence[str], *, folded: bool = False
+) -> bool:
+    """Whether a series is one long run (module docstring); `folded`: the
+    stage folded it on a recent run (`folded_before`)."""
+    if folded or event_type_of(categories) == "exhibition":
         return True
     return (
         len(occurrences) >= FOLD_MIN_OCCURRENCES
         and _median_gap([o.starts_at for o in occurrences]) <= FOLD_MAX_MEDIAN_GAP
     )
+
+
+def stable_start(today: date) -> date:
+    """The inferred first day of a series older than `RUN_REACH`: the first of
+    the month 11 months back (module docstring)."""
+    months = today.year * 12 + today.month - 1 - 11
+    return date(months // 12, months % 12 + 1, 1)
+
+
+def stable_end(day: date) -> date:
+    """The inferred last day of a series that runs past the calendar's
+    horizon: the last day of `day`'s month (module docstring)."""
+    months = day.year * 12 + day.month  # the next month, 0-based
+    return date(months // 12, months % 12 + 1, 1) - timedelta(days=1)
 
 
 def fold_runs(
@@ -564,23 +606,29 @@ def fold_runs(
     draft: EventDraft,
     *,
     now: datetime | None = None,
+    horizon: date | None = None,
 ) -> EventDraft:
     """The one all-day draft of a run (module docstring). `occurrences`: the
     series' entries in the window; `every`: all the feed lists; `draft`: the
-    first occurrence's draft, whose other fields the run keeps."""
+    first occurrence's draft, whose other fields the run keeps; `horizon`:
+    the programme calendar's last listed day."""
     today = london_today(now)
-    reach = RUN_REACH.days
     first_seen = min(o.starts_at.astimezone(LONDON).date() for o in every)
     last_seen = max(o.starts_at.astimezone(LONDON).date() for o in every)
     head = occurrences[0]
     inferred = set(draft.inferred) - {"startsAt", "endsAt"}
     first = head.series_first
-    if first is None or first < today - timedelta(days=reach) or first > first_seen:
+    if first is None or first > first_seen:
         first = first_seen
         inferred.add("startsAt")
+    elif first <= today - RUN_REACH:
+        first = stable_start(today)
+        inferred.add("startsAt")
     last = head.series_last
-    if last is None or last < last_seen or last > today + timedelta(days=reach):
-        last = last_seen
+    if last is None or last < last_seen or last > today + RUN_REACH:
+        runs_on = last is None or last > today + RUN_REACH
+        near_horizon = horizon is not None and last_seen >= horizon - HORIZON_SLACK
+        last = stable_end(last_seen) if runs_on and near_horizon else last_seen
         inferred.add("endsAt")
     draft.external_id = f"{head.uuid}/run"
     draft.starts_at = london_midnight(first)
@@ -596,16 +644,38 @@ def fold_runs(
 
 def _fetch_details(
     client: PoliteClient, programme: Programme, notes: list[str]
-) -> dict[str, Details]:
+) -> dict[str, Details] | None:
+    """The programme's iCalendar details, or None (with a note) when the
+    export fails or cannot be read: the programme is then skipped this run
+    (module docstring)."""
     result = client.fetch(calendar_url(programme.id, "ics"), accept="text/calendar,*/*;q=0.5")
     if not result.ok or result.content is None:
-        notes.append(f"{programme.title}: no categories — {describe_failure(result)}")
-        return {}
+        notes.append(
+            f"{programme.title}: skipped, iCalendar export not fetched — {describe_failure(result)}"
+        )
+        return None
     try:
         return read_details(result.content)
     except IcsError as error:
-        notes.append(f"{programme.title}: unreadable iCalendar export ({error})")
-        return {}
+        notes.append(f"{programme.title}: skipped, unreadable iCalendar export ({error})")
+        return None
+
+
+def folded_before(ctx: StageContext) -> set[str]:
+    """The uuids this stage staged as a folded run (``<uuid>/run``) on any of
+    its last `FOLD_MEMORY_FILES` runs (module docstring)."""
+    folder = ctx.staging.root / events_directory(SOURCE_TYPE)
+    if not folder.is_dir():
+        return set()
+    recent = sorted(folder.glob("*.jsonl"))[-FOLD_MEMORY_FILES:]
+    uuids: set[str] = set()
+    for path in recent:
+        for record in ctx.staging.read(path):
+            if isinstance(record, EventObservation) and record.event_source == EVENT_SOURCE:
+                uuid, _, tail = record.external_id.rpartition("/")
+                if tail == "run" and uuid:
+                    uuids.add(uuid)
+    return uuids
 
 
 def _image(client: PoliteClient, path: str | None, cache: dict[str, str | None]) -> str | None:
@@ -648,6 +718,7 @@ def _programme_drafts(
     images: dict[str, str | None],
     notes: list[str],
     now: datetime | None,
+    folded: set[str],
 ) -> list[Sourced]:
     series: dict[str, list[Occurrence]] = {}
     for occurrence in calendar.occurrences:
@@ -660,6 +731,9 @@ def _programme_drafts(
     if not current:
         return []
     details = _fetch_details(client, programme, notes)
+    if details is None:
+        return []
+    horizon = max(o.starts_at.astimezone(LONDON).date() for o in calendar.occurrences)
     pending: list[Sourced] = []
     for uuid, found in current.items():
         found.sort(key=lambda o: o.starts_at)
@@ -674,9 +748,13 @@ def _programme_drafts(
         image = _image(client, found[0].image_path, images)
         org = {"org_key": key, "org_name": index.name_of(key) or key} if key else {}
         evidence = SOCIETY_EVIDENCE if key else EVIDENCE
-        if should_fold(found, categories):
+        if should_fold(found, categories, folded=uuid in folded):
             draft = fold_runs(
-                found, series[uuid], event_draft(found[0], extra, image=image, **org), now=now
+                found,
+                series[uuid],
+                event_draft(found[0], extra, image=image, **org),
+                now=now,
+                horizon=horizon,
             )
             folding.occurrences += len(found)
             folding.runs += 1
@@ -698,6 +776,7 @@ def run(
     folding = _Folding()
     images: dict[str, str | None] = {}
     notes = ctx.report.notes
+    folded = folded_before(ctx)
     pending: list[Sourced] = []
     with polite_client(ctx.settings) as client:
         listing = client.fetch(PROGRAMMES_URL, accept="application/json", store=False)
@@ -738,6 +817,7 @@ def run(
                     images,
                     notes,
                     now,
+                    folded,
                 )
             )
     if ctx.limit is not None:
@@ -762,6 +842,7 @@ __all__ = [
     "event_draft",
     "event_type_of",
     "fold_runs",
+    "folded_before",
     "image_url",
     "match_society",
     "on_demand_only",
@@ -773,4 +854,6 @@ __all__ = [
     "select_programmes",
     "should_fold",
     "society_names",
+    "stable_end",
+    "stable_start",
 ]

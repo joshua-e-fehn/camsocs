@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -19,6 +19,7 @@ from camsocs_pipeline.events import (
     talks_cam,
     uni_events,
 )
+from camsocs_pipeline.events.checks import check_draft
 from camsocs_pipeline.events.common import LONDON, default_window
 from camsocs_pipeline.events.ics import IcsEvent
 from camsocs_pipeline.models.observation import EventObservation, IdentityHints, Observation
@@ -767,6 +768,123 @@ class TestUniEvents:
         everything = [p.read_bytes() for p in ctx.settings.cache_dir.rglob("*") if p.is_file()]
         everything += [p.read_bytes() for p in ctx.staging.root.rglob("*") if p.is_file()]
         assert not any(b"staff.person" in blob for blob in everything)
+
+    def test_a_programme_whose_export_fails_is_skipped(
+        self, ctx: StageContext, net: respx.MockRouter
+    ) -> None:
+        allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
+        net.get(f"{UNI_API}/programmes.json").respond(
+            200, json={"results": {"list": [_programme("11", "What's On")]}}
+        )
+        net.get(uni_events.calendar_url("11", "json")).respond(200, json=UNI_CALENDAR)
+        export = net.get(uni_events.calendar_url("11", "ics")).respond(500)
+
+        uni_events.run(ctx, window=WINDOW, now=NOW)
+
+        # Read without its categories, every event would change type,
+        # description and folding, and change back the next day.
+        assert export.call_count >= 1
+        assert staged(ctx, "uni_events_api.events") == []
+        assert any("What's On: skipped, iCalendar export" in n for n in ctx.report.notes)
+
+    def test_a_folded_series_stays_folded_as_its_days_pass(
+        self, ctx: StageContext, net: respx.MockRouter
+    ) -> None:
+        # Six daily talks, 10-15 October: five or more in the calendar fold
+        # them; three days later four are left, and the run must not come
+        # apart into single talks beside the run already posted.
+        series = "abab7777-0000-4000-8000-000000000007"
+        days = [f"{day:02d}/10/2026" for day in range(10, 16)]
+        export = (
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example//Events//EN\r\n"
+            f"BEGIN:VEVENT\r\nUID:{series}:2026-10-10{{13:00:00.000:PT3600S}}\r\n"
+            "DTSTAMP:20261007T120000Z\r\nDTSTART:20261010T130000\r\n"
+            "SUMMARY:Lunchtime Talks on Imaginary Birds\r\nCATEGORIES:Talks,Adults\r\n"
+            "END:VEVENT\r\nEND:VCALENDAR\r\n"
+        ).encode()
+        allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
+        net.get(f"{UNI_API}/programmes.json").respond(
+            200, json={"results": {"list": [_programme("11", "What's On")]}}
+        )
+        net.get(uni_events.calendar_url("11", "ics")).respond(200, content=export)
+        calendar = net.get(uni_events.calendar_url("11", "json"))
+
+        def listing(listed: list[str]) -> dict:
+            entries = [
+                _entry(
+                    series,
+                    "Lunchtime Talks on Imaginary Birds",
+                    day,
+                    "13:00:00",
+                    "14:00:00",
+                    earliestStartDate=days[0],
+                    latestStartDate=days[-1],
+                )
+                for day in listed
+            ]
+            return {"results": {"totalResults": len(entries), "list": entries}}
+
+        seen: list[set[str]] = []
+        for today, listed in (
+            (datetime(2026, 10, 9, 5, tzinfo=UTC), days),
+            (datetime(2026, 10, 12, 5, tzinfo=UTC), days[2:]),
+        ):
+            ctx.run.run_key = f"{today:%Y%m%dT%H%M%SZ}-abcdef"
+            calendar.respond(200, json=listing(listed))
+            # By its count alone, the series folds on the first day only.
+            occurrences = uni_events.read_calendar(json.dumps(listing(listed)).encode())
+            folds = uni_events.should_fold(occurrences.occurrences, ["Talks"])
+            assert folds == (len(listed) >= uni_events.FOLD_MIN_OCCURRENCES)
+            uni_events.run(ctx, window=default_window(today), now=today)
+            seen.append({e.external_id for e in staged(ctx, "uni_events_api.events")})
+
+        assert seen == [{f"{series}/run"}, {f"{series}/run"}]
+
+    def test_a_series_older_than_a_year_starts_on_a_stable_day(self) -> None:
+        today = date(2026, 11, 2)
+        now = datetime(2026, 11, 2, 23, 0, tzinfo=UTC)
+        horizon = date(2027, 2, 1)
+
+        def run_of(first: str, last: str | None, listed: list[date]) -> object:
+            every = [
+                uni_events.Occurrence(
+                    uuid="u",
+                    title="A permanent display of invented maps",
+                    starts_at=london(day.year, day.month, day.day, 10),
+                    ends_at=None,
+                    all_day=False,
+                    series_first=datetime.strptime(first, "%Y-%m-%d").date(),
+                    series_last=datetime.strptime(last, "%Y-%m-%d").date() if last else None,
+                )
+                for day in listed
+            ]
+            draft = uni_events.event_draft(every[0], None)
+            return uni_events.fold_runs(every, every, draft, now=now, horizon=horizon)
+
+        daily = [date(2026, 11, 2) + timedelta(days=n) for n in range(92)]
+        # Open since 2021, no last day: the start is the first of the month
+        # 11 months back, the end the last day of the last listed month, both
+        # inferred, and unchanged as the listed days pass.
+        old = run_of("2021-01-01", None, daily)
+        assert old.starts_at == london(2025, 12, 1)
+        assert old.ends_at == london(2027, 3, 1)
+        assert {"startsAt", "endsAt"} <= old.inferred
+        later = run_of("2021-01-01", None, daily[20:])
+        assert (later.starts_at, later.ends_at) == (old.starts_at, old.ends_at)
+        assert check_draft(old, default_window(now), now=now).keep
+        # At the edge of the reach the run is anchored, never dropped as an
+        # impossible date; a day inside it keeps its own first day.
+        edge = run_of(str(today - timedelta(days=365)), None, daily)
+        assert edge.starts_at == london(2025, 12, 1)
+        assert check_draft(edge, default_window(now), now=now).keep
+        inside = run_of(str(today - timedelta(days=364)), "2027-01-15", daily[:75])
+        assert inside.starts_at == london(2025, 11, 3) and "startsAt" not in inside.inferred
+        assert inside.ends_at == london(2027, 1, 16) and "endsAt" not in inside.inferred
+        assert check_draft(inside, default_window(now), now=now).keep
+        # A series that visibly ends inside the calendar ends with its last
+        # occurrence, even without a last day.
+        short = run_of("2026-10-30", None, daily[:6])
+        assert short.ends_at == london(2026, 11, 8) and "endsAt" in short.inferred
 
     def test_programmes_are_whats_on_and_this_years_festivals(self) -> None:
         programmes = uni_events.read_programmes(json.dumps(UNI_PROGRAMMES).encode())
