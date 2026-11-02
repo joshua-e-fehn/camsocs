@@ -1,4 +1,11 @@
-import { ArrowUpRightIcon, InfoIcon, LockIcon, MapPinIcon, TicketIcon } from "lucide-react"
+import {
+  ArrowUpRightIcon,
+  InfoIcon,
+  LandmarkIcon,
+  LockIcon,
+  MapPinIcon,
+  TicketIcon,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { AddToCalendar, type CalendarLinks } from "@/components/molecules/add-to-calendar"
@@ -12,7 +19,12 @@ import { SourcedChip, type SourcedFact } from "@/components/molecules/sourced-ch
 import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { analyticsAttrs, analyticsContext } from "@/lib/analytics-events"
 import { formatEventTime, formatInstantDate, londonIsoDate } from "@/lib/calendar"
-import { eventGoogleCalendarUrl, eventOutlookCalendarUrl, spokenTitle } from "@/lib/events"
+import {
+  eventGoogleCalendarUrl,
+  eventOutlookCalendarUrl,
+  spokenTitle,
+  UNIVERSITY_NAME,
+} from "@/lib/events"
 import { formatEventPrice } from "@/lib/format"
 import type { EventPublic } from "@/lib/public-api"
 import { displayHost, hasValue, sourceLine } from "@/lib/source-line"
@@ -73,9 +85,12 @@ function leadOrgKey(event: EventPublic): string | undefined {
 }
 
 /** The type and who runs it over the title, in the events brick:
- * "Performance · CU Jazz Society". */
+ * "Performance · CU Jazz Society" ("Talk · University of Cambridge" for one
+ * of the University's own listings, ENG-24). */
 export function EventEyebrow({ event, className }: { event: EventPublic; className?: string }) {
-  const lead = event.organisers.find((o) => o.role !== "sponsor")?.name
+  const lead = event.fromUniversity
+    ? UNIVERSITY_NAME
+    : event.organisers.find((o) => o.role !== "sponsor")?.name
   return (
     <p
       className={cn(
@@ -132,10 +147,38 @@ function Unknown({ what, meta }: { what: string; meta: EventPublic["meta"][strin
   )
 }
 
+/** One of the University's own listings (ENG-24): the University as plain
+ * text — it has no page here — and where the listing comes from. */
+function UniversityOrganiser({ event }: { event: EventPublic }) {
+  return (
+    <section aria-labelledby={`people-${event.key}`} className="flex flex-col gap-2.5">
+      <h2
+        id={`people-${event.key}`}
+        className="font-mono text-[0.6875rem] tracking-[0.14em] text-muted-foreground uppercase"
+      >
+        Organiser
+      </h2>
+      <p className="flex min-h-11 items-center gap-3">
+        <span
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted/60"
+        >
+          <LandmarkIcon className="size-4" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="font-medium">{UNIVERSITY_NAME}</span>
+          <span className="text-xs text-muted-foreground">From its public events programme</span>
+        </span>
+      </p>
+    </section>
+  )
+}
+
 /** Who runs it, with a monogram per society, or — for someone else's event
  * (D6) — who takes part, never "organised by". */
 function People({ event }: { event: EventPublic }) {
   const external = event.hosting === "takes_part"
+  if (event.fromUniversity) return <UniversityOrganiser event={event} />
   if (event.organisers.length === 0) return null
   return (
     <section aria-labelledby={`people-${event.key}`} className="flex flex-col gap-2.5">

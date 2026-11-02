@@ -324,6 +324,7 @@ EVENT_TYPES: tuple[str, ...] = (
     "talk",
     "social",
     "performance",
+    "exhibition",
     "competition",
     "match",
     "workshop",

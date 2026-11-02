@@ -276,10 +276,10 @@ export function talkIcsFile(talk: IcsTalk, now: number): { body: string; filenam
   }
 }
 
-// --- one society event -----------------------------------------------------------------------
+// --- one event --------------------------------------------------------------------------------
 
-/** What a society event's `.ics` needs (the public event, `events.get`). */
-export type IcsSocietyEvent = {
+/** What an event's `.ics` needs (the public event, `events.get`). */
+export type IcsEvent = {
   key: string
   title: string
   startsAt: number
@@ -289,6 +289,17 @@ export type IcsSocietyEvent = {
   cancelled: boolean
   hosting: "hosts" | "takes_part" | string
   organisers: readonly { name: string; role: string }[]
+  /** The University's own listing (ENG-24): no society runs it. */
+  fromUniversity?: boolean
+  /** The listing it was read from: for a University listing, its page there. */
+  sourceUrl?: string
+}
+
+/** Who lists one of the University's own events (ENG-24), for a calendar
+ * entry's description: the programme and the event's page in it. */
+export function universityListingLine(sourceUrl: string | undefined): string {
+  const programme = "Listed in the University of Cambridge’s public events programme"
+  return sourceUrl ? `${programme}: ${sourceUrl}` : `${programme}.`
 }
 
 /** A file name from a title: lower-case words joined by hyphens, ≤ 60 chars. */
@@ -305,20 +316,23 @@ function fileSlug(title: string, fallback: string): string {
 }
 
 /**
- * One society event as a downloadable `.ics` (`/events/<key>/ics`, "Add to
- * calendar" for Apple Calendar and desktop Outlook): UID `<key>@camsocs.uk`,
- * the page here as its URL, who runs it — or who takes part (D6) — in the
- * description, and no feed name, so the calendar app asks where to put it.
+ * One event as a downloadable `.ics` (`/events/<key>/ics`, "Add to calendar"
+ * for Apple Calendar and desktop Outlook): UID `<key>@camsocs.uk`, the page
+ * here as its URL, who runs it — or who takes part (D6), or for one of the
+ * University's own listings the programme and its page there (ENG-24) — in
+ * the description, and no feed name, so the calendar app asks where to put it.
  */
 export function eventIcsFile(
-  event: IcsSocietyEvent,
+  event: IcsEvent,
   pageUrl: string,
   now: number,
 ): { body: string; filename: string } {
   const lines: string[] = []
   if (event.cancelled) lines.push("This event is cancelled.")
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
-  if (names.length > 0) {
+  if (event.fromUniversity) {
+    lines.push(universityListingLine(event.sourceUrl))
+  } else if (names.length > 0) {
     lines.push(
       event.hosting === "takes_part"
         ? `Taking part: ${names.join(", ")}`

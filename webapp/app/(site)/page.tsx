@@ -201,10 +201,14 @@ export default async function HomePage() {
 
   // What starts in these seven days; a long run that began weeks ago (a film
   // listed for months) is not this week's.
-  const { starting } = splitOngoing(
+  const { starting: startingAll } = splitOngoing(
     events.filter((event) => !event.cancelled),
     londonMidnight(today),
   )
+  // The columns are societies' and clubs' events; the University's own
+  // listings (ENG-24) are one link to the calendar's University view.
+  const starting = startingAll.filter((event) => !event.fromUniversity)
+  const universityWeek = groupRuns(startingAll.filter((event) => event.fromUniversity)).length
   const liveTalks = (talks?.week ?? []).filter((talk) => !talk.cancelled).sort(byTime)
   const talkCount = new Map(talks?.dayCounts.map((row) => [row.day, row.count]))
 
@@ -394,6 +398,13 @@ export default async function HomePage() {
         days={overviewDays}
         weekRange={`${formatDayShort(days[0])} – ${formatDayShort(days[6])}`}
       />
+      {universityWeek > 0 && (
+        <p className="mx-auto -mt-8 w-full max-w-7xl px-4 pb-10 sm:px-8">
+          <MoreLink href="/events?university=only">
+            {plural(universityWeek, "University event", "University events")} this week
+          </MoreLink>
+        </p>
+      )}
 
       {/* Find your people -------------------------------------------------------------------- */}
       <section

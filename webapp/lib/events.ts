@@ -7,7 +7,7 @@ import {
   spanEndOf,
 } from "./calendar"
 import type { CategoryTone } from "./category-tone"
-import { utcStamp } from "./ics"
+import { universityListingLine, utcStamp } from "./ics"
 import { TERM_SHORT, type TermDatesRow, termWeekOf } from "./term-week"
 import { EVENT_TYPE_LABELS, type EventType } from "./vocab"
 import { type DayCount, termWeekTag } from "./week-strip"
@@ -25,6 +25,8 @@ type Searchable = {
   title: string
   organisers: readonly Organiser[]
   venueText?: string
+  /** The University's own listing (ENG-24): "University" finds it. */
+  fromUniversity?: boolean
 }
 
 /** Lower case without accents, so "Cafe" finds "Café". */
@@ -48,6 +50,7 @@ export function matchesEventQuery(event: Searchable, q: string | undefined): boo
     [
       event.title,
       ...event.organisers.map((organiser) => organiser.name),
+      event.fromUniversity ? UNIVERSITY_NAME : "",
       event.venueText ?? "",
     ].join("\n"),
   )
@@ -181,6 +184,7 @@ export const EVENT_TYPE_TONE: Record<EventType, CategoryTone> = {
   talk: "indigo",
   social: "sage",
   performance: "plum",
+  exhibition: "plum",
   competition: "brick",
   match: "teal",
   workshop: "gilt",
@@ -203,15 +207,26 @@ type CalendarEvent = Timed & {
   venueText?: string
   organisers: readonly Organiser[]
   hosting: string
+  /** The University's own listing (ENG-24): no society runs it. */
+  fromUniversity?: boolean
+  sourceUrl?: string
 }
 
-/** The words a calendar entry carries: who runs it (or takes part), the
+/** The University as the organiser of its own listings (ENG-24), in words
+ * and in JSON-LD: a factual credit, never our branding. */
+export const UNIVERSITY_NAME = "University of Cambridge"
+const UNIVERSITY_URL = "https://www.cam.ac.uk"
+
+/** The words a calendar entry carries: who runs it (or takes part; for one
+ * of the University's own listings, the programme and its page there), the
  * page here. Nothing from the description: it is long, and it is on the page. */
 export function eventCalendarDetails(event: CalendarEvent, pageUrl: string): string {
   const lines: string[] = []
   if (event.cancelled) lines.push("This event is cancelled.")
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
-  if (names.length > 0) {
+  if (event.fromUniversity) {
+    lines.push(universityListingLine(event.sourceUrl))
+  } else if (names.length > 0) {
     lines.push(
       event.hosting === "takes_part"
         ? `Taking part: ${names.join(", ")}`
@@ -290,8 +305,9 @@ export function eventMetaDescription(
   venueName?: string,
 ): string {
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
-  const who =
-    names.length === 0
+  const who = event.fromUniversity
+    ? `listed by the ${UNIVERSITY_NAME}`
+    : names.length === 0
       ? undefined
       : event.hosting === "takes_part"
         ? `with ${names.join(", ")} taking part`
@@ -302,9 +318,11 @@ export function eventMetaDescription(
 }
 
 /** schema.org `Event` for an event's page. Organisers are named only when
- * they run it (never for an event they only take part in, decision D6). */
+ * they run it (never for an event they only take part in, decision D6); one
+ * of the University's own listings names the University (ENG-24), and its
+ * `sameAs` is the University's page for it. */
 export function eventJsonLd(
-  event: CalendarEvent & { sourceUrl?: string; externalUrl?: string },
+  event: CalendarEvent & { externalUrl?: string },
   pageUrl: string,
   venueName?: string,
 ): Record<string, unknown> {
@@ -345,10 +363,12 @@ export function eventJsonLd(
           },
         }
       : {}),
-    ...(organisers.length > 0
-      ? {
-          organizer: organisers.map((name) => ({ "@type": "Organization", name })),
-        }
-      : {}),
+    ...(event.fromUniversity
+      ? { organizer: [{ "@type": "Organization", name: UNIVERSITY_NAME, url: UNIVERSITY_URL }] }
+      : organisers.length > 0
+        ? {
+            organizer: organisers.map((name) => ({ "@type": "Organization", name })),
+          }
+        : {}),
   }
 }

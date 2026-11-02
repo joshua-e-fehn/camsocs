@@ -36,6 +36,10 @@ const SOURCES = [
     "academic talks, read by parsers where robots.txt allows, never by an AI model",
   ],
   ["Playwaze and SU What's On", "leagues and events"],
+  [
+    "The University of Cambridge's public events programme (What's On, the Cambridge Festival, Open Cambridge)",
+    "every public event it lists, with its images, read with the University's permission",
+  ],
   ["The University's term-dates page", "Full Term dates, for week numbers"],
 ] as const
 
@@ -93,13 +97,18 @@ export default async function AboutPage() {
               <InlineCode>{BOT_USER_AGENT}</InlineCode>.
             </li>
             <li>
-              <strong>robots.txt, with one exception.</strong> The harvester follows robots.txt on
+              <strong>robots.txt, with two exceptions.</strong> The harvester follows robots.txt on
               every site except the pages societies publish about themselves: their own websites and
               Linktree pages, the public Google calendars they link, files on their SU listing, and
               college, JCR and MCR society lists. Those are read, also by the AI model, even where
               robots.txt or an AI opt-out asks otherwise, because they exist to tell students about
-              the society. Crawl delays always apply, and the harvester makes one request at a time
-              per site.
+              the society. The other exception is the University of Cambridge’s public events
+              programme (What’s On, the Cambridge Festival and Open Cambridge, and their event
+              images): University Information Services, which runs the events service, and the
+              Office of External Affairs and Communications, which runs the programme, gave
+              permission on 2 November 2026 for it to be read and for the AI model to read its text.
+              The rest of that site keeps its robots.txt. Crawl delays always apply, and the
+              harvester makes one request at a time per site.
             </li>
             <li>
               <strong>Nothing behind a login.</strong> Pages that need a Raven or members’ login, or
@@ -114,9 +123,11 @@ export default async function AboutPage() {
             <li>
               <strong>AI extraction, checked.</strong> An AI language model, run by a third-party
               provider, reads free text from societies’ own pages to pull out facts such as how to
-              join. A fact counts as <em>found</em> only when the model quotes the source word for
-              word and the quote is checked; otherwise it is labelled <em>inferred</em>. Content
-              from talks.cam, departments’ talk listings and tbc.xyz is never given to an AI model.
+              join, and the University’s public events listings (with the permission above) to keep
+              private individuals’ names and notices out of them. A fact counts as <em>found</em>{" "}
+              only when the model quotes the source word for word and the quote is checked;
+              otherwise it is labelled <em>inferred</em>. Content from talks.cam, departments’ talk
+              listings and tbc.xyz is never given to an AI model.
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown

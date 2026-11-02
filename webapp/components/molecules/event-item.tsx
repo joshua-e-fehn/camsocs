@@ -1,8 +1,8 @@
-import { ArrowUpRightIcon, BanIcon, LockIcon, MapPinIcon } from "lucide-react"
+import { ArrowUpRightIcon, BanIcon, LandmarkIcon, LockIcon, MapPinIcon } from "lucide-react"
 import Link from "next/link"
 import { TONE_CLASSES } from "@/components/molecules/org-monogram"
 import { formatEventWhen, londonTime } from "@/lib/calendar"
-import { EVENT_TYPE_TONE, eventTimes, splitEmoji, spokenTitle } from "@/lib/events"
+import { EVENT_TYPE_TONE, eventTimes, splitEmoji, spokenTitle, UNIVERSITY_NAME } from "@/lib/events"
 import { takesPart } from "@/lib/format"
 import type { EventListItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
@@ -58,12 +58,25 @@ export function TakingPartBadge() {
   )
 }
 
-/** "Taking part", "Cambridge only", "Cancelled", "To be confirmed": words
- * with an icon, not colours. */
+/** One of the University's own listings (ENG-24): its public events
+ * programme lists it and no society runs it. Words and an icon, never colour
+ * alone, and no University mark. */
+export function UniversityBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-foreground/25 bg-muted/60 px-1.5 py-0.5 text-xs text-foreground/80">
+      <LandmarkIcon aria-hidden className="size-3" />
+      University
+    </span>
+  )
+}
+
+/** "University", "Taking part", "Cambridge only", "Cancelled", "To be
+ * confirmed": words with an icon, not colours. */
 export function EventFlags({
   event,
 }: {
-  event: Pick<EventListItem, "visibility" | "cancelled" | "status" | "hosting">
+  event: Pick<EventListItem, "visibility" | "cancelled" | "status" | "hosting"> &
+    Partial<Pick<EventListItem, "fromUniversity">>
 }) {
   return (
     <>
@@ -73,6 +86,7 @@ export function EventFlags({
           Cancelled
         </span>
       )}
+      {event.fromUniversity && <UniversityBadge />}
       {event.hosting === "takes_part" && <TakingPartBadge />}
       {event.visibility === "cam_only" && (
         <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs text-foreground/80">
@@ -118,8 +132,13 @@ function selectHandler(onSelect: ((target: HTMLElement) => void) | undefined) {
   }
 }
 
-/** Who runs it — or, for someone else's event, who takes part (D6). */
-export function organiserLine(event: Pick<EventListItem, "organisers" | "hosting">) {
+/** Who runs it — or, for someone else's event, who takes part (D6); the
+ * University for one of its own listings (ENG-24). */
+export function organiserLine(
+  event: Pick<EventListItem, "organisers" | "hosting"> &
+    Partial<Pick<EventListItem, "fromUniversity">>,
+) {
+  if (event.fromUniversity) return UNIVERSITY_NAME
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
   if (event.hosting === "takes_part") return takesPart(names)
   return names.length > 0 ? names.join(", ") : undefined
@@ -244,9 +263,9 @@ export function EventRowSkeleton() {
 
 /** A compact event for the week and month grids: a dot in the type's
  * colour, the time (none for an all-day event: the title needs the room)
- * and the title; someone else's event (D6) dashed with an
- * arrow off-site. `when` replaces the time ("until Fri 18 Dec" for an event
- * already running). */
+ * and the title; someone else's event (D6) dashed with an arrow off-site,
+ * the University's own (ENG-24) with a landmark. `when` replaces the time
+ * ("until Fri 18 Dec" for an event already running). */
 export function EventChip({
   event,
   href,
@@ -296,6 +315,12 @@ export function EventChip({
       >
         {event.visibility === "cam_only" && (
           <LockIcon aria-label="Cambridge only" className="mr-0.5 inline size-3 align-[-2px]" />
+        )}
+        {event.fromUniversity && (
+          <LandmarkIcon
+            aria-label="The University’s event"
+            className="mr-0.5 inline size-3 align-[-2px]"
+          />
         )}
         {event.hosting === "takes_part" && (
           <ArrowUpRightIcon

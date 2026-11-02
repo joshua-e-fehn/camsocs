@@ -3,7 +3,7 @@ import { addDays, isoDateMs, londonMidnight, startOfWeek } from "../lib/calendar
 import { CATEGORIES, EVENT_TYPES, type EventVisibility } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
-import { DAY_MS, londonIsoDate } from "./lib/derived"
+import { DAY_MS, isUniversityListing, londonIsoDate } from "./lib/derived"
 import { withdrawnCheck } from "./lib/entityStore"
 import {
   type EventListItem,
@@ -54,6 +54,10 @@ const listArgs = {
   /** `false` leaves out events societies only take part in (`hosting:
    * takes_part`, decision D6); they are included by default. */
   includeTakingPart: v.optional(v.boolean()),
+  /** The University's own listings (ENG-24, lib/derived.ts
+   * `isUniversityListing`): `hide` leaves them out, `only` lists nothing
+   * else; both kinds by default. */
+  university: v.optional(v.union(v.literal("hide"), v.literal("only"))),
 }
 const listArgsObject = v.object(listArgs)
 type ListArgs = Infer<typeof listArgsObject>
@@ -153,6 +157,7 @@ async function matchingEvents(
       tiers.includes(event.visibility) &&
       (args.includeTakingPart !== false || event.hosting !== "takes_part") &&
       (!types || types.has(event.eventType)) &&
+      (!args.university || (args.university === "only") === isUniversityListing(event)) &&
       words.every((word) => event.title.toLowerCase().includes(word)),
   )
   events = events.sort((a, b) => a.startsAt - b.startsAt).slice(0, MAX_EVENTS)

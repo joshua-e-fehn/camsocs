@@ -28,7 +28,7 @@ import {
 } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
-import { classifyEmail } from "./derived"
+import { classifyEmail, isUniversityListing } from "./derived"
 import {
   chatChannelValidator,
   isHttpUrl,
@@ -484,6 +484,9 @@ export const eventListItemValidator = v.object({
   hosting: literalUnion(EVENT_HOSTING),
   /** The external event's own page; only for a `takes_part` event. */
   externalUrl: v.optional(v.string()),
+  /** The University's own listing (ENG-24, lib/derived.ts `isUniversityListing`):
+   * shown as "University of Cambridge", never as a society's event. */
+  fromUniversity: v.boolean(),
 })
 export type EventListItem = Infer<typeof eventListItemValidator>
 
@@ -514,6 +517,8 @@ export const eventPublicValidator = v.object({
   hosting: literalUnion(EVENT_HOSTING),
   /** The external event's own page; only for a `takes_part` event. */
   externalUrl: v.optional(v.string()),
+  /** The University's own listing (ENG-24), as in `eventListItemValidator`. */
+  fromUniversity: v.boolean(),
   lastSeenAt: v.number(),
   confidence: v.number(),
   meta: publicMetaValidator,
@@ -593,6 +598,7 @@ export async function eventListItem(
     source: event.source,
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
+    fromUniversity: isUniversityListing(event),
   }
 }
 
@@ -625,6 +631,7 @@ export async function eventPublic(
     source: event.source,
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
+    fromUniversity: isUniversityListing(event),
     lastSeenAt: event.lastSeenAt,
     confidence: event.confidence,
     meta: publicMeta(event.meta),

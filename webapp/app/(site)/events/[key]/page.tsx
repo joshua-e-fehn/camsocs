@@ -1,5 +1,5 @@
 import { fetchQuery } from "convex/nextjs"
-import { ArrowLeftIcon, ChevronRightIcon, LockIcon } from "lucide-react"
+import { ArrowLeftIcon, ArrowUpRightIcon, ChevronRightIcon, LockIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, unstable_rethrow } from "next/navigation"
@@ -8,6 +8,7 @@ import { EventActionBar, EventDetails } from "@/components/molecules/event-detai
 import { OrgMonogram } from "@/components/molecules/org-monogram"
 import { TrackView } from "@/components/molecules/track-view"
 import { api } from "@/convex/_generated/api"
+import { analyticsAttrs } from "@/lib/analytics-events"
 import { getToken } from "@/lib/auth-server"
 import { formatDayShort, londonIsoDate } from "@/lib/calendar"
 import { eventJsonLd, eventMetaDescription, spokenTitle } from "@/lib/events"
@@ -150,7 +151,9 @@ export default async function EventPage({ params }: Props) {
           />
         </article>
 
-        {lead && (
+        {event.fromUniversity ? (
+          <FromUniversity listingUrl={event.sourceUrl} />
+        ) : lead ? (
           <aside aria-label={`More from ${lead.name}`} className="lg:pt-16">
             <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:sticky lg:top-[calc(var(--site-header-height,4rem)+1.5rem)]">
               <p className="flex items-center gap-2 font-mono text-[0.6875rem] tracking-[0.14em] text-muted-foreground uppercase">
@@ -184,10 +187,53 @@ export default async function EventPage({ params }: Props) {
               </div>
             </div>
           </aside>
-        )}
+        ) : null}
       </div>
       <EventActionBar event={event} pageUrl={pageUrl} venueName={venueName} />
     </>
+  )
+}
+
+/** The side panel of one of the University's own listings (ENG-24), in place
+ * of the society's: its page in the University's programme, and the
+ * calendar's University view. */
+function FromUniversity({ listingUrl }: { listingUrl?: string }) {
+  return (
+    <aside aria-label="From the University" className="lg:pt-16">
+      <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:sticky lg:top-[calc(var(--site-header-height,4rem)+1.5rem)]">
+        <p className="flex items-center gap-2 font-mono text-[0.6875rem] tracking-[0.14em] text-muted-foreground uppercase">
+          <span aria-hidden className="size-2 rounded-full bg-events" />
+          From the University
+        </p>
+        <p className="font-serif text-2xl leading-tight">University of Cambridge</p>
+        <p className="text-sm text-muted-foreground">
+          Listed in the University’s public events programme. No society runs it; its own page there
+          has the full details and any booking.
+        </p>
+        <div className="flex flex-col gap-2">
+          {listingUrl && (
+            <a
+              href={listingUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              {...analyticsAttrs("outbound_link_clicked", { kind: "source" })}
+              className="inline-flex h-11 items-center justify-between gap-2 rounded-full border px-4 text-sm font-medium transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
+            >
+              The University’s listing
+              <ArrowUpRightIcon aria-hidden className="size-4" />
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          )}
+          <Link
+            href={eventsHref({ ...EMPTY_EVENTS, university: "only", weeks: 4 })}
+            className="inline-flex h-11 items-center justify-between gap-2 rounded-full border border-events px-4 text-sm font-medium text-events transition-colors hover:bg-events-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
+          >
+            All University events
+            <ChevronRightIcon aria-hidden className="size-4" />
+          </Link>
+        </div>
+      </div>
+    </aside>
   )
 }
 
