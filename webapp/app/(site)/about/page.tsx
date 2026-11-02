@@ -107,8 +107,9 @@ export default async function AboutPage() {
               images): University Information Services, which runs the events service, and the
               Office of External Affairs and Communications, which runs the programme, gave
               permission on 2 November 2026 for it to be read and for the AI model to read its text.
-              The rest of that site keeps its robots.txt. Crawl delays always apply, and the
-              harvester makes one request at a time per site.
+              Permission to read the programme is not an endorsement: camsocs remains unofficial and
+              is not run by or for the University. The rest of that site keeps its robots.txt. Crawl
+              delays always apply, and the harvester makes one request at a time per site.
             </li>
             <li>
               <strong>Nothing behind a login.</strong> Pages that need a Raven or members’ login, or

@@ -207,8 +207,8 @@ function FromUniversity({ listingUrl }: { listingUrl?: string }) {
         </p>
         <p className="font-serif text-2xl leading-tight">University of Cambridge</p>
         <p className="text-sm text-muted-foreground">
-          Listed in the University’s public events programme. No society runs it; its own page there
-          has the full details and any booking.
+          Listed in the University’s public events programme; its page there has the full details
+          and any booking.
         </p>
         <div className="flex flex-col gap-2">
           {listingUrl && (

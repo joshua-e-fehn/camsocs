@@ -117,7 +117,7 @@ const UNIVERSITY_OPTIONS: { value: UniversityView; label: string; chip: string }
 ]
 /** Why the University view greys out the organiser filters. */
 const NO_ORGANISER_FILTERS =
-  "Category, college and society filters don’t apply to the University’s events: no society runs them."
+  "Category, college and society filters don’t apply to the University’s listings: they aren’t linked to a society here."
 
 function searchParamsObject(params: URLSearchParams): SearchParams {
   const out: SearchParams = {}
@@ -343,10 +343,14 @@ export function EventsCalendar({
   const args = eventListArgs(state, window_)
   const loaded = useEventWindow(args, preloadedEvents)
   const stale = loaded.stale
-  const camOnly = useRestrictedCount(
-    preloadedRestricted ? eventRestrictedArgs(args) : "skip",
+  // The University view never lists a Cambridge-only event (its listings are
+  // all public), so signing in would add nothing there: no count, no prompt.
+  const universityView = state.university === "only"
+  const restricted = useRestrictedCount(
+    preloadedRestricted && !universityView ? eventRestrictedArgs(args) : "skip",
     preloadedRestricted ?? undefined,
   )
+  const camOnly = universityView ? undefined : restricted
   const all = loaded.data ?? []
   const matching = useMemo(
     () => all.filter((event) => matchesEventQuery(event, state.q)),
@@ -664,13 +668,17 @@ export function EventsCalendar({
             )
           }}
         />
+        {/* The reason sits outside the dimmed fieldset: only the controls fade. */}
+        {draft.university === "only" && (
+          <p id="no-organiser-filters" className="-mb-4 text-sm text-muted-foreground">
+            {NO_ORGANISER_FILTERS}
+          </p>
+        )}
         <fieldset
           disabled={draft.university === "only"}
+          aria-describedby={draft.university === "only" ? "no-organiser-filters" : undefined}
           className="flex flex-col gap-7 disabled:opacity-60"
         >
-          {draft.university === "only" && (
-            <p className="text-sm text-muted-foreground">{NO_ORGANISER_FILTERS}</p>
-          )}
           <FacetChips
             legend="Society category"
             options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
@@ -695,7 +703,11 @@ export function EventsCalendar({
           selected={draft.takingPart ? ["show"] : []}
           onToggle={(_, on) => setDraft({ ...draft, takingPart: on })}
         />
-        <fieldset disabled={draft.university === "only"} className="disabled:opacity-60">
+        <fieldset
+          disabled={draft.university === "only"}
+          aria-describedby={draft.university === "only" ? "no-organiser-filters" : undefined}
+          className="disabled:opacity-60"
+        >
           <FacetChips
             legend="College"
             options={colleges.map((college) => ({ value: college.key, label: college.name }))}

@@ -134,15 +134,17 @@ describe("the University's own listings (ENG-24)", () => {
     expect(row.textContent).toContain("University")
     expect(row.textContent).not.toContain("Taking part")
     const chip = await render(<EventChip event={university} href="/events" />)
-    expect(chip.querySelector("[aria-label='The University’s event']")).not.toBeNull()
+    expect(chip.querySelector("[aria-label='Listed by the University']")).not.toBeNull()
   })
 
-  test("the details name the University as organiser, with no society link", async () => {
+  test("the details say the University lists it, with no society link", async () => {
     const sheet = await render(
       <EventDetails event={{ ...details, ...university, meta: {} }} pageUrl={PAGE} />,
     )
     expect(sheet.textContent).toContain("University of Cambridge")
     expect(sheet.textContent).toContain("From its public events programme")
+    expect(sheet.textContent).toContain("Listed by")
+    expect(sheet.textContent).not.toContain("Organiser")
     expect(sheet.querySelector("a[href^='/societies/']")).toBeNull()
   })
 })

@@ -517,7 +517,7 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default). `university` filters after the per-tier index reads (`.take(1000)` starting, `.take(200)` spanning, no index on `fromUniversity`), so a window holding more than 1,000 events of a tier can drop its later days from either view without a sign; safe for What's On (about 100 rows in 10 weeks), not for a Cambridge Festival window: store the flag with an index (widen, backfill, switch) or page past the cap before the Festival's events are loaded (ENG-24 follow-up). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
 | `events.exists` | `{ key }` | `boolean`: whether `get` would return the event to a verified @cam.ac.uk viewer (so `cam_only` is true for everyone; `members_only`, withdrawn, suppressed or every host hidden is false); for the 404 gate in `proxy.ts` |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
@@ -539,8 +539,10 @@ and its "Include taking part" toggle (`?external=show`) lists them.
 Cambridge's public events programme (`source: uni_events_api`) and credited to no student group
 as organiser or co-host. It is derived in the projection (`convex/lib/derived.ts`
 `isUniversityListing`), never stored, so there is no index or migration behind it; an event of
-the programme that names exactly one society is that society's and is not `fromUniversity`. The
-UI names the University in words ("University of Cambridge", the "University" badge with a
+the programme that names exactly one society is that society's and is not `fromUniversity`.
+`fromUniversity` says only that no student group is linked here, not who runs the event (a
+department, a college, a museum, two societies): the UI says "listed by" the University, never
+that no society runs it. The UI names the University in words ("University of Cambridge", the "University" badge with a
 landmark icon, never a University mark) and has no page for it: the event page's side panel is
 "From the University", linking the event's page in the University's programme (`sourceUrl`) and
 the calendar's University view; its JSON-LD `organizer` is the University
@@ -552,7 +554,9 @@ The calendar's "All · Societies & clubs · University" switch (`?university=hid
 all; `lib/url-state.ts` `UniversityView`) sits under the headline. The University view drops and
 greys out the category, college and society filters, which match through organiser cards, with
 a one-line reason. The headline counts societies from the student groups credited and the
-University's listings apart ("… from 12 societies and clubs · 4 from the University"). The home
+University's listings apart ("… from 12 societies and clubs · 4 from the University"). The
+University view shows no "Cambridge-only events, sign in" note: its listings are all public, so
+`events.restrictedCount` is not asked there. The home
 page's columns stay societies' and clubs' events; the University's are one link, "N University
 events this week", to `/events?university=only`.
 

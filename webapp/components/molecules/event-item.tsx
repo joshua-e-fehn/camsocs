@@ -58,8 +58,8 @@ export function TakingPartBadge() {
   )
 }
 
-/** One of the University's own listings (ENG-24): its public events
- * programme lists it and no society runs it. Words and an icon, never colour
+/** A listing from the University's public events programme (ENG-24),
+ * linked to no student group here. Words and an icon, never colour
  * alone, and no University mark. */
 export function UniversityBadge() {
   return (
@@ -318,7 +318,7 @@ export function EventChip({
         )}
         {event.fromUniversity && (
           <LandmarkIcon
-            aria-label="The University’s event"
+            aria-label="Listed by the University"
             className="mr-0.5 inline size-3 align-[-2px]"
           />
         )}

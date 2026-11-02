@@ -207,7 +207,8 @@ type CalendarEvent = Timed & {
   venueText?: string
   organisers: readonly Organiser[]
   hosting: string
-  /** The University's own listing (ENG-24): no society runs it. */
+  /** A listing from the University's public events programme (ENG-24),
+   * linked to no student group here. */
   fromUniversity?: boolean
   sourceUrl?: string
 }

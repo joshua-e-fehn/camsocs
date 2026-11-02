@@ -156,7 +156,7 @@ function UniversityOrganiser({ event }: { event: EventPublic }) {
         id={`people-${event.key}`}
         className="font-mono text-[0.6875rem] tracking-[0.14em] text-muted-foreground uppercase"
       >
-        Organiser
+        Listed by
       </h2>
       <p className="flex min-h-11 items-center gap-3">
         <span

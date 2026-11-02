@@ -289,7 +289,8 @@ export type IcsEvent = {
   cancelled: boolean
   hosting: "hosts" | "takes_part" | string
   organisers: readonly { name: string; role: string }[]
-  /** The University's own listing (ENG-24): no society runs it. */
+  /** A listing from the University's public events programme (ENG-24),
+   * linked to no student group here. */
   fromUniversity?: boolean
   /** The listing it was read from: for a University listing, its page there. */
   sourceUrl?: string
