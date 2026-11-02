@@ -260,6 +260,14 @@ No-cookie requests (and requests whose only cookies are PostHog's `ph_*` /
 `__ph_*`, ENG-4) skip the redundant server auth lookup; other cookie-bearing
 requests retain the existing auth flow. The former no-op proxy is removed;
 access checks remain in the existing Convex functions and client auth guard.
+Since ENG-20 a narrow `proxy.ts` runs on `/societies/<slug>`, `/events/<key>`
+and `/talks/<key>` only, to answer unknown listings with a real 404
+(docs/webapp.md "Unknown listing URLs"): one anonymous indexed Convex query
+per page view (a found listing is remembered for a minute per instance), none
+for a malformed key; router and browser prefetches skip it in the matcher, so
+the directory and calendar cards cost nothing extra. A check slower than
+800 ms lets the page answer. An unknown URL renders only the not-found page,
+not the listing page and its queries.
 
 This hotfix is based on the deployed commit 7df7d6c, not the in-progress redesign.
 Frontend-only deployment must not redeploy or roll back Convex: build locally

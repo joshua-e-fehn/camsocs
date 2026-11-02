@@ -72,9 +72,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * An event's own, shareable page (talks-redesign-spec §6 "/events"): what the
  * calendar's sheet shows, as an article with schema.org `Event` JSON-LD and a
  * canonical URL; on a phone a sticky bar carries Add to calendar, the source
- * and Share. A Cambridge-only event the viewer may not see (or one taken
- * down) gets a page that says so, with the sign-in, rather than a 404 that
- * would hide whether it exists only from the signed-in.
+ * and Share. A Cambridge-only event the viewer may not see gets a page that
+ * says so, with the sign-in, rather than a 404 that would hide whether it
+ * exists only from the signed-in. A key with no event anyone may see is a
+ * real 404 before this runs (proxy.ts, `events.exists`); `notFound()` and
+ * `Unavailable` here also cover an event taken down since that check.
  */
 export default async function EventPage({ params }: Props) {
   const { key } = await params

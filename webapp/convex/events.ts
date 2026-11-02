@@ -246,26 +246,55 @@ export const restrictedCount = query({
   },
 })
 
+/**
+ * The event behind a key if a viewer with `tiers` may see it, else null: the
+ * visibility gate above, plus the suppression list — an event, an address or
+ * a name removed on request never shows, even before the walk that sets its
+ * claims aside reaches this event (lib/suppressions.ts).
+ */
+async function shownEvent(
+  ctx: QueryCtx,
+  key: string,
+  tiers: readonly EventVisibility[],
+  lookup: ReturnType<typeof orgRefCache>,
+): Promise<Doc<"events"> | null> {
+  const event = await eventByKey(ctx, key)
+  if (!event || !tiers.includes(event.visibility)) return null
+  if (!(await hostsListed(event, lookup))) return null
+  if (await withdrawnCheck(ctx, Date.now())(event)) return null
+  if ((await loadSuppressedEvents(ctx)).has(event.key)) return null
+  return event
+}
+
 /** One event, or null when it does not exist or the viewer may not see it. */
 export const get = query({
   args: { key: v.string() },
   returns: v.union(v.null(), eventPublicValidator),
   handler: async (ctx, args) => {
-    const event = await eventByKey(ctx, args.key)
-    if (!event) return null
-    const tiers: readonly EventVisibility[] = visibleEventTiers(await getViewer(ctx))
-    if (!tiers.includes(event.visibility)) return null
+    const tiers = visibleEventTiers(await getViewer(ctx))
     const lookup = orgRefCache(ctx)
-    if (!(await hostsListed(event, lookup))) return null
-    if (await withdrawnCheck(ctx, Date.now())(event)) return null
-    // An event, an address or a name removed on request never shows, even
-    // before the walk that sets its claims aside reaches this event
-    // (lib/suppressions.ts).
-    if ((await loadSuppressedEvents(ctx)).has(event.key)) return null
+    const event = await shownEvent(ctx, args.key, tiers, lookup)
+    if (!event) return null
     return scrubAddresses(
       await eventPublic(ctx, event, lookup),
       await loadContactHashes(ctx),
       await loadNameHashes(ctx),
     )
   },
+})
+
+/**
+ * Whether `/events/<key>` has an event to show to someone (ENG-20): the
+ * request-time gate in `proxy.ts` answers anything else with a real 404
+ * before the page streams. True for an event a verified @cam.ac.uk viewer
+ * would see, so a Cambridge-only event keeps its "not available, sign in"
+ * page for everyone else (`get` decides that per viewer); a `members_only`,
+ * withdrawn or suppressed event, or one whose hosts are all hidden, is as
+ * absent as an unknown key. Viewer-independent by design.
+ */
+export const exists = query({
+  args: { key: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) =>
+    (await shownEvent(ctx, args.key, ["public", "cam_only"], orgRefCache(ctx))) !== null,
 })

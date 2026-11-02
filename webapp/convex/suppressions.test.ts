@@ -150,6 +150,7 @@ describe("accepting a removal", () => {
       })
       expect(suppressionKeys).toHaveLength(1)
       expect(await publicChess(t)).toBeNull()
+      expect(await t.query(api.orgs.exists, { slug: "chess" })).toBe(false)
       const rows = (
         await broker.query(api.broker.orgs.page, {
           paginationOpts: { numItems: 50, cursor: null },
@@ -420,6 +421,7 @@ describe("events and names", () => {
     await asBroker(async (t, broker) => {
       await t.mutation(internal.ingest.claims.ingest, { claims: goNight("Come and play.") })
       expect((await t.query(api.events.get, { key: eventKey }))?.title).toBe("Go night")
+      expect(await t.query(api.events.exists, { key: eventKey })).toBe(true)
       const key = await request(t, "object")
       await expect(
         broker.mutation(api.broker.listingRequests.acceptRemoval, {
@@ -434,6 +436,7 @@ describe("events and names", () => {
         eventKeys: [eventKey],
       })
       expect(await t.query(api.events.get, { key: eventKey })).toBeNull()
+      expect(await t.query(api.events.exists, { key: eventKey })).toBe(false)
       const again = await t.mutation(internal.ingest.claims.ingest, {
         claims: goNight("Come and play."),
       })

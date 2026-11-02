@@ -422,6 +422,39 @@ export const related = query({
 const UPCOMING_EVENTS = 50
 
 /**
+ * The listing behind a public slug with its suppression rows, or null when
+ * there is none to show: no such slug, hidden by the broker after a remove /
+ * object request, or on the suppression list as a whole organisation. The one
+ * test `getBySlug` and `exists` share, so a URL never 404s for a listing its
+ * page would show, nor passes for one it would not.
+ */
+async function listedOrg(ctx: QueryCtx, slug: string) {
+  const org = await ctx.db
+    .query("organisations")
+    .withIndex("by_slug", (i) => i.eq("slug", slug))
+    .unique()
+  if (!org || org.hidden === true) return null
+  const suppressed = await ctx.db
+    .query("suppressions")
+    .withIndex("by_orgKey", (i) => i.eq("orgKey", org.key))
+    .take(MAX_SUPPRESSIONS)
+  if (suppressed.some((row) => row.scope === "organisation")) return null
+  return { org, suppressed }
+}
+
+/**
+ * Whether `/societies/<slug>` has a listing to show (ENG-20): the
+ * request-time gate in `proxy.ts` answers an unknown slug with a real 404
+ * before the page streams. Two indexed reads; viewer-independent, since a
+ * listing is public or absent.
+ */
+export const exists = query({
+  args: { slug: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => (await listedOrg(ctx, args.slug)) !== null,
+})
+
+/**
  * One organisation's page: its public projection (with per-field `meta` for
  * the SourceLine), teams, regular sessions, upcoming events the viewer may
  * see (public; `cam_only` too for a verified @cam.ac.uk viewer), and its
@@ -441,13 +474,9 @@ export const getBySlug = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const org = await ctx.db
-      .query("organisations")
-      .withIndex("by_slug", (i) => i.eq("slug", args.slug))
-      .unique()
-    // Hidden by the broker after a remove / object request: as if absent
-    // (and so is a listing on the suppression list, below).
-    if (!org || org.hidden === true) return null
+    const listed = await listedOrg(ctx, args.slug)
+    if (!listed) return null
+    const { org, suppressed } = listed
 
     const [teams, sessions] = await Promise.all([
       ctx.db
@@ -498,11 +527,6 @@ export const getBySlug = query({
     const contacts = await loadContactHashes(ctx)
     const names = await loadNameHashes(ctx)
 
-    const suppressed = await ctx.db
-      .query("suppressions")
-      .withIndex("by_orgKey", (i) => i.eq("orgKey", org.key))
-      .take(MAX_SUPPRESSIONS)
-    if (suppressed.some((row) => row.scope === "organisation")) return null
     const projected = withoutSuppressed(
       await orgPublic(ctx, org),
       new Set(suppressed.flatMap((row) => (row.scope === "field" && row.field ? [row.field] : []))),

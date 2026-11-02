@@ -50,7 +50,8 @@ app/                         Next.js App Router pages
   sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/, /sign-in,
                              /relay
   opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
-  not-found.tsx              404 outside the site frame
+  not-found.tsx              404 for any unmatched URL, server-rendered; an unknown listing (proxy.ts) gets
+                             the site frame and its segment's not-found page (see "Unknown listing URLs")
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
   relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
                              next.config rewrite: that would pass cookies on)
@@ -170,6 +171,8 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
 instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
+proxy.ts                     Listing pages only: unknown society / event / talk URL → real 404 (see
+                             "Unknown listing URLs"; lib/missing-listing.ts)
 next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
                              /api/auth or /relay rewrite); PostHog source map upload on Vercel
                              production builds only (withSourceMapUpload, + next.config.test.ts)
@@ -195,6 +198,32 @@ client organism that reads it with `usePreloadedQuery` (live afterwards); a filt
 and ships no client JavaScript of its own. Viewer-dependent queries (`events.*`,
 `orgs.getBySlug`) get `{ token: await getToken() }` (`lib/auth-server.ts`, memoised per request).
 Opening an event only changes `?event=` with `window.history.pushState` (no server round trip).
+
+### Unknown listing URLs (ENG-20)
+
+`/societies/<slug>`, `/events/<key>` and `/talks/<key>` answer an unknown key with HTTP 404 and the
+site's not-found page in the server's HTML, for browsers and crawlers alike. The page cannot do it
+itself in Next 16: under a `loading.tsx` its `notFound()` comes after a 200 (a noindex soft 404),
+and outside every Suspense boundary Next sends the 404 with an empty `html#__next_error__` shell
+that only JavaScript fills in. So `proxy.ts`, matched on those three paths only, decides first
+(`lib/missing-listing.ts`): a malformed key (`isOrgSlug` / `isEventKey` / `isTalkKey`) is missing
+without a Convex call; a well-formed one costs one anonymous indexed query (`orgs.exists`,
+`events.exists`, `talks.exists`, which share their test with `getBySlug` / `get`). A missing listing
+is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404; the
+`x-camsocs-missing-listing` request header makes it wrap the (site) frame around the talks
+not-found page for a talk and the site's own for the rest. Only the proxy can set that header: a
+last matcher entry catches any request that brings its own copy, and the proxy drops it. Router and
+browser prefetches skip the proxy in its matcher (`missing` header conditions: Next strips
+`next-router-prefetch` and `rsc` from the headers a proxy sees, so a check in code never fires).
+Static siblings (`/talks/departments`, or a metadata file such as `opengraph-image` in the section;
+the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
+one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
+listing is remembered for 60 s per instance (missing ones never), so repeat views skip the round
+trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
+page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
+hidden since the check. A client-side navigation to a missing listing becomes a full page load (the
+rewritten RSC response is outside the (site) tree); a stale in-site link is rare, and the end state
+is the same 404 page.
 
 ## Code quality
 
@@ -465,6 +494,7 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 |---|---|---|
 | `orgs.list` | `OrgFilters & { sort?: "relevance" \| "name" \| "active", paginationOpts }` | `{ page: (OrgCardPublic & { activity? })[], isDone, continueCursor }` — `relevance` (default): search rank with `q`, else name; `name`: A–Z also with `q`; `active`: most counted events this term first (`convex/lib/orgActivity.ts`: public events a listing organises or co-hosts, not taking-part ones). `activity` = `{ count, inTerm, next?: { startsAt, allDay, termWeekLabel? } }` (term = Week 0 to the end of Full Term; outside term, the next 8 weeks). Works with `usePaginatedQuery` (cursor = offset) |
 | `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly, truncated }`, each but the last `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns; `truncated` when a search matched more than one query returns (1,024, Convex's limit) and the counts cover the best matches only |
+| `orgs.exists` | `{ slug }` | `boolean`: whether `getBySlug` would show a listing (not hidden, not suppressed); viewer-independent, for the 404 gate in `proxy.ts` |
 | `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 | `orgs.busy` | `{ limit? }` | `{ label?, from, to, orgs: { card: OrgCardPublic, count }[] }` — the "Busy this week" shelf: listings with the most counted, not cancelled events this term week (Thu–Wed; `label` "MT26 Wk 4"), else the next 7 days; at most 12 |
@@ -489,6 +519,7 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 |---|---|---|
 | `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts'; `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
+| `events.exists` | `{ key }` | `boolean`: whether `get` would return the event to a verified @cam.ac.uk viewer (so `cam_only` is true for everyone; `members_only`, withdrawn, suppressed or every host hidden is false); for the 404 gate in `proxy.ts` |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,

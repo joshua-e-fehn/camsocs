@@ -51,23 +51,83 @@ const PAGES: { name: string; path: string; dark?: boolean }[] = [
   { name: "request", path: "/request" },
   { name: "request-org", path: `/request?kind=correct&org=${PROFILES["profile-sport"]}` },
   { name: "sign-in", path: "/sign-in" },
-  { name: "not-found", path: "/societies/zzqx-no-such-society" },
 ]
 
 for (const { name, path, dark } of PAGES) {
   test(`${name}${dark ? " @dark" : ""}`, async ({ page }, testInfo) => {
     const response = await page.goto(path)
-    if (name === "not-found") {
-      // 404, or 200 once a loading boundary has streamed — then Next marks it noindex.
-      expect([200, 404]).toContain(response?.status())
-      await expect(page.getByText("Not found", { exact: true })).toBeVisible()
-    } else {
-      expect(response?.status(), `${path} status`).toBe(200)
-    }
+    expect(response?.status(), `${path} status`).toBe(200)
     await expect(page.locator("main, [data-slot=card]").first()).toBeVisible()
     await checkAndCapture(page, testInfo, name)
   })
 }
+
+/**
+ * Unknown listing URLs are real 404s with the site's not-found page in the
+ * server's HTML (ENG-20: proxy.ts, lib/missing-listing.ts) — never a 200
+ * marked noindex, nor an empty shell that only JavaScript fills in. A
+ * well-formed key the data does not have costs one existence query; a
+ * malformed one none.
+ */
+const UNKNOWN: { name: string; path: string; heading: string }[] = [
+  { name: "society", path: "/societies/zzqx-no-such-society", heading: "Not found" },
+  { name: "society-malformed", path: "/societies/No_Such!", heading: "Not found" },
+  { name: "event", path: `/events/evt-${"0".repeat(40)}`, heading: "Not found" },
+  { name: "event-malformed", path: "/events/not-an-event", heading: "Not found" },
+  { name: "talk", path: `/talks/talk-${"0".repeat(20)}`, heading: "This talk is no longer listed" },
+  { name: "talk-malformed", path: "/talks/nope", heading: "This talk is no longer listed" },
+]
+
+for (const { name, path, heading } of UNKNOWN.filter((u) => !u.name.endsWith("-malformed"))) {
+  test(`an unknown ${name} is a 404 in the site frame`, async ({ page }, testInfo) => {
+    const response = await page.goto(path)
+    expect(response?.status(), `${path} status`).toBe(404)
+    await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible()
+    await expect(page.locator("header").first()).toBeVisible()
+    await expect(page.locator("footer").first()).toBeVisible()
+    await checkAndCapture(page, testInfo, `not-found-${name}`)
+  })
+}
+
+test.describe("without JavaScript, as a crawler", () => {
+  test.use({
+    javaScriptEnabled: false,
+    userAgent: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  })
+  for (const { name, path, heading } of UNKNOWN) {
+    test(`an unknown ${name} answers 404 with its not-found page in the HTML`, async ({ page }) => {
+      const response = await page.goto(path)
+      expect(response?.status(), `${path} status`).toBe(404)
+      await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible()
+      await expect(page.locator("html#__next_error__")).toHaveCount(0)
+    })
+  }
+
+  test("a known profile still answers 200 with its content", async ({ page }) => {
+    const response = await page.goto(`/societies/${PROFILES["profile-university"]}`)
+    expect(response?.status()).toBe(200)
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0)
+  })
+})
+
+test("router prefetches skip the 404 gate, and only the proxy names a missing listing", async ({
+  request,
+}) => {
+  // The proxy's matcher keeps prefetches away (Next strips the header inside
+  // the proxy), so a prefetch of a well-formed unknown key is not rewritten.
+  const prefetch = await request.get(UNKNOWN[0].path, {
+    headers: { RSC: "1", "Next-Router-Prefetch": "1" },
+    maxRedirects: 0,
+  })
+  expect(prefetch.status()).not.toBe(404)
+  // A visitor's own x-camsocs-missing-listing header is dropped: an unmatched
+  // URL keeps the plain 404, not the framed talks page.
+  const spoofed = await request.get("/zzqx-no-such-page", {
+    headers: { "x-camsocs-missing-listing": "talk" },
+  })
+  expect(spoofed.status()).toBe(404)
+  expect(await spoofed.text()).not.toContain("This talk is no longer listed")
+})
 
 test("dashboard sends a signed-out visitor to sign-in", async ({ page }, testInfo) => {
   await page.goto("/dashboard")
@@ -170,12 +230,10 @@ test("robots.txt, the sitemap and the share image are served", async ({ request 
   expect(image.headers()["content-type"]).toBe("image/png")
 })
 
-test("an unknown talk is a talks 404", async ({ page }, testInfo) => {
+test("an unknown talk's 404 leads back to the talks", async ({ page }) => {
   const response = await page.goto("/talks/talk-00000000000000000000")
   expect(response?.status()).toBe(404)
-  await expect(page.getByRole("heading", { name: "This talk is no longer listed" })).toBeVisible()
   await expect(page.getByRole("link", { name: "Upcoming talks" })).toHaveAttribute("href", "/talks")
-  await checkAndCapture(page, testInfo, "talk-not-found")
 })
 
 test("the talks feed is a calendar, and AI crawlers are kept off talks", async ({ request }) => {
