@@ -55,7 +55,8 @@ module allow-lists. A generation carries the model id, `$ai_provider`
 `cliproxy`, the token counts the proxy reported, the final attempt's latency,
 the HTTP status (when there was one), `$ai_is_error`, the run key as
 `$ai_trace_id`, the stage as `$ai_span_name`, the tier, the prompt version, the
-attempt count and, on failure, the exception's class name. **Never** the
+attempt count, whether it was the strong fallback after a failed bulk request
+(`fallback`, ENG-23) and, on failure, the exception's class name. **Never** the
 messages (`$ai_input`), the reply (`$ai_output_choices`), error text
 (`$ai_error`), the base URL or any scraped text — the messages hold scraped
 pages and mail. The client has no notion of a run: `run_started` makes this
@@ -179,6 +180,7 @@ ALLOWED: Mapping[str, frozenset[str]] = {
         "promptVersion",
         "attempts",
         "validationRetry",
+        "fallback",
         "errorType",
     },
 }
@@ -553,11 +555,13 @@ class HarvestTelemetry:
         http_status: int | None = None,
         error_type: str | None = None,
         validation_retry: bool = False,
+        fallback: bool = False,
     ) -> None:
         """One `$ai_generation`: an `LLMClient` request, retries included.
         `latency_s` is the final attempt's; `error_type` the class name of the
-        exception that ended it (never its message). Takes no messages, reply
-        or error text, so it cannot send them."""
+        exception that ended it (never its message); `fallback` marks a strong
+        request made because the bulk one failed (ENG-23). Takes no messages,
+        reply or error text, so it cannot send them."""
         self._capture(
             AI_GENERATION,
             {
@@ -575,6 +579,7 @@ class HarvestTelemetry:
                 "promptVersion": prompt_version,
                 "attempts": attempts,
                 "validationRetry": validation_retry,
+                "fallback": fallback,
                 "errorType": error_type,
             },
         )

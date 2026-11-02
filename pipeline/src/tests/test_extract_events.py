@@ -3,10 +3,13 @@ honesty, visibility, redaction, de-duplication and the reply cache."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
+import respx
 
 from camsocs_pipeline.claims import claims_for_event
 from camsocs_pipeline.extract.dedupe import EventIndex, similar_titles
@@ -22,6 +25,7 @@ from camsocs_pipeline.extract.events import (
     title_slug,
     verbatim_url,
 )
+from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.memo import LLMMemo, memo_key
 from camsocs_pipeline.extract.when import TermCalendar, Unresolvable
 from camsocs_pipeline.keys import event_key
@@ -32,6 +36,7 @@ from tests.fakes import (
     WEEKLY_TEXT,
     FakeLLM,
 )
+from tests.test_llm import COMPLETIONS, completion, llm_settings
 
 CAL = TermCalendar.default()
 
@@ -234,6 +239,38 @@ def test_extract_events_reuses_a_cached_reply(tmp_path) -> None:
     extract_events(llm, memo, prompt=prompt, prompt_version=version, text="other text")
     assert len(llm.calls) == 2
     assert memo_key("ab", "c") != memo_key("a", "bc")
+
+
+def test_a_fallback_reply_is_cached_under_the_bulk_key(tmp_path, net: respx.MockRouter) -> None:
+    """ENG-23: the bulk model's reply never validates, the strong model
+    answers; the memo keeps that answer under the key the bulk call computed,
+    with the model that gave it, so the next run asks nobody."""
+    asked: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        model = json.loads(request.content)["model"]
+        asked.append(model)
+        return completion("not json" if model == "bulk-model-1" else json.dumps(WEEKLY_REPLY))
+
+    net.post(COMPLETIONS).mock(side_effect=respond)
+    llm = LLMClient(llm_settings(), sleep=lambda _s: None)
+    memo = LLMMemo(tmp_path)
+    prompt, version = load_prompt("email_events_v1")
+
+    first = extract_events(llm, memo, prompt=prompt, prompt_version=version, text="mail text")
+
+    assert (first.model, first.cached) == ("strong-model-1", False)
+    assert asked == ["bulk-model-1", "bulk-model-1", "strong-model-1"]
+    bulk_key = memo_key(version, "bulk", "bulk-model-1", "mail text")
+    stored = memo.get(version, bulk_key, LlmEvents)
+    assert stored is not None and stored[1] == "strong-model-1"
+    assert stored[0] == LlmEvents.model_validate(WEEKLY_REPLY)
+
+    second = extract_events(llm, memo, prompt=prompt, prompt_version=version, text="mail text")
+
+    assert (second.model, second.cached) == ("strong-model-1", True)
+    assert second.value == first.value
+    assert len(asked) == 3, "the cached fallback reply makes no request"
 
 
 def test_every_prompt_exists_and_names_its_rules() -> None:

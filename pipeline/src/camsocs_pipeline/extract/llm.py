@@ -16,17 +16,40 @@ the shape here follows the pipeline's own rules:
   `LLMValidationError`.
 - **Retries for the transport, not the content.** 429, 5xx, timeouts and
   connection errors back off exponentially with full jitter (honouring
-  `Retry-After`, capped) and resume; 4xx other than 429 is raised at once. No
-  proactive throttling: concurrency is bounded by a semaphore
-  (`LLM_CONCURRENCY`, default 8) and the server's 429s do the rest. The SDK's
-  own retries are disabled so there is exactly one retry policy.
-- **Provenance per call.** Every `LLMCall` records the `model` and the
-  `prompt_version` it was made with, for storing beside each extracted claim.
+  `Retry-After`, capped) and resume; 4xx other than 429 is raised at once.
+  Either way the content is not retried on the same model; a bulk request
+  may then fall back to the strong one (below). No proactive throttling:
+  concurrency is bounded by a semaphore (`LLM_CONCURRENCY`, default 8) and
+  the server's 429s do the rest. The SDK's own retries are disabled so there
+  is exactly one retry policy.
+- **One fallback from bulk to strong (ENG-23).** A bulk request that fails
+  for a reason the strong model might not share is asked **once** more,
+  whole and fresh, on the strong tier (its own corrective retry and transport
+  retries): a reply that still fails validation, transient failures (429,
+  5xx, a timeout) that outlast their retries, or any other HTTP error the
+  server answered (400 context length, 404 unknown model, 422) except 401 and
+  403. Never after a plain connection failure (cliproxy is down for both
+  models), a 401/403 (the same key), `ModelRefused`, an interrupt, or a
+  request that was on the strong tier already. If the strong request fails
+  too, the **bulk** error is raised (the strong one's class is noted on it and
+  it is its `__context__`), so callers see exactly the failures they saw
+  before the fallback existed — `classify` catches `LLMValidationError` only,
+  and a Sol transport error must not turn a skipped batch into a failed
+  stage. `LLMClient(..., fallback=False)` turns it off (tests); there is no
+  setting for it.
+- **Provenance per call.** Every `LLMCall` records the `model` that answered
+  and the `prompt_version` it was made with, for storing beside each
+  extracted claim; after a fallback that is the strong model, and
+  `fallback_from` names the bulk model that failed. Callers key their reply
+  caches on the tier they asked for (`model_for(tier)`) and store the
+  answering model, so the next run reuses the strong reply instead of
+  repeating the failing bulk request.
 - **Analytics per generation (ENG-9).** Each request — retries included, and
   the corrective retry as a second one — is reported to the run's telemetry
   (`camsocs_pipeline.telemetry`, off without POSTHOG_KEY) as one
   `$ai_generation`: model, tier, prompt version, token counts, the final
-  attempt's latency, HTTP status, attempts and an exception's class name.
+  attempt's latency, HTTP status, attempts and an exception's class name;
+  a fallback's generations carry tier `strong` and `fallback: true`.
   Never the messages, the reply or error text; reporting can never fail or
   change the call.
 
@@ -44,7 +67,7 @@ import threading
 import time
 import unicodedata
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -145,6 +168,8 @@ class LLMCall[T: BaseModel]:
     validation_retried: bool
     raw: str
     usage: dict[str, Any] | None = None
+    #: The bulk model id when this reply came from the strong fallback (ENG-23).
+    fallback_from: str | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +183,22 @@ def _is_transient(error: BaseException) -> bool:
         return True
     if isinstance(error, openai.APIStatusError):
         return error.status_code == 429 or error.status_code >= 500
+    return False
+
+
+#: Statuses that mean the key, not the model: the strong model shares the key.
+_KEY_STATUSES = frozenset({401, 403})
+
+
+def _falls_back(error: Exception) -> bool:
+    """Whether a failed bulk request is worth asking the strong model (module
+    docstring). Called after the transport retries are exhausted."""
+    if isinstance(error, LLMValidationError | openai.APITimeoutError):
+        return True
+    if isinstance(error, openai.APIConnectionError):  # cliproxy unreachable
+        return False
+    if isinstance(error, openai.APIStatusError):
+        return error.status_code not in _KEY_STATUSES
     return False
 
 
@@ -202,6 +243,7 @@ class LLMClient:
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         sleep: Callable[[float], None] = time.sleep,
         telemetry: HarvestTelemetry | None = None,
+        fallback: bool = True,
     ) -> None:
         self._models: dict[Tier, str] = {
             "bulk": assert_model_allowed(settings.model_bulk),
@@ -220,6 +262,7 @@ class LLMClient:
         self._max_attempts = max_attempts
         self._sleep = sleep
         self._telemetry = telemetry
+        self._fallback = fallback
 
     def model_for(self, tier: Tier) -> str:
         return self._models[tier]
@@ -233,11 +276,61 @@ class LLMClient:
         tier: Tier = "bulk",
         temperature: float = 0.0,
     ) -> LLMCall[T]:
-        """Ask for a JSON object matching `schema`, validate it, retry once on failure."""
+        """Ask for a JSON object matching `schema`, validate it, retry once on
+        failure; a failed bulk request is asked once more on the strong tier
+        (module docstring)."""
+        try:
+            return self._complete_json(schema, messages, prompt_version, tier, temperature)
+        except Exception as error:
+            if not (self._fallback and tier == "bulk" and _falls_back(error)):
+                raise
+            bulk_error = error
+        # Each request takes a semaphore slot of its own (`_complete`) and gives
+        # it back, so the fallback never waits on a slot this thread holds.
+        # Outside the `except`, the strong request's errors are not chained to
+        # the bulk one.
+        bulk, strong = self.model_for("bulk"), self.model_for("strong")
+        logger.warning(
+            "LLM %s failed (%s, prompt %s); asking %s once",
+            bulk,
+            type(bulk_error).__name__,
+            prompt_version,
+            strong,
+        )
+        try:
+            call = self._complete_json(
+                schema, messages, prompt_version, "strong", temperature, fallback=True
+            )
+        except Exception as strong_error:
+            logger.warning(
+                "LLM fallback %s failed too (%s, prompt %s); raising the %s error",
+                strong,
+                type(strong_error).__name__,
+                prompt_version,
+                bulk,
+            )
+            bulk_error.add_note(f"Fallback to {strong} failed too: {type(strong_error).__name__}")
+            raise bulk_error  # noqa: B904 (its own cause stays; the strong error is its context)
+        return replace(call, fallback_from=bulk)
+
+    def _complete_json[T: BaseModel](
+        self,
+        schema: type[T],
+        messages: Sequence[dict[str, Any]],
+        prompt_version: str,
+        tier: Tier,
+        temperature: float,
+        *,
+        fallback: bool = False,
+    ) -> LLMCall[T]:
+        """One model's attempt: a request, and one corrective retry on a reply
+        that does not validate."""
         model = assert_model_allowed(self.model_for(tier))
         conversation: list[dict[str, Any]] = [_schema_instruction(schema), *messages]
 
-        raw = self._complete(model, conversation, temperature, tier, prompt_version)
+        raw = self._complete(
+            model, conversation, temperature, tier, prompt_version, fallback=fallback
+        )
         try:
             value = _parse(schema, raw.text)
             return LLMCall(value, model, prompt_version, False, raw.text, raw.usage)
@@ -256,7 +349,13 @@ class LLMClient:
             ]
 
         retry = self._complete(
-            model, conversation, temperature, tier, prompt_version, validation_retry=True
+            model,
+            conversation,
+            temperature,
+            tier,
+            prompt_version,
+            validation_retry=True,
+            fallback=fallback,
         )
         try:
             value = _parse(schema, retry.text)
@@ -278,6 +377,7 @@ class LLMClient:
         prompt_version: str,
         *,
         validation_retry: bool = False,
+        fallback: bool = False,
     ) -> _RawReply:
         """One request (with transport retries), reported as one generation."""
         attempts = 0
@@ -340,6 +440,7 @@ class LLMClient:
                     http_status=status if isinstance(status, int) else None,
                     error_type=error_type,
                     validation_retry=validation_retry,
+                    fallback=fallback,
                 )
         return _RawReply(text, usage)
 

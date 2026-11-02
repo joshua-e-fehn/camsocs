@@ -1,11 +1,17 @@
 """The LLM client: the claude* guard, JSON validation with one corrective retry,
-transport retries, provenance, and the vision helper. All offline (respx)."""
+transport retries, the strong fallback, provenance, and the vision helper. All
+offline (respx)."""
 
 from __future__ import annotations
 
 import json
+import logging
+import threading
+from types import SimpleNamespace
+from typing import Any
 
 import httpx
+import openai
 import pytest
 import respx
 from pydantic import BaseModel, SecretStr
@@ -190,7 +196,7 @@ def test_invalid_reply_is_retried_once_with_the_error(net: respx.MockRouter) -> 
 
 def test_a_second_invalid_reply_raises(net: respx.MockRouter) -> None:
     net.post(COMPLETIONS).mock(side_effect=[completion("not json"), completion("[]")])
-    llm, _ = client()
+    llm, _ = client(fallback=False)
 
     with pytest.raises(LLMValidationError):
         llm.complete_json(schema=Society, messages=[], prompt_version="v1")
@@ -228,12 +234,10 @@ def test_429_and_5xx_back_off_and_resume(net: respx.MockRouter) -> None:
 
 
 def test_a_400_is_not_retried(net: respx.MockRouter) -> None:
-    import openai
-
     route = net.post(COMPLETIONS).mock(
         return_value=httpx.Response(400, json={"error": {"message": "bad request"}})
     )
-    llm, sleeps = client()
+    llm, sleeps = client(fallback=False)
 
     with pytest.raises(openai.BadRequestError):
         llm.complete_json(schema=Society, messages=[], prompt_version="v1")
@@ -242,14 +246,244 @@ def test_a_400_is_not_retried(net: respx.MockRouter) -> None:
 
 
 def test_retries_stop_after_max_attempts(net: respx.MockRouter) -> None:
-    import openai
-
     route = net.post(COMPLETIONS).mock(return_value=httpx.Response(503, json={"error": {}}))
-    llm, _ = client(max_attempts=3)
+    llm, _ = client(max_attempts=3, fallback=False)
 
     with pytest.raises(openai.InternalServerError):
         llm.complete_json(schema=Society, messages=[], prompt_version="v1")
     assert route.call_count == 3
+
+
+# --- the strong fallback (ENG-23) ---------------------------------------------------
+
+VALID = '{"name": "Chess", "email": null}'
+#: Scraped text a request carries: it must not reach the fallback's log lines.
+SCRAPED = "Join the Example Society at https://example.org/join"
+
+Reply = httpx.Response | Exception
+
+
+class ByModel:
+    """A respx side effect that answers each request from its model's queue
+    (a reply, or an httpx exception to raise), and records the models asked."""
+
+    def __init__(self, **replies: list[Reply]) -> None:
+        self.replies = {model.replace("_", "-"): list(queue) for model, queue in replies.items()}
+        self.models: list[str] = []
+        self.bodies: list[dict[str, Any]] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        self.models.append(body["model"])
+        self.bodies.append(body)
+        reply = self.replies[body["model"]].pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+def error(status: int) -> httpx.Response:
+    return httpx.Response(status, json={"error": {"message": f"status {status}"}})
+
+
+def ask(llm: LLMClient, **kwargs: Any) -> Any:
+    return llm.complete_json(
+        schema=Society,
+        messages=[{"role": "user", "content": f"Extract the society from: {SCRAPED}"}],
+        prompt_version="v1",
+        **kwargs,
+    )
+
+
+def test_a_bulk_reply_that_never_validates_is_asked_of_the_strong_model(
+    net: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    replies = ByModel(
+        bulk_model_1=[completion("not json"), completion('{"name": 42}')],
+        strong_model_1=[completion(VALID)],
+    )
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client()
+
+    with caplog.at_level(logging.WARNING, logger="camsocs_pipeline.extract.llm"):
+        call = ask(llm)
+
+    assert call.value == Society(name="Chess", email=None)
+    # Provenance is the model that answered, and says what it stood in for.
+    assert (call.model, call.fallback_from, call.validation_retried) == (
+        "strong-model-1",
+        "bulk-model-1",
+        False,
+    )
+    assert replies.models == ["bulk-model-1", "bulk-model-1", "strong-model-1"]
+    # A fresh request: the bulk model's corrective exchange is not carried over.
+    assert replies.bodies[2]["messages"] == replies.bodies[0]["messages"]
+    (warning,) = [r for r in caplog.records if r.levelno == logging.WARNING]
+    message = warning.getMessage()
+    for word in ("bulk-model-1", "strong-model-1", "LLMValidationError", "v1"):
+        assert word in message
+    assert "Example Society" not in message and "example.org" not in message
+    assert "42" not in message
+
+
+def test_a_successful_call_names_no_fallback(net: respx.MockRouter) -> None:
+    net.post(COMPLETIONS).mock(return_value=completion(VALID))
+    llm, _ = client()
+
+    assert ask(llm).fallback_from is None
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_transient_failures_that_outlast_their_retries_fall_back(
+    status: int, net: respx.MockRouter
+) -> None:
+    replies = ByModel(
+        bulk_model_1=[error(status), error(status)],
+        strong_model_1=[error(status), completion(VALID)],  # the strong request retries too
+    )
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, sleeps = client(max_attempts=2)
+
+    call = ask(llm)
+
+    assert (call.model, call.fallback_from) == ("strong-model-1", "bulk-model-1")
+    assert replies.models == ["bulk-model-1"] * 2 + ["strong-model-1"] * 2
+    assert len(sleeps) == 2
+
+
+@pytest.mark.parametrize("status", [400, 404, 413, 422])
+def test_a_model_side_http_error_falls_back_at_once(status: int, net: respx.MockRouter) -> None:
+    replies = ByModel(bulk_model_1=[error(status)], strong_model_1=[completion(VALID)])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, sleeps = client()
+
+    call = ask(llm)
+
+    assert (call.model, call.fallback_from) == ("strong-model-1", "bulk-model-1")
+    assert replies.models == ["bulk-model-1", "strong-model-1"] and sleeps == []
+
+
+def test_a_timeout_that_outlasts_its_retries_falls_back(net: respx.MockRouter) -> None:
+    replies = ByModel(
+        bulk_model_1=[httpx.ReadTimeout("slow"), httpx.ReadTimeout("slow")],
+        strong_model_1=[completion(VALID)],
+    )
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client(max_attempts=2)
+
+    call = ask(llm)
+
+    assert (call.model, call.fallback_from) == ("strong-model-1", "bulk-model-1")
+    assert replies.models == ["bulk-model-1", "bulk-model-1", "strong-model-1"]
+
+
+def test_a_connection_failure_does_not_fall_back(net: respx.MockRouter) -> None:
+    """cliproxy unreachable: the strong model is behind the same proxy."""
+    replies = ByModel(bulk_model_1=[httpx.ConnectError("refused")] * 2, strong_model_1=[])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client(max_attempts=2)
+
+    with pytest.raises(openai.APIConnectionError) as raised:
+        ask(llm)
+
+    assert not isinstance(raised.value, openai.APITimeoutError)
+    assert replies.models == ["bulk-model-1", "bulk-model-1"]
+
+
+@pytest.mark.parametrize(
+    ("status", "raised"),
+    [(401, openai.AuthenticationError), (403, openai.PermissionDeniedError)],
+)
+def test_a_key_problem_does_not_fall_back(
+    status: int, raised: type[Exception], net: respx.MockRouter
+) -> None:
+    replies = ByModel(bulk_model_1=[error(status)], strong_model_1=[])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client()
+
+    with pytest.raises(raised):
+        ask(llm)
+    assert replies.models == ["bulk-model-1"]
+
+
+def test_a_strong_request_that_fails_has_nothing_to_fall_back_to(net: respx.MockRouter) -> None:
+    replies = ByModel(strong_model_1=[error(400)])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client()
+
+    with pytest.raises(openai.BadRequestError):
+        ask(llm, tier="strong")
+    assert replies.models == ["strong-model-1"]
+
+
+def test_fallback_false_turns_it_off(net: respx.MockRouter) -> None:
+    replies = ByModel(bulk_model_1=[error(400)], strong_model_1=[completion(VALID)])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client(fallback=False)
+
+    with pytest.raises(openai.BadRequestError):
+        ask(llm)
+    assert replies.models == ["bulk-model-1"]
+
+
+def test_when_the_strong_model_fails_too_the_bulk_error_is_raised(
+    net: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Callers see the failure they saw before the fallback existed (classify
+    catches only `LLMValidationError`); the strong error is noted on it."""
+    replies = ByModel(
+        bulk_model_1=[completion("not json"), completion("[]")],
+        strong_model_1=[error(503), error(503)],
+    )
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm, _ = client(max_attempts=2)
+
+    with (
+        caplog.at_level(logging.WARNING, logger="camsocs_pipeline.extract.llm"),
+        pytest.raises(LLMValidationError, match="bulk-model-1") as raised,
+    ):
+        ask(llm)
+
+    assert raised.value.__notes__ == ["Fallback to strong-model-1 failed too: InternalServerError"]
+    assert isinstance(raised.value.__context__, openai.InternalServerError)
+    assert replies.models == ["bulk-model-1"] * 2 + ["strong-model-1"] * 2
+    last = caplog.records[-1].getMessage()
+    assert "InternalServerError" in last and "status 503" not in last
+
+
+def test_an_interrupt_never_falls_back() -> None:
+    calls: list[str] = []
+
+    def interrupted(**kwargs: Any) -> Any:
+        calls.append(kwargs["model"])
+        raise KeyboardInterrupt
+
+    openai_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=interrupted))
+    )
+    llm, _ = client(client=openai_client)
+
+    with pytest.raises(KeyboardInterrupt):
+        ask(llm)
+    assert calls == ["bulk-model-1"]
+
+
+def test_the_fallback_never_waits_on_its_own_semaphore_slot(net: respx.MockRouter) -> None:
+    """With one slot, the strong request must still get it (no deadlock)."""
+    replies = ByModel(bulk_model_1=[error(400)], strong_model_1=[completion(VALID)])
+    net.post(COMPLETIONS).mock(side_effect=replies)
+    llm = LLMClient(llm_settings(concurrency=1), sleep=lambda _s: None)
+    result: list[Any] = []
+
+    def run() -> None:
+        result.append(ask(llm))
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout=10)
+
+    assert not worker.is_alive(), "the fallback deadlocked on the semaphore"
+    assert result[0].model == "strong-model-1"
 
 
 # --- vision -----------------------------------------------------------------------

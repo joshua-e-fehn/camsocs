@@ -132,6 +132,7 @@ def test_a_call_sends_one_generation_with_numbers_and_ids_only(net: respx.MockRo
         "promptVersion": "org_v1",
         "attempts": 1,
         "validationRetry": False,
+        "fallback": False,
         "$process_person_profile": False,
     }
     assert isinstance(generation["$ai_latency"], float) and generation["$ai_latency"] >= 0
@@ -169,7 +170,7 @@ def test_the_corrective_retry_is_a_second_generation(net: respx.MockRouter) -> N
     client = FakeClient()
 
     with pytest.raises(LLMValidationError):
-        llm(telemetry=enabled(client)).complete_json(
+        llm(telemetry=enabled(client), fallback=False).complete_json(
             schema=Society, messages=messages(), prompt_version="org_v1"
         )
 
@@ -186,7 +187,7 @@ def test_an_error_sends_the_status_and_class_but_no_error_text(net: respx.MockRo
     client = FakeClient()
 
     with pytest.raises(openai.BadRequestError, match="context length"):
-        llm(telemetry=enabled(client)).complete_json(
+        llm(telemetry=enabled(client), fallback=False).complete_json(
             schema=Society, messages=messages(), prompt_version="org_v1"
         )
 
@@ -209,6 +210,45 @@ def test_a_transport_failure_has_no_status(net: respx.MockRouter) -> None:
     (generation,) = generations(client)
     assert "$ai_http_status" not in generation and generation["$ai_is_error"] is True
     assert generation["errorType"] == "APIConnectionError" and generation["attempts"] == 2
+    assert_private(client)
+
+
+def test_a_fallback_is_reported_as_strong_generations_with_the_flag(
+    net: respx.MockRouter,
+) -> None:
+    """ENG-23: the failed bulk request is its own generation; the strong
+    request it falls back to carries tier `strong` and `fallback: true`, and
+    nothing else a generation did not already carry."""
+    net.post(COMPLETIONS).mock(
+        side_effect=[
+            httpx.Response(400, json={"error": {"message": SERVER_TEXT}}),
+            completion(json.dumps({"also": REPLY_SECRET})),
+            completion(json.dumps({"name": REPLY_SECRET})),
+        ]
+    )
+    client = FakeClient()
+
+    call = llm(telemetry=enabled(client)).complete_json(
+        schema=Society, messages=messages(), prompt_version="org_v1"
+    )
+
+    assert (call.model, call.fallback_from) == ("strong-model-1", "bulk-model-1")
+    bulk, strong, strong_retry = generations(client)
+    assert (bulk["$ai_model"], bulk["tier"], bulk["fallback"]) == ("bulk-model-1", "bulk", False)
+    assert bulk["errorType"] == "BadRequestError" and bulk["$ai_http_status"] == 400
+    for generation, retried in ((strong, False), (strong_retry, True)):
+        assert generation["$ai_model"] == "strong-model-1" and generation["tier"] == "strong"
+        assert generation["fallback"] is True and generation["validationRetry"] is retried
+        assert generation["$ai_is_error"] is False and "errorType" not in generation
+    # The same keys as any successful generation: the flag is all that is new.
+    plain = FakeClient()
+    net.post(COMPLETIONS).mock(side_effect=None, return_value=completion('{"name": "ok"}'))
+    llm(telemetry=enabled(plain)).complete_json(
+        schema=Society, messages=messages(), prompt_version="org_v1"
+    )
+    (ordinary,) = generations(plain)
+    assert set(strong) == set(ordinary)
+    assert ALLOWED[AI_GENERATION] - set(ordinary) == {"errorType"}
     assert_private(client)
 
 

@@ -93,7 +93,7 @@ Per-source detail lives in `docs/source-research.md`. Each harvester gets its ow
 **LLM**
 - cliproxy (`https://cliproxy.mymya.cloud/v1`, OpenAI-compatible; the VPS runner calls it on the host's loopback, `http://127.0.0.1:8317/v1`, with a key of its own, D5), Codex models only:
   - `gpt-6-luna` for bulk work;
-  - `gpt-6.1-sol` for images and hard or conflicting cases.
+  - `gpt-6.1-sol` for images and hard or conflicting cases, and as the one fallback for a bulk request that failed (ENG-23).
 - The client has a hard guard that refuses any `claude*` model.
 - No proactive throttling. Joshua is fine with exhausting the weekly Pro quota.
 - On HTTP 429 or 5xx, back off and resume.

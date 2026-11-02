@@ -290,7 +290,7 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
 | `CAMSOCS_ENV_FILE` | A second env file read on top of `pipeline/.env` (as `--env <name>` reads `pipeline/.env.<name>`); environment only, never in an env file |
 | `PIPELINE_API_KEY` | Bearer key; must equal `PIPELINE_API_KEY` on the Convex deployment |
 | `LLM_BASE_URL`, `LLM_API_KEY` | OpenAI-compatible endpoint |
-| `LLM_MODEL_BULK`, `LLM_MODEL_STRONG` | Model ids; any id starting with `claude` is refused |
+| `LLM_MODEL_BULK`, `LLM_MODEL_STRONG` | Model ids; any id containing `claude` or `anthropic` is refused. A bulk request that fails (a reply that never validates, retries exhausted on 429/5xx/timeouts, an HTTP error other than 401/403) is asked once more on the strong model (ENG-23, `extract/llm.py`); a connection failure, 401/403 or a strong request never falls back |
 | `LLM_CONCURRENCY` | Parallel LLM calls (default 8) |
 | `CAMSOCS_USER_AGENT` | Honest crawler User-Agent with a contact URL, `camsocs-bot/0.1 (+https://camsocs.uk/about)`; browser-like strings and any email address are refused |
 | `CAMSOCS_CACHE_DIR` | Raw response cache (default `<repo>/var/cache`) |
