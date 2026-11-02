@@ -245,6 +245,11 @@ export function directoryCursor(state: DirectoryState): string {
  * dates are reached by moving the anchor. */
 export const MAX_LIST_WEEKS = 8
 
+/** Whose events `/events` lists (ENG-24): everything, societies' and clubs'
+ * only, or the University's own listings only (`?university=hide|only`). */
+export const UNIVERSITY_VIEWS = ["all", "hide", "only"] as const
+export type UniversityView = (typeof UNIVERSITY_VIEWS)[number]
+
 export type EventsState = {
   view: CalendarView
   /** The day the view is anchored on; today (London) when absent. */
@@ -265,6 +270,11 @@ export type EventsState = {
   /** Whether events societies only take part in (decision D6: someone else's
    * CTF, conference or fair) are listed. Off by default; `?external=show`. */
   takingPart: boolean
+  /** `all` (the default) lists the University's own listings beside the
+   * societies' (ENG-24); `hide` leaves them out; `only` lists nothing else,
+   * and then no category, college or society filter applies (they match
+   * through organiser cards, which a University listing has none of). */
+  university: UniversityView
   /** The event whose details are open. */
   event?: string
 }
@@ -276,6 +286,7 @@ export const EMPTY_EVENTS: EventsState = {
   eventTypes: [],
   collegeKeys: [],
   takingPart: false,
+  university: "all",
 }
 
 export function isEventKey(value: string): boolean {
@@ -289,6 +300,10 @@ export function parseEventsParams(params: SearchParams): EventsState {
   const weeks = Number.parseInt(firstParam(params, "weeks") ?? "1", 10)
   const org = firstParam(params, "org")
   const event = firstParam(params, "event")
+  const university = UNIVERSITY_VIEWS.find((view) => view === firstParam(params, "university"))
+  // The University view has no organiser cards to filter by: those filters
+  // are dropped rather than left to list nothing.
+  const only = university === "only"
   return {
     view: (CALENDAR_VIEWS as readonly string[]).includes(view ?? "")
       ? (view as CalendarView)
@@ -297,12 +312,13 @@ export function parseEventsParams(params: SearchParams): EventsState {
     preset: isDatePreset(preset) ? preset : undefined,
     weeks: Number.isFinite(weeks) && weeks >= 1 ? Math.min(weeks, MAX_LIST_WEEKS) : 1,
     q: query(params),
-    categories: oneOf(params, "cat", CATEGORIES),
+    categories: only ? [] : oneOf(params, "cat", CATEGORIES),
     eventTypes: oneOf(params, "type", EVENT_TYPES),
-    collegeKeys: orgKeys(params, "college"),
-    org: org && isOrgSlug(org) ? org : undefined,
+    collegeKeys: only ? [] : orgKeys(params, "college"),
+    org: !only && org && isOrgSlug(org) ? org : undefined,
     // `hide` (the old opt-out) and anything else leave them out.
     takingPart: firstParam(params, "external") === "show",
+    university: university ?? "all",
     event: event && isEventKey(event) ? event : undefined,
   }
 }
@@ -319,6 +335,7 @@ export function serializeEventsState(state: EventsState): string {
     ["college", [...state.collegeKeys].sort()],
     ["org", state.org],
     ["external", state.takingPart ? "show" : undefined],
+    ["university", state.university === "all" ? undefined : state.university],
     ["event", state.event],
   ])
 }
@@ -330,14 +347,16 @@ export function eventsHref(state: EventsState): string {
 
 /** How many filters (not the text query, the dates or the open event) are on.
  * Including the events societies take part in counts: it widens the list,
- * but it is a choice the reader made and may want to undo. */
+ * but it is a choice the reader made and may want to undo. So does a
+ * University switch away from "All". */
 export function activeEventFilterCount(state: EventsState): number {
   return (
     state.categories.length +
     state.eventTypes.length +
     state.collegeKeys.length +
     (state.org ? 1 : 0) +
-    (state.takingPart ? 1 : 0)
+    (state.takingPart ? 1 : 0) +
+    (state.university === "all" ? 0 : 1)
   )
 }
 
@@ -395,6 +414,7 @@ export function eventListArgs(
     collegeKeys: state.collegeKeys.length > 0 ? state.collegeKeys : undefined,
     orgKey: state.org ? `org-${state.org}` : undefined,
     includeTakingPart: state.takingPart ? undefined : false,
+    university: state.university === "all" ? undefined : state.university,
   })
 }
 

@@ -33,6 +33,7 @@ const listed: EventListItem = {
   source: "google_calendar",
   hosting: "takes_part",
   externalUrl: "https://ctf.deadface.io/",
+  fromUniversity: false,
 }
 
 const details: EventPublic = {
@@ -109,6 +110,42 @@ describe("events societies take part in (D6)", () => {
     )
     expect(sheet.textContent).not.toContain("takes part")
     expect(sheet.textContent).toContain("Cyber Security Society")
+  })
+})
+
+describe("the University's own listings (ENG-24)", () => {
+  // An invented listing from the University's public events programme.
+  const university: EventListItem = {
+    ...listed,
+    key: `evt-${"d".repeat(40)}`,
+    title: "Lantern lecture",
+    organisers: [],
+    eventType: "talk",
+    source: "uni_events_api",
+    sourceUrl: "https://events.example.ac.uk/whats-on/lantern-lecture",
+    hosting: "hosts",
+    externalUrl: undefined,
+    fromUniversity: true,
+  }
+
+  test("a list item names the University and carries the badge", async () => {
+    const row = await render(<EventRow event={university} href="/events" />)
+    expect(row.textContent).toContain("University of Cambridge")
+    expect(row.textContent).toContain("University")
+    expect(row.textContent).not.toContain("Taking part")
+    const chip = await render(<EventChip event={university} href="/events" />)
+    expect(chip.querySelector("[aria-label='Listed by the University']")).not.toBeNull()
+  })
+
+  test("the details say the University lists it, with no society link", async () => {
+    const sheet = await render(
+      <EventDetails event={{ ...details, ...university, meta: {} }} pageUrl={PAGE} />,
+    )
+    expect(sheet.textContent).toContain("University of Cambridge")
+    expect(sheet.textContent).toContain("From its public events programme")
+    expect(sheet.textContent).toContain("Listed by")
+    expect(sheet.textContent).not.toContain("Organiser")
+    expect(sheet.querySelector("a[href^='/societies/']")).toBeNull()
   })
 })
 

@@ -6,6 +6,7 @@ import {
   classifyEmail,
   DAY_MS,
   deriveOrgStatus,
+  isUniversityListing,
   londonIsoDate,
   londonOffsetMs,
   nextHandoverDate,
@@ -161,5 +162,20 @@ describe("orgSearchText", () => {
     expect(text).toBe(
       "cu german society · german soc · cugs · stammtisch and films · film nights · cultural & international",
     )
+  })
+})
+
+describe("isUniversityListing (ENG-24)", () => {
+  const listing = { source: "uni_events_api", organiserKeys: [], coHostKeys: [] }
+
+  test("a University programme event credited to no student group", () => {
+    expect(isUniversityListing(listing)).toBe(true)
+  })
+
+  test("not once a society organises or co-hosts it, nor from any other source", () => {
+    expect(isUniversityListing({ ...listing, organiserKeys: ["org-chess"] })).toBe(false)
+    expect(isUniversityListing({ ...listing, coHostKeys: ["org-chess"] })).toBe(false)
+    expect(isUniversityListing({ ...listing, source: "ics" })).toBe(false)
+    expect(isUniversityListing({ ...listing, source: "talks_cam" })).toBe(false)
   })
 })

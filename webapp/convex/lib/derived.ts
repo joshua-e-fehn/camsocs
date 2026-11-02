@@ -131,6 +131,29 @@ export function isWithdrawn(
   )
 }
 
+// --- University events ---------------------------------------------------------------------
+
+/**
+ * Whether an event is the University's own listing (ENG-24): read from the
+ * University of Cambridge's public events programme (`uni_events_api`) and
+ * credited to no student group as organiser or co-host. Such an event is
+ * shown as "University of Cambridge" and is what the calendar's University
+ * switch selects. Derived from the stored row in the public projection,
+ * never stored: an event the pipeline later credits to a society stops
+ * being one at its next read.
+ */
+export function isUniversityListing(event: {
+  source: string
+  organiserKeys: readonly string[]
+  coHostKeys: readonly string[]
+}): boolean {
+  return (
+    event.source === "uni_events_api" &&
+    event.organiserKeys.length === 0 &&
+    event.coHostKeys.length === 0
+  )
+}
+
 // --- organisation status --------------------------------------------------------------------
 
 type RegistrationLike = { registered: boolean; year?: string }

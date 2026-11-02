@@ -97,7 +97,7 @@ export default function PrivacyPage() {
           role or a neutral phrase, for example “contact our President”. The original wording is
           kept privately, with the record of where each fact came from, for as long as the listing
           exists. Speakers announced for public talks are shown by name, as the organiser published
-          them.
+          them, and so are speakers named in the titles of the University’s public events programme.
         </p>
         <h3>Speakers at academic talks (public)</h3>
         <p>
@@ -277,8 +277,9 @@ export default function PrivacyPage() {
           <li>Google (sign-in for the operator only);</li>
           <li>
             OpenAI, through a relay server the operator rents, which provides the AI model that
-            extracts facts from public pages and mailing-list messages and replaces names in
-            descriptions with roles. Talk listings are never sent to it.
+            extracts facts from public pages, the University of Cambridge’s public events programme
+            (with its permission) and mailing-list messages, and replaces names in descriptions with
+            roles. Talk listings from talks.cam and departments are never sent to it.
           </li>
           <li>
             PostHog (analytics and error reports), on its EU Cloud: the data is stored in the EU, in

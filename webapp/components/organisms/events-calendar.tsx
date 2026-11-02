@@ -86,6 +86,7 @@ import {
   MAX_LIST_WEEKS,
   parseEventsParams,
   type SearchParams,
+  type UniversityView,
 } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 import { CATEGORIES, CATEGORY_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/vocab"
@@ -107,6 +108,16 @@ const PRESET_PHRASES: Record<DatePreset, string> = {
 }
 /** "Search the next N weeks" from an empty search. */
 const SEARCH_WEEKS = 4
+/** Whose events are listed (ENG-24): the switch's words, and the applied
+ * chip's for a choice other than "All". */
+const UNIVERSITY_OPTIONS: { value: UniversityView; label: string; chip: string }[] = [
+  { value: "all", label: "All", chip: "All events" },
+  { value: "hide", label: "Societies & clubs", chip: "Societies & clubs only" },
+  { value: "only", label: "University", chip: "University only" },
+]
+/** Why the University view greys out the organiser filters. */
+const NO_ORGANISER_FILTERS =
+  "Category, college and society filters don’t apply to the University’s listings: they aren’t linked to a society here."
 
 function searchParamsObject(params: URLSearchParams): SearchParams {
   const out: SearchParams = {}
@@ -144,6 +155,38 @@ function PuntMark() {
         strokeWidth="2"
       />
     </svg>
+  )
+}
+
+/** "All · Societies & clubs · University" (ENG-24): whose events the
+ * calendar lists. The University's own listings are in by default. */
+function UniversitySwitch({
+  value,
+  onChange,
+  className,
+}: {
+  value: UniversityView
+  onChange: (next: UniversityView) => void
+  className?: string
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => next && onChange(next as UniversityView)}
+      aria-label="Whose events"
+      className={cn("rounded-full border bg-card p-0.5", className)}
+    >
+      {UNIVERSITY_OPTIONS.map((option) => (
+        <ToggleGroupItem
+          key={option.value}
+          value={option.value}
+          className="h-11 rounded-full px-3.5 text-[13px] whitespace-nowrap data-[state=on]:bg-foreground data-[state=on]:text-background sm:h-8"
+        >
+          {option.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   )
 }
 
@@ -300,10 +343,14 @@ export function EventsCalendar({
   const args = eventListArgs(state, window_)
   const loaded = useEventWindow(args, preloadedEvents)
   const stale = loaded.stale
-  const camOnly = useRestrictedCount(
-    preloadedRestricted ? eventRestrictedArgs(args) : "skip",
+  // The University view never lists a Cambridge-only event (its listings are
+  // all public), so signing in would add nothing there: no count, no prompt.
+  const universityView = state.university === "only"
+  const restricted = useRestrictedCount(
+    preloadedRestricted && !universityView ? eventRestrictedArgs(args) : "skip",
     preloadedRestricted ?? undefined,
   )
+  const camOnly = universityView ? undefined : restricted
   const all = loaded.data ?? []
   const matching = useMemo(
     () => all.filter((event) => matchesEventQuery(event, state.q)),
@@ -478,6 +525,17 @@ export function EventsCalendar({
           },
         ]
       : []),
+    ...(state.university !== "all"
+      ? [
+          {
+            key: "university",
+            label:
+              UNIVERSITY_OPTIONS.find((option) => option.value === state.university)?.chip ??
+              state.university,
+            onRemove: () => apply({ ...base, university: "all" }),
+          },
+        ]
+      : []),
   ]
   const quick: QuickChip[] = [
     ...(!state.takingPart
@@ -507,7 +565,17 @@ export function EventsCalendar({
       eventTypes: [],
       collegeKeys: [],
       takingPart: false,
+      university: "all",
     })
+  /** The University view lists no society's events: the organiser filters go. */
+  const pickUniversity = (university: UniversityView) =>
+    apply(
+      university === "only"
+        ? { ...base, university, categories: [], collegeKeys: [], org: undefined }
+        : { ...base, university },
+      { scroll: true },
+    )
+  const universityOnly = state.university === "only"
   const pickOrg = (next: OrgRef | null, from: EventsState) => {
     if (next) setKnownOrgs((known) => ({ ...known, [next.slug]: next }))
     return { ...from, org: next?.slug }
@@ -575,6 +643,7 @@ export function EventsCalendar({
           collegeKeys: [],
           org: undefined,
           takingPart: false,
+          university: "all",
         })
       }
       clearDisabled={activeEventFilterCount(draft) === 0}
@@ -587,21 +656,46 @@ export function EventsCalendar({
           onToggle={(value, on) => setDraft(toggle(draft, "eventTypes", value, on))}
         />
         <FacetChips
-          legend="Society category"
-          options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
-          selected={draft.categories}
-          onToggle={(value, on) => setDraft(toggle(draft, "categories", value, on))}
+          legend="Whose events"
+          options={UNIVERSITY_OPTIONS.map(({ value, label }) => ({ value, label }))}
+          selected={[draft.university]}
+          onToggle={(value, on) => {
+            const university = (on ? value : "all") as UniversityView
+            setDraft(
+              university === "only"
+                ? { ...draft, university, categories: [], collegeKeys: [], org: undefined }
+                : { ...draft, university },
+            )
+          }}
         />
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-            Society
-          </legend>
-          <OrgPicker
-            value={draftOrg}
-            label="Society"
-            placeholder="Any society"
-            onChange={(next) => setDraft(pickOrg(next, draft))}
+        {/* The reason sits outside the dimmed fieldset: only the controls fade. */}
+        {draft.university === "only" && (
+          <p id="no-organiser-filters" className="-mb-4 text-sm text-muted-foreground">
+            {NO_ORGANISER_FILTERS}
+          </p>
+        )}
+        <fieldset
+          disabled={draft.university === "only"}
+          aria-describedby={draft.university === "only" ? "no-organiser-filters" : undefined}
+          className="flex flex-col gap-7 disabled:opacity-60"
+        >
+          <FacetChips
+            legend="Society category"
+            options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+            selected={draft.categories}
+            onToggle={(value, on) => setDraft(toggle(draft, "categories", value, on))}
           />
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              Society
+            </legend>
+            <OrgPicker
+              value={draftOrg}
+              label="Society"
+              placeholder="Any society"
+              onChange={(next) => setDraft(pickOrg(next, draft))}
+            />
+          </fieldset>
         </fieldset>
         <FacetChips
           legend="Someone else’s events"
@@ -609,12 +703,18 @@ export function EventsCalendar({
           selected={draft.takingPart ? ["show"] : []}
           onToggle={(_, on) => setDraft({ ...draft, takingPart: on })}
         />
-        <FacetChips
-          legend="College"
-          options={colleges.map((college) => ({ value: college.key, label: college.name }))}
-          selected={draft.collegeKeys}
-          onToggle={(value, on) => setDraft(toggle(draft, "collegeKeys", value, on))}
-        />
+        <fieldset
+          disabled={draft.university === "only"}
+          aria-describedby={draft.university === "only" ? "no-organiser-filters" : undefined}
+          className="disabled:opacity-60"
+        >
+          <FacetChips
+            legend="College"
+            options={colleges.map((college) => ({ value: college.key, label: college.name }))}
+            selected={draft.collegeKeys}
+            onToggle={(value, on) => setDraft(toggle(draft, "collegeKeys", value, on))}
+          />
+        </fieldset>
       </div>
     </FilterSheet>
   )
@@ -625,7 +725,20 @@ export function EventsCalendar({
     const day = londonIsoDate(event.startsAt)
     return day >= window_.shown.first && day <= window_.shown.last
   })
-  const societies = new Set(onShown.flatMap((event) => event.organisers.map((o) => o.key))).size
+  // Societies are counted from the student groups credited; the University's
+  // own listings (no organiser) are counted apart (ENG-24).
+  const societies = new Set(
+    onShown.filter((event) => !event.fromUniversity).flatMap((e) => e.organisers.map((o) => o.key)),
+  ).size
+  const fromUniversity = onShown.filter((event) => event.fromUniversity).length
+  // "from 12 societies and clubs · 4 from the University" (ENG-24).
+  const whose = universityOnly
+    ? " in the University’s public events programme"
+    : societies > 0
+      ? ` from ${plural(societies, "society", "societies")} and clubs${fromUniversity > 0 ? ` · ${fromUniversity} from the University` : ""}`
+      : fromUniversity > 0
+        ? `, ${fromUniversity} from the University`
+        : ""
   const spanText =
     window_.shown.first === window_.shown.last
       ? formatDayShort(window_.shown.first)
@@ -641,10 +754,14 @@ export function EventsCalendar({
   // the new one's ("61 events for the rest of term" was one week's).
   const headline =
     loading || stale
-      ? "What Cambridge societies and clubs have published: socials, shows, matches, formals and more."
+      ? universityOnly
+        ? "What the University of Cambridge lists in its public events programme: talks, exhibitions, tours and more."
+        : "What Cambridge societies and clubs have published: socials, shows, matches, formals and more."
       : list
-        ? `${plural(onShown.length, "event", "events")} ${when}${societies > 0 ? ` from ${plural(societies, "society", "societies")} and clubs` : ""}.`
-        : "Socials, shows, matches and formals from Cambridge societies and clubs, a week or a month at a glance."
+        ? `${plural(onShown.length, "event", "events")} ${when}${whose}.`
+        : universityOnly
+          ? "The University of Cambridge’s public events, a week or a month at a glance."
+          : "Socials, shows, matches and formals from Cambridge societies and clubs, a week or a month at a glance."
   const anchor = state.date ?? today
   const nextWeekFirst = addDays(window_.shown.last, 1)
   const showsTalks = state.eventTypes.includes("talk")
@@ -699,6 +816,10 @@ export function EventsCalendar({
                   <>
                     Events from <span className="text-events">{org.name}</span>
                   </>
+                ) : universityOnly ? (
+                  <>
+                    Events from <span className="text-events">the University</span>
+                  </>
                 ) : (
                   <>
                     Events<span className="text-events">.</span>
@@ -711,6 +832,11 @@ export function EventsCalendar({
               >
                 {headline}
               </p>
+              <UniversitySwitch
+                value={state.university}
+                onChange={pickUniversity}
+                className="mt-1 self-start"
+              />
             </div>
             <Link
               href="/talks"
@@ -766,27 +892,35 @@ export function EventsCalendar({
                 selected={state.eventTypes}
                 onToggle={(value, on) => apply(toggle(base, "eventTypes", value, on))}
               />
-              <FacetPopover
-                label="Category"
-                accent="events"
-                options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
-                selected={state.categories}
-                onToggle={(value, on) => apply(toggle(base, "categories", value, on))}
-              />
-              <FacetPopover
-                label="College"
-                accent="events"
-                options={colleges.map((college) => ({ value: college.key, label: college.name }))}
-                selected={state.collegeKeys}
-                onToggle={(value, on) => apply(toggle(base, "collegeKeys", value, on))}
-              />
-              <OrgPicker
-                className="w-44 [&_button]:rounded-full [&_button]:bg-card"
-                value={org}
-                label="Society"
-                placeholder="Any society"
-                onChange={(next) => apply(pickOrg(next, base))}
-              />
+              {/* The University view has no organiser cards to filter by. */}
+              <fieldset
+                disabled={universityOnly}
+                title={universityOnly ? NO_ORGANISER_FILTERS : undefined}
+                className="flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <legend className="sr-only">Society filters</legend>
+                <FacetPopover
+                  label="Category"
+                  accent="events"
+                  options={CATEGORIES.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+                  selected={state.categories}
+                  onToggle={(value, on) => apply(toggle(base, "categories", value, on))}
+                />
+                <FacetPopover
+                  label="College"
+                  accent="events"
+                  options={colleges.map((college) => ({ value: college.key, label: college.name }))}
+                  selected={state.collegeKeys}
+                  onToggle={(value, on) => apply(toggle(base, "collegeKeys", value, on))}
+                />
+                <OrgPicker
+                  className="w-44 [&_button]:rounded-full [&_button]:bg-card"
+                  value={org}
+                  label="Society"
+                  placeholder="Any society"
+                  onChange={(next) => apply(pickOrg(next, base))}
+                />
+              </fieldset>
               <button
                 type="button"
                 aria-pressed={state.takingPart}
@@ -812,6 +946,9 @@ export function EventsCalendar({
             quick={quick}
             onClear={applied.length > 0 || state.q ? clearAll : undefined}
           />
+          {universityOnly && (
+            <p className="hidden text-xs text-muted-foreground lg:block">{NO_ORGANISER_FILTERS}</p>
+          )}
           {applied.length > 0 && (
             <FilterChipStrip
               className="hidden lg:flex"
@@ -952,8 +1089,9 @@ export function EventsCalendar({
               <p className="mt-3 flex gap-3 rounded-2xl border border-talks/40 bg-talks-tint/50 px-4 py-3 text-sm">
                 <span aria-hidden className="mt-1 size-2 shrink-0 rounded-full bg-talks" />
                 <span>
-                  These are talks societies run. For department seminars and lectures across
-                  Cambridge, by School and department, see{" "}
+                  These are talks societies run and talks in the University’s public events
+                  programme. For department seminars and lectures across Cambridge, by School and
+                  department, see{" "}
                   <Link
                     href="/talks"
                     className="font-medium text-talks underline underline-offset-4"
@@ -1034,6 +1172,7 @@ export function EventsCalendar({
                 onClear={clearAll}
                 onNextWeek={extendWeek}
                 canExtend={state.weeks < MAX_LIST_WEEKS}
+                universityOnly={universityOnly}
               />
             ) : (
               <div className="flex flex-col">
@@ -1151,7 +1290,8 @@ export function EventsCalendar({
             <p className="mt-10 flex flex-wrap gap-x-1 text-xs text-muted-foreground">
               <span>
                 Times are UK time. Events come from societies’ own calendars, listings and mailing
-                lists; each shows its source.
+                lists, and from the University of Cambridge’s public events programme; each shows
+                its source.
               </span>
               {state.takingPart ? (
                 <span>
@@ -1286,6 +1426,7 @@ function EmptyEvents({
   onClear,
   onNextWeek,
   canExtend,
+  universityOnly,
 }: {
   q?: string
   chips: AppliedChip[]
@@ -1297,23 +1438,28 @@ function EmptyEvents({
   onClear: () => void
   onNextWeek: () => void
   canExtend: boolean
+  universityOnly: boolean
 }) {
   const filtered = chips.length > 0 || Boolean(q)
+  // The University view alone is a scope, not a filter that came up empty.
+  const justUniversity = universityOnly && chips.length === 1 && !q
   return (
     <div className="mt-4 flex flex-col items-center gap-5 rounded-2xl border border-dashed px-6 py-12 text-center">
       <PuntMark />
       <div className="flex max-w-md flex-col gap-1.5">
         <h2 className="font-serif text-2xl font-normal">
-          {filtered
+          {filtered && !justUniversity
             ? "Nothing on with those"
             : `Nothing on${termTag ? ` — unusual for ${termTag.replace(" · ", " ")}` : ""}`}
         </h2>
         <p className="text-sm text-muted-foreground">
           {q
-            ? `No event on these days has “${q}” in its title, society or venue.`
-            : filtered
-              ? "No event on these days matches all of these. Drop a filter, or look further ahead."
-              : "No society has listed anything for these days yet. Calendars are added as their feeds are found."}
+            ? `No event on these days has “${q}” in its title, organiser or venue.`
+            : justUniversity
+              ? "The University’s public events programme lists nothing for these days."
+              : filtered
+                ? "No event on these days matches all of these. Drop a filter, or look further ahead."
+                : "No society has listed anything for these days yet. Calendars are added as their feeds are found."}
         </p>
       </div>
       <div className="flex max-w-xl flex-wrap justify-center gap-2">
