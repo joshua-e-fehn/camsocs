@@ -700,6 +700,9 @@ def test_the_registry_is_valid_and_only_lists_readable_sources() -> None:
     registry = load_registry()
     assert len(registry) >= 100
     assert set(sites.PARSERS) == set(SOURCE_KINDS)
+    # talks.cam has its own stage and never reaches a model; the University's
+    # events programme (webservices.admin) belongs to the uni_events stage
+    # (§10), so the talks registry never reads it a second time.
     banned = ("talks.cam.ac.uk", "calendar.google.com", "events.cam.ac.uk", "webservices.admin")
     for department in registry:
         assert department.sources or department.talks_cam_list_ids, department.key

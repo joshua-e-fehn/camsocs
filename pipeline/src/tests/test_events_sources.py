@@ -478,17 +478,19 @@ class TestUniEvents:
         assert uni_events.match_society(event("Department of Physics open day"), names) is None
         assert uni_events.match_society(event("Chess for all"), names) is None
 
-    def test_robots_txt_blocks_the_feed_and_nothing_is_fetched(
+    def test_the_feed_is_read_with_its_recorded_permission(
         self, ctx: StageContext, net: respx.MockRouter
     ) -> None:
+        # robots.txt disallows everything; the recorded permission (D3a)
+        # covers the events API, so the feed is read once.
         allow(net, "https://webservices.admin.cam.ac.uk", "User-agent: *\nDisallow: /\n")
-        feed = net.get(url__startswith="https://webservices.admin.cam.ac.uk/events/").respond(200)
+        feed = net.get(uni_events.FEED_URL).respond(200, content=b"not a calendar")
 
         uni_events.run(ctx, window=WINDOW, now=NOW)
 
-        assert feed.call_count == 0
-        assert any("disallowed_by_robots" in note for note in ctx.report.notes)
-        assert staged(ctx, "uni_events_api.events") == []
+        assert feed.call_count == 1
+        assert not any("disallowed_by_robots" in note for note in ctx.report.notes)
+        assert any("unreadable feed" in note for note in ctx.report.notes)
 
 
 # --- society calendar feeds (§11) ----------------------------------------------------------------

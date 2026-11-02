@@ -320,10 +320,17 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
   site as a society's website, or a robots.txt that could not be reached. A declared class
   is bound to the site it was declared for (`FetchPurpose.bound_to`): a redirect or a
   linked file on another domain keeps that host's rules.
-  webservices.admin.cam.ac.uk, Instagram, Facebook and LinkedIn are never fetched. An
-  overridden fetch carries `FetchResult.override` = `robots_override:society` (also in its
-  cache entry and its `sources` row's `accessNote`); the cache never serves it to a general
-  fetch.
+  **Recorded permission (decision D3a).** Paths a publisher let us read in writing
+  (`policy.RECORDED_PERMISSIONS`: the University's events API `/events/api/` and event
+  images `/events/uploadedImages/` on webservices.admin.cam.ac.uk, granted 2026-11-02 by
+  University Information Services and the Office of External Affairs and Communications)
+  may be read whatever the purpose, and their text may reach the model; every other path on
+  that host keeps its robots.txt. Instagram, Facebook and LinkedIn are never fetched. An
+  overridden fetch carries `FetchResult.override` = `robots_override:society` or
+  `robots_override:permission` (`policy.robots_override_note`; also in its cache entry and
+  its `sources` row's `accessNote`); the cache never serves a society override's copy to a
+  general fetch. `fetch(…, store=False)` keeps a body out of the raw cache (the University's
+  programme list, which names staff contacts).
 - One request in flight per host, at least `CAMSOCS_MIN_HOST_INTERVAL` apart; different hosts
   may run concurrently.
 - **Public addresses only.** A host is resolved before every request (robots.txt and each

@@ -14,6 +14,9 @@ from camsocs_pipeline.sources.policy import (
     AI_OVERRIDE_NOTE,
     COLLEGE_SOCIETY_LIST,
     GENERAL,
+    PERMISSION_AI_NOTE,
+    PERMISSION_ROBOTS_NOTE,
+    RECORDED_PERMISSIONS,
     ROBOTS_OVERRIDE_NOTE,
     SOCIETY,
     SOCIETY_WEBSITE,
@@ -21,7 +24,9 @@ from camsocs_pipeline.sources.policy import (
     ai_optout_override,
     is_general_host,
     never_fetched,
+    permission_for,
     robots_override,
+    robots_override_note,
     society_class,
     url_class_of,
 )
@@ -71,7 +76,6 @@ COLLEGE_LIST = "https://www.chu.cam.ac.uk/student-life/clubs-and-societies/"
         ("https://talks.cam.ac.uk/show/xml/201664", None, None, None, None),
         ("https://tbc.xyz/events", None, None, None, None),
         # Never fetched at all.
-        ("https://webservices.admin.cam.ac.uk/events/api/x.ics", None, None, None, None),
         ("https://www.instagram.com/cuchess/", None, None, None, None),
         ("https://www.facebook.com/cuchess", None, None, None, None),
         ("https://www.linkedin.com/company/cuchess/", None, None, None, None),
@@ -79,6 +83,13 @@ COLLEGE_LIST = "https://www.chu.cam.ac.uk/student-life/clubs-and-societies/"
         # other networks and link shorteners.
         ("https://www.cam.ac.uk/colleges-and-departments/college-a-z", None, None, None, None),
         ("https://www.admin.cam.ac.uk/whatson/", None, None, None, None),
+        (
+            "https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html",
+            None,
+            None,
+            None,
+            None,
+        ),
         ("https://www.sport.cam.ac.uk/university-sports-clubs-0/fencing", None, None, None, None),
         ("https://www.google.com/search?q=cu+chess", None, None, None, None),
         ("https://duckduckgo.com/?q=cu+chess", None, None, None, None),
@@ -104,6 +115,65 @@ def test_the_override_matrix(
         assert ai_optout_override(url, purpose) is expected
 
 
+UNI_API = "https://webservices.admin.cam.ac.uk/events/api"
+
+
+@pytest.mark.parametrize(
+    ("url", "permitted"),
+    [
+        (f"{UNI_API}/programmes.json", True),
+        (f"{UNI_API}/programmes/11/calendar/events.json?resultSetSize=20000", True),
+        (f"{UNI_API}/programmes/11/calendar/events.ics?resultSetSize=20000", True),
+        (f"{UNI_API}/programmes/652/calendar/events.json", True),
+        (f"{UNI_API}/images/guid/0000/show.json", True),
+        (
+            "https://webservices.admin.cam.ac.uk/events/uploadedImages/ab/image_1_x_very_large.jpg",
+            True,
+        ),
+        ("http://webservices.admin.cam.ac.uk/events/api/programmes.json", True),
+        # The rest of the host keeps its robots.txt.
+        ("https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html", False),
+        ("https://webservices.admin.cam.ac.uk/foo", False),
+        ("https://webservices.admin.cam.ac.uk/events/apix/programmes.json", False),
+        ("https://webservices.admin.cam.ac.uk/events/api/../../foo", False),
+        ("https://webservices.admin.cam.ac.uk/events/api/%2e%2e/foo", False),
+        # Exactly that host: not its parent, siblings or look-alikes.
+        ("https://www.admin.cam.ac.uk/events/api/programmes.json", False),
+        ("https://x.webservices.admin.cam.ac.uk/events/api/programmes.json", False),
+        ("https://webservices.admin.cam.ac.uk.example/events/api/programmes.json", False),
+        ("https://talks.cam.ac.uk/events/api/programmes.json", False),
+    ],
+)
+def test_a_recorded_permission_covers_its_paths_only(url: str, permitted: bool) -> None:
+    # Decision D3a: keyed by URL, not purpose, so a general fetch (and the
+    # load's image copy) may override too.
+    assert robots_override(url, GENERAL) is permitted
+    assert ai_optout_override(url, GENERAL) is permitted
+    assert robots_override_note(url, GENERAL) == (PERMISSION_ROBOTS_NOTE if permitted else None)
+    assert (permission_for(url, "fetch") is not None) is permitted
+    assert (permission_for(url, "ai_input") is not None) is permitted
+    assert never_fetched(url) is None
+    if url.startswith(("https://webservices.admin.cam.ac.uk/", "http://webservices.admin")):
+        # The host is a general one: no society class ever applies there.
+        for purpose in (GENERAL, SOCIETY, SOCIETY_WEBSITE, COLLEGE_SOCIETY_LIST):
+            assert society_class(url, purpose) is None
+            assert robots_override(url, purpose) is permitted
+            assert robots_override_note(url, purpose) == (
+                PERMISSION_ROBOTS_NOTE if permitted else None
+            )
+
+
+def test_the_university_permission_is_recorded_with_who_and_when() -> None:
+    (permission,) = RECORDED_PERMISSIONS
+    assert permission.host == "webservices.admin.cam.ac.uk"
+    assert permission.granted_on == "2026-11-02"
+    assert "University Information Services" in permission.granted_by
+    assert "Office of External Affairs and Communications" in permission.granted_by
+    assert permission.scope == {"fetch", "ai_input"}
+    assert robots_override_note(SOCIETY_SITE, SOCIETY_WEBSITE) == ROBOTS_OVERRIDE_NOTE
+    assert robots_override_note(SOCIETY_SITE, GENERAL) is None
+
+
 def test_url_classes_are_read_from_the_shape_of_the_url() -> None:
     assert url_class_of(SU_LOGO) == "su_asset"
     assert url_class_of("https://cambridgesu.co.uk/asset/Event/1/x.jpg") == "su_asset"
@@ -116,7 +186,6 @@ def test_url_classes_are_read_from_the_shape_of_the_url() -> None:
 @pytest.mark.parametrize(
     "url",
     [
-        "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json",
         "https://instagram.com/p/abc/",
         "https://m.facebook.com/cuchess",
         "https://uk.linkedin.com/company/x",
@@ -272,15 +341,62 @@ def test_never_fetched_hosts_are_refused_before_any_request(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
     client = make_client(tmp_path)
-    for url in (
-        "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.ics",
-        "https://www.instagram.com/cuchess/",
-    ):
-        for purpose in (GENERAL, SOCIETY, SOCIETY_WEBSITE):
-            result = client.fetch(url, purpose=purpose)
-            assert result.outcome == "disallowed_by_robots"
-            assert not client.allows(url, purpose)
+    url = "https://www.instagram.com/cuchess/"
+    for purpose in (GENERAL, SOCIETY, SOCIETY_WEBSITE):
+        result = client.fetch(url, purpose=purpose)
+        assert result.outcome == "disallowed_by_robots"
+        assert not client.allows(url, purpose)
+        assert not client.ai_input_allowed(url, purpose)
+    assert client.post_form(url, {"a": "b"}).outcome == "disallowed_by_robots"
     assert not net.calls
+
+
+def test_the_university_api_is_read_with_its_permission_and_says_so(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://webservices.admin.cam.ac.uk/robots.txt").respond(
+        200, text="User-agent: *\nDisallow: /\n"
+    )
+    feed_url = f"{UNI_API}/programmes/11/calendar/events.json?resultSetSize=20000"
+    feed = net.get(feed_url).respond(200, json={"results": {"list": []}})
+    docs = net.get("https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html")
+    clock = FakeClock()
+    client = make_client(tmp_path, clock)
+
+    first = client.fetch(feed_url)
+    again = client.fetch(feed_url, fresh_for=timedelta(days=1))
+    other = client.fetch("https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html")
+
+    assert first.outcome == "fetched" and first.override == PERMISSION_ROBOTS_NOTE
+    # Its cached copy serves any purpose (the permission is keyed by URL).
+    assert again.from_cache and again.override == PERMISSION_ROBOTS_NOTE
+    assert feed.call_count == 1
+    assert other.outcome == "disallowed_by_robots" and docs.call_count == 0
+    assert client.robots_verdict(feed_url) == "disallowed"
+    docs_url = "https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html"
+    assert client.allows(feed_url) and not client.allows(docs_url)
+    # The model may read the feed's text, nothing else on the host.
+    assert client.ai_input_allowed(feed_url)
+    assert not client.ai_input_allowed("https://webservices.admin.cam.ac.uk/foo")
+
+
+def test_a_response_fetched_without_storing_never_reaches_the_cache(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    net.get("https://webservices.admin.cam.ac.uk/robots.txt").respond(
+        200, text="User-agent: *\nDisallow: /\n"
+    )
+    listing = net.get(f"{UNI_API}/programmes.json").respond(200, json={"results": {}})
+    client = make_client(tmp_path)
+
+    first = client.fetch(f"{UNI_API}/programmes.json", store=False)
+    second = client.fetch(f"{UNI_API}/programmes.json", store=False, fresh_for=timedelta(days=1))
+
+    assert first.ok and second.ok and not second.from_cache
+    assert listing.call_count == 2
+    body, meta = client.cache_paths(f"{UNI_API}/programmes.json")
+    assert not body.exists() and not meta.exists()
+    assert client.cached(f"{UNI_API}/programmes.json") is None
 
 
 def test_a_redirect_hop_is_checked_against_its_own_host(
@@ -361,6 +477,8 @@ def test_ai_opt_outs_are_lifted_for_society_pages_only(
 def test_override_notes_are_distinct() -> None:
     assert ROBOTS_OVERRIDE_NOTE == "robots_override:society"
     assert AI_OVERRIDE_NOTE == "ai_optout_override:society"
+    assert PERMISSION_ROBOTS_NOTE == "robots_override:permission"
+    assert PERMISSION_AI_NOTE == "ai_optout_override:permission"
 
 
 def test_a_declared_class_belongs_to_the_site_it_was_declared_for() -> None:

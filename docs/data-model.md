@@ -346,7 +346,7 @@ These are never returned by public queries.
   | sourceType | vocab `SOURCE_TYPES` |
   | orgKey | string? |
   | httpStatus | number? |
-  | accessNote | string? — why a fetch failed, and the D3 fetch-policy overrides: `robots_override:society` (robots.txt disallowed the URL; read as a society page), `ai_optout_override:society` (its text reached the LLM despite an AI opt-out) |
+  | accessNote | string? — why a fetch failed, and the D3 fetch-policy overrides: `robots_override:society` (robots.txt disallowed the URL; read as a society page), `ai_optout_override:society` (its text reached the LLM despite an AI opt-out), and their `:permission` forms under a publisher's recorded permission (decision D3a: the University's events programme) |
   | contentSha256 | string? |
   | lastFetchedAt | number |
   | yielded | string[] |
