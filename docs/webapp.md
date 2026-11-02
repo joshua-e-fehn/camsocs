@@ -211,11 +211,19 @@ without a Convex call; a well-formed one costs one anonymous indexed query (`org
 `events.exists`, `talks.exists`, which share their test with `getBySlug` / `get`). A missing listing
 is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404; the
 `x-camsocs-missing-listing` request header makes it wrap the (site) frame around the talks
-not-found page for a talk and the site's own for the rest. Router prefetches, static siblings
-(`/talks/departments`; the unit test fails on a new one not listed) and non-GET requests pass
-unchecked, and a failed check lets the page answer, so an outage never 404s a real listing. A
-`cam_only` event exists for everyone: a visitor still gets its "not available, sign in" page (200).
-The pages keep their own `notFound()` as the fallback for a listing hidden since the check.
+not-found page for a talk and the site's own for the rest. Only the proxy can set that header: a
+last matcher entry catches any request that brings its own copy, and the proxy drops it. Router and
+browser prefetches skip the proxy in its matcher (`missing` header conditions: Next strips
+`next-router-prefetch` and `rsc` from the headers a proxy sees, so a check in code never fires).
+Static siblings (`/talks/departments`, or a metadata file such as `opengraph-image` in the section;
+the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
+one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
+listing is remembered for 60 s per instance (missing ones never), so repeat views skip the round
+trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
+page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
+hidden since the check. A client-side navigation to a missing listing becomes a full page load (the
+rewritten RSC response is outside the (site) tree); a stale in-site link is rare, and the end state
+is the same 404 page.
 
 ## Code quality
 

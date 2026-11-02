@@ -110,6 +110,25 @@ test.describe("without JavaScript, as a crawler", () => {
   })
 })
 
+test("router prefetches skip the 404 gate, and only the proxy names a missing listing", async ({
+  request,
+}) => {
+  // The proxy's matcher keeps prefetches away (Next strips the header inside
+  // the proxy), so a prefetch of a well-formed unknown key is not rewritten.
+  const prefetch = await request.get(UNKNOWN[0].path, {
+    headers: { RSC: "1", "Next-Router-Prefetch": "1" },
+    maxRedirects: 0,
+  })
+  expect(prefetch.status()).not.toBe(404)
+  // A visitor's own x-camsocs-missing-listing header is dropped: an unmatched
+  // URL keeps the plain 404, not the framed talks page.
+  const spoofed = await request.get("/zzqx-no-such-page", {
+    headers: { "x-camsocs-missing-listing": "talk" },
+  })
+  expect(spoofed.status()).toBe(404)
+  expect(await spoofed.text()).not.toContain("This talk is no longer listed")
+})
+
 test("dashboard sends a signed-out visitor to sign-in", async ({ page }, testInfo) => {
   await page.goto("/dashboard")
   await page.waitForURL("**/sign-in")

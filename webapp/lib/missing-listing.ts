@@ -16,8 +16,9 @@ import { isEventKey, isOrgSlug } from "./url-state"
  * the whole UI in the HTML. That is what the proxy does for a missing listing.
  *
  * The check costs one small indexed Convex query (`orgs.exists`,
- * `events.exists`, `talks.exists`) and none for a malformed key, a router
- * prefetch or a method other than GET / HEAD.
+ * `events.exists`, `talks.exists`), none for a malformed key, a method other
+ * than GET / HEAD or a listing found in the last minute, and the proxy never
+ * runs for a prefetch (its matcher).
  */
 
 export type ListingKind = "society" | "event" | "talk"
@@ -65,10 +66,11 @@ export function listingPath(pathname: string): ListingPath | null {
   return { kind: section.kind, key, wellFormed: section.wellFormed(key) }
 }
 
-/** A Next router prefetch or a browser speculative prefetch. */
+/** A browser speculative prefetch. The proxy's matcher already keeps these
+ * and Next router prefetches away; `next-router-prefetch` is not checked
+ * here because Next strips it from the headers a proxy sees. */
 export function isPrefetch(headers: Headers): boolean {
   return (
-    headers.get("next-router-prefetch") === "1" ||
     headers.get("sec-purpose")?.includes("prefetch") === true ||
     headers.get("purpose") === "prefetch"
   )
@@ -83,9 +85,9 @@ export type ListingExists = (listing: { kind: ListingKind; key: string }) => Pro
  * - A malformed key is missing, without asking Convex.
  * - A prefetch is let through unchecked: the directory and calendar prefetch
  *   every visible link, and the navigation that follows is checked.
- * - A failed check lets the request through: the page's own `notFound()`
- *   still answers (as a noindex soft 404), so an outage never 404s a real
- *   listing.
+ * - A failed or slow check (`withTimeout`) lets the request through: the
+ *   page's own `notFound()` still answers (as a noindex soft 404), so an
+ *   outage never 404s a real listing.
  */
 export async function missingListing(
   request: { pathname: string; method: string; headers: Headers },
@@ -100,6 +102,47 @@ export async function missingListing(
     return (await exists(listing)) ? null : listing.kind
   } catch {
     return null
+  }
+}
+
+/** `exists`, failing when it has not answered within `ms`. */
+export function withTimeout(exists: ListingExists, ms: number): ListingExists {
+  return (listing) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`listing check timed out after ${ms} ms`)), ms)
+    })
+    return Promise.race([exists(listing), timeout]).finally(() => clearTimeout(timer))
+  }
+}
+
+/**
+ * `exists`, remembering a found listing for `ttlMs` (at most `max` of them,
+ * oldest dropped first). The answer is the same for every viewer, so repeat
+ * views skip the round trip. A missing one is never remembered, so a listing
+ * added a moment ago is not 404'd; one hidden since it was remembered falls
+ * back to the page's own `notFound()` for up to `ttlMs`.
+ */
+export function rememberFound(
+  exists: ListingExists,
+  { ttlMs, max, now = Date.now }: { ttlMs: number; max: number; now?: () => number },
+): ListingExists {
+  const found = new Map<string, number>()
+  return async (listing) => {
+    const id = `${listing.kind}:${listing.key}`
+    const until = found.get(id)
+    if (until !== undefined) {
+      if (until > now()) return true
+      found.delete(id)
+    }
+    if (!(await exists(listing))) return false
+    found.delete(id)
+    if (found.size >= max) {
+      const oldest = found.keys().next().value
+      if (oldest !== undefined) found.delete(oldest)
+    }
+    found.set(id, now() + ttlMs)
+    return true
   }
 }
 
