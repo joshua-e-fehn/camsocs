@@ -596,6 +596,13 @@ describe("public queries", () => {
     expect(await t.query(api.talks.get, { key: "talk-nope" })).toBeNull()
   })
 
+  test("exists: true for a listed talk only (the ENG-20 404 gate)", async () => {
+    const { t, talks } = await fixture()
+    expect(await t.query(api.talks.exists, { key: talks.cst.key })).toBe(true)
+    expect(await t.query(api.talks.exists, { key: talks.gone.key })).toBe(false)
+    expect(await t.query(api.talks.exists, { key: "talk-nope" })).toBe(false)
+  })
+
   test("dayCounts: every London day, zeros included, cancelled not counted", async () => {
     const { t, talks } = await fixture()
     const firstDay = londonIsoDate(NOW)

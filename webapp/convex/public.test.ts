@@ -153,6 +153,43 @@ describe("orgs.getBySlug", () => {
   })
 })
 
+describe("exists: the request-time 404 gate (ENG-20)", () => {
+  test("orgs.exists is true exactly when getBySlug shows a listing", async () => {
+    await withEnv({ BROKER_EMAILS: "broker@example.com" }, async () => {
+      const t = newTest()
+      await seed(t)
+      expect(await t.query(api.orgs.exists, { slug: "chess" })).toBe(true)
+      expect(await t.query(api.orgs.exists, { slug: "nope" })).toBe(false)
+      const broker = await signedInAs(t, "broker@example.com")
+      await broker.mutation(api.broker.orgs.setHidden, { orgKey: "org-chess", hidden: true })
+      expect(await t.query(api.orgs.exists, { slug: "chess" })).toBe(false)
+      expect(await t.query(api.orgs.getBySlug, { slug: "chess" })).toBeNull()
+    })
+  })
+
+  test("events.exists: public and Cambridge-only events exist for everyone; members-only never", async () => {
+    const t = newTest()
+    const keys = await seed(t)
+    expect(await t.query(api.events.exists, { key: keys.open })).toBe(true)
+    // A visitor gets the "not available, sign in" page for it, not a 404.
+    expect(await t.query(api.events.exists, { key: keys.cam })).toBe(true)
+    expect(await t.query(api.events.get, { key: keys.cam })).toBeNull()
+    expect(await t.query(api.events.exists, { key: keys.members })).toBe(false)
+    expect(await t.query(api.events.exists, { key: eventKey("ics", "never-seen") })).toBe(false)
+  })
+
+  test("events.exists is false once every host is hidden", async () => {
+    await withEnv({ BROKER_EMAILS: "broker@example.com" }, async () => {
+      const t = newTest()
+      const keys = await seed(t)
+      const broker = await signedInAs(t, "broker@example.com")
+      await broker.mutation(api.broker.orgs.setHidden, { orgKey: "org-chess", hidden: true })
+      expect(await t.query(api.events.exists, { key: keys.open })).toBe(false)
+      expect(await t.query(api.events.exists, { key: keys.cam })).toBe(false)
+    })
+  })
+})
+
 describe("orgs.list / facets / colleges", () => {
   test("lists cards by name with filters, never counterparts, and paginates", async () => {
     const t = newTest()

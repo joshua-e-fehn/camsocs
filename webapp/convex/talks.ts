@@ -242,16 +242,22 @@ export const search = query({
   },
 })
 
+/** The listed talk behind a key, or null — the one test `get` and `exists` share. */
+async function listedTalk(ctx: QueryCtx, key: string): Promise<Doc<"talks"> | null> {
+  const talk = await ctx.db
+    .query("talks")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique()
+  return talk?.listing === "listed" ? talk : null
+}
+
 /** One listed talk with its abstract and provenance, or null. */
 export const get = query({
   args: { key: v.string() },
   returns: v.union(talkPublicValidator, v.null()),
   handler: async (ctx, args) => {
-    const talk = await ctx.db
-      .query("talks")
-      .withIndex("by_key", (q) => q.eq("key", args.key))
-      .unique()
-    if (!talk || talk.listing !== "listed") return null
+    const talk = await listedTalk(ctx, args.key)
+    if (!talk) return null
     const details = await ctx.db
       .query("talkDetails")
       .withIndex("by_talkKey", (q) => q.eq("talkKey", talk.key))
@@ -271,6 +277,17 @@ export const get = query({
       names,
     )
   },
+})
+
+/**
+ * Whether `/talks/<key>` has a listed talk (ENG-20): the request-time gate in
+ * `proxy.ts` answers an unknown or delisted key with a real 404. One indexed
+ * read; a boolean, never the talk's text.
+ */
+export const exists = query({
+  args: { key: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => (await listedTalk(ctx, args.key)) !== null,
 })
 
 /**

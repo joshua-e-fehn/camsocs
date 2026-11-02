@@ -3,9 +3,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 /** The agenda's shape while it loads: header and School rail, the search
  * bar, then the week strip beside (desktop) or over (phone) talk rows.
- * In the (agenda) group so it wraps /talks only: /talks/[key] stays outside
- * any Suspense boundary, so an unknown talk is a real HTTP 404, and
- * /talks/departments is not shown an agenda skeleton. */
+ * In the (agenda) group so it wraps /talks only: a talk's page and
+ * /talks/departments are not shown an agenda skeleton. (An unknown talk's
+ * 404 comes from proxy.ts, before any page renders.) */
 export default function Loading() {
   return (
     <div aria-busy="true">

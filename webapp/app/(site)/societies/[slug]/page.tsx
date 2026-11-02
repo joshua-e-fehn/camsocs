@@ -34,9 +34,10 @@ function plainDescription(org: { shortDescription?: string; description?: string
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const page = await loadOrg((await params).slug)
-  // An unknown slug renders the not-found page. The status stays 200 once
-  // loading.tsx has streamed, and Next marks the page noindex instead
-  // (Next docs, loading.md "Status Codes").
+  // proxy.ts has already answered an unknown slug with a real 404
+  // (lib/missing-listing.ts). This is the fallback — a listing hidden since
+  // that check, or a check that failed — and after loading.tsx has streamed
+  // its status stays 200, marked noindex (Next docs, loading.md "Status Codes").
   if (!page) notFound()
   const { org } = page
   const description =
