@@ -78,6 +78,8 @@ def reading(
             "termcard": "termcard",
             "mailing_list": "mailing_list_email",
             "google_calendar": "ics_feed",
+            "uni_events_api": "uni_events_api",
+            "talks_cam": "talks_list",
         }[source],
         source_key=external_id,
         source_url=source_url,
@@ -301,3 +303,33 @@ def test_a_duplicate_titled_unlike_its_primary_adds_no_title() -> None:
     )
     fields = {f.field for f in as_duplicate(row, found).fields}
     assert "title" not in fields and "startsAt" not in fields and "description" in fields
+
+
+def test_a_university_event_merges_with_its_societys_page_but_never_with_talks_cam() -> None:
+    # The University's programme names no organiser (decision D3a); a
+    # society's own page at the same minute is the same evening.
+    university = reading(
+        "uni_events_api",
+        "aaaa1111-0000-4000-8000-000000000001/20261030T190000Z",
+        "Puddles and Ponds",
+        ms(2026, 10, 30, 19, 0),
+        organisers=(),
+    )
+    site = reading(
+        "website",
+        "org-fl:2026-10-30:puddles-and-ponds",
+        "Puddles and Ponds",
+        ms(2026, 10, 30, 19, 0),
+        organisers=("org-fl",),
+    )
+    assert find_duplicates([site, university]).primary_of == {
+        ("website", "org-fl:2026-10-30:puddles-and-ponds"): (
+            "uni_events_api",
+            "aaaa1111-0000-4000-8000-000000000001/20261030T190000Z",
+        )
+    }
+    # Two listings that name no organiser stay apart.
+    talk = reading(
+        "talks_cam", "900001", "Puddles and Ponds", ms(2026, 10, 30, 19, 0), organisers=()
+    )
+    assert find_duplicates([talk, university]).primary_of == {}

@@ -181,6 +181,7 @@ export const EVENT_TYPE_TONE: Record<EventType, CategoryTone> = {
   talk: "indigo",
   social: "sage",
   performance: "plum",
+  exhibition: "plum",
   competition: "brick",
   match: "teal",
   workshop: "gilt",

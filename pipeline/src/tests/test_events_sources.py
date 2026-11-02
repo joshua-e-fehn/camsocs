@@ -434,6 +434,200 @@ class TestPlaywaze:
         assert not any("public-" in str(c.request.url) for c in net.calls)
 
 
+# --- University events (§10): synthetic fixtures shaped like the live API (2026-11-02) ----------
+
+UNI_HOST = "https://webservices.admin.cam.ac.uk"
+UNI_API = f"{UNI_HOST}/events/api"
+WHATSON_PAGE = "http://www.admin.cam.ac.uk/whatson/detail.shtml?uid="
+
+
+def _programme(ident: str, title: str, published: bool = True) -> dict:
+    return {
+        "@id": ident,
+        "@publicationState": "PUBLISHED" if published else "UNPUBLISHED",
+        "title": title,
+        "description": "A programme.",
+        "primaryContact": {"name": "Staff Person", "emailAddress": "staff.person@example.invalid"},
+        "accountEnquiriesEmail": "staff.person@example.invalid",
+        "useOrganiser": False,
+    }
+
+
+UNI_PROGRAMMES = {
+    "results": {
+        "totalResults": 5,
+        "returnedResults": 5,
+        "list": [
+            _programme("11", "What's On"),
+            _programme("700", "Cambridge Festival 2026"),
+            _programme("710", "Schools Days 2026"),
+            _programme("720", "Open Cambridge 2026", published=False),
+            _programme("730", "Open Cambridge 2025"),
+        ],
+    }
+}
+
+
+def _entry(uuid: str, title: str, day: str, start: str = "", end: str = "", **extra) -> dict:
+    entry = {
+        "@programmeId": "11",
+        "title": title,
+        "eventUid": uuid,
+        "url": f"{WHATSON_PAGE}{uuid}",
+        "eventId": 1000,
+        "startDate": day,
+        "startTime": start,
+        "endDate": day,
+        "endTime": end,
+        "vagueTiming": "NOT_VAGUE",
+        "earliestStartDate": day,
+        "latestStartDate": day,
+        "shortDescription": f"About {title}.",
+        "cancelled": False,
+        "lastModified": "2026-09-01T10:00:00.000+01:00",
+        "venue": "West Hall",
+        "roomDetails": "",
+        "cost": "Free",
+    }
+    entry.update(extra)
+    return entry
+
+
+_CONCERT = "aaaa1111-0000-4000-8000-000000000001"
+_TALK = "bbbb2222-0000-4000-8000-000000000002"
+_SHOW = "cccc3333-0000-4000-8000-000000000003"
+_CLASS = "dddd4444-0000-4000-8000-000000000004"
+_RECORDING = "eeee5555-0000-4000-8000-000000000005"
+_GARDEN = "ffff6666-0000-4000-8000-000000000006"
+
+UNI_CALENDAR = {
+    "results": {
+        "resultSetSize": 20000,
+        "totalResults": 33,
+        "returnedResults": 33,
+        "list": [
+            _entry(
+                _CONCERT,
+                "Autumn Serenades with the CU Quokka Orchestra",
+                "14/10/2026",
+                "19:30:00",
+                "21:30:00",
+                cost="£8 (£5 concessions)",
+                imageUrl="/events/uploadedImages/ab/image_1001_g1_tiny.jpg",
+            ),
+            _entry(
+                _TALK,
+                "The Physics of Puddles",
+                "20/10/2026",
+                "17:00:00",
+                "18:00:00",
+                venue="Department of Imaginary Physics",
+                roomDetails="Lecture Theatre 2",
+            ),
+            *[
+                _entry(
+                    _SHOW,
+                    "Maps of Nowhere",
+                    f"{day:02d}/10/2026",
+                    "10:00:00",
+                    "17:00:00",
+                    earliestStartDate="15/09/2026",
+                    latestStartDate="30/11/2026",
+                    venue="Museum of Invented Places",
+                )
+                for day in range(1, 21)
+            ],
+            *[
+                _entry(_CLASS, "Life Drawing for Beginners", day, "18:00:00", "20:00:00")
+                for day in ("08/10/2026", "15/10/2026", "22/10/2026", "29/10/2026", "05/11/2026")
+            ],
+            _entry(_RECORDING, "Recorded lecture: Moss", "10/10/2026", venue=""),
+            _entry(
+                _GARDEN,
+                "Garden open evening",
+                "25/10/2026",
+                "18:00:00",
+                "20:00:00",
+                cancelled=True,
+                shortDescription="An evening in a garden.",
+            ),
+        ],
+    }
+}
+
+UNI_ICS = b"""BEGIN:VCALENDAR\r
+VERSION:2.0\r
+PRODID:-//Example//Events//EN\r
+BEGIN:VEVENT\r
+UID:aaaa1111-0000-4000-8000-000000000001:2026-10-14{19:30:00.000:PT7200S}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART:20261014T193000\r
+DTEND:20261014T213000\r
+SUMMARY:Autumn Serenades with the CU Quokka Orchestra\r
+CATEGORIES:Music,All Ages,In person\r
+DESCRIPTION:An evening of invented serenades.\r
+LOCATION:West Hall \r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:bbbb2222-0000-4000-8000-000000000002:2026-10-20{17:00:00.000:PT3600S}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART:20261020T170000\r
+DTEND:20261020T180000\r
+SUMMARY:The Physics of Puddles\r
+CATEGORIES:Talks,Adults,In person,Step-free access\r
+DESCRIPTION:A long description of puddles\\, their depth and their surprisi\r
+ ng physics.\r
+LOCATION:Department of Imaginary Physics\r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:cccc3333-0000-4000-8000-000000000003:2026-09-15{10:00:00.000:PT25200S}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART:20260915T100000\r
+DTEND:20260915T170000\r
+RRULE:FREQ=WEEKLY;BYDAY=TU,WE,TH,FR,SA;UNTIL=20261130T235959Z\r
+SUMMARY:Maps of Nowhere\r
+CATEGORIES:Exhibitions,All Ages,In person\r
+DESCRIPTION:Maps of places that never were.\r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:cccc3333-0000-4000-8000-000000000003:2026-09-20{12:00:00.000:PT14400S}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART:20260920T120000\r
+DTEND:20260920T160000\r
+RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261130T235959Z\r
+RELATED-TO;RELTYPE=SIBLING:cccc3333-0000-4000-8000-000000000003\r
+SUMMARY:Maps of Nowhere\r
+CATEGORIES:Exhibitions,Families\r
+DESCRIPTION:Sunday hours.\r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:dddd4444-0000-4000-8000-000000000004:2026-10-08{18:00:00.000:PT7200S}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART:20261008T180000\r
+DTEND:20261008T200000\r
+RRULE:FREQ=WEEKLY;COUNT=5\r
+SUMMARY:Life Drawing for Beginners\r
+CATEGORIES:Courses/Workshops,Adults,In person\r
+DESCRIPTION:Bring a pencil.\r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:eeee5555-0000-4000-8000-000000000005:2026-10-10{null}\r
+DTSTAMP:20261007T120000Z\r
+DTSTART;VALUE=DATE:20261010\r
+SUMMARY:Recorded lecture: Moss\r
+CATEGORIES:Available on Demand,Talks\r
+DESCRIPTION:A recording.\r
+STATUS:CONFIRMED\r
+END:VEVENT\r
+END:VCALENDAR\r
+"""
+
+
 # --- University events (§10) ---------------------------------------------------------------------
 
 
@@ -478,19 +672,143 @@ class TestUniEvents:
         assert uni_events.match_society(event("Department of Physics open day"), names) is None
         assert uni_events.match_society(event("Chess for all"), names) is None
 
-    def test_the_feed_is_read_with_its_recorded_permission(
+    def test_the_stage_lists_every_public_university_event(
         self, ctx: StageContext, net: respx.MockRouter
     ) -> None:
-        # robots.txt disallows everything; the recorded permission (D3a)
-        # covers the events API, so the feed is read once.
-        allow(net, "https://webservices.admin.cam.ac.uk", "User-agent: *\nDisallow: /\n")
-        feed = net.get(uni_events.FEED_URL).respond(200, content=b"not a calendar")
+        society = Observation(
+            source_type="su_directory",
+            source_key="org-cu-quokka-orchestra",
+            source_url="https://x.org",
+            retrieved_at=NOW,
+            entity_type="organisation",
+            identity=IdentityHints(name="CU Quokka Orchestra", org_type="society"),
+            entity_key="org-cu-quokka-orchestra",
+        )
+        ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", [society])
+        # robots.txt shuts everyone out; the recorded permission (D3a) lets
+        # the events API and its images be read, nothing else.
+        allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
+        listing = net.get(f"{UNI_API}/programmes.json").respond(200, json=UNI_PROGRAMMES)
+        whats_on = net.get(uni_events.calendar_url("11", "json")).respond(200, json=UNI_CALENDAR)
+        details = net.get(uni_events.calendar_url("11", "ics")).respond(200, content=UNI_ICS)
+        festival = net.get(uni_events.calendar_url("700", "json")).respond(
+            200, json={"results": {"totalResults": 0, "returnedResults": 0}}
+        )
+        festival_ics = net.get(uni_events.calendar_url("700", "ics")).respond(200)
+        poster = net.get(f"{UNI_HOST}/events/uploadedImages/ab/image_1001_g1_very_large.jpg")
+        poster.respond(200, content=PNG)
+        other = net.get(url__regex=r"/events/api/programmes/(710|720|730)/").respond(200)
 
         uni_events.run(ctx, window=WINDOW, now=NOW)
 
-        assert feed.call_count == 1
-        assert not any("disallowed_by_robots" in note for note in ctx.report.notes)
-        assert any("unreadable feed" in note for note in ctx.report.notes)
+        events = {e.external_id: e for e in staged(ctx, "uni_events_api.events")}
+        concert = events["aaaa1111-0000-4000-8000-000000000001/20261014T183000Z"]
+        talk = events["bbbb2222-0000-4000-8000-000000000002/20261020T160000Z"]
+        run = events["cccc3333-0000-4000-8000-000000000003/run"]
+        classes = [k for k in events if k.startswith("dddd4444-")]
+        evening = events["ffff6666-0000-4000-8000-000000000006/20261025T180000Z"]
+        assert len(events) == 9 and len(classes) == 5  # a weekly class is not folded
+        assert not any(k.startswith("eeee5555-") for k in events)  # on demand only
+
+        # A society named in the title is the organiser, second-hand.
+        assert [o.identity.known_key for o in concert.organisers] == ["org-cu-quokka-orchestra"]
+        assert {f.evidence for f in concert.fields} == {"secondary"}
+        values = fields(concert)
+        assert values["price"] == {
+            "free": False,
+            "text": "£8 (£5 concessions)",
+            "minPence": 500,
+            "maxPence": 800,
+        }
+        assert values["image"] == {"sourceUrl": str(poster.calls[0].request.url)}
+        assert values["sourceUrl"] == f"{WHATSON_PAGE}aaaa1111-0000-4000-8000-000000000001"
+        assert values["eventType"] == "performance"
+        # Every other event is the University's: no organiser, primary.
+        assert talk.organisers == [] and talk.unresolved_organisers == []
+        assert {f.evidence for f in talk.fields} == {"primary"}
+        values = fields(talk)
+        assert values["eventType"] == "talk"
+        assert not any(f.field == "eventType" and f.status == "inferred" for f in talk.fields)
+        assert values["price"] == {"free": True, "text": "Free"}
+        assert values["description"].startswith("A long description of puddles")
+        assert talk.venue is not None
+        assert talk.venue.name == "Department of Imaginary Physics (Lecture Theatre 2)"
+        # A daily exhibition is one all-day run over its whole series.
+        values = fields(run)
+        assert values["allDay"] is True and values["eventType"] == "exhibition"
+        assert values["startsAt"] == int(london(2026, 9, 15).timestamp() * 1000)
+        assert values["endsAt"] == int(london(2026, 12, 1).timestamp() * 1000)
+        # No categories (nothing in the iCalendar export): a guessed type, the
+        # short description, and the occurrence's own cancellation.
+        values = fields(evening)
+        assert values["cancelled"] is True and values["eventType"] == "other"
+        assert any(f.field == "eventType" and f.status == "inferred" for f in evening.fields)
+        assert values["description"] == "An evening in a garden."
+
+        notes = " | ".join(ctx.report.notes)
+        assert "What's On, Cambridge Festival 2026" in notes
+        assert "20 occurrences folded into 1 runs" in notes
+        assert "on demand, not a dated event" in notes
+        for event in events.values():
+            assert event.fetch is not None
+            assert event.fetch.robots_verdict == "disallowed"
+            assert (event.fetch.access_note or "").split("; ") == [
+                "robots_override:permission",
+                "ai_optout_override:permission",
+            ]
+            assert event.source_url == uni_events.calendar_url("11", "json")
+        # Few requests: the list, What's On's two, the festival's empty
+        # calendar (so not its export), one image; no other programme.
+        assert (listing.call_count, whats_on.call_count, details.call_count) == (1, 1, 1)
+        assert (festival.call_count, festival_ics.call_count, other.call_count) == (1, 0, 0)
+        assert poster.call_count == 1
+        assert not any("_tiny" in str(c.request.url) for c in net.calls)
+        # Staff contacts are never kept: not in staging, not in the raw cache.
+        everything = [p.read_bytes() for p in ctx.settings.cache_dir.rglob("*") if p.is_file()]
+        everything += [p.read_bytes() for p in ctx.staging.root.rglob("*") if p.is_file()]
+        assert not any(b"staff.person" in blob for blob in everything)
+
+    def test_programmes_are_whats_on_and_this_years_festivals(self) -> None:
+        programmes = uni_events.read_programmes(json.dumps(UNI_PROGRAMMES).encode())
+        chosen = uni_events.select_programmes(programmes, WINDOW)
+        assert [p.title for p in chosen] == ["What's On", "Cambridge Festival 2026"]
+        spring = default_window(datetime(2027, 2, 1, tzinfo=UTC))
+        assert [p.id for p in uni_events.select_programmes(programmes, spring)] == ["11"]
+        assert not any(hasattr(p, "primaryContact") for p in programmes)
+
+    def test_cost_texts_become_prices(self) -> None:
+        assert uni_events.price_from("FREE, booking recommended") == {
+            "free": True,
+            "text": "FREE, booking recommended",
+        }
+        assert uni_events.price_from("£25 per person")["minPence"] == 2500  # type: ignore[index]
+        assert uni_events.price_from("Free for members, £3.50 others") == {
+            "free": False,
+            "text": "Free for members, £3.50 others",
+            "minPence": 350,
+            "maxPence": 350,
+        }
+        assert uni_events.price_from("n/a") is None
+        assert uni_events.price_from(None) is None
+
+    def test_images_are_read_at_their_largest_derived_size(self) -> None:
+        tiny = "/events/uploadedImages/8b/image_1_0f0f_tiny.jpg"
+        assert uni_events.image_url(tiny) == (
+            f"{UNI_HOST}/events/uploadedImages/8b/image_1_0f0f_very_large.jpg"
+        )
+        assert uni_events.image_url("https://elsewhere.example/x_tiny.jpg") is None
+        assert uni_events.image_url("/events/doc/x_tiny.jpg") is None
+
+    def test_the_export_adds_categories_and_descriptions_by_uuid(self) -> None:
+        details = uni_events.read_details(UNI_ICS)
+        exhibition = details["cccc3333-0000-4000-8000-000000000003"]
+        # Siblings (the Sunday hours) add their categories.
+        assert exhibition.categories == ["Exhibitions", "All Ages", "In person", "Families"]
+        assert uni_events.event_type_of(exhibition.categories) == "exhibition"
+        assert uni_events.event_type_of(["Courses/Workshops", "Adults"]) == "workshop"
+        assert uni_events.event_type_of(["Adults", "In person"]) is None
+        assert uni_events.on_demand_only(["Available on Demand", "Talks"], None)
+        assert not uni_events.on_demand_only(["Available on Demand", "In person"], None)
 
 
 # --- society calendar feeds (§11) ----------------------------------------------------------------

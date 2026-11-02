@@ -21,7 +21,10 @@ readings — posted before D6 — stop competing with the event's own title.
 Every other keyed reading gains a ``hosting`` observation — ``takes_part``
 for an external event, with its page as ``externalUrl`` (``missing`` /
 ``not_found`` when the text gives none, so an earlier page does not linger) —
-unless its source states ``hosting`` itself.
+unless its source states ``hosting`` itself. A reading with no organiser is
+nobody's to take part in: an ``external`` verdict on it (a University event
+that links talks.cam, a model's reading) becomes ``event.no_organiser``, so
+the University's own events are never hidden as "taking part".
 
 **Provenance** (`verdict_fields`). A rule's verdict is a parser claim,
 ``inferred`` (a rule judges what a text means; the source does not state
@@ -110,6 +113,10 @@ _LISTINGS = {
     "termcard": "the organisation's own termcard",
     "mailing_list_email": "a mail to the organisation's mailing list",
     "instagram_api": "the organisation's own Instagram post",
+    "uni_events_api": (
+        "the University of Cambridge's public events programme (What's On, Cambridge Festival,"
+        " Open Cambridge)"
+    ),
 }
 
 
@@ -221,6 +228,13 @@ class NoiseClassifier:
             setattr(self.stats, name, getattr(self.stats, name) + 1)
 
     def classify(self, record: EventObservation, text: EventText) -> Verdict:
+        verdict = self._classify(record, text)
+        if verdict.kind == "external" and not record.organisers:
+            # Nobody listed takes part in someone else's event (module docstring).
+            return Verdict("event", "event.no_organiser", verdict.evidence)
+        return verdict
+
+    def _classify(self, record: EventObservation, text: EventText) -> Verdict:
         verdict = judge(text)
         if not verdict.borderline:
             return verdict

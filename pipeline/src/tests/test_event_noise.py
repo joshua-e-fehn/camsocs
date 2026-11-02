@@ -693,3 +693,59 @@ def test_a_title_naming_its_organisers_own_site_is_its_own() -> None:
         event_source="website",
     )
     assert judge(named).rule == "event.own_name"
+
+
+class TestUniversityProgramme:
+    """The University's public events programme (decision D3a): judged like a
+    calendar, and its organiser-less events are never "taken part in"."""
+
+    @staticmethod
+    def reading(title: str, description: str = "") -> EventObservation:
+        fields = [
+            parser_field("title", title, extractor="uni_events_api.title", evidence="primary"),
+            parser_field("startsAt", 1792000000000, extractor="u.startsAt", evidence="primary"),
+        ]
+        if description:
+            fields.append(
+                parser_field("description", description, extractor="u.d", evidence="primary")
+            )
+        return EventObservation(
+            source_type="uni_events_api",
+            source_key=title,
+            source_url="https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json",
+            retrieved_at=AT,
+            event_source="uni_events_api",
+            external_id=title,
+            visibility="public",
+            organisers=[],
+            fields=fields,
+        )
+
+    def test_an_office_notice_is_dropped(self) -> None:
+        verdict = judge(
+            text("Applications close", source_type="uni_events_api", event_source="uni_events_api")
+        )
+        assert (verdict.kind, verdict.rule) == ("notice", "notice.admin")
+        kept = sift_events(
+            [self.reading("Applications close"), self.reading("Puddles")], NoiseClassifier()
+        )
+        assert [title_of(r) for r in kept] == ["Puddles"]
+
+    def test_an_organiser_less_external_reading_is_the_universitys_own(self) -> None:
+        lecture = self.reading(
+            "Lecture on puddles", "Also listed on talks.cam.ac.uk/talk/index/900001"
+        )
+        [kept] = sift_events([lecture], NoiseClassifier())
+        hosting = field_of(kept, "hosting")
+        assert (hosting.value, hosting.extractor) == ("hosts", "event_noise.event.no_organiser")
+        assert field_of(kept, "externalUrl") is None
+
+    def test_the_model_sees_the_programme_and_may_not_make_it_external(self) -> None:
+        llm = FakeLLM(
+            lambda _t, _tier: {"kind": "external", "evidence_quote": "hosted by the Museum"}
+        )
+        fair = self.reading("Science fair", "A fair hosted by the Museum of Invented Places.")
+        [kept] = sift_events([fair], NoiseClassifier(llm))  # type: ignore[arg-type]
+        assert field_of(kept, "hosting").value == "hosts"
+        [call] = llm.calls
+        assert "the University of Cambridge's public events programme" in call["text"]

@@ -42,6 +42,11 @@ the occurrence it replaces.
 keeps the copy with the highest ``SEQUENCE`` (then the latest
 ``LAST-MODIFIED``). A missing UID gets a stable stand-in hashed from the
 summary and start.
+
+**As written** (`list_vevents`): every ``VEVENT`` once, unexpanded and
+unwindowed, for a source whose occurrences come from elsewhere and whose
+feed only adds details (the University's programme: categories and the full
+description, §10).
 """
 
 from __future__ import annotations
@@ -486,4 +491,31 @@ def parse_ics(data: bytes, window: EventWindow) -> ParsedCalendar:
     return parsed
 
 
-__all__ = ["MAX_OCCURRENCES", "IcsError", "IcsEvent", "ParsedCalendar", "parse_ics"]
+def list_vevents(data: bytes) -> list[IcsEvent]:
+    """Every ``VEVENT`` as written: masters, siblings and overrides, with
+    their own ``DTSTART`` and no recurrence expanded or window applied
+    (module docstring). A ``VEVENT`` without a start is left out. Raises
+    `IcsError` for unreadable input."""
+    try:
+        calendar = icalendar.Calendar.from_ical(data)
+    except (ValueError, IndexError, KeyError) as error:
+        raise IcsError(f"not an iCalendar file: {error}") from error
+    if calendar.name != "VCALENDAR":
+        raise IcsError("not a VCALENDAR")
+    calendar_zone = _zone_from_name(_text(calendar, "X-WR-TIMEZONE"))
+    events: list[IcsEvent] = []
+    for component in calendar.walk("VEVENT"):
+        timing = _timing(component, calendar_zone)
+        if timing is not None:
+            events.append(_base_event(component, _uid(component), timing))
+    return events
+
+
+__all__ = [
+    "MAX_OCCURRENCES",
+    "IcsError",
+    "IcsEvent",
+    "ParsedCalendar",
+    "list_vevents",
+    "parse_ics",
+]

@@ -28,9 +28,10 @@ individuals, so a title is read for what it is:
   a Camdram show ("Lola", "I Kassandra"), a talks.cam talk, a performance a
   society's own structured data lists (`_work_title`);
 - a **talk's or workshop's title** on a society's own programme (a term card,
-  its website, its Instagram, SU What's On) that names a person names its
-  public speaker ("Sophie von der Tann" under a card's "Speakers", "A chat
-  with Luca Ravenna"): those names stay (`_speaker_names_in`), unless they
+  its website, its Instagram, SU What's On) or on the University's public
+  events programme that names a person names its public speaker ("Sophie
+  von der Tann" under a card's "Speakers", "A chat with Luca Ravenna"):
+  those names stay (`_speaker_names_in`), unless they
   are a known committee member's, or a role word stands in the title (then
   the model reads it, with the context below). Calendar feeds,
   which can look like room bookings, and free text stay strict;
@@ -1353,8 +1354,10 @@ def _tagged(extractor: str, tag: str) -> str:
 _WORK_TITLE_SOURCES = frozenset({"talks_list"})
 #: A society's own programme: a talk's title there that names a person names
 #: its speaker. Calendar feeds (which can be room bookings) and mail are not.
+#: The University's public events programme is one too: a talk it lists
+#: names its published speaker (decision 2026-11-02, §10).
 _PROGRAMME_SOURCES = frozenset(
-    {"termcard", "society_website", "instagram_api", "su_profile", "su_whatson"}
+    {"termcard", "society_website", "instagram_api", "su_profile", "su_whatson", "uni_events_api"}
 )
 _SOURCE_LABELS = {
     "camdram": "Camdram (the theatre listings)",
@@ -1366,6 +1369,7 @@ _SOURCE_LABELS = {
     "luma": "a Luma calendar",
     "mailing_list_email": "a society's mailing-list mail",
     "su_whatson": "the SU's What's On",
+    "uni_events_api": "the University of Cambridge's public events programme",
 }
 #: How much of an event's description a title's or venue's context shows.
 CONTEXT_DESCRIPTION = 600

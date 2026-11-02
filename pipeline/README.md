@@ -47,8 +47,9 @@ line per stage, warnings, and the `report` stage's coverage numbers.
 daily stage reads). The VPS host runs both under systemd timers (decision D5,
 `docs/ops-vps.md`):
 
-- **events**, daily (`pixi run harvest-events`): `term_dates`, every events stage but the
-  University's, `talks`, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
+- **events**, daily (`pixi run harvest-events`): `term_dates`, every events stage (the
+  University's programme included, read with recorded permission, source-research §10),
+  `talks`, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
   organisation, so it reads what the last full run staged — `_resolved`, `society_website`,
   `su_profile` — and stops before any request when one was never staged ("run the full group
   first"); older than eight days, they still serve and the run carries a warning.

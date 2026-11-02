@@ -21,7 +21,9 @@ the claim's extractor ``event_noise.<rule>``) and the words it matched are
 its evidence:
 
 1. Notices, by title — never on a listing that states its events itself
-   (Camdram, talks.cam, CUCBC, Playwaze, SU What's On): a room booking
+   (Camdram, talks.cam, CUCBC, Playwaze, SU What's On; not the University's
+   events programme, which lists every public University event, office
+   notices included, and names no organiser): a room booking
    (`events.checks.is_booking`), a room or prayer room closed or open and
    opening hours (``notice.room_closure``; with an event of its own beside it
    — "Library closed — study social at the Buttery", "Freshers Squash: Bar is
@@ -96,9 +98,10 @@ SUBSTANTIVE_DESCRIPTION = 15
 
 #: Listings that state the organiser themselves: what they list under a
 #: society is its own (a Camdram show, a CUCBC regatta under its host club).
-SELF_DESCRIBING_SOURCES = frozenset(
-    {"camdram", "talks_cam", "cucbc", "playwaze", "su_whatson", "uni_events_api"}
-)
+#: Not the University's events programme (decision D3a): it lists every
+#: public University event and names no organiser, so its readings are judged
+#: like a calendar's.
+SELF_DESCRIBING_SOURCES = frozenset({"camdram", "talks_cam", "cucbc", "playwaze", "su_whatson"})
 
 
 # --- text helpers ---------------------------------------------------------------------------

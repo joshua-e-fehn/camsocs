@@ -988,3 +988,22 @@ def test_a_url_spelling_the_name_a_shows_title_keeps_reveals_nothing() -> None:
     posted, stats = redact_claims(claims, Redactor(FakeLLM(respond)))  # type: ignore[arg-type]
     assert stats.dropped == []
     assert {c.field for c in posted} == {"title", "sourceUrl", "description"}
+
+
+def test_a_university_talks_title_keeps_its_published_speaker() -> None:
+    # Decision 2026-11-02: the University's public events programme is a
+    # programme like a term card; its descriptions stay strict.
+    listing = "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json"
+
+    def uni_claim(field: str, value: Any) -> ClaimInput:
+        return event_claim(field, value, key="evt-uni", url=listing, source_type="uni_events_api")
+
+    claims = [
+        uni_claim("title", "The Quokka Lecture: Professor Bo Quokkason"),
+        uni_claim("eventType", "talk"),
+    ]
+    posted, stats = redact_claims(claims, Redactor(FakeLLM(_model_never)))  # type: ignore[arg-type]
+    assert next(c.value for c in posted if c.field == "title") == (
+        "The Quokka Lecture: Professor Bo Quokkason"
+    )
+    assert stats.speaker_titles == 1
