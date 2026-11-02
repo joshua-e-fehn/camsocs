@@ -937,6 +937,42 @@ class TestCalendarFeeds:
         assert embed.call_count == 0
         assert any("disallowed_by_robots" in n for n in ctx.report.notes)
 
+    def test_the_university_programme_is_never_read_as_a_society_feed(
+        self, ctx: StageContext, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The recorded permission (D3a) is the uni_events stage's: a society
+        # website or SU profile that links What's On's subscribe link, in
+        # either form, does not make it that society's feed.
+        monkeypatch.setattr(calendar_feeds, "FEED_SEEDS", ())
+        feed = uni_events.calendar_url("11", "ics").split("?")[0]
+        orgs = [
+            Observation(
+                source_type=source_type,
+                source_key=key,
+                source_url="https://soc.example/",
+                retrieved_at=NOW,
+                entity_type="organisation",
+                identity=IdentityHints(name=key),
+                entity_key=f"org-{key}",
+                internal={"ics_urls": [link]},
+            )
+            for source_type, key, link in (
+                ("society_website", "website-society", feed),
+                ("su_profile", "profile-society", feed.replace("https://", "webcal://")),
+            )
+        ]
+        ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", orgs)
+        allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
+        programme = net.get(url__startswith=f"{UNI_API}/").respond(200, content=UNI_ICS)
+
+        assert calendar_feeds.collect_feeds(OrgLookup.for_stage(ctx)) == []
+        calendar_feeds.run(ctx, window=WINDOW, now=NOW)
+
+        assert programme.call_count == 0
+        assert not any(str(c.request.url).startswith(UNI_HOST) for c in net.calls)
+        assert staged(ctx, "ics_feed.events") == []
+        assert any("1 linked feeds not read" in n for n in ctx.report.notes)
+
 
 # --- SU What's On (§12) ---------------------------------------------------------------------
 
