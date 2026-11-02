@@ -80,6 +80,25 @@ def test_the_candidates_are_the_events_no_reader_restates() -> None:
     }
 
 
+def test_an_event_with_no_organiser_is_never_someone_elses() -> None:
+    # A past University event (decision D3a: no organiser, stored `hosts`)
+    # that links its talks.cam page is the University's own, as the load
+    # judged it (`event.no_organiser`); the same text under a society is not.
+    talk = {
+        "days": -3,
+        "source": "uni_events_api",
+        "source_url": "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json",
+        "hosting": "hosts",
+        "description": "Book on talks.cam: https://talks.cam.ac.uk/talk/index/123456",
+    }
+    university = stored("evt-uni", "The Physics of Puddles", organiser_keys=[], **talk)
+    relayed = stored(
+        "evt-relayed", "The Physics of Puddles", organiser_keys=["org-cu-physics-society"], **talk
+    )
+    found = {c.key: c.reason for c in candidates([university, relayed], now=NOW)}
+    assert found == {"evt-relayed": "external:external.talks_cam"}
+
+
 def test_titles_are_shown_only_when_asked() -> None:
     [first, *_] = candidates(EVENTS, now=NOW)
     assert "PR closed" not in first.line(titles=False) and first.key in first.line(titles=False)

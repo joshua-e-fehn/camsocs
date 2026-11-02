@@ -70,7 +70,14 @@ from pydantic import BaseModel, ConfigDict
 
 from camsocs_pipeline.claims import NO_LLM_SOURCE_TYPES, evidence_of, missing_field, parser_field
 from camsocs_pipeline.config import ConfigError, Settings
-from camsocs_pipeline.events.noise import EventText, Kind, NoiseContext, Verdict, judge
+from camsocs_pipeline.events.noise import (
+    EventText,
+    Kind,
+    NoiseContext,
+    Verdict,
+    for_organisers,
+    judge,
+)
 from camsocs_pipeline.extract.ai_gate import AiGate
 from camsocs_pipeline.extract.evidence import EvidenceMatch, check_quote
 from camsocs_pipeline.extract.llm import LLMClient, NoLLMHost, assert_llm_source_allowed
@@ -228,11 +235,8 @@ class NoiseClassifier:
             setattr(self.stats, name, getattr(self.stats, name) + 1)
 
     def classify(self, record: EventObservation, text: EventText) -> Verdict:
-        verdict = self._classify(record, text)
-        if verdict.kind == "external" and not record.organisers:
-            # Nobody listed takes part in someone else's event (module docstring).
-            return Verdict("event", "event.no_organiser", verdict.evidence)
-        return verdict
+        # Nobody listed takes part in someone else's event (module docstring).
+        return for_organisers(self._classify(record, text), bool(record.organisers))
 
     def _classify(self, record: EventObservation, text: EventText) -> Verdict:
         verdict = judge(text)

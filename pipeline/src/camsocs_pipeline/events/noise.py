@@ -548,6 +548,21 @@ def _signals(text: EventText) -> list[str]:
     return signals
 
 
+#: The rule an `external` verdict becomes on a reading with no organiser.
+NO_ORGANISER_RULE = "event.no_organiser"
+
+
+def for_organisers(verdict: Verdict, has_organiser: bool) -> Verdict:
+    """A reading with no organiser is nobody's to take part in: an
+    ``external`` verdict on it (a University event that links talks.cam)
+    becomes `NO_ORGANISER_RULE`, so the University's own events are never
+    marked, or removed, as someone else's (decision D3a). The load
+    (`extract.event_noise`) and `camsocs clean-events` both apply it."""
+    if verdict.kind == "external" and not has_organiser:
+        return Verdict("event", NO_ORGANISER_RULE, verdict.evidence)
+    return verdict
+
+
 def judge(text: EventText) -> Verdict:
     """The rules' verdict on one reading (module docstring). A ``borderline``
     verdict is ``event.default`` until the model says otherwise."""
@@ -666,12 +681,14 @@ class NoiseContext:
 
 
 __all__ = [
+    "NO_ORGANISER_RULE",
     "SELF_DESCRIBING_SOURCES",
     "EventText",
     "Kind",
     "NoiseContext",
     "Verdict",
     "candidate_links",
+    "for_organisers",
     "judge",
     "own_names",
 ]
