@@ -15,7 +15,7 @@ Decision **D7** (recorded in PLAN.md §6): academic talks are their own pillar w
 ## 1. Hard rules
 
 - **talks.cam.ac.uk is read by parser code only. It never reaches a model**: no LLM call, and no AI agent reads it with WebFetch or a browser. This is the rule from the 2026-10-07 decisions plus its robots.txt. Tests use fixtures. Debug output that is shown to an AI agent prints aggregates only: counts, ids and status codes.
-- **Department sites are `GENERAL` purpose** (`sources/policy.py`). robots.txt always holds for them, so the polite client must allow every fetch. Never fetch `webservices.admin.cam.ac.uk`, `events.cam.ac.uk`, Google Calendar or Raven-gated pages.
+- **Department sites are `GENERAL` purpose** (`sources/policy.py`). robots.txt always holds for them, so the polite client must allow every fetch. The talks pillar never fetches `webservices.admin.cam.ac.uk` (the University's events programme belongs to the `uni_events` events stage, read under its recorded permission, source-research §10; the talks registry never reads it a second time), `events.cam.ac.uk`, Google Calendar or Raven-gated pages.
 - **All talk sources are parser-only and zero-LLM.** Add each new source type to `NO_LLM_SOURCE_TYPES` so the AI gate refuses them, whatever happens.
 - Politeness: the existing polite client (`sources/base.py`). That means the honest UA, one request in flight per host, robots `Crawl-delay` honoured, and talks.cam at least 10 s between requests.
 - No University crest, logo, Feijoa/Open Sans fonts, or the brand palette led by #8EE8D8. Cambridge flavour comes from our own palette, serif type, term-week vocabulary and line motifs.

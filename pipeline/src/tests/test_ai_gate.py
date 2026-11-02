@@ -70,3 +70,18 @@ def test_the_redaction_keeps_a_refused_sources_text_from_the_model(
     (posted,), _ = redact_claims([claim], redactor)
     assert llm.calls == []
     assert posted.value == "Contact our Captain about trials."
+
+
+def test_the_university_events_api_may_reach_the_model_with_its_permission(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    # Decision D3a: UIS and the Office of External Affairs and Communications
+    # let the model read the programme's text; the rest of the host keeps its
+    # robots.txt, which shuts out every agent.
+    net.get("https://webservices.admin.cam.ac.uk/robots.txt").respond(
+        200, text="User-agent: *\nDisallow: /\n"
+    )
+    feed = "https://webservices.admin.cam.ac.uk/events/api/programmes/11/calendar/events.json"
+    gate = AiGate(polite(tmp_path))
+    assert gate.verdict(feed, "uni_events_api") == "allowed"
+    assert gate.verdict("https://webservices.admin.cam.ac.uk/foo", "uni_events_api") == "refused"

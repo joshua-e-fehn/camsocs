@@ -45,8 +45,8 @@ still holds):
   last full run left in `var/staging` and `var/cache`:
 
   - term_dates, report: nothing earlier runs left;
-  - camdram_events, cucbc_events, playwaze: the organisations to name as
-    organisers — resolve (``_resolved``) and the crosswalk;
+  - camdram_events, cucbc_events, playwaze, uni_events: the organisations
+    to name as organisers — resolve (``_resolved``) and the crosswalk;
   - talks_cam, calendar_feeds: talks.cam lists and ICS / Google / Luma
     feeds — the SU profiles (keyed in ``_resolved``), enrichment
     (``society_website``, ``linktree``) and `events/seeds.py`;
@@ -142,8 +142,8 @@ STAGES: list[Stage] = [
     # Playwaze leagues (§9).
     Stage("playwaze", fetches=True, description="Playwaze college leagues → matches"),
     #
-    # University Events API (§10).
-    Stage("uni_events", fetches=True, description="University events → society events"),
+    # University events programme, read with recorded permission (§10, D3a).
+    Stage("uni_events", fetches=True, description="University events programme → public events"),
     #
     # Society ICS / Luma / Google feeds (§11).
     Stage("calendar_feeds", fetches=True, description="society ICS / Luma / Google feeds → events"),
@@ -197,6 +197,7 @@ GROUPS: dict[str, StageGroup] = {
             "talks_cam",
             "cucbc_events",
             "playwaze",
+            "uni_events",
             "calendar_feeds",
             "su_whatson",
             "website_events",

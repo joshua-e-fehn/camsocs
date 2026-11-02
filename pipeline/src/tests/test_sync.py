@@ -325,9 +325,12 @@ def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_loa
     assert "talks" in GROUPS["events"].stages
     events = [stage.name for stage in resolve_stages(GROUPS["events"].stages)]
     assert events[0] == "term_dates" and events[-3:] == ["load", "talks", "report"]
-    # Every events source but the University's (which fetches nothing, §10)
-    # runs daily; no harvest, resolve, enrich or classify stage does.
-    fetching = {s.name for s in STAGES if s.fetches} - {"enrich", "uni_events"}
+    # Every events source runs daily, the University's programme included
+    # (read with recorded permission, §10); no harvest, resolve, enrich or
+    # classify stage does.
+    fetching = {s.name for s in STAGES if s.fetches} - {"enrich"}
+    assert "uni_events" in events
+    assert events.index("uni_events") == events.index("playwaze") + 1
     assert fetching <= set(events)
     assert {"inbox", "instagram", "termcards"} <= set(events)
     assert not {"su_directory", "resolve", "enrich", "classify"} & set(events)

@@ -16,8 +16,10 @@ describe one event.
 - not two entries of one listing (the same source and source URL: one feed,
   one page): the listing itself says they are two events;
 - at least one resolved organiser in common — or, for a structured listing
-  that names no organiser (a Camdram show without a society), a society's
-  own page or card listing an event of the same name at the same minute;
+  that names no organiser (a Camdram show without a society, a University
+  event), a society's own page or card listing an event of the same name at
+  the same minute (two such listings never merge with each other: a
+  University lecture is not folded into a talks.cam talk);
 - the same Europe/London calendar date;
 - similar titles (`extract.dedupe.similar_titles`: one title's words contain
   the other's, or they share at least half) — or, with an organiser in common
@@ -73,8 +75,9 @@ LONDON = ZoneInfo("Europe/London")
 MAX_START_GAP = timedelta(minutes=30)
 #: A feed's and a page's times this far apart in British Summer Time.
 BST_SLIP = timedelta(hours=1)
-#: Listings whose entry may name no organiser (a Camdram show without a society).
-_LISTINGS = frozenset({"camdram", "talks_cam", "su_whatson", "cucbc"})
+#: Listings whose entry may name no organiser (a Camdram show without a
+#: society, the University's own event).
+_LISTINGS = frozenset({"camdram", "talks_cam", "su_whatson", "cucbc", "uni_events_api"})
 #: A society's own page or card.
 _OWN_PAGES = frozenset({"website", "termcard"})
 #: Feeds whose times are instants (UTC or zoned), as read by a parser.

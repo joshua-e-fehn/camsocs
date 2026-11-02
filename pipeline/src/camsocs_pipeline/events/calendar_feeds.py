@@ -21,6 +21,12 @@ person's name.
   ``/calendar/ical/<id>/public/…`` feeds only. The event's `sources` row is
   then ``disallowed`` with ``robots_override:society`` in its access note.
   Other feed hosts keep their robots.txt.
+- Never a feed on a path with a recorded permission (`policy.RECORDED_PERMISSIONS`,
+  decision D3a): the University's events programme (What's On's subscribe
+  link, ``webcal://`` or not) belongs to the `uni_events` stage, which folds
+  its runs, keeps its organisers honest and is what the permission's
+  revocation runbook covers. A society or SU profile linking it is dropped
+  with a note (`collect_feeds`), never read as that society's feed.
 
 **Parsing** is `events.ics` (time zones, the bogus-zone heuristic, recurrence,
 UID de-duplication); events re-read from a bogus zone have their times claimed
@@ -78,7 +84,7 @@ from camsocs_pipeline.models.observation import IdentityHints, OrganiserObs
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import PoliteClient
-from camsocs_pipeline.sources.policy import SOCIETY
+from camsocs_pipeline.sources.policy import SOCIETY, permission_for
 
 EVIDENCE = "primary"
 COVERS = frozenset({"description", "endsAt", "venueText"})
@@ -191,12 +197,18 @@ def _owner(index: OrgLookup, org_key: str) -> IdentityHints:
     return IdentityHints(name=index.name_of(org_key) or org_key, known_key=org_key)
 
 
-def collect_feeds(index: OrgLookup) -> list[Feed]:
+def collect_feeds(index: OrgLookup, notes: list[str] | None = None) -> list[Feed]:
+    """Every feed to read, by URL; one on a recorded-permission path is
+    dropped, with a note in `notes` (module docstring)."""
     feeds: dict[str, Feed] = {}
+    dropped: set[str] = set()
 
     def add(kind: str, value: str, owner: IdentityHints) -> None:
         url = feed_url(kind, value)
         if url is None:
+            return
+        if permission_for(url, "fetch") is not None:
+            dropped.add(url)
             return
         feeds.setdefault(url, Feed(kind=feed_kind(kind, url), url=url)).add_owner(owner)
 
@@ -204,6 +216,11 @@ def collect_feeds(index: OrgLookup) -> list[Feed]:
         add(ref.kind, ref.value, _owner(index, ref.org_key))
     for seed in FEED_SEEDS:
         add(seed.kind, seed.value, seed.owner)
+    if dropped and notes is not None:
+        notes.append(
+            f"{len(dropped)} linked feeds not read: the University's events programme"
+            " belongs to the uni_events stage (D3a)"
+        )
     return list(feeds.values())
 
 
@@ -338,7 +355,7 @@ def run(
 ) -> None:
     window = window or default_window(now)
     index = OrgLookup.for_stage(ctx)
-    feeds = collect_feeds(index)
+    feeds = collect_feeds(index, ctx.report.notes)
     slugs = collect_luma_slugs(index)
     if ctx.limit is not None:
         feeds = feeds[: ctx.limit]
@@ -352,7 +369,9 @@ def run(
 
         for feed in feeds:
             # A feed a society links (D3): the society purpose overrides a
-            # robots disallow for Google Calendar public ICS feeds only.
+            # robots disallow for Google Calendar public ICS feeds only. The
+            # paths a publisher gave us permission to read are never here
+            # (`collect_feeds`): they belong to their own stage.
             result = client.fetch(feed.url, accept="text/calendar,*/*;q=0.5", purpose=SOCIETY)
             if not result.ok or result.content is None:
                 ctx.report.notes.append(f"{feed.kind} feed: {describe_failure(result)}")

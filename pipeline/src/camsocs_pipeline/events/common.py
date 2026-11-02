@@ -269,6 +269,7 @@ _TYPE_KEYWORDS: tuple[tuple[str, str], ...] = (
     (r"formal|banquet|ball|gala dinner|garden party", "formal"),
     (r"talk|lecture|seminar|colloquium|panel|q\s*&\s*a|in conversation|debate|symposium", "talk"),
     (r"concert|recital|performance|gig|screening|play|musical|opera|show", "performance"),
+    (r"exhibitions?", "exhibition"),
     (r"tournament|competition|regatta|race|championship|cuppers|varsity|quiz", "competition"),
     (r"training|practice|rehearsal|session", "training"),
     (r"social|party|drinks|mixer|meet ?(?:&|and) ?greet|welcome|pub|crawl|bop|picnic", "social"),

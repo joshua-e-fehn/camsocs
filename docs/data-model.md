@@ -223,7 +223,8 @@ An event row is created by its first claims, which must include `title`, `starts
 |---|---|---|
 | camdram | `show:<show id>/performance:<run id>/<YYYY-MM-DD>`; `show:<id>/performance:<run id>` for a run over 21 days (one all-day event); `event:<id>/<date>` for a non-show diary event | **Series:** every night of a show shares the `show:<id>/` prefix and the show page as `sourceUrl` |
 | talks_cam | talk id | |
-| ics, luma, google_calendar, uni_events_api, cucbc (calendar) | the iCalendar `UID`; `<UID>/<original start, UTC>` for an occurrence of a recurring event (all-day: `<UID>/<YYYYMMDD>`) | An override (`RECURRENCE-ID`) keeps its occurrence's id |
+| ics, luma, google_calendar, cucbc (calendar) | the iCalendar `UID`; `<UID>/<original start, UTC>` for an occurrence of a recurring event (all-day: `<UID>/<YYYYMMDD>`) | An override (`RECURRENCE-ID`) keeps its occurrence's id |
+| uni_events_api | `<event uuid>/<start, UTC>` (`YYYYMMDDTHHMMSSZ`; all-day: `<uuid>/<YYYYMMDD>`) for one occurrence; `<event uuid>/run` for a long run folded into one all-day event | The University's events programme (What's On, Cambridge Festival, Open Cambridge; source-research §10). `sourceUrl` is the University's own event page; the listing URL (the sweep group) is the programme's JSON calendar. An event naming no student group has no organisers: the University lists it |
 | cucbc | `bumps:<lent\|may>:<year>`; `timetable:<academic year>:<term>:<slug(name)>` | Timetable dates are computed from Full Term weeks: `status: tbc`, times `inferred` |
 | playwaze | fixture id (`Fixtures/<n>-B`) | |
 | su_whatson | `events/<SU org id>/<event id>` or `ents/<id>` | The same id whether What's On or a society profile's own event list (`.soc-event-list`) lists it |
@@ -346,7 +347,7 @@ These are never returned by public queries.
   | sourceType | vocab `SOURCE_TYPES` |
   | orgKey | string? |
   | httpStatus | number? |
-  | accessNote | string? — why a fetch failed, and the D3 fetch-policy overrides: `robots_override:society` (robots.txt disallowed the URL; read as a society page), `ai_optout_override:society` (its text reached the LLM despite an AI opt-out) |
+  | accessNote | string? — why a fetch failed, and the D3 fetch-policy overrides: `robots_override:society` (robots.txt disallowed the URL; read as a society page), `ai_optout_override:society` (its text reached the LLM despite an AI opt-out), and their `:permission` forms under a publisher's recorded permission (decision D3a: the University's events programme) |
   | contentSha256 | string? |
   | lastFetchedAt | number |
   | yielded | string[] |

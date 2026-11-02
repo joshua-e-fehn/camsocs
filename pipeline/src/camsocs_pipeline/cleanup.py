@@ -16,7 +16,9 @@ The candidates (`candidates`), each with its reason:
   title a notice, past or future;
 - ``external:<rule>`` — a past event the D6 rules decisively judge someone
   else's (a CTFtime import, a "[External]" title, a talks.cam relay) that is
-  stored as the society's own (`hosting` not ``takes_part``);
+  stored as the society's own (`hosting` not ``takes_part``); never an event
+  with no organiser, such as the University's own (`events.noise.for_organisers`,
+  as the load judges it);
 - ``stale-redaction`` — a title that reads "someone" (an earlier redaction)
   the latest harvest did not see again;
 - ``stale-card`` — a future term-card event no card read since three days
@@ -38,7 +40,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from camsocs_pipeline.events.noise import EventText, judge, own_names
+from camsocs_pipeline.events.noise import EventText, for_organisers, judge, own_names
 from camsocs_pipeline.models.wire import ScannedEvent
 from camsocs_pipeline.sources.links import name_tokens
 
@@ -109,7 +111,9 @@ def candidates(events: Sequence[ScannedEvent], *, now: datetime) -> list[Candida
     stale_ms = int(STALE_AFTER.total_seconds() * 1000)
     out: list[Candidate] = []
     for event in events:
-        verdict = judge(text_of(event))
+        # As the load judges it: an organiser-less event (the University's)
+        # is never someone else's, so never an `external` candidate.
+        verdict = for_organisers(judge(text_of(event)), bool(event.organiser_keys))
         reason: str | None = None
         if verdict.kind == "notice":
             reason = f"notice:{verdict.rule}"
