@@ -283,7 +283,9 @@ def classify_all(
             pending.append(request)
     batches = [pending[i : i + batch_size] for i in range(0, len(pending), batch_size)]
 
-    def ask(batch: list[OrgRequest]) -> tuple[list[OrgRequest], ClassifyReply | None, float]:
+    def ask(
+        batch: list[OrgRequest],
+    ) -> tuple[list[OrgRequest], ClassifyReply | None, str, float]:
         idents = [(f"o{number}", request) for number, request in enumerate(batch, start=1)]
         started = clock()
         try:
@@ -295,11 +297,12 @@ def classify_all(
             )
         except LLMValidationError as error:
             logger.warning("Classification batch failed validation: %s", error)
-            return batch, None, clock() - started
-        return batch, call.value, clock() - started
+            return batch, None, model, clock() - started
+        # The model that answered: the strong one after a fallback (ENG-23).
+        return batch, call.value, call.model, clock() - started
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        for batch, reply, seconds in pool.map(ask, batches):
+        for batch, reply, answered_by, seconds in pool.map(ask, batches):
             stats.calls += 1
             stats.seconds += seconds
             if reply is None:
@@ -311,10 +314,11 @@ def classify_all(
                 if item is None:
                     stats.missing += 1
                     continue
-                answers[request.key] = Answer(item, model)
+                answers[request.key] = Answer(item, answered_by)
                 stats.answered += 1
                 if memo is not None:
-                    memo.put(PROMPT_VERSION, request.memo_key(model), item, model)
+                    # Keyed on the bulk model asked, so a fallback reply is reused.
+                    memo.put(PROMPT_VERSION, request.memo_key(model), item, answered_by)
     return answers, stats
 
 

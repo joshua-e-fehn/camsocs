@@ -5,6 +5,7 @@ fictional."""
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -277,6 +278,33 @@ def test_the_model_classifies_the_rest_with_checked_quotes(tmp_path) -> None:
     again = FakeLLM(lambda text, _tier: _reply(text, ANSWERS))
     classify_records(records, llm=again, memo=memo)
     assert again.calls == []
+
+
+class FallbackLLM(FakeLLM):
+    """Answers as `LLMClient` does after the bulk model failed (ENG-23): the
+    strong model's reply, with the bulk model it stood in for."""
+
+    def complete_json(self, **kwargs: Any) -> Any:
+        call = super().complete_json(**kwargs)
+        return replace(call, model="strong-model-1", fallback_from="bulk-model-1")
+
+
+def test_a_fallback_answer_carries_the_strong_model_and_is_cached_for_bulk(tmp_path) -> None:
+    records = su_society("org-quokka", QUOKKA, description=QUOKKA_TEXT)
+    memo = LLMMemo(tmp_path / "llm")
+    llm = FallbackLLM(lambda text, _tier: _reply(text, ANSWERS))
+
+    result = classify_records(records, llm=llm, memo=memo)
+
+    (categories,) = values(result, "org-quokka")["categories"]
+    assert categories.extractor == "strong-model-1"
+    # Keyed on the bulk model the stage asked for: the next run asks nobody,
+    # and still names the model that answered.
+    again = FakeLLM(lambda text, _tier: _reply(text, ANSWERS))
+    cached = classify_records(records, llm=again, memo=memo)
+    assert again.calls == []
+    (categories,) = values(cached, "org-quokka")["categories"]
+    assert categories.extractor == "strong-model-1"
 
 
 def test_a_failed_call_claims_nothing_and_retracts_nothing() -> None:
