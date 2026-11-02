@@ -9,9 +9,11 @@ import { SITE_URL } from "@/lib/site"
 import { isEventKey } from "@/lib/url-state"
 
 /**
- * `GET /events/<key>/ics` — one society event as an `.ics` file ("Add to
- * calendar" → Apple Calendar / Outlook on the desktop): UID
- * `<key>@camsocs.uk`, the event's page here as its URL. Read with the
+ * `GET /events/<key>/ics` — one event as an `.ics` file ("Add to calendar" →
+ * Apple Calendar / Outlook on the desktop): UID `<key>@camsocs.uk`, the
+ * event's page here as its URL; one of the University's own listings says
+ * it is listed in the University's public events programme, with its page
+ * there (ENG-24, lib/ics.ts `eventIcsFile`). Read with the
  * viewer's session, so a verified Cambridge reader can add a Cambridge-only
  * event — and that file is never cached by a shared cache. An unknown or
  * hidden event is a 404. A served file is counted after the response

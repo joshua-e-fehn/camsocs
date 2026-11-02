@@ -229,4 +229,38 @@ describe("the event's page", () => {
     expect(external.organizer).toBeUndefined()
     expect(external.eventStatus).toBe("https://schema.org/EventCancelled")
   })
+
+  describe("the University's own listing (ENG-24)", () => {
+    const listing = "https://events.example.ac.uk/whats-on/lantern-lecture"
+    const UNIVERSITY = {
+      ...EVENT,
+      title: "Lantern lecture",
+      eventType: "talk" as const,
+      organisers: [],
+      fromUniversity: true,
+      sourceUrl: listing,
+    }
+
+    test("JSON-LD names the University as organiser and its page as sameAs", () => {
+      const ld = eventJsonLd(UNIVERSITY, "https://camsocs.uk/events/x")
+      expect(ld.organizer).toEqual([
+        { "@type": "Organization", name: "University of Cambridge", url: "https://www.cam.ac.uk" },
+      ])
+      expect(ld.sameAs).toBe(listing)
+    })
+
+    test("the search box finds it by the University's name", () => {
+      expect(matchesEventQuery(UNIVERSITY, "university lantern")).toBe(true)
+      expect(matchesEventQuery({ ...UNIVERSITY, fromUniversity: false }, "university")).toBe(false)
+    })
+
+    test("meta description and calendar entries say where it is listed", () => {
+      expect(eventMetaDescription(UNIVERSITY)).toBe(
+        "Talk listed by the University of Cambridge · Tue 3 Nov, 19:30–22:00 · The Union Chamber",
+      )
+      expect(eventCalendarDetails(UNIVERSITY, "https://camsocs.uk/events/x")).toBe(
+        `Listed in the University of Cambridge’s public events programme: ${listing}\nDetails: https://camsocs.uk/events/x`,
+      )
+    })
+  })
 })

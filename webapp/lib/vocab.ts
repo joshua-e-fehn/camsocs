@@ -734,7 +734,7 @@ export const EVENT_SOURCE_LABELS: Record<EventSource, string> = {
   luma: "Luma",
   google_calendar: "Google Calendar",
   playwaze: "Playwaze",
-  uni_events_api: "University events listing",
+  uni_events_api: "University of Cambridge public events",
   cucbc: "CUCBC",
   su_whatson: "SU What's On",
   mailing_list: "Society mailing list",

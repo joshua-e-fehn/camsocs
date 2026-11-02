@@ -130,6 +130,7 @@ describe("events URL state", () => {
       collegeKeys: [],
       org: undefined,
       takingPart: false,
+      university: "all",
       event: undefined,
     })
     expect(serializeEventsState(parseEventsParams({}))).toBe("")
@@ -208,6 +209,51 @@ describe("events URL state", () => {
         }),
       ),
     ).toBe(5)
+  })
+
+  test("the University switch: all by default, hide or only (ENG-24)", () => {
+    expect(parseEventsParams({ university: "everything" }).university).toBe("all")
+    expect(parseEventsParams({ university: "all" }).university).toBe("all")
+    const hide = parseEventsParams({ university: "hide", cat: "music" })
+    expect(hide).toMatchObject({ university: "hide", categories: ["music"] })
+    expect(serializeEventsState(hide)).toBe("?cat=music&university=hide")
+    expect(eventListArgs(hide, { from: 1, to: 2 })).toEqual({
+      from: 1,
+      to: 2,
+      categories: ["music"],
+      includeTakingPart: false,
+      university: "hide",
+    })
+    expect(activeEventFilterCount(hide)).toBe(2)
+    // The default sends no argument, so the query also runs against a
+    // deployment that predates it.
+    expect(eventListArgs(EMPTY_EVENTS, { from: 1, to: 2 })).not.toHaveProperty("university")
+  })
+
+  test("the University view drops the filters that match through organiser cards", () => {
+    const only = parseEventsParams({
+      university: "only",
+      cat: "music",
+      college: "org-trinity",
+      org: "cu-jazz",
+      type: "talk",
+    })
+    expect(only).toMatchObject({
+      university: "only",
+      categories: [],
+      collegeKeys: [],
+      org: undefined,
+      eventTypes: ["talk"],
+    })
+    expect(serializeEventsState(only)).toBe("?type=talk&university=only")
+    expect(eventListArgs(only, { from: 1, to: 2 })).toEqual({
+      from: 1,
+      to: 2,
+      eventTypes: ["talk"],
+      includeTakingPart: false,
+      university: "only",
+    })
+    expect(activeEventFilterCount(only)).toBe(2)
   })
 })
 

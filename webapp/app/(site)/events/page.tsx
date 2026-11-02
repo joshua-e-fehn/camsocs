@@ -23,7 +23,7 @@ type Props = { searchParams: Promise<SearchParams> }
 export const metadata: Metadata = pageMetadata({
   title: "Events",
   description:
-    "Socials, shows, matches and formals from Cambridge societies and clubs, day by day. Each event shows where it was listed.",
+    "Socials, shows, matches and formals from Cambridge societies and clubs, and the University’s public events, day by day. Each event shows where it was listed.",
   path: "/events",
 })
 

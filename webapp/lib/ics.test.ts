@@ -253,4 +253,20 @@ describe("eventIcsFile (/events/<key>/ics)", () => {
   test("a title with nothing to keep is event.ics", () => {
     expect(eventIcsFile({ ...EVENT, title: "🎉🎉" }, PAGE, NOW).filename).toBe("event.ics")
   })
+
+  test("the University's own listing names the programme and its page there (ENG-24)", () => {
+    const listing = "https://events.example.ac.uk/whats-on/lantern-lecture"
+    const { body } = eventIcsFile(
+      { ...EVENT, organisers: [], fromUniversity: true, sourceUrl: listing },
+      PAGE,
+      NOW,
+    )
+    const description = unfold(body)
+      .split("\r\n")
+      .find((line) => line.startsWith("DESCRIPTION"))
+    expect(description).toBe(
+      `DESCRIPTION:Listed in the University of Cambridge’s public events programme: ${listing}\\nDetails: ${PAGE}`,
+    )
+    expect(description).not.toContain("Organised by")
+  })
 })
