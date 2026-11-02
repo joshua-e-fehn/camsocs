@@ -65,7 +65,7 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `NEXT_PUBLIC_POSTHOG_HOST` | `https://eu.i.posthog.com` | unset | EU Cloud ingestion host for the server's error reports (`lib/posthog-server.ts`; unset means this same host). The browser does not read it: it sends to the site's own `/relay` path, which `app/relay/[...path]/route.ts` forwards to the EU hosts (fixed in `lib/relay.ts`) |
    | `NEXT_PUBLIC_POSTHOG_ENV` | `production` | unset | Tags each browser event's `environment`; unset means `development`, which the project's internal/test filter hides (configured) |
    | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the source map upload at build time (ENG-6, `next.config.ts`) |
-   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project, with error tracking write access (checked by a real upload on 2026-11-01). The upload runs only when both PostHog variables are set **and** `VERCEL_ENV` is `production`; otherwise the build skips it. A wrong or under-scoped key fails the production build (Turbopack), so rotate it with care. (The same name, with a separate read-only key, configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below) |
+   | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project, with error tracking write access (checked by a real upload on 2026-11-01). The upload runs only when both PostHog variables are set **and** `VERCEL_ENV` is `production`; otherwise the build skips it. A wrong or under-scoped key fails the production build (Turbopack), so rotate it with care. (The same key configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below; rotate all three together) |
 
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
@@ -118,7 +118,7 @@ The variables above are provisioned (2026-11-01). One PostHog project, `camsocs`
 
 The relay is not blocked or cached by the CPU protection below: the firewall rule denies only the GPTBot and ClaudeBot user agents, the anonymous Data Cache covers three Convex queries (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
 
-**Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item, never the host's read-only monitor key — read into the environment without echoing it:
+**Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item (the VPS monitor uses the same key) — read into the environment without echoing it:
 
 ```bash
 pixi run posthog-dashboards -- --dry-run          # the JSON it would send; no key needed
@@ -162,7 +162,7 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    Optional, for the hourly production checks (`camsocs monitor`, `pipeline/src/camsocs_pipeline/monitor.py`, ENG-10; on the VPS only, `docs/ops-vps.md` §6 "Monitor"):
 
    ```dotenv
-   POSTHOG_PERSONAL_API_KEY=<a personal API key scoped to the camsocs project, query:read only>
+   POSTHOG_PERSONAL_API_KEY=<the project-scoped personal API key from the 1Password item PostHog>
    POSTHOG_PROJECT_ID=<the numeric project id; 1Password Mya vault, item PostHog>
    ```
 
