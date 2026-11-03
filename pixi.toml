@@ -120,7 +120,7 @@ description = "Format everything: Ruff (Python) + Biome (TS)."
 [tasks.typecheck]
 cmd = "bun run typecheck"
 cwd = "webapp"
-description = "TypeScript type check (tsc --noEmit)."
+description = "TypeScript type check: the app (tsc --noEmit) and Convex's own tsconfig (lib ES2021), as `convex deploy` checks it."
 
 [tasks.check-codegen]
 cmd = "bun run check:codegen"

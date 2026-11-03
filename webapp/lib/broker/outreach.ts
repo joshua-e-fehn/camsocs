@@ -95,17 +95,13 @@ const FIELD_LABELS: Record<string, string> = {
 export function fieldLabel(field: string): string {
   return (
     FIELD_LABELS[field] ??
-    field
-      .split(".")
-      .at(-1)!
-      .replace(/([a-z])([A-Z])/g, "$1 $2")
-      .toLowerCase()
+    (field.split(".").pop() ?? field).replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()
   )
 }
 
 function list(items: readonly string[]): string {
   if (items.length <= 1) return items.join("")
-  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
 }
 
 /** Whether a row belongs in the outreach at all. */
