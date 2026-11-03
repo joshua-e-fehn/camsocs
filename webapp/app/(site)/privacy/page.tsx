@@ -258,7 +258,7 @@ export default function PrivacyPage() {
         <h3>If we have not written to you</h3>
         <p>
           We are writing to every society we list about its listing, at the role address it
-          publishes (by mid-November 2026). We do not write to each speaker on a talk or event, each
+          publishes (by 9 November 2026). We do not write to each speaker on a talk or event, each
           person named in the title of a University event, or each sender of a mailing-list message:
           there are thousands of them, for most we have no address, and finding one would mean
           collecting more about them than the listing needs. This notice is how we tell them

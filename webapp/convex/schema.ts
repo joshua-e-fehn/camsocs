@@ -90,8 +90,8 @@ import { literalUnion } from "./lib/validators"
  *  5. **Privacy boundary.** Public queries return only the public projection
  *     (convex/lib/projections.ts). The internal tables (`fieldClaims`,
  *     `sources`, `orgInternal`, `harvestRuns`, `inboundEmails`,
- *     `listingRequests`, `storedFiles`, `suppressions`,
- *     `coverageSnapshots`, `talkRuns`) and the broker tables (`people`,
+ *     `listingRequests`, `listingRequestSubmits`, `storedFiles`,
+ *     `suppressions`, `coverageSnapshots`, `talkRuns`) and the broker tables (`people`,
  *     `orgBrokerProfiles`, `interactions`, `introductions`) are never
  *     returned by a public query; broker functions call `requireBrokerUser`.
  *     `cam_only` events need a verified @cam.ac.uk session; `members_only`
@@ -865,6 +865,20 @@ export const coverageSnapshotFields = {
   computedAt: v.number(),
 }
 
+/**
+ * One accepted listing request, stamped for the form's rate limits
+ * (convex/listingRequests.ts): which budget it used and the listing it was
+ * about. No address and no text, so the counts never read a request's
+ * contents; pruned after a day.
+ */
+export const listingRequestSubmitFields = {
+  /** `removal` for remove / object, `other` for claim / correct / add. */
+  budget: v.union(v.literal("removal"), v.literal("other")),
+  /** The listing concerned; absent for an `add`. */
+  orgKey: v.optional(v.string()),
+  submittedAt: v.number(),
+}
+
 /** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
  * log: the address is stored only as a sha256, and rows are pruned after a day. */
 export const signInLinkSendFields = {
@@ -995,6 +1009,10 @@ export default defineSchema({
     .index("by_status_createdAt", ["status", "createdAt"])
     .index("by_submitter_createdAt", ["submitterEmail", "createdAt"])
     .index("by_kind_createdAt", ["kind", "createdAt"]),
+  listingRequestSubmits: defineTable(listingRequestSubmitFields)
+    .index("by_budget_submittedAt", ["budget", "submittedAt"])
+    .index("by_orgKey_budget_submittedAt", ["orgKey", "budget", "submittedAt"])
+    .index("by_submittedAt", ["submittedAt"]),
 
   // internal, auth
   signInLinkSends: defineTable(signInLinkSendFields)

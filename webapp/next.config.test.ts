@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import nextConfigExport, {
+  contentSecurityPolicy,
   HTML_LIMITED_BOTS,
   nextConfig,
+  securityHeaders,
   sourceMapUploadOptions,
   withSourceMapUpload,
 } from "./next.config"
@@ -53,6 +55,111 @@ describe("the source map upload gate", () => {
     })
     // withPostHogConfig returns Next's config-function form.
     expect(typeof withSourceMapUpload(nextConfig, env)).toBe("function")
+  })
+})
+
+/**
+ * The browser protections (ENG-35, security-headers): on every path, framing
+ * refused, the full CSP report-only, and
+ * the policy naming the Convex deployment the build talks to.
+ */
+const PROD = {
+  NEXT_PUBLIC_CONVEX_URL: "https://cheerful-bandicoot-511.convex.cloud",
+  NEXT_PUBLIC_CONVEX_SITE_URL: "https://cheerful-bandicoot-511.convex.site",
+  VERCEL_ENV: "production",
+  NODE_ENV: "production",
+}
+
+function directives(policy: string): Record<string, string[]> {
+  return Object.fromEntries(
+    policy.split("; ").map((part) => {
+      const [name, ...sources] = part.split(" ")
+      return [name, sources]
+    }),
+  )
+}
+
+describe("the security headers", () => {
+  test("apply to every path", async () => {
+    const rules = (await nextConfig.headers?.()) ?? []
+    const all = rules.filter((rule) => rule.source === "/:path*")
+    expect(all).toHaveLength(1)
+    const names = all[0].headers.map((header) => header.key)
+    expect(names).toEqual([
+      "X-Content-Type-Options",
+      "Referrer-Policy",
+      "X-Frame-Options",
+      "Permissions-Policy",
+      "Content-Security-Policy",
+      "Content-Security-Policy-Report-Only",
+    ])
+  })
+
+  test("Next does not advertise itself", () => {
+    expect(nextConfig.poweredByHeader).toBe(false)
+  })
+
+  test("enforce frame-ancestors alone, the rest report-only (security-headers)", () => {
+    const headers = securityHeaders(PROD)
+    expect(headers).toContainEqual({ key: "X-Content-Type-Options", value: "nosniff" })
+    expect(headers).toContainEqual({
+      key: "Referrer-Policy",
+      value: "strict-origin-when-cross-origin",
+    })
+    expect(headers).toContainEqual({
+      key: "Content-Security-Policy",
+      value: "frame-ancestors 'none'",
+    })
+  })
+
+  test("refuse framing and sniffing, trim referrers and switch off device features", () => {
+    const byName = Object.fromEntries(securityHeaders(PROD).map((h) => [h.key, h.value]))
+    expect(byName["X-Content-Type-Options"]).toBe("nosniff")
+    expect(byName["Referrer-Policy"]).toBe("strict-origin-when-cross-origin")
+    expect(byName["X-Frame-Options"]).toBe("DENY")
+    for (const feature of ["camera", "microphone", "geolocation", "payment", "usb"]) {
+      expect(byName["Permissions-Policy"]).toContain(`${feature}=()`)
+    }
+    // HSTS is Vercel's (max-age=63072000 on camsocs.uk); never a second copy.
+    expect(byName["Strict-Transport-Security"]).toBeUndefined()
+    // Only framing is enforced; the full policy stays report-only until the
+    // pages show no reports, never enforced by accident.
+    expect(byName["Content-Security-Policy"]).toBe("frame-ancestors 'none'")
+  })
+
+  test("the CSP allows self, the build's own Convex deployment and stored images", () => {
+    const csp = directives(contentSecurityPolicy(PROD))
+    expect(csp["default-src"]).toEqual(["'self'"])
+    expect(csp["connect-src"]).toEqual([
+      "'self'",
+      "https://cheerful-bandicoot-511.convex.cloud",
+      "wss://cheerful-bandicoot-511.convex.cloud",
+      "https://cheerful-bandicoot-511.convex.site",
+    ])
+    expect(csp["img-src"]).toContain("https://*.convex.cloud")
+    expect(csp["frame-ancestors"]).toEqual(["'none'"])
+    expect(csp["object-src"]).toEqual(["'none'"])
+    expect(csp["form-action"]).toEqual(["'self'"])
+    // PostHog goes through /relay, so its hosts are not named.
+    expect(contentSecurityPolicy(PROD)).not.toContain("posthog")
+    expect(csp["script-src"]).not.toContain("'unsafe-eval'")
+    expect(contentSecurityPolicy(PROD)).not.toContain("vercel.live")
+  })
+
+  test("falls back to any Convex deployment without a valid URL, and widens for dev and previews", () => {
+    const bare = directives(contentSecurityPolicy({ NEXT_PUBLIC_CONVEX_URL: "not a url" }))
+    expect(bare["connect-src"]).toEqual([
+      "'self'",
+      "https://*.convex.cloud",
+      "wss://*.convex.cloud",
+      "https://*.convex.site",
+    ])
+    const dev = directives(contentSecurityPolicy({ ...PROD, NODE_ENV: "development" }))
+    expect(dev["script-src"]).toContain("'unsafe-eval'")
+    const preview = directives(contentSecurityPolicy({ ...PROD, VERCEL_ENV: "preview" }))
+    expect(preview["script-src"]).toContain("https://vercel.live")
+    expect(preview["frame-src"]).toEqual(["https://vercel.live"])
+    expect(preview["frame-ancestors"]).toEqual(["'none'"])
   })
 })
 
@@ -119,22 +226,5 @@ describe("private routes say noindex (private-routes-noindex)", () => {
     for (const rule of noindex) {
       expect(rule.source).toMatch(/^\/(dashboard|sign-in|api|relay)\//)
     }
-  })
-})
-
-describe("security headers (security-headers)", () => {
-  test("every path gets them, with frame-ancestors as the whole CSP", async () => {
-    const rules = (await nextConfig.headers?.()) ?? []
-    const all = rules.find((rule) => rule.source === "/:path*")
-    expect(all?.headers).toEqual([
-      { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-      { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-    ])
-  })
-
-  test("Next does not advertise itself", () => {
-    expect(nextConfig.poweredByHeader).toBe(false)
   })
 })

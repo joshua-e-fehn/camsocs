@@ -29,6 +29,7 @@ import { pageMetadata } from "@/lib/page-metadata"
 import type { OrgPage } from "@/lib/public-api"
 import { publicQuery } from "@/lib/public-data"
 import { summary } from "@/lib/rich-text"
+import { camSignInOpen } from "@/lib/sign-in-options"
 import { jsonLdScript, organizationId } from "@/lib/structured-data"
 import { isOrgSlug } from "@/lib/url-state"
 
@@ -238,11 +239,16 @@ export default async function SocietyPage({ params }: Props) {
   if (isCollegeHub(org)) return <CollegeHubPage page={page} />
 
   const window = camOnlyWindow(Date.now())
-  const [colleges, hiddenEvents, related] = await Promise.all([
+  const [colleges, camSignIn, hiddenCount, related] = await Promise.all([
     loadColleges(),
+    camSignInOpen(),
     hiddenEventCount(org.key, window),
     relatedOrgs(org.slug),
   ])
+  // The count's prompt is a sign-in link: none while the link is off, as on
+  // /events (ENG-35). A signed-in reader's own Cambridge-only events still
+  // arrive in the browser (`ProfileCamOnlyEvents`).
+  const hiddenEvents = camSignIn ? hiddenCount : null
   const collegeNames = Object.fromEntries(colleges.map((college) => [college.key, college.name]))
   const collegeSlugs = Object.fromEntries(colleges.map((college) => [college.key, college.slug]))
   const { lead, description } = profileLead({
