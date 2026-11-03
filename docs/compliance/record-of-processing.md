@@ -1,7 +1,7 @@
 # Record of processing activities (UK GDPR Art 30)
 
 Controller: **Joshua Fehn**, as an individual (personal / portfolio project; PLAN.md §1). No joint controllers, no representative, no DPO (not required: no large-scale special-category processing, no public authority).
-Contact: the public request form (`/request`) and `CONTACT_EMAIL` in `webapp/lib/site.ts`: camsocs@joshua-fehn.de (decision D4, 2026-10-08). Information Commission (the ICO until 30 Sep 2026) data protection fee: **Tier 1, to be paid** (PLAN.md J6); record the number in `ICO_REGISTRATION_NUMBER`.
+Contact: the public request form (`/request`) and `CONTACT_EMAIL` in `webapp/lib/site.ts`: camsocs@joshua-fehn.de (decision D4, 2026-10-08). Information Commission (the ICO until 30 Sep 2026) data protection fee: **none payable**, per Joshua's check with the regulator's online fee self-assessment on 2026-11-03 (PLAN.md J6, ENG-38). Keep a copy of the answers given and the result outside the repository, and re-run the self-assessment if the processing changes (for example paid sponsorship, or the CRM used for anyone's marketing). The research brief of 2026-10-07 had expected Tier 1, so this rests on the self-assessment's result. If a fee ever becomes payable, record the number in `ICO_REGISTRATION_NUMBER`.
 
 Why a record is kept: the directory is maintained continuously, so the processing is not "occasional" (landscape brief §5.2). This file is the record; `docs/data-model.md` is the authority on fields, and the public notice is `webapp/app/(site)/privacy/page.tsx`.
 

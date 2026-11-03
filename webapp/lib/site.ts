@@ -2,9 +2,9 @@
  * Site-wide facts the public pages, metadata and compliance pages state.
  *
  * `CONTACT_EMAIL` is Joshua's decision D4 (PLAN.md, 2026-10-08); he creates the
- * alias. ⚠ `ICO_REGISTRATION_NUMBER` is deliberately empty until Joshua fills it
- * in (PLAN.md J6 and the privacy notice); the pages leave the line out while it
- * is. Never put a guessed value here.
+ * alias. `ICO_REGISTRATION_NUMBER` is empty: no data protection fee is payable
+ * (the regulator's self-assessment, PLAN.md J6, 2026-11-03), so there is no
+ * number, and the pages leave the line out. Never put a guessed value here.
  */
 
 export const SITE_NAME = "camsocs"
@@ -55,8 +55,8 @@ export const CONTROLLER_NAME = "Joshua Fehn"
 export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 
 /** The data protection fee registration number from the Information
- * Commission (the ICO until 30 September 2026), once paid (PLAN.md J6).
- * Empty until then. */
+ * Commission (the ICO until 30 September 2026). Empty: no fee is payable
+ * (PLAN.md J6); fill it in only if a fee is ever paid. */
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
