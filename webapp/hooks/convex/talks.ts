@@ -135,3 +135,12 @@ export function useNextTalk(args: TalkListArgs | "skip"): TalkListItem | null | 
   if (status === "LoadingFirstPage" || status === "LoadingMore" || more) return undefined
   return null
 }
+
+/**
+ * A page of `talks.list` for the home page's Talks column (lib/talk-display.ts
+ * `homeTalkArgs`), live; "skip" until the page is hydrated, so the server
+ * render never holds a talk (owner decision G1).
+ */
+export function useHomeTalks(args: Parameters<typeof useQuery<typeof api.talks.list>>[1]) {
+  return useQuery(api.talks.list, args)
+}

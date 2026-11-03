@@ -1,4 +1,4 @@
-import { fetchQuery } from "convex/nextjs"
+import type { Metadata } from "next"
 import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { Crest } from "@/components/molecules/crest"
@@ -20,56 +20,66 @@ import {
   londonTime,
   weekdayShort,
 } from "@/lib/calendar"
+import { categoryHubPath } from "@/lib/directory-hubs"
 import { type EventRun, groupRuns, splitOngoing } from "@/lib/event-runs"
-import type { EventListItem, TalkListItem } from "@/lib/public-api"
-import { schoolColumns, talkHref, talkMeta, talkTime } from "@/lib/talk-display"
+import { pageMetadata } from "@/lib/page-metadata"
+import type { EventListItem } from "@/lib/public-api"
+import { publicQuery } from "@/lib/public-data"
+import { SITE_INTRO } from "@/lib/site"
+import { websiteJsonLd } from "@/lib/site-jsonld"
+import { jsonLdScript } from "@/lib/structured-data"
+import { schoolColumns } from "@/lib/talk-display"
 import { loadTermClock } from "@/lib/term-dates"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 import { CATEGORIES, CATEGORY_LABELS, TALK_SCHOOL_LABELS } from "@/lib/vocab"
 
+/**
+ * The home page's own title, description and canonical (SEO audit
+ * 2026-11-02, home-metadata): a title for what people search ("Cambridge
+ * student societies"), under 60 characters with the brand first, and a
+ * canonical that folds `?utm_…` and `?ref=` variants into `/`.
+ */
+export const metadata: Metadata = pageMetadata({
+  title: { absolute: "camsocs – Cambridge student societies, events & talks" },
+  description:
+    "Find Cambridge student societies and sports clubs, what they are running this week, and public talks, each fact linked to its source. Unofficial.",
+  path: "/",
+})
+
 /** Rows per column in the overview; the rest is one "N more" link. */
 const ROWS = 5
-/** Talks read per day: the rows shown plus room for cancelled ones. The day
- * counts (`talks.dayCounts`) are exact. Read day by day, so a busy Monday
- * cannot crowd the rest of the week out of one page. */
-const DAY_TALKS = ROWS + 5
 /** Departments named under each School. */
 const DEPARTMENTS_PER_SCHOOL = 3
-/** An event or talk with no end time still counts as on for this long. */
+/** An event with no end time still counts as on for this long. */
 const DEFAULT_LENGTH_MS = 2 * 60 * 60 * 1000
 /** The hero's "Try" links. */
 const TRY = [
   { href: "/societies?q=jazz", label: "Jazz" },
   { href: "/societies?q=rowing", label: "Rowing" },
-  { href: "/societies?cat=politics_debate", label: "Debating" },
+  // A category's own hub, not the filtered directory (decision G13).
+  { href: categoryHubPath("politics_debate"), label: "Debating" },
   { href: "/societies?beginner=yes", label: "Beginners welcome" },
   { href: "/talks", label: "Seminars" },
 ] as const
 
 /**
- * The talks pillar for the home page: its numbers, the week's talks with
- * exact per-day counts, and the departments. Null when the talks module
- * cannot be read — the page then shows no Talks column rather than zeros
- * (DESIGN.md "no fake numbers").
+ * The talks pillar for the home page: its numbers and the departments — no
+ * talk itself. Outside /talks a talk's title, speakers or series never reach
+ * the server's HTML or RSC payload (owner decision G1,
+ * lib/talks-boundary.ts): the overview reads its Talks rows in the browser
+ * after hydration. Null when the talks module cannot be read — the page then
+ * shows no Talks column rather than zeros (DESIGN.md "no fake numbers").
  */
 async function loadTalks(today: string) {
   const from = londonMidnight(today)
   const to = londonMidnight(addDays(today, 7))
   try {
-    const days = Array.from({ length: 7 }, (_, offset) => addDays(today, offset))
-    const [overview, dayCounts, departments, ...perDay] = await Promise.all([
-      fetchQuery(api.talks.overview, {}),
-      fetchQuery(api.talks.dayCounts, { from, to }),
-      fetchQuery(api.talks.departments, {}),
-      ...days.map((day) =>
-        fetchQuery(api.talks.list, {
-          from: londonMidnight(day),
-          to: londonMidnight(addDays(day, 1)),
-          paginationOpts: { numItems: DAY_TALKS, cursor: null },
-        }),
-      ),
+    const [overview, dayCounts, departments] = await Promise.all([
+      publicQuery(api.talks.overview, {}),
+      publicQuery(api.talks.dayCounts, { from, to }),
+      publicQuery(api.talks.departments, {}),
     ])
-    return { overview, week: perDay.flatMap((page) => page.page), dayCounts, departments }
+    return { overview, dayCounts, departments }
   } catch (error) {
     unstable_rethrow(error)
     console.error("talks queries failed; the home page without its talks", error)
@@ -97,14 +107,6 @@ const LONG_MONTHS = [
 function longDay(iso: string): string {
   const date = new Date(`${iso}T12:00:00Z`)
   return `${LONG_WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${LONG_MONTHS[date.getUTCMonth()]}`
-}
-
-function greeting(now: number): string {
-  const hour = Number(londonTime(now).slice(0, 2))
-  if (hour < 5) return "Good evening"
-  if (hour < 12) return "Good morning"
-  if (hour < 18) return "Good afternoon"
-  return "Good evening"
 }
 
 /** "Michaelmas · week 4", or "Vacation · Lent from Tue 19 Jan". */
@@ -137,19 +139,6 @@ function eventItem(run: EventRun<EventListItem>, today: string, weekday: boolean
     isToday: weekday && day === today,
     title: event.title,
     meta: [event.organisers[0]?.name, event.venueText].filter(Boolean).join(" · ") || undefined,
-  }
-}
-
-function talkItem(talk: TalkListItem, today: string, weekday: boolean): OverviewItem {
-  const day = londonIsoDate(talk.startsAt)
-  return {
-    key: talk.key,
-    href: talkHref(talk.key),
-    time: talkTime(talk, today),
-    weekday: weekday ? (day === today ? "Today" : weekdayShort(day)) : undefined,
-    isToday: weekday && day === today,
-    title: talk.title,
-    meta: talkMeta(talk),
   }
 }
 
@@ -188,10 +177,12 @@ export default async function HomePage() {
   const now = Date.now()
   const today = londonIsoDate(now)
   const days = Array.from({ length: 7 }, (_, offset) => addDays(today, offset))
-  // Public data only (no token): the home page is the same for everyone.
+  // Public data only, cached (lib/public-data.ts): the home page is the same
+  // for everyone, served from the edge and revalidated (docs/webapp.md
+  // "Caching"); its "counts as of" time is the render's.
   const [{ facets, categoryExamples: examples }, events, talks, { clock }] = await Promise.all([
-    fetchQuery(api.orgs.home, {}),
-    fetchQuery(api.events.list, {
+    publicQuery(api.orgs.home, {}),
+    publicQuery(api.events.list, {
       from: londonMidnight(today),
       to: londonMidnight(addDays(today, 7)),
     }),
@@ -209,7 +200,6 @@ export default async function HomePage() {
   // listings (ENG-24) are one link to the calendar's University view.
   const starting = startingAll.filter((event) => !event.fromUniversity)
   const universityWeek = groupRuns(startingAll.filter((event) => event.fromUniversity)).length
-  const liveTalks = (talks?.week ?? []).filter((talk) => !talk.cancelled).sort(byTime)
   const talkCount = new Map(talks?.dayCounts.map((row) => [row.day, row.count]))
 
   /** Today: what has not finished yet, so the evening view is not the morning's. */
@@ -235,9 +225,7 @@ export default async function HomePage() {
     // One entry per show, even across its nights that day.
     const runs = groupRuns(dayEvents).sort((a, b) => byTime(a.events[0], b.events[0]))
     const shownRuns = isToday ? fromNow(runs, (run) => run.events[0]) : runs
-    const dayTalks = liveTalks.filter((talk) => londonIsoDate(talk.startsAt) === day)
-    const shownTalks = isToday ? fromNow(dayTalks, (talk) => talk) : dayTalks
-    const talkTotal = talks ? (talkCount.get(day) ?? dayTalks.length) : null
+    const talkTotal = talks ? (talkCount.get(day) ?? 0) : null
     const societies = hosts(runs)
     return {
       events: runs.length,
@@ -250,14 +238,9 @@ export default async function HomePage() {
           total: runs.length,
           href: `/events?date=${day}`,
         },
+        // Rows come in the browser (G1); the server sends the count.
         talks:
-          talkTotal === null
-            ? null
-            : {
-                items: shownTalks.slice(0, ROWS).map((talk) => talkItem(talk, today, false)),
-                total: talkTotal,
-                href: `/talks?from=${day}`,
-              },
+          talkTotal === null ? null : { items: [], total: talkTotal, href: `/talks?from=${day}` },
         societies: { items: societies.slice(0, ROWS), total: societies.length, href: "/societies" },
       },
     }
@@ -288,17 +271,7 @@ export default async function HomePage() {
       total: weekRuns.length,
       href: "/events",
     },
-    talks:
-      weekTalkTotal === null
-        ? null
-        : {
-            items: liveTalks
-              .filter((talk) => notOver(talk) && !talk.allDay)
-              .slice(0, ROWS)
-              .map((talk) => talkItem(talk, today, true)),
-            total: weekTalkTotal,
-            href: "/talks",
-          },
+    talks: weekTalkTotal === null ? null : { items: [], total: weekTalkTotal, href: "/talks" },
     societies: { items: weekHosts.slice(0, ROWS), total: weekHosts.length, href: "/societies" },
   }
 
@@ -311,6 +284,11 @@ export default async function HomePage() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD, escaped by jsonLdScript
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(websiteJsonLd()) }}
+      />
       {/* Hero: the one sky band ------------------------------------------------------------ */}
       <div className="border-b border-sky-line bg-sky">
         <section
@@ -342,7 +320,7 @@ export default async function HomePage() {
             <p className="max-w-[34em] text-[1.0625rem] leading-[1.55] text-muted-foreground md:text-[1.1875rem]">
               {facets.total > 0 ? (
                 <>
-                  {greeting(now)}.{" "}
+                  {SITE_INTRO}{" "}
                   <strong className="font-semibold text-foreground">
                     {plural(eventsToday, "event", "events")}
                   </strong>
@@ -360,7 +338,7 @@ export default async function HomePage() {
                   {departments > 0 && <> and {plural(departments, "department", "departments")}</>}.
                 </>
               ) : (
-                "Societies, clubs, their events and the University’s talks in one place. The directory is being filled from public sources now."
+                `${SITE_INTRO} The directory is being filled from public sources now.`
               )}
             </p>
             <HeroSearch className="mt-5 max-w-[600px] md:mt-[30px]" />
@@ -393,6 +371,8 @@ export default async function HomePage() {
       </div>
 
       <HomeOverview
+        todayIso={today}
+        now={now}
         today={todaySlice}
         week={weekSlice}
         days={overviewDays}
@@ -422,7 +402,9 @@ export default async function HomePage() {
           {CATEGORIES.map((category) => (
             <li key={category} className="flex min-w-0">
               <Link
-                href={`/societies?cat=${category}`}
+                // The category's hub (decision G13): a crawlable page of its
+                // own; `/societies?cat=` only canonicalises to it.
+                href={categoryHubPath(category)}
                 className="group flex min-h-12 min-w-0 flex-1 flex-col justify-center border-b py-3 focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <span className="flex items-baseline justify-between gap-2.5">

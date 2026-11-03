@@ -57,9 +57,10 @@ import {
 import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import { addDays, DAY_MS, formatDayShort, londonIsoDate, startOfWeek } from "@/lib/calendar"
 import { availablePresets, currentTermEnd } from "@/lib/date-presets"
-import { SITE_NAME, SITE_URL } from "@/lib/site"
+import { SITE_URL } from "@/lib/site"
 import {
   dayHeading,
+  documentTitle,
   groupTalksByDay,
   SCHOOL_TONE,
   schoolCounts,
@@ -67,6 +68,7 @@ import {
   TALK_SCHOOL_SHORT,
   type TalkListItem,
   type TalkOverview,
+  talksPageTitle,
 } from "@/lib/talks"
 import {
   activeTalkFilterCount,
@@ -120,13 +122,6 @@ function plural(n: number, one: string, many: string) {
 
 /** The page title for a state: "Talks", "Computer Science talks", "Lectures
  * · Technology talks". */
-function talksTitle(state: TalksState, departmentName?: string): string {
-  const scope = departmentName ?? (state.school ? TALK_SCHOOL_SHORT[state.school] : undefined)
-  const kind = state.kind ? TALK_KIND_LABELS[state.kind] : undefined
-  if (!scope && !kind) return "Talks"
-  return [kind && `${kind}s`, scope && `${scope} talks`].filter(Boolean).join(" · ") || "Talks"
-}
-
 /** A small line drawing of a lecture theatre's tiered benches and lectern
  * over the river: the empty state's mark. */
 function TheatreMark() {
@@ -236,9 +231,10 @@ export function TalksBrowser({
     else window.history.replaceState(null, "", talksHref(base))
   }
 
-  const pageTitle = talksTitle(state, department?.shortName)
+  // The same title the server's metadata gives this URL (lib/talks.ts).
+  const pageTitle = documentTitle(talksPageTitle(state, department?.shortName))
   useEffect(() => {
-    document.title = `${pageTitle} · ${SITE_NAME}`
+    document.title = pageTitle
   }, [pageTitle])
 
   // --- data ------------------------------------------------------------------------------
@@ -572,7 +568,7 @@ export function TalksBrowser({
                   </>
                 ) : (
                   <>
-                    Talks<span className="text-talks">.</span>
+                    Public talks in Cambridge<span className="text-talks">.</span>
                   </>
                 )}
               </h1>

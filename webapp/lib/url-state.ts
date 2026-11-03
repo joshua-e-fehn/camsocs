@@ -245,6 +245,16 @@ export function directoryCursor(state: DirectoryState): string {
  * dates are reached by moving the anchor. */
 export const MAX_LIST_WEEKS = 8
 
+/** One society's calendar loads four weeks at first (its events are
+ * sparser than the whole site's): `/events?org=<slug>`, the URL its profile
+ * and event pages link, is that view and the one search engines index (SEO
+ * audit "events-param-urls"). */
+export const ORG_WEEKS = 4
+
+/** The weeks a list loads when the URL does not say. */
+export function defaultWeeks(org: string | undefined): number {
+  return org ? ORG_WEEKS : 1
+}
 /** Whose events `/events` lists (ENG-24): everything, societies' and clubs'
  * only, or the University's own listings only (`?university=hide|only`). */
 export const UNIVERSITY_VIEWS = ["all", "hide", "only"] as const
@@ -297,25 +307,27 @@ export function parseEventsParams(params: SearchParams): EventsState {
   const view = firstParam(params, "view")
   const date = firstParam(params, "date")
   const preset = firstParam(params, "preset")
-  const weeks = Number.parseInt(firstParam(params, "weeks") ?? "1", 10)
-  const org = firstParam(params, "org")
-  const event = firstParam(params, "event")
   const university = UNIVERSITY_VIEWS.find((view) => view === firstParam(params, "university"))
   // The University view has no organiser cards to filter by: those filters
   // are dropped rather than left to list nothing.
   const only = university === "only"
+  const orgParam = firstParam(params, "org")
+  const org = !only && orgParam && isOrgSlug(orgParam) ? orgParam : undefined
+  const fallbackWeeks = defaultWeeks(org)
+  const weeks = Number.parseInt(firstParam(params, "weeks") ?? String(fallbackWeeks), 10)
+  const event = firstParam(params, "event")
   return {
     view: (CALENDAR_VIEWS as readonly string[]).includes(view ?? "")
       ? (view as CalendarView)
       : "list",
     date: date && isIsoDate(date) ? date : undefined,
     preset: isDatePreset(preset) ? preset : undefined,
-    weeks: Number.isFinite(weeks) && weeks >= 1 ? Math.min(weeks, MAX_LIST_WEEKS) : 1,
+    weeks: Number.isFinite(weeks) && weeks >= 1 ? Math.min(weeks, MAX_LIST_WEEKS) : fallbackWeeks,
     q: query(params),
     categories: only ? [] : oneOf(params, "cat", CATEGORIES),
     eventTypes: oneOf(params, "type", EVENT_TYPES),
     collegeKeys: only ? [] : orgKeys(params, "college"),
-    org: !only && org && isOrgSlug(org) ? org : undefined,
+    org,
     // `hide` (the old opt-out) and anything else leave them out.
     takingPart: firstParam(params, "external") === "show",
     university: university ?? "all",
@@ -328,7 +340,12 @@ export function serializeEventsState(state: EventsState): string {
     ["view", state.view === "list" ? undefined : state.view],
     ["date", state.date],
     ["preset", state.preset],
-    ["weeks", state.weeks > 1 ? String(Math.min(state.weeks, MAX_LIST_WEEKS)) : undefined],
+    [
+      "weeks",
+      state.weeks !== defaultWeeks(state.org)
+        ? String(Math.min(state.weeks, MAX_LIST_WEEKS))
+        : undefined,
+    ],
     ["q", state.q?.trim() || undefined],
     ["cat", [...state.categories].sort()],
     ["type", [...state.eventTypes].sort()],
@@ -343,6 +360,29 @@ export function serializeEventsState(state: EventsState): string {
 /** `/events?…` for a state. */
 export function eventsHref(state: EventsState): string {
   return `/events${serializeEventsState(state)}`
+}
+
+/**
+ * How search engines should treat an /events URL (SEO audit
+ * "events-param-urls"): the calendar itself (`/events`) and one society's
+ * calendar (`/events?org=<slug>`) are pages of their own, canonical and
+ * indexable; every other combination — a date, more weeks, a view, a
+ * preset, a search, a filter, an open event — is the same calendar sliced
+ * differently, so it is noindex, follow (its links still count) with the
+ * canonical of the page it slices. Never robots-disallowed: that would stop
+ * the link-following. A society the directory does not list (`orgListed`
+ * false: an unknown, hidden or unreadable slug) has no calendar of its own
+ * to index, so `?org=<that slug>` is noindex too.
+ */
+export function eventsIndexing(
+  state: EventsState,
+  orgListed = true,
+): { canonical: string; index: boolean } {
+  const canonical = state.org
+    ? eventsHref({ ...EMPTY_EVENTS, org: state.org, weeks: ORG_WEEKS })
+    : "/events"
+  const plain = eventsHref({ ...state, q: state.q?.trim() || undefined }) === canonical
+  return { canonical, index: plain && (!state.org || orgListed) }
 }
 
 /** How many filters (not the text query, the dates or the open event) are on.

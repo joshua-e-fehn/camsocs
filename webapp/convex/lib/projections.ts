@@ -1,4 +1,5 @@
 import { type Infer, v } from "convex/values"
+import { isTalksDerivedEvent } from "../../lib/talks-boundary"
 import {
   ACTIVITY_TYPES,
   AUDIENCES,
@@ -484,6 +485,17 @@ export const eventListItemValidator = v.object({
   hosting: literalUnion(EVENT_HOSTING),
   /** The external event's own page; only for a `takes_part` event. */
   externalUrl: v.optional(v.string()),
+  /** The talks boundary's verdict (owner decision G1, lib/talks-boundary.ts),
+   * reached here over the stored event's every field: true puts the event's
+   * page under /talks and keeps it out of every list, feed and JSON-LD
+   * outside it. Read this; never re-run the rule on a projection. */
+  talksDerived: v.boolean(),
+  /** How the start time was read, alone of the event's provenance: whether
+   * its page carries JSON-LD depends on it (lib/events.ts
+   * `eventHasStructuredData`), and a profile links only events whose page
+   * does (review of the SEO audit, profile-jsonld-dangling-event-ids).
+   * Absent when the start has no provenance. */
+  meta: v.optional(v.object({ startsAt: v.object({ status: literalUnion(FIELD_STATUSES) }) })),
   /** The University's own listing (ENG-24, lib/derived.ts `isUniversityListing`):
    * shown as "University of Cambridge", never as a society's event. */
   fromUniversity: v.boolean(),
@@ -517,6 +529,11 @@ export const eventPublicValidator = v.object({
   hosting: literalUnion(EVENT_HOSTING),
   /** The external event's own page; only for a `takes_part` event. */
   externalUrl: v.optional(v.string()),
+  /** The talks boundary's verdict (owner decision G1, lib/talks-boundary.ts),
+   * reached here over the stored event's every field: true puts the event's
+   * page under /talks and keeps it out of every list, feed and JSON-LD
+   * outside it. Read this; never re-run the rule on a projection. */
+  talksDerived: v.boolean(),
   /** The University's own listing (ENG-24), as in `eventListItemValidator`. */
   fromUniversity: v.boolean(),
   lastSeenAt: v.number(),
@@ -598,6 +615,8 @@ export async function eventListItem(
     source: event.source,
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
+    talksDerived: isTalksDerivedEvent(event),
+    ...(event.meta.startsAt ? { meta: { startsAt: { status: event.meta.startsAt.status } } } : {}),
     fromUniversity: isUniversityListing(event),
   }
 }
@@ -631,6 +650,7 @@ export async function eventPublic(
     source: event.source,
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
+    talksDerived: isTalksDerivedEvent(event),
     fromUniversity: isUniversityListing(event),
     lastSeenAt: event.lastSeenAt,
     confidence: event.confidence,

@@ -41,13 +41,20 @@ const event = {
   hosting: "hosts",
   organisers: [{ name: "CU Chess Club", role: "host" }],
   visibility: "public",
+  source: "ics",
+  sourceUrl: "https://example.org/chess",
+  talksDerived: false,
 }
 
 /** What the Convex stub does: answer, or fail like an outage. */
 let convexDown = false
 let eventVisibility = "public"
+/** Convex's talks-boundary verdict on the event (G1, lib/talks-boundary.ts). */
+let eventTalksDerived = false
+/** The arguments of the last `events.list` call. */
+let listArgs: Record<string, unknown> | undefined
 mock.module("convex/nextjs", () => ({
-  fetchQuery: async (query: unknown) => {
+  fetchQuery: async (query: unknown, args?: Record<string, unknown>) => {
     if (convexDown) throw new Error("Convex unreachable")
     switch (getFunctionName(query as never)) {
       case "talks:list":
@@ -57,9 +64,32 @@ mock.module("convex/nextjs", () => ({
       case "talks:get":
         return talk
       case "events:get":
-        return { ...event, visibility: eventVisibility }
+        return { ...event, visibility: eventVisibility, talksDerived: eventTalksDerived }
+      case "venues:get":
+        return null
       case "venues:list":
-        return []
+        return [{ key: "ven-hall", name: "The Invented Hall", aliases: [] }]
+      case "events:list":
+        listArgs = args
+        return [
+          { ...event, venueText: undefined, venueKey: "ven-hall" },
+          // Defence in depth: the feed drops these even if the list had them.
+          {
+            ...event,
+            key: `evt-${"c".repeat(40)}`,
+            title: "Invented seminar",
+            source: "talks_cam",
+            talksDerived: true,
+          },
+          {
+            ...event,
+            key: `evt-${"d".repeat(40)}`,
+            title: "Members' drinks",
+            visibility: "cam_only",
+          },
+        ]
+      case "orgs:getBySlug":
+        return { org: { name: "CU Chess Club" } }
       default:
         throw new Error(`unexpected query ${getFunctionName(query as never)}`)
     }
@@ -90,8 +120,10 @@ mock.module("../lib/posthog-server", () => ({
 }))
 
 const talksFeed = await import("./talks.ics/route")
+const eventsFeed = await import("./events.ics/route")
 const eventFile = await import("./events/[key]/ics/route")
 const talkFile = await import("./talks/[key]/ics/route")
+const talksEventFile = await import("./talks/events/[key]/ics/route")
 
 type Snapshot = { status: number; headers: [string, string][]; body: string }
 
@@ -115,10 +147,16 @@ const feed =
   (query = "") =>
   () =>
     talksFeed.GET({ nextUrl: new URL(`http://localhost:3000/talks.ics${query}`) } as never)
+const eventsIcs =
+  (query = "") =>
+  () =>
+    eventsFeed.GET({ nextUrl: new URL(`http://localhost:3000/events.ics${query}`) } as never)
 const eventIcs = (key: string) => () =>
   eventFile.GET({} as never, { params: Promise.resolve({ key }) })
 const talkIcs = (key: string) => () =>
   talkFile.GET({} as never, { params: Promise.resolve({ key }) })
+const talksEventIcs = (key: string) => () =>
+  talksEventFile.GET({} as never, { params: Promise.resolve({ key }) })
 
 const header = (s: Snapshot, name: string) => s.headers.find(([k]) => k === name)?.[1]
 
@@ -161,6 +199,61 @@ const header = (s: Snapshot, name: string) => s.headers.find(([k]) => k === name
   assert.equal(snapshot.status, 200)
   assert.equal(header(snapshot, "content-disposition"), 'attachment; filename="on-knots.ics"')
   assert.deepEqual(captured, [["ics_feed_fetched", { feed: "talk", key: TALK_KEY }]])
+}
+
+{
+  // The events feed: public, not talks.cam-derived, venues named by key.
+  const { snapshot, captured } = await serve(eventsIcs("?org=chess"))
+  assert.equal(snapshot.status, 200)
+  assert.equal(
+    header(snapshot, "cache-control"),
+    "public, s-maxage=3600, stale-while-revalidate=86400",
+  )
+  const unfolded = snapshot.body.replace(/\r\n /g, "")
+  assert.ok(unfolded.includes("X-WR-CALNAME:CU Chess Club · camsocs"))
+  assert.ok(unfolded.includes("LOCATION:The Invented Hall"))
+  assert.ok(unfolded.includes(`URL:https://camsocs.uk/events/${EVENT_KEY}`))
+  assert.ok(!unfolded.includes("Invented seminar"))
+  assert.ok(!unfolded.includes("Members' drinks"))
+  assert.deepEqual(captured, [["ics_feed_fetched", { feed: "events" }]])
+  // The whole-site feed: every public event, the University's own listings
+  // (ENG-24) too, as the calendar's default; named for that, not "society".
+  const all = await serve(eventsIcs())
+  assert.equal(all.snapshot.status, 200)
+  assert.ok(all.snapshot.body.includes("X-WR-CALNAME:Cambridge events · camsocs\r\n"))
+  assert.equal(listArgs?.university, undefined)
+  assert.equal(listArgs?.orgKey, undefined)
+  const bad = await serve(eventsIcs("?org=Not_A_Slug"))
+  assert.equal(bad.snapshot.status, 400)
+  assert.equal(bad.deferredCount, 0)
+}
+
+// --- the talks boundary (G1): a talks.cam-derived file under /talks only, a 308 (not counted) there
+
+{
+  eventTalksDerived = true
+  const across = await serve(eventIcs(EVENT_KEY))
+  assert.equal(across.snapshot.status, 308)
+  // Site-relative: a preview or local deployment stays on its own host.
+  assert.equal(header(across.snapshot, "location"), `/talks/events/${EVENT_KEY}/ics`)
+  assert.equal(across.snapshot.body, "")
+  assert.equal(across.deferredCount, 0)
+  const served = await serve(talksEventIcs(EVENT_KEY))
+  assert.equal(served.snapshot.status, 200)
+  // RFC 5545 folds long lines; unfold before reading the URL.
+  const unfolded = served.snapshot.body.replace(/\r\n /g, "")
+  assert.ok(unfolded.includes(`URL:https://camsocs.uk/talks/events/${EVENT_KEY}\r\n`))
+  assert.deepEqual(served.captured, [["ics_feed_fetched", { feed: "event", key: EVENT_KEY }]])
+  // Never back (talks-boundary-redirect-loop): any other event's file is
+  // served under /talks too, its URL the event's own page.
+  eventTalksDerived = false
+  const kept = await serve(talksEventIcs(EVENT_KEY))
+  assert.equal(kept.snapshot.status, 200)
+  assert.ok(
+    kept.snapshot.body
+      .replace(/\r\n /g, "")
+      .includes(`URL:https://camsocs.uk/events/${EVENT_KEY}\r\n`),
+  )
 }
 
 // --- refusals and failures are not counted ------------------------------------------------------

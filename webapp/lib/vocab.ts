@@ -435,6 +435,20 @@ export type InboundExtractionStatus = (typeof INBOUND_EXTRACTION_STATUSES)[numbe
 export const LISTING_REQUEST_KINDS = ["claim", "correct", "remove", "object", "add"] as const
 export type ListingRequestKind = (typeof LISTING_REQUEST_KINDS)[number]
 
+/**
+ * Whether a listing request must name a listing (`orgKey`): every kind but
+ * `add`, and a correction about an event (`eventKey`), which names what to
+ * check by itself: a University listing has no host to name (ENG-24). A claim
+ * is of a listing, and a removal or objection is accepted against one
+ * (`broker/listingRequests.acceptRemoval`). The form and
+ * `listingRequests.submit` share this rule (review of 2026-11-03,
+ * event-correction-no-org).
+ */
+export function requestNeedsListing(kind: ListingRequestKind, aboutEvent: boolean): boolean {
+  if (kind === "add") return false
+  return !(kind === "correct" && aboutEvent)
+}
+
 export const LISTING_REQUEST_STATUSES = ["open", "accepted", "rejected", "done"] as const
 export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
 

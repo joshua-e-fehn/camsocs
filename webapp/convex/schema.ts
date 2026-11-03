@@ -673,6 +673,10 @@ export const listingRequestFields = {
   message: v.string(),
   /** Proposed corrections, field name → proposed value (text). */
   fields: v.optional(v.record(v.string(), v.string())),
+  /** The event the request is about (`evt-…`), when sent from an event
+   * page's "Report or correct this event" link (SEO audit 2026-11-02,
+   * event-correction-link). */
+  eventKey: v.optional(v.string()),
   status: literalUnion(LISTING_REQUEST_STATUSES),
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),

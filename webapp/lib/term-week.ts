@@ -52,7 +52,8 @@ export const TERM_SHORT: Record<Term, string> = {
   easter: "Easter",
 }
 
-/** Teaching weeks in a Full Term (Michaelmas adds a short Week 9). */
+/** Teaching weeks in a Full Term. A term that runs past Week 8 (Michaelmas and
+ * Lent, at 60 days from a Tuesday) ends in a short Week 9; Easter does not. */
 export const TEACHING_WEEKS = 8
 
 const WEEK_MS = 7 * DAY_MS

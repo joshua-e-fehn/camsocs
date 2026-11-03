@@ -2,7 +2,9 @@
 
 import { ArrowRightIcon } from "lucide-react"
 import Link from "next/link"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useHomeTalks } from "@/hooks/convex/talks"
+import { homeTalkArgs, homeTalkRows } from "@/lib/talk-display"
 import { cn } from "@/lib/utils"
 
 export type OverviewItem = {
@@ -28,7 +30,8 @@ export type OverviewSlice = {
   /** "31 events · 23 talks · 18 societies hosting". */
   summary: string
   events: OverviewColumn<OverviewItem>
-  /** Null when the talks module could not be read. */
+  /** Null when the talks module could not be read. Its `items` are empty
+   * from the server: the rows are read in the browser (owner decision G1). */
   talks: OverviewColumn<OverviewItem> | null
   societies: OverviewColumn<OverviewSociety>
 }
@@ -51,14 +54,23 @@ type Mode = "today" | "week" | string
  * The home page's overview (DESIGN.md "River & ink"): Events · Talks ·
  * Societies side by side for today, the next seven days, or one day picked in
  * the week strip below it. Every view is rendered on the server and passed
- * in; switching is instant and needs no request.
+ * in; switching is instant and needs no request — except the Talks rows: a
+ * talk's title and speakers never reach the server's HTML or RSC payload
+ * outside /talks (owner decision G1, lib/talks-boundary.ts), so this reads
+ * the rows of the view on screen once hydrated, under the server's counts.
  */
 export function HomeOverview({
+  todayIso,
+  now,
   today,
   week,
   days,
   weekRange,
 }: {
+  /** London's today, from the server. */
+  todayIso: string
+  /** The server's time, so the rows match its counts. */
+  now: number
   today: OverviewSlice
   week: OverviewSlice
   days: OverviewDay[]
@@ -71,6 +83,22 @@ export function HomeOverview({
   const slice = mode === "week" ? week : (picked?.slice ?? today)
   const isToday = mode !== "week" && !picked
   const hasTalks = slice.talks !== null
+
+  // The Talks rows of the view on screen, read in the browser only (G1).
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
+  const talkDay = mode === "week" ? undefined : (picked?.iso ?? todayIso)
+  const talkPage = useHomeTalks(
+    hydrated && slice.talks && slice.talks.total > 0
+      ? homeTalkArgs(todayIso, now, talkDay)
+      : "skip",
+  )
+  const talkRows = talkPage && homeTalkRows(talkPage.page, { today: todayIso, now, day: talkDay })
+  const talks: OverviewColumn<OverviewItem> | null = slice.talks && {
+    ...slice.talks,
+    items: talkRows ?? [],
+  }
+  const talksLoading = !!slice.talks && slice.talks.total > 0 && talkRows === undefined
 
   const pickDay = (day: OverviewDay) => {
     setMode(day.isToday ? "today" : day.iso)
@@ -144,13 +172,14 @@ export function HomeOverview({
             noun={["event", "events"]}
             empty="Nothing listed yet."
           />
-          {slice.talks && (
+          {talks && (
             <Column
               title="Talks"
               href="/talks"
-              column={slice.talks}
+              column={talks}
               noun={["talk", "talks"]}
               empty="No talks listed."
+              loading={talksLoading}
             />
           )}
           <SocietiesColumn column={slice.societies} />
@@ -285,12 +314,15 @@ function Column({
   column,
   noun,
   empty,
+  loading = false,
 }: {
   title: string
   href: string
   column: OverviewColumn<OverviewItem>
   noun: [string, string]
   empty: string
+  /** The rows are still being read: their shape, not "nothing listed". */
+  loading?: boolean
 }) {
   return (
     <div className="flex min-w-0 flex-col border-t-2 border-foreground pt-3">
@@ -299,7 +331,23 @@ function Column({
         href={href}
         count={`${column.total.toLocaleString("en-GB")} ${column.total === 1 ? noun[0] : noun[1]}`}
       />
-      {column.items.length === 0 ? (
+      {loading ? (
+        <ul aria-hidden className="mt-1">
+          {Array.from({ length: Math.min(3, column.total) }, (_, index) => (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: placeholder rows, never reordered
+              key={index}
+              className="grid grid-cols-[50px_minmax(0,1fr)] gap-3 border-b py-[13px] sm:grid-cols-[54px_minmax(0,1fr)] sm:gap-3.5 sm:py-[15px] [&:first-child]:border-t"
+            >
+              <span className="h-4 w-10 animate-pulse rounded bg-muted" />
+              <span className="flex flex-col gap-1.5">
+                <span className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+                <span className="h-3.5 w-1/2 animate-pulse rounded bg-muted" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : column.items.length === 0 ? (
         <p className="mt-1 border-y py-4 text-[0.9375rem] text-muted-foreground">{empty}</p>
       ) : (
         <ul className="mt-1">
