@@ -224,8 +224,10 @@ function FromUniversity({ listingUrl }: { listingUrl?: string }) {
 }
 
 /** The page of an event this viewer may not see (taken down since the
- * proxy's check, or Cambridge-only): says so, with the sign-in. */
-export function EventUnavailable({ path }: { path: string }) {
+ * proxy's check, or Cambridge-only): says so, with the @cam.ac.uk sign-in
+ * while that link is on; with it off, says a Cambridge-only event stays
+ * hidden rather than offering a sign-in that cannot happen (ENG-35). */
+export function EventUnavailable({ path, camSignIn }: { path: string; camSignIn: boolean }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-start gap-4 px-4 py-16 sm:px-6 sm:py-24">
       <p className="flex items-center gap-2 font-mono text-[0.6875rem] font-medium tracking-[0.14em] text-events uppercase">
@@ -237,16 +239,23 @@ export function EventUnavailable({ path }: { path: string }) {
       </h1>
       <p className="flex gap-2.5 text-pretty text-muted-foreground">
         <LockIcon aria-hidden className="mt-1 size-4 shrink-0" />
-        <span>
-          It may have been taken down, or it is a Cambridge-only event:{" "}
-          <Link
-            href={camSignInHref(path)}
-            className="font-medium text-foreground underline underline-offset-4"
-          >
-            sign in with your @cam.ac.uk email
-          </Link>{" "}
-          to see those.
-        </span>
+        {camSignIn ? (
+          <span>
+            It may have been taken down, or it is a Cambridge-only event:{" "}
+            <Link
+              href={camSignInHref(path)}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              sign in with your @cam.ac.uk email
+            </Link>{" "}
+            to see those.
+          </span>
+        ) : (
+          <span>
+            It may have been taken down, or it is a Cambridge-only event, which stays hidden until
+            Cambridge sign-in opens.
+          </span>
+        )}
       </p>
       <Link
         href="/events"

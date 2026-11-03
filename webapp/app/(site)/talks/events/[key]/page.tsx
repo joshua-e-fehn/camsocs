@@ -11,6 +11,7 @@ import {
   UNAVAILABLE_METADATA,
   venueNameOf,
 } from "@/lib/event-page"
+import { camSignInOpen } from "@/lib/sign-in-options"
 import { termWeekTag } from "@/lib/week-strip"
 
 type Props = { params: Promise<{ key: string }> }
@@ -56,7 +57,7 @@ export default async function TalksEventRoute({ params }: Props) {
   if (event === null) {
     return (
       <RestrictedEvent eventKey={key} underTalks={true}>
-        <EventUnavailable path={`/talks/events/${key}`} />
+        <EventUnavailable path={`/talks/events/${key}`} camSignIn={await camSignInOpen()} />
       </RestrictedEvent>
     )
   }

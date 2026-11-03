@@ -380,7 +380,12 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   day). A verified link means
   `emailVerified: true`, so `getViewer(ctx).isCamVerified` holds for that session.
 - `auth.getSignInOptions` → `{ google, camEmail }` (booleans) and `auth.getViewerTier` →
-  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI.
+  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI. While `camEmail` is
+  off, a signed-out visitor sees no Sign in in the header, and no page offers the Cambridge-only
+  sign-in: not /events, a society page or an unavailable event's page under /events or
+  /talks/events (`lib/sign-in-options.ts` on the server, an anonymous cached read like any other,
+  so a switch reaches the cached pages within a revalidation); /sign-in shows only the options that are on, and says sign-in is not open when
+  none is (ENG-35).
 - Better Auth runs **inside Convex**. Flow: client → same-origin `/api/auth/*` → route handler
   (`lib/auth-forwarded-headers.ts`) → Convex site URL → Better Auth → session in the component's
   tables → `ConvexBetterAuthProvider` holds the token.
@@ -755,7 +760,7 @@ read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 | `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, more than 5 requests per address per hour, or a full hourly budget (removals and objections have their own, larger one) (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
