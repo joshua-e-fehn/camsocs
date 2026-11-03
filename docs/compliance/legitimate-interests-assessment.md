@@ -1,6 +1,6 @@
 # Legitimate interests assessment (UK GDPR Art 6(1)(f))
 
-Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, and D, server-side monitoring, 2026-11-01; A and B corrected for special category data, 2026-11-03, ENG-34); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
+Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, and D, server-side monitoring, 2026-11-01; A and B corrected for special category data, 2026-11-03, ENG-34; B's Art 9 condition decided the same day, ENG-42); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
 
 The ICO three-part test — purpose, necessity, balance — is applied to four processing activities separately, because their risk differs: **A** the public directory and calendar, **B** the private broker CRM, **C** the talks pillar, and **D** server-side error tracking and aggregate counts. Activity numbers (P1…) refer to `record-of-processing.md`.
 
@@ -57,9 +57,9 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 | Expectations | An officer whose name is on the society's site may expect to be contacted about the society, not to be catalogued. Hence: private, time-boxed, no inference about the person |
 | Impact | Unwanted contact. Mitigated by contacting role addresses first, recording PECR status per address (default individual subscriber), no marketing without consent, a permanent suppression list, and Art 21(4) objection wording at first contact |
 | Data matching | Names are matched to organisations only, never across sources into a profile of a person |
-| Special category data | Officers' names for faith, political and LGBTQ+ societies can reveal religion, political opinion or sexual orientation (Art 9). This assessment is an Art 6 basis only; Art 9 also needs a condition, and none is recorded yet: options in `dpia-lite.md` §5, **decision pending (ENG-42)**. Until then, do not use those names for outreach or introductions |
+| Special category data | Officers' names for faith, political and LGBTQ+ societies can reveal religion, political opinion or sexual orientation (Art 9). This assessment is an Art 6 basis only. The Art 9 condition is Art 9(2)(e), personal data manifestly made public by the data subject (decided by Joshua 2026-11-03, ENG-42; `dpia-lite.md` §5): only names that the society's own public pages list as its officers, never a name from another source; never published, nothing inferred, not disclosed to a partner in an introduction without the person's agreement, R5 retention with no extension, an objection honoured with a person suppression |
 
-**Conclusion:** legitimate interests applies to B only with every safeguard above, and only while the data stays private; for the officers of faith, political and LGBTQ+ societies it applies only once the Art 9 question is settled (ENG-42). Publishing any of it, selling it, or sending marketing without consent would fail the balance test.
+**Conclusion:** legitimate interests applies to B only with every safeguard above, and only while the data stays private; for the officers of faith, political and LGBTQ+ societies it applies together with Art 9(2)(e), on the conditions and with the safeguards in `dpia-lite.md` §5 (ENG-42). Publishing any of it, selling it, or sending marketing without consent would fail the balance test.
 
 ## C. Talks pillar (P10, decision D7)
 
