@@ -8,7 +8,7 @@ import { CONTACT_EMAIL, CONTROLLER_NAME, DISCLAIMER, SITE_NAME, TERMS_UPDATED } 
 export const metadata: Metadata = pageMetadata({
   title: "Terms of use",
   description:
-    "Terms for using camsocs: an unofficial project, information as found and not guaranteed, events run by others, and the law of England and Wales.",
+    "Terms for using CAMsocs: an unofficial project, information as found and not guaranteed, events run by others, and the law of England and Wales.",
   path: "/terms",
 })
 

@@ -74,7 +74,7 @@ export const KIND_DETAILS: Record<ListingRequestKind, { title: string; descripti
   },
   remove: {
     title: "Remove this listing",
-    description: "You speak for this society and want it taken off camsocs.",
+    description: "You speak for this society and want it taken off CAMsocs.",
   },
   object: {
     title: "Object to processing",

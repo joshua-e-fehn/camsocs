@@ -72,7 +72,7 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 
 - The talk's own facts (title, time, place, series, abstract) and its speakers' names and affiliations exactly as the organiser published them. Speakers are not replaced by roles (D1 does not apply): a talk without its speaker is not useful, and the listing is public for that purpose.
 - Nothing is inferred or added about a speaker, and speakers are not matched across talks or sources into a profile: there is no speaker page, index or search by person beyond the talk text itself.
-- Parser code only: no LLM reads talks.cam or a department's pages, which also keeps their robots.txt AI opt-outs intact; camsocs's own robots.txt asks AI crawlers to keep off `/talks` and its feeds.
+- Parser code only: no LLM reads talks.cam or a department's pages, which also keeps their robots.txt AI opt-outs intact; CAMsocs's own robots.txt asks AI crawlers to keep off `/talks` and its feeds.
 - Short retention: a talk and its details are deleted 30 days after it ended (`retention.md` R11). A talk its source no longer lists is marked `missing` and is not shown.
 - Less intrusive alternatives considered: linking out without the speaker (rejected: the speaker is what a reader chooses a talk by); copying only talks.cam (rejected: many departments do not use it).
 
