@@ -1,6 +1,6 @@
 # CAMsocs pipeline
 
-Python harvester for camsocs: fetches public society and sports-club sources politely, extracts
+Python harvester for CAMsocs: fetches public society and sports-club sources politely, extracts
 facts (deterministic rules first, then an LLM over cached text with verbatim-evidence checks) and
 loads them into Convex over `/api/pipeline/*`.
 

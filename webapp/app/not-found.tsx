@@ -8,7 +8,7 @@ import { NotFoundVariant } from "./not-found-variant"
  * not-found-template). Next adds `noindex` to every 404 itself. */
 export const metadata: Metadata = {
   title: "Page not found",
-  description: "There is no page at this address on camsocs.",
+  description: "There is no page at this address on CAMsocs.",
 }
 
 /**
