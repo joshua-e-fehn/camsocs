@@ -29,6 +29,7 @@ export const PAGE_PATHS = [
   "/term-dates",
   "/about",
   "/privacy",
+  "/terms",
   "/request",
 ] as const
 

@@ -71,8 +71,8 @@ app/                         Next.js App Router pages
                              disk, so no card's text goes to a font service; file tracing ships it with
                              each card's function, as public/crest.svg
   manifest.ts                /manifest.webmanifest (name, light theme colour, icons); public/ also serves
-                             apple-touch-icon.png and .well-known/security.txt (RFC 9116: renew its
-                             Expires before 2027-09-01)
+                             apple-touch-icon.png and .well-known/security.txt (RFC 9116, held equal to
+                             lib/security-txt.ts by its test: renew its Expires before 2027-09-01)
   llms.txt/route.ts          /llms.txt (lib/llms-txt.ts), static: what camsocs is, that it is unofficial,
                              its societies, category hubs, events, term dates and About pages; never the
                              talks pillar (G1)

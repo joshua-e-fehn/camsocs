@@ -9,13 +9,20 @@ import { api } from "@/convex/_generated/api"
 import { formatInstantDate, londonTime } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
-import { BOT_USER_AGENT, CONTACT_EMAIL, CONTROLLER_NAME, DISCLAIMER } from "@/lib/site"
+import {
+  BOT_USER_AGENT,
+  CONTACT_EMAIL,
+  CONTROLLER_NAME,
+  DISCLAIMER,
+  SECURITY_CONTACT_EMAIL,
+  SITE_NAME,
+} from "@/lib/site"
 import { aboutPageJsonLd } from "@/lib/site-jsonld"
 import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-line"
 import { jsonLdScript } from "@/lib/structured-data"
 
 const DESCRIPTION =
-  "Who runs camsocs and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, every fact sourced."
+  "Who runs camsocs, how it collects data (public sources, polite crawling, no Instagram scraping, names as roles, every fact sourced) and how takedowns work."
 
 export const metadata: Metadata = pageMetadata({
   title: "About",
@@ -44,6 +51,10 @@ const SOURCES = [
   [
     "The University of Cambridge's public events programme (What's On, the Cambridge Festival, Open Cambridge)",
     "every public event it lists, with its images, read with the University's permission",
+  ],
+  [
+    "Instagram, only through Meta's official Business Discovery API",
+    "event posts of societies' public professional accounts, never scraped",
   ],
   ["The University's term-dates page", "Full Term dates, for week numbers"],
 ] as const
@@ -133,8 +144,10 @@ export default async function AboutPage() {
               for public professional accounts.
             </li>
             <li>
-              <strong>AI extraction, checked.</strong> An AI language model, run by a third-party
-              provider, reads free text from societies’ own pages to pull out facts such as how to
+              <strong>AI extraction, checked.</strong> An AI language model, one of OpenAI’s,
+              reached through the operator’s own ChatGPT subscription rather than OpenAI’s API
+              service (the <Link href="/privacy#sharing">privacy notice</Link> says what that
+              means), reads free text from societies’ own pages to pull out facts such as how to
               join, and the University’s public events listings (with the permission above) to keep
               private individuals’ names and notices out of them. A fact counts as <em>found</em>{" "}
               only when the model quotes the source word for word and the quote is checked;
@@ -242,6 +255,42 @@ export default async function AboutPage() {
           </p>
         </ProseSection>
 
+        <ProseSection id="copyright" title="Copyright and takedown">
+          <p>
+            Descriptions, logos and event images on {SITE_NAME} are copied from the public pages
+            listed above, so that each listing can show them beside their source. They remain the
+            work of whoever made them. If you hold the rights in something shown here, or act for
+            whoever does, and want it taken down or credited differently, email{" "}
+            {CONTACT_EMAIL ? (
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            ) : (
+              <>
+                us through the{" "}
+                <Link href="/request?kind=object" rel="nofollow">
+                  request form
+                </Link>
+              </>
+            )}
+            . You do not need to be the society concerned.
+          </p>
+          <p>Please include:</p>
+          <ul>
+            <li>the link to the page on {SITE_NAME} and what on it you mean;</li>
+            <li>where the original is, if you can say;</li>
+            <li>that you own the rights, or on whose behalf you write;</li>
+            <li>what you would like us to do: remove it, credit it differently or link to you.</li>
+          </ul>
+          <p>
+            We act promptly and tell you what we did. For a society’s listing or an event, we aim to
+            take the material down within two working days of a clear request, while we look into
+            it, and we record the removal so that the harvester does not bring it back (an event’s
+            image goes with the event). A talk is shown as its organiser publishes it, so for a talk
+            we ask the organiser to change the listing at its source, and ours follows. If the
+            request is about personal data rather than copyright, such as your name or address, the{" "}
+            <Link href="/privacy#rights">privacy notice</Link> explains your rights.
+          </p>
+        </ProseSection>
+
         <ProseSection id="contact" title="Corrections, removal and contact">
           <p>
             Societies decide what is said about them. To claim, correct or remove a listing, or to
@@ -253,8 +302,17 @@ export default async function AboutPage() {
               </>
             ) : null}
             . A person reads every request. See the <Link href="/privacy">privacy notice</Link> for
-            your rights, and its <Link href="/privacy#cookies">cookies section</Link> for the visit
-            statistics we collect only if you allow them.
+            your rights, its <Link href="/privacy#cookies">cookies section</Link> for the visit
+            statistics we collect only if you allow them, and the{" "}
+            <Link href="/terms">terms of use</Link> for what you can rely on.
+          </p>
+          <h3 id="security">Security</h3>
+          <p>
+            To report a security problem, or personal data from {SITE_NAME} where it should not be,
+            email <a href={`mailto:${SECURITY_CONTACT_EMAIL}`}>{SECURITY_CONTACT_EMAIL}</a>. Please
+            give us a chance to fix it before telling anyone else, and do not access more data than
+            you need to show the problem. The address is also in{" "}
+            <a href="/.well-known/security.txt">security.txt</a>.
           </p>
         </ProseSection>
       </div>
@@ -288,6 +346,7 @@ export default async function AboutPage() {
             ["#data", "How we collect data"],
             ["#talks", "Talks"],
             ["#statuses", "What the labels mean"],
+            ["#copyright", "Copyright and takedown"],
             ["#contact", "Corrections and contact"],
           ].map(([href, label]) => (
             <a key={href} href={href} className="text-muted-foreground hover:text-foreground">

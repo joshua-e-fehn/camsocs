@@ -1,6 +1,6 @@
 # Legitimate interests assessment (UK GDPR Art 6(1)(f))
 
-Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, and D, server-side monitoring, 2026-11-01); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
+Controller: Joshua Fehn (individual). Assessed 2026-10-07 (C, the talks pillar, and D, server-side monitoring, 2026-11-01; A and B corrected for special category data, 2026-11-03, ENG-34); review each July and before any change of source, purpose or recipient. This is a working assessment, not legal advice (landscape brief §5.6 is the research behind it).
 
 The ICO three-part test — purpose, necessity, balance — is applied to four processing activities separately, because their risk differs: **A** the public directory and calendar, **B** the private broker CRM, **C** the talks pillar, and **D** server-side error tracking and aggregate counts. Activity numbers (P1…) refer to `record-of-processing.md`.
 
@@ -27,11 +27,11 @@ Browser analytics (P11) rests on consent (Art 6(1)(a)), not on this assessment: 
 
 | Factor | Assessment |
 |---|---|
-| Nature of the data | Role addresses and organisation facts. No special category data: a faith or political society is listed, its members are not (Art 9 risk avoided by not naming people) |
+| Nature of the data | Role addresses and organisation facts. No special category data is published: a faith, political or LGBTQ+ society is listed, its members are not named in any public field. (The private CRM does hold such officers' names: B below, and `dpia-lite.md` §5) |
 | Reasonable expectations | Societies published the data to be found; registers publish it for the same reason. A student society expects to be listed in student directories |
 | Source | Publicly accessible pages only; nothing behind a login; crawl delays always honoured; robots.txt honoured except on the pages and feeds societies publish about themselves (decision D3: they publish them to be found), never overridden for talks.cam or non-society sites, except the University's events programme, read with its publishers' recorded permission (D3a); obfuscated addresses never decoded |
 | Impact | Low: more contact from prospective members. The PECR risk of marketing to a role address is not part of this activity |
-| Safeguards | Per-fact source, date and status on every page; claim / correct / remove / object form on every listing and in the footer; Art 14 notice to each society's role address by 9 Nov 2026, the Art 14(3)(a) one-month limit (PLAN.md J7); removal honoured permanently (suppression list, `retention.md` R8); unofficial disclaimer; no University branding |
+| Safeguards | Per-fact source, date and status on every page; claim / correct / remove / object form on every listing and in the footer; Art 14 notice to each society's role address by 9 Nov 2026, the Art 14(3)(a) one-month limit (PLAN.md J7), and for speakers, people named in University event titles and list senders the Art 14(5)(e) measures in `dpia-lite.md` §4, published in `/privacy`; removal honoured permanently (suppression list, `retention.md` R8); unofficial disclaimer; no University branding |
 | Children | Society officers are students, almost all adults; nothing is aimed at children |
 
 **Conclusion:** legitimate interests applies, provided the safeguards above stay in place. The decisive ones are: role addresses only; no personal CRSids or names in public fields; the right to object honoured without argument for a society's own listing.
@@ -57,8 +57,9 @@ Connecting societies with each other and with partners (sponsors, speakers, venu
 | Expectations | An officer whose name is on the society's site may expect to be contacted about the society, not to be catalogued. Hence: private, time-boxed, no inference about the person |
 | Impact | Unwanted contact. Mitigated by contacting role addresses first, recording PECR status per address (default individual subscriber), no marketing without consent, a permanent suppression list, and Art 21(4) objection wording at first contact |
 | Data matching | Names are matched to organisations only, never across sources into a profile of a person |
+| Special category data | Officers' names for faith, political and LGBTQ+ societies can reveal religion, political opinion or sexual orientation (Art 9). This assessment is an Art 6 basis only; Art 9 also needs a condition, and none is recorded yet: options in `dpia-lite.md` §5, **decision pending (ENG-42)**. Until then, do not use those names for outreach or introductions |
 
-**Conclusion:** legitimate interests applies to B only with every safeguard above, and only while the data stays private. Publishing any of it, selling it, or sending marketing without consent would fail the balance test.
+**Conclusion:** legitimate interests applies to B only with every safeguard above, and only while the data stays private; for the officers of faith, political and LGBTQ+ societies it applies only once the Art 9 question is settled (ENG-42). Publishing any of it, selling it, or sending marketing without consent would fail the balance test.
 
 ## C. Talks pillar (P10, decision D7)
 

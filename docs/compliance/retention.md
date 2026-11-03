@@ -31,5 +31,6 @@ What is kept, for how long, what ends it, and whether the deletion is automated 
 ## Open items
 
 - R1 archiving and deletion, and R9 account deletion, stay manual (reasons above).
+- A removal or takedown that arrives by email (a rights holder writing as `/about#copyright` asks, or anyone writing to the contact address) is entered through `/request` as a `remove` or `object` request for the listing, on the sender's behalf, and accepted in the broker, so that a suppression is recorded (R8). Answering the email alone records nothing, and the next harvest brings the material back. An event can only be suppressed whole, its image with it. Talks have no suppression beyond names and contacts (DPIA-lite R-14): a request about a talk's title or abstract goes to its organiser, and the talk follows its source.
 - R12 depends on PostHog's plan, not on code here: PostHog says older data "may be" deleted, so the July check confirms nothing older than a year is still queryable.
 - `prune-cache` runs only where it is scheduled: the VPS runner prunes weekly once installed (PLAN.md J8); until then, and for the laptop's own `var/`, run `pixi run prune-cache` by hand.
