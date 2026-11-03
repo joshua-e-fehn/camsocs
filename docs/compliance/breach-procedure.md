@@ -52,7 +52,7 @@ Answer, in the log:
 - What personal data, about whom (which activity, P1–P12), and roughly how many people?
 - Was it only exposed, or actually seen, copied, changed or lost? Can we tell?
 - Is it already public anyway (a role address a society publishes) or private (a name in the CRM, a list message, a request with someone's email)?
-- Could it hurt anyone? Special care for: officers of faith, political or LGBTQ+ societies (their names can reveal those things, `dpia-lite.md` §5), list mail, request messages (complaints may say more than they should), sign-in emails.
+- Could it hurt anyone? Special care for: officers of faith, political, LGBTQ+, ethnic, national, health or disability societies (their names can reveal those things, `dpia-lite.md` §5), list mail, request messages (complaints may say more than they should), sign-in emails.
 - Is it contained? Could it recur?
 
 Rate the risk to people's rights and freedoms: **none / unlikely**, **risk**, or **high risk**. Use the regulator's breach self-assessment if unsure (ico.org.uk, "report a breach").
