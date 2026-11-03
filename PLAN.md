@@ -63,7 +63,7 @@ The full field set is in `docs/data-model.md`.
 - [ ] Needs and offers per organisation, each inferred or confirmed.
 - [ ] Interaction log and follow-ups.
 - [ ] Introductions (party A ↔ party B, reason, status, outcome).
-- [ ] Missing-data report, plus a phase-2 outreach export (role address and the list of missing fields). The outreach doubles as the Art 14 notice and must be sent by about **13 Nov 2026**.
+- [ ] Missing-data report, plus a phase-2 outreach export (role address and the list of missing fields). The outreach doubles as the Art 14 notice and must be sent by **9 Nov 2026** (one month after the first full harvest of 9 Oct, Art 14(3)(a)).
 - [ ] Inbox of listing requests.
 
 ### 2.5 Auth
@@ -116,7 +116,7 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | T10 | C Webapp | Auth tiers (Google admin + `BROKER_EMAILS`; `@cam.ac.uk` sign-in link) and `cam_only` gating | done (sign-in link off until Resend is configured, J3) |
 | T11 | C Webapp | Broker area: graph, people, needs and offers, interactions, introductions, missing-data report, outreach export | done |
 | T12 | C Webapp | Claim / correct / remove form plus the `listingRequests` admin | done (form, inbox; accepted corrections → `owner_submitted` claims; removals / objections → the suppression list, enforced by the pipeline and every ingestion route) |
-| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`; retention automated for R3–R8, R10; list mail cleaned before the LLM); J6 and the remaining DPIA R-4 todos open |
+| T13 | D Ship | Compliance documents: privacy notice, legitimate interests assessment, DPIA-lite, record of processing, retention | done (`docs/compliance/`, `/privacy`; retention automated for R3–R8, R10; list mail cleaned before the LLM; ENG-34: breach procedure and security contact with `/.well-known/security.txt`, `/terms`, copyright takedown on `/about`, the Art 14(5)(e) and Art 9 assessments in DPIA-lite §4–5); J6, the VPS region, the remaining DPIA R-4 todos (training opt-out ENG-41, the provider) and the Art 9 decision (ENG-42) open |
 | T14 | D Ship | Deploy: Vercel project + prod Convex + env, full harvest, coverage report; scheduled harvests on the VPS (D5) | `pixi run harvest` + `var/reports/coverage-<date>.md` done; full harvest on dev 2026-10-09 (purged first; 794 listed, 168 counterparts, 593 upcoming events; a second identical load writes nothing); ready to deploy: `docs/deploy.md` (steps, env for Vercel and Convex prod), `pipeline --env prod`; the deploy itself and the prod harvest todo; VPS runner (`ops/vps/`, `docs/ops-vps.md`: `sync --group events` daily, `--group full` weekly, Slack alert) ready, its install todo (J8) |
 | T15 | D Ship | QA: adversarial review, browser checks (desktop and mobile), data-quality audit sample | browser checks done (R5: `webapp/e2e/`, `bun run e2e`, screenshots at 1440×900 and 390×844, light and dark; fixes from them); adversarial review and data-quality sample todo |
 
@@ -130,7 +130,7 @@ The build runs as parallel agent workflows. Each task produces a commit (or a br
 | J4 | Outlook rule on your @cam.ac.uk mailbox that **redirects** list mail (has a `List-Id` header) to the inbound address. Then work through the mailing-list sign-up list (`pixi run pipeline -- worklist` → `var/reports/mailing-list-worklist.csv`). Steps: `docs/setup/inbox-instagram.md` | T7 |
 | J5 | Meta: switch an Instagram account to professional, link a Facebook Page, create a developer app, get a long-lived token (renew about every 60 days); set `META_IG_USER_ID` and `META_ACCESS_TOKEN` in `pipeline/.env`. Steps: `docs/setup/inbox-instagram.md` | T8 |
 | J6 | Pay the ICO data protection fee (£52) | T13 |
-| J7 | Send the phase-2 outreach / Art 14 notice by about 13 Nov 2026 (from the export in T11) | compliance |
+| J7 | Send the phase-2 outreach / Art 14 notice by 9 Nov 2026 (from the export in T11) | compliance |
 | J8 | Install the VPS runner (D5; `docs/ops-vps.md` §2): the camsocs cliproxy key (§8), a read-only deploy key, the host's `pipeline/.env` and `.env.prod`, `ops/vps/install.sh --revision <reviewed commit> --no-enable`, a first full run by hand, then the timers | scheduled harvests off the laptop |
 | J9 | After the next production deploy and harvest: `pixi run pipeline -- --env prod clean-events` (dry run), then `… clean-events --apply` (`docs/deploy.md` §7) | pre-D6 notices and pre-fix D1 titles off production |
 

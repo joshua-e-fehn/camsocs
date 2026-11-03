@@ -33,6 +33,7 @@ const COLUMNS = [
     links: [
       { href: "/about", label: "How camsocs works" },
       { href: "/privacy", label: "Privacy notice" },
+      { href: "/terms", label: "Terms of use" },
     ],
   },
 ] as const

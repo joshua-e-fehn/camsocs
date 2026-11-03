@@ -9,6 +9,7 @@ import {
   CONTROLLER_NAME,
   ICO_REGISTRATION_NUMBER,
   PRIVACY_NOTICE_UPDATED,
+  SECURITY_CONTACT_EMAIL,
   SITE_NAME,
 } from "@/lib/site"
 
@@ -37,6 +38,26 @@ export const metadata: Metadata = pageMetadata({
  * docs/analytics.md) with exactly the properties each carries: an event or a
  * property added there is added here first. Keep them in step; if this page
  * ships on a later date than its partners, move PRIVACY_NOTICE_UPDATED to it.
+ *
+ * ENG-34 (3 November 2026, the launch audit): the sources name the
+ * University's events programme and Meta Business Discovery; the VPS host is
+ * named, ⚠ its region still to confirm (record-of-processing, transfers); the
+ * AI model is described as it is reached today, a ChatGPT subscription through
+ * cliproxy with no API data processing agreement. Training is off since
+ * 3 November 2026, and Joshua decided to stay on the subscription rather than
+ * move to the API (ENG-41): change "The AI model" if that changes. The OpenAI
+ * company that holds the subscription and its transfer safeguard are not yet
+ * checked (record-of-processing, transfers; ENG-41): the notice says
+ * "not yet confirmed" until they are, then names them, here and in dpia-lite
+ * R-4 alike. The Art 14 notice to societies (J7, ENG-32) is not sent yet, so
+ * "If we have not written to you" and "Changes" say "we are writing"; put
+ * them back in the present tense once it has gone out. "If we have not
+ * written to you" is the published side of the Art 14(5)(e) assessment
+ * (dpia-lite §4), and the faith, political and LGBTQ+ officers sentence
+ * follows the Art 9 assessment (dpia-lite §5, decision pending, ENG-42): if
+ * those names are dropped, say so there. The regulator is the Information
+ * Commission (the ICO until 30 September 2026): each mention gives the old
+ * name too, as the Art 14 notice (lib/broker/outreach.ts) should.
  */
 export default function PrivacyPage() {
   const contact = CONTACT_EMAIL ? (
@@ -76,10 +97,15 @@ export default function PrivacyPage() {
           its colleges or Cambridge SU.
         </p>
         <p>Contact for anything in this notice: {contact}.</p>
+        <p>
+          To report a security problem, or personal data from {SITE_NAME} where it should not be,
+          email <a href={`mailto:${SECURITY_CONTACT_EMAIL}`}>{SECURITY_CONTACT_EMAIL}</a> (also
+          given in <a href="/.well-known/security.txt">security.txt</a>).
+        </p>
         {ICO_REGISTRATION_NUMBER && (
           <p>
-            Registered with the Information Commission under number{" "}
-            <span className="font-mono">{ICO_REGISTRATION_NUMBER}</span>.
+            Registered with the Information Commission (formerly the Information Commissioner’s
+            Office, ICO) under number <span className="font-mono">{ICO_REGISTRATION_NUMBER}</span>.
           </p>
         )}
       </ProseSection>
@@ -120,7 +146,10 @@ export default function PrivacyPage() {
           Where a society names its committee on its own public pages, the operator may keep the
           names and roles in private notes, used to contact societies and to make introductions
           between them and possible partners. These notes are not public, are marked out of date
-          after each year’s handover, and are deleted on the schedule below.
+          after each year’s handover, and are deleted on the schedule below. Some societies are
+          about a faith, a political view or LGBTQ+ identity, so being named as one of their
+          officers can itself say something about a person. Such names are never published, nothing
+          is inferred from them, and you can ask for yours to be deleted at any time.
         </p>
         <h3>Society mailing lists</h3>
         <p>
@@ -219,8 +248,24 @@ export default function PrivacyPage() {
           comes from publicly accessible sources: the Cambridge SU society directory, the Proctors’
           register, Sport Cambridge, Camdram, CUCBC, college and JCR/MCR websites, societies’ own
           websites, Linktree pages and public calendars, talks.cam, departments’ and institutes’
-          public talk listings, and Playwaze; and from society mailing lists as described above. The
-          full list and our collection rules are on the <Link href="/about#data">About page</Link>.
+          public talk listings, Playwaze and SU What’s On; the University of Cambridge’s public
+          events programme (What’s On, the Cambridge Festival and Open Cambridge), read with the
+          permission of the University offices that run it; public posts of professional Instagram
+          accounts, read only through Meta’s official Business Discovery API (part of the Instagram
+          API), never by scraping; and society mailing lists as described above. The full list and
+          our collection rules are on the <Link href="/about#data">About page</Link>.
+        </p>
+        <h3>If we have not written to you</h3>
+        <p>
+          We are writing to every society we list about its listing, at the role address it
+          publishes (by 9 November 2026). We do not write to each speaker on a talk or event, each
+          person named in the title of a University event, or each sender of a mailing-list message:
+          there are thousands of them, for most we have no address, and finding one would mean
+          collecting more about them than the listing needs. This notice is how we tell them
+          instead. To protect them, we show only what the organiser published and link to it, infer
+          nothing about anyone, delete talks 30 days and events a year after they took place, keep
+          mailing-list messages private and delete them on the schedule below, and remove a name for
+          good when its owner asks.
         </p>
       </ProseSection>
 
@@ -279,14 +324,15 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li>Vercel (website hosting) and Convex (database and server code);</li>
+          <li>
+            Hostinger, from which the operator rents the virtual server that runs the harvester on a
+            schedule (region to be confirmed). It holds the harvester’s working copies: the public
+            pages it reads, staged listings and talks, and mailing-list messages being processed,
+            for up to 90 days (list mail for 30 days), and it runs the relay to the AI model
+            described below;
+          </li>
           <li>Resend (sign-in emails and receiving forwarded mailing-list messages);</li>
           <li>Google (sign-in for the operator only);</li>
-          <li>
-            OpenAI, through a relay server the operator rents, which provides the AI model that
-            extracts facts from public pages, the University of Cambridge’s public events programme
-            (with its permission) and mailing-list messages, and replaces names in descriptions with
-            roles. Talk listings from talks.cam and departments are never sent to it.
-          </li>
           <li>
             PostHog (analytics and error reports), on its EU Cloud: the data is stored in the EU, in
             Frankfurt. PostHog, Inc. acts as our processor (see its{" "}
@@ -298,14 +344,32 @@ export default function PrivacyPage() {
             read.
           </li>
         </ul>
+        <h3>The AI model</h3>
+        <p>
+          The AI model that extracts facts from public pages, the University of Cambridge’s public
+          events programme (with its permission) and mailing-list messages, and replaces names in
+          descriptions with roles, is one of OpenAI’s. We do not use OpenAI’s API service for it:
+          the operator reaches the models through his own ChatGPT subscription, by way of a relay
+          (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI under the
+          subscription’s own terms, and may be processed in the United States. We have no data
+          processing agreement with OpenAI, so it is not a provider acting only on our instructions
+          like those above. We have not yet confirmed which OpenAI company the subscription is with
+          (for people in the UK and Europe it may be OpenAI’s Irish company) or what safeguard its
+          terms provide for transfers outside the UK; we will say so here once we have. The account
+          setting that lets OpenAI use what it is sent to train its models is switched off (since 3
+          November 2026), and we send it as little as we can: talk listings from talks.cam and
+          departments never, and mailing-list messages only after quoted replies, signatures,
+          addresses and phone numbers are cut out.
+        </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
-          Where they do, we rely on the safeguards each provider offers for transfers from the UK.
-          PostHog, a US company, stores analytics in the EU; where it or its subprocessors handle
-          the data elsewhere, its data processing agreement provides for the UK’s International Data
-          Transfer Addendum to the EU standard contractual clauses and the UK Extension to the EU–US
-          Data Privacy Framework. Ask us (see <a href="#rights">Your rights</a>) for a copy of the
-          safeguards for any provider.
+          Where they do, we rely on the safeguards each provider offers for transfers from the UK,
+          except for OpenAI, whose safeguard under the subscription’s terms we have not yet
+          confirmed (see above). PostHog, a US company, stores analytics in the EU; where it or its
+          subprocessors handle the data elsewhere, its data processing agreement provides for the
+          UK’s International Data Transfer Addendum to the EU standard contractual clauses and the
+          UK Extension to the EU–US Data Privacy Framework. Ask us (see{" "}
+          <a href="#rights">Your rights</a>) for a copy of the safeguards for any provider.
         </p>
       </ProseSection>
 
@@ -369,7 +433,10 @@ export default function PrivacyPage() {
             it, under “Cookie settings” at the foot of any page (Article 7(3)). Withdrawing does not
             make the processing before it unlawful;
           </li>
-          <li>complain to us, and to the Information Commission.</li>
+          <li>
+            complain to us, and to the Information Commission (formerly the Information
+            Commissioner’s Office, ICO).
+          </li>
         </ul>
         <p>
           To use any of these rights, use {contact}. We reply within one month. We acknowledge a
@@ -379,7 +446,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           You can also complain to the UK regulator, the Information Commission (formerly the
-          Information Commissioner’s Office), at{" "}
+          Information Commissioner’s Office, ICO), at{" "}
           <a href="https://ico.org.uk/make-a-complaint/" rel="noopener noreferrer">
             ico.org.uk
           </a>
@@ -443,8 +510,9 @@ export default function PrivacyPage() {
 
       <ProseSection id="changes" title="Changes to this notice">
         <p>
-          If we change how we use personal data, we update this page and its date. Societies whose
-          role addresses we list are told directly about the listing and how to object.
+          If we change how we use personal data, we update this page and its date. We are writing to
+          the societies whose role addresses we list, to tell them about the listing and how to
+          object.
         </p>
       </ProseSection>
     </div>

@@ -7,8 +7,9 @@ import { newTest, signedInAs, type TestConvex, withEnv } from "../lib/harness.te
  * What the broker area does with data (gating is gating.test.ts): hiding a
  * listing takes it off every public query, needs/offers verdicts survive the
  * pipeline, edits make a person the broker's, follow-ups and introductions
- * behave, the rows feed the outreach with non-personal addresses only, and
- * complementary needs/offers are matched.
+ * behave, the rows feed the outreach with role addresses only (never a
+ * personal, mailing-list or webmail one), the outreach's send log becomes
+ * interactions, and complementary needs/offers are matched.
  */
 
 const BROKER = "broker@example.com"
@@ -90,14 +91,31 @@ describe("broker.orgs", () => {
     })
   })
 
-  test("rows carry outreach data; personal CRSid addresses are never the best address", async () => {
-    await asBroker(async (_t, broker) => {
+  test("rows carry outreach data; personal, list and webmail addresses are never the best address", async () => {
+    await asBroker(async (t, broker) => {
+      await t.mutation(internal.ingest.claims.ingest, {
+        claims: [
+          claim("org-rowing", "name", "Rowing Society"),
+          claim("org-rowing", "email", "rowing-soc@gmail.com"),
+          claim("org-rowing", "roleEmails", [
+            { role: "secretary", email: "soc-rowing@lists.cam.ac.uk" },
+          ]),
+        ],
+      })
       const rows = await allRows(broker)
       const chess = rows.find((r) => r.key === "org-chess")
       const go = rows.find((r) => r.key === "org-go")
-      expect(chess?.bestAddress).toEqual({ email: "president@cuchess.org", role: "president" })
+      expect(chess?.bestAddress).toEqual({
+        email: "president@cuchess.org",
+        role: "president",
+        kind: "role_own_domain",
+      })
       expect(go?.bestAddress).toBeUndefined()
       expect(go?.has.email).toBe(false)
+      // A list and a webmail address: coverage counts an address, the outreach has none.
+      const rowing = rows.find((r) => r.key === "org-rowing")
+      expect(rowing?.bestAddress).toBeUndefined()
+      expect(rowing?.has.email).toBe(true)
       expect(chess?.sourceHosts).toEqual(["example.org"])
       expect(chess?.heldFields).toContain("roleEmails")
       expect(chess?.missingFields).toContain("website")
@@ -249,6 +267,121 @@ describe("broker.interactions", () => {
       expect(
         await broker.query(api.broker.interactions.list, { orgKey: "org-chess" }),
       ).toHaveLength(1)
+    })
+  })
+})
+
+describe("broker.interactions.recordSendLog", () => {
+  const sent = { orgKey: "org-chess", email: "President@cuchess.org", sentOn: "2026-10-20" }
+
+  test("one email interaction per organisation and address; a second import changes nothing", async () => {
+    await asBroker(async (_t, broker) => {
+      const first = await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [
+          { ...sent, bounced: false },
+          { orgKey: "org-go", email: "secretary@cugo.org", sentOn: "2026-10-20", bounced: false },
+          { orgKey: "org-gone", email: "a@b.org", sentOn: "2026-10-20", bounced: false },
+        ],
+      })
+      expect(first).toEqual({
+        recorded: 2,
+        bounced: 0,
+        unchanged: 0,
+        unknownOrgs: ["org-gone"],
+        offListing: ["org-go"],
+      })
+      const chess = await broker.query(api.broker.interactions.list, { orgKey: "org-chess" })
+      expect(chess).toHaveLength(1)
+      expect(chess[0]).toMatchObject({
+        channel: "email",
+        date: Date.parse("2026-10-20T12:00:00Z"),
+        summary: "Art 14 notice (outreach) sent to president@cuchess.org on 2026-10-20.",
+      })
+      expect(chess[0].followUpOn).toBeUndefined()
+      const again = await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: false }],
+      })
+      expect(again).toMatchObject({ recorded: 0, unchanged: 1 })
+      expect(await broker.query(api.broker.interactions.list, {})).toHaveLength(2)
+    })
+  })
+
+  test("a bounce marks the send and adds a follow-up; it is never taken back", async () => {
+    await asBroker(async (_t, broker) => {
+      await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: false }],
+      })
+      const bounce = await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: true }],
+      })
+      expect(bounce).toMatchObject({ recorded: 0, bounced: 1, unchanged: 0 })
+      const due = await broker.query(api.broker.interactions.followUps, {})
+      expect(due).toHaveLength(1)
+      expect(due[0]).toMatchObject({
+        followUpOn: "2026-10-20",
+        summary:
+          "Art 14 notice (outreach) sent to president@cuchess.org on 2026-10-20; it bounced.",
+      })
+      await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: false }],
+      })
+      expect(await broker.query(api.broker.interactions.followUps, {})).toHaveLength(1)
+    })
+  })
+
+  test("a bounce leaves an interaction the broker has edited as it is", async () => {
+    await asBroker(async (_t, broker) => {
+      await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: false }],
+      })
+      const [recorded] = await broker.query(api.broker.interactions.list, { orgKey: "org-chess" })
+      const edited = {
+        key: recorded.key,
+        date: recorded.date,
+        orgKey: "org-chess",
+        channel: "email" as const,
+        summary: "Art 14 notice sent; the president replied from a new address",
+        nextStep: "Update the role address",
+      }
+      await broker.mutation(api.broker.interactions.update, edited)
+      const bounce = await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: true }],
+      })
+      expect(bounce).toMatchObject({ recorded: 0, bounced: 0, unchanged: 1 })
+      const [after] = await broker.query(api.broker.interactions.list, { orgKey: "org-chess" })
+      expect(after).toMatchObject({ summary: edited.summary, nextStep: edited.nextStep })
+      expect(after.followUpOn).toBeUndefined()
+    })
+  })
+
+  test("refuses a bad or out-of-period date, a bad address, and an oversized batch", async () => {
+    await asBroker(async (_t, broker) => {
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, sentOn: "5/11/2026", bounced: false }],
+        }),
+      ).rejects.toThrow("must be a date")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, sentOn: "2026-05-11", bounced: false }],
+        }),
+      ).rejects.toThrow("outside the outreach period")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, sentOn: "2099-01-01", bounced: false }],
+        }),
+      ).rejects.toThrow("outside the outreach period")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, email: "nobody", bounced: false }],
+        }),
+      ).rejects.toThrow("is not an address")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: Array.from({ length: 201 }, () => ({ ...sent, bounced: false })),
+        }),
+      ).rejects.toThrow("at most 200 rows")
+      expect(await broker.query(api.broker.interactions.list, {})).toEqual([])
     })
   })
 })

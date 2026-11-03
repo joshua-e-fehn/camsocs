@@ -45,6 +45,7 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "who runs it, where every fact comes from and how the data is collected",
   },
   { path: "/privacy", name: "Privacy notice", about: "the UK GDPR notice" },
+  { path: "/terms", name: "Terms of use", about: "what the site offers and what you can rely on" },
   {
     path: "/request",
     name: "Claim, correct or remove a listing",

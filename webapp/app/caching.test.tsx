@@ -67,7 +67,12 @@ describe("public pages", () => {
     expect(pages).toContain(path.join(SITE, "site-frame.tsx"))
   })
 
-  for (const file of [...pages, "lib/event-page.ts", "lib/term-dates.ts"]) {
+  for (const file of [
+    ...pages,
+    "lib/event-page.ts",
+    "lib/term-dates.ts",
+    "lib/sign-in-options.ts",
+  ]) {
     test(`${file} reads no request and only cached, anonymous data`, () => {
       const source = code(read(file))
       expect(source).not.toMatch(READS_REQUEST)

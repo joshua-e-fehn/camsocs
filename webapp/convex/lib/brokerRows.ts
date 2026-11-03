@@ -2,6 +2,8 @@ import { type Infer, v } from "convex/values"
 import type { CoverageRow } from "../../lib/broker/coverage"
 import {
   CATEGORIES,
+  EMAIL_TYPES,
+  type EmailType,
   INTERNAL_SOURCE_TYPES,
   NEED_OFFER_ITEMS,
   NEED_OFFER_STATUSES,
@@ -21,8 +23,10 @@ import { literalUnion } from "./validators"
  * Read models for the private broker area (convex/broker/*). Only those
  * functions use these — every one behind `requireBrokerUser` — so they may
  * carry what the public projection drops (internal sources, hidden rows),
- * with one exception kept even here: a personal CRSid address is never an
- * outreach address.
+ * with one exception kept even here: the outreach (the Art 14 notice) goes
+ * to a role address only — never a personal CRSid address, a lists.cam.ac.uk
+ * mailing list (it would reach every member) or a webmail address (often one
+ * officer's own).
  */
 
 /** Statuses that mean "we hold a value". */
@@ -43,16 +47,36 @@ const ROLE_PREFERENCE = [
 
 const isPersonal = (email: string) => classifyEmail(email) === "personal_crsid"
 
-/** The best published, non-personal address to write to, or undefined. */
+/** Address kinds the outreach never writes to (see the module comment). */
+const NOT_FOR_OUTREACH: ReadonlySet<EmailType> = new Set(["personal_crsid", "lists_cam", "webmail"])
+
+/** The address's kind when the outreach may write to it, else undefined. */
+function outreachKind(email: string): EmailType | undefined {
+  const kind = classifyEmail(email)
+  return NOT_FOR_OUTREACH.has(kind) ? undefined : kind
+}
+
+/** The best published role address to send the outreach to, or undefined. */
 export function bestRoleAddress(
   org: Pick<Doc<"organisations">, "email" | "roleEmails">,
-): { email: string; role: string } | undefined {
+): { email: string; role: string; kind: EmailType } | undefined {
   for (const role of ROLE_PREFERENCE) {
-    const entry = org.roleEmails.find((item) => item.role === role && !isPersonal(item.email))
-    if (entry) return { email: entry.email, role }
+    for (const item of org.roleEmails) {
+      if (item.role !== role) continue
+      const kind = outreachKind(item.email)
+      if (kind) return { email: item.email, role, kind }
+    }
   }
-  if (org.email && !isPersonal(org.email)) return { email: org.email, role: "general" }
+  const kind = org.email ? outreachKind(org.email) : undefined
+  if (org.email && kind) return { email: org.email, role: "general", kind }
   return undefined
+}
+
+/** Whether the listing publishes any non-personal address (coverage's
+ * "email"), whether or not the outreach may use it. */
+function hasPublishedAddress(org: Pick<Doc<"organisations">, "email" | "roleEmails">): boolean {
+  if (org.email && !isPersonal(org.email)) return true
+  return org.roleEmails.some((item) => !isPersonal(item.email))
 }
 
 /** Fields we hold a value for, in registry order. */
@@ -97,8 +121,14 @@ export const brokerOrgRowValidator = v.object({
     description: v.boolean(),
   }),
   missingFields: v.array(v.string()),
+  /** The outreach address (`bestRoleAddress`): a role address, never a
+   * personal, mailing-list or webmail one. */
   bestAddress: v.optional(
-    v.object({ email: v.string(), role: v.union(literalUnion(ROLES), v.literal("general")) }),
+    v.object({
+      email: v.string(),
+      role: v.union(literalUnion(ROLES), v.literal("general")),
+      kind: literalUnion(EMAIL_TYPES),
+    }),
   ),
   heldFields: v.array(v.string()),
   sourceHosts: v.array(v.string()),
@@ -117,9 +147,9 @@ const chips = (entries: Doc<"orgBrokerProfiles">["needs"]) =>
     .map(({ item, status }) => ({ item, status }))
 
 /** Which headline fields an organisation holds (coverage, the broker table). */
-function headlineFields(org: Doc<"organisations">, best: ReturnType<typeof bestRoleAddress>) {
+function headlineFields(org: Doc<"organisations">) {
   return {
-    email: best !== undefined,
+    email: hasPublishedAddress(org),
     website: org.website !== undefined,
     instagram: org.socials.some((social) => social.platform === "instagram"),
     description: Boolean(org.description || org.shortDescription),
@@ -134,7 +164,7 @@ export function coverageRowOf(org: Doc<"organisations">): CoverageRow {
     status: org.status,
     isCounterpart: org.isCounterpart,
     hidden: org.hidden === true,
-    has: headlineFields(org, bestRoleAddress(org)),
+    has: headlineFields(org),
     heldFields: heldFields(org.meta),
     missingFields: org.missingFields,
   }
@@ -156,7 +186,7 @@ export function brokerOrgRow(
     hidden: org.hidden === true,
     collegeKeys: org.collegeKeys,
     categories: org.categories,
-    has: headlineFields(org, best),
+    has: headlineFields(org),
     missingFields: org.missingFields,
     bestAddress: best as BrokerOrgRow["bestAddress"],
     heldFields: heldFields(org.meta),

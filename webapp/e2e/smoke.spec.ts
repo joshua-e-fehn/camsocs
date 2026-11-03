@@ -48,6 +48,7 @@ const PAGES: { name: string; path: string; dark?: boolean }[] = [
   { name: "talks-departments", path: "/talks/departments" },
   { name: "about", path: "/about" },
   { name: "privacy", path: "/privacy" },
+  { name: "terms", path: "/terms" },
   { name: "request", path: "/request" },
   { name: "request-org", path: `/request?kind=correct&org=${PROFILES["profile-sport"]}` },
   { name: "sign-in", path: "/sign-in" },

@@ -16,9 +16,11 @@ function safeNext(value: string | string[] | undefined): string | undefined {
 }
 
 /**
- * `?cam=1` preselects the Cambridge email option (links from cam-only event
- * notices use it); `?next=/path` is where a Cambridge sign-in lands; `?error=`
- * is what a failed sign-in link reports back.
+ * The Cambridge email option comes first, as every public link here is for it
+ * (`?cam=1` from cam-only event notices still says so; Admin is one click
+ * away); `?next=/path` is where a Cambridge sign-in lands; `?error=` is what a
+ * failed sign-in link reports back. With no option switched on, the form says
+ * sign-in is not open (ENG-35).
  */
 export default async function SignInPage({
   searchParams,
@@ -32,7 +34,6 @@ export default async function SignInPage({
       <main className="flex flex-1 flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
         <div className="flex w-full max-w-sm flex-col gap-6">
           <LoginForm
-            defaultMethod={params.cam === "1" ? "cam" : "google"}
             linkError={typeof params.error === "string" ? params.error : undefined}
             next={safeNext(params.next)}
           />

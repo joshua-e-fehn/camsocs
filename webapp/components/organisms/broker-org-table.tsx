@@ -77,7 +77,8 @@ export function BrokerOrgTable() {
           (brokering === "needs" && row.needs.length > 0) ||
           (brokering === "offers" && row.offers.length > 0) ||
           (brokering === "suppressed" && row.suppressed) ||
-          (brokering === "no_address" && !row.bestAddress)) &&
+          (brokering === "no_address" && !row.has.email) ||
+          (brokering === "no_outreach" && !row.bestAddress)) &&
         (!needle || row.name.toLowerCase().includes(needle) || row.key.includes(needle)),
     )
     return out.sort((a, b) =>
@@ -164,6 +165,7 @@ export function BrokerOrgTable() {
               ["needs", "Has needs"],
               ["offers", "Has offers"],
               ["no_address", "No address"],
+              ["no_outreach", "No outreach address"],
               ["suppressed", "Suppressed"],
             ]}
           />
@@ -207,7 +209,7 @@ export function BrokerOrgTable() {
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Missing</TableHead>
                 <TableHead className="hidden lg:table-cell">Needs · offers</TableHead>
-                <TableHead className="hidden xl:table-cell">Address</TableHead>
+                <TableHead className="hidden xl:table-cell">Outreach address</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Updated</TableHead>
               </TableRow>
             </TableHeader>
@@ -255,7 +257,9 @@ export function BrokerOrgTable() {
                     {row.bestAddress ? (
                       <span title={row.bestAddress.email}>{humanize(row.bestAddress.role)}</span>
                     ) : (
-                      <span className="text-muted-foreground">none</span>
+                      <span className="text-muted-foreground">
+                        {row.has.email ? "list or webmail only" : "none"}
+                      </span>
                     )}
                     {row.suppressed && (
                       <Badge variant="outline" className="ml-1.5">
