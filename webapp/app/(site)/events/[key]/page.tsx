@@ -12,6 +12,7 @@ import {
   venueNameOf,
 } from "@/lib/event-page"
 import { eventStructuredData } from "@/lib/events"
+import { camSignInOpen } from "@/lib/sign-in-options"
 import { jsonLdScript } from "@/lib/structured-data"
 import { talksBoundaryRedirect } from "@/lib/talks-boundary"
 import { termWeekTag } from "@/lib/week-strip"
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * graph — WebPage, Event, BreadcrumbList — for a public, confirmed event
  * (lib/events.ts `eventStructuredData`). The render is anonymous and cached,
  * so a Cambridge-only event gets a page that says it is not available, with
- * the sign-in, rather than a 404 that would hide whether it exists only from
+ * the sign-in while it is open (ENG-35), rather than a 404 that would hide whether it exists only from
  * the signed-in; a reader who may see it gets the event in its place once
  * hydrated (`RestrictedEvent`). A key with no
  * event anyone may see is a real 404 before this runs (proxy.ts,
@@ -64,7 +65,7 @@ export default async function EventRoute({ params }: Props) {
   if (event === null) {
     return (
       <RestrictedEvent eventKey={key} underTalks={false}>
-        <EventUnavailable path={`/events/${key}`} />
+        <EventUnavailable path={`/events/${key}`} camSignIn={await camSignInOpen()} />
       </RestrictedEvent>
     )
   }
