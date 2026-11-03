@@ -616,14 +616,16 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 The phase-2 outreach email is also each society's UK GDPR Art 14 notice (J7). Nothing in the app
 sends it; the broker sends it and records what went out, which is the Art 5(2) evidence of who
-was told and when.
+was told and when. Send it by **9 Nov 2026**: Art 14(3)(a) allows one month from the 9 Oct
+harvest that collected the data.
 
 1. **Export.** `/dashboard/reports` → "Download outreach CSV": one row per listed, non-suppressed
    society with an outreach address (`lib/broker/outreach.ts`). The address is a role address
    (`email`, with `role` and `email_kind`); personal CRSid, lists.cam.ac.uk and webmail
-   addresses are never chosen, so a society that publishes only those is under "No address" and
-   needs another route (contact form, socials). `notice` holds the personalised text;
-   `sent_on` and `bounced` are empty.
+   addresses are never chosen. A society that publishes only those, or no address at all, is
+   left out of the CSV and counted under "No outreach address", complete listing or not; it needs
+   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   empty.
 2. **Send** from the published contact address (`CONTACT_EMAIL`, set up as a "Send mail as"
    address so replies reach it) with a mail merge over the CSV, in batches of a few hundred a
    day. Send one test to your own @cam.ac.uk address first and check where it lands.
@@ -635,6 +637,16 @@ was told and when.
 4. **Bounces.** A bounce becomes a follow-up on the interaction ("Send the notice to the next
    role address, or find another route"). Send it to the next address, add that row to the log
    and import again: rows already recorded are left as they are, and a bounce is never undone.
+   An interaction you have edited since (a reply, a new address) is not overwritten.
+5. **Other routes.** For each society under "No outreach address", send the notice (the
+   "Notice" button copies its text) through its contact form or social account, then add an
+   interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice
+   (outreach) sent via … on YYYY-MM-DD". That is the record for those societies; the import
+   takes email sends only.
+
+`sent_on` must fall between 1 Oct 2026 and today. A date outside that, usually a sheet in a US
+locale that wrote 5 Nov as `11/5/2026`, stops the import with the row named; a file with an
+unclosed quote is refused as a whole.
 
 Each recorded send is an `email` interaction on the organisation ("Art 14 notice (outreach) sent
 to … on …"), shown in its drawer and under Interactions.

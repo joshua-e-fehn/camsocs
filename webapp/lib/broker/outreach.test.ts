@@ -5,13 +5,18 @@ import {
   OUTREACH_COLUMNS,
   type OutreachRow,
   outreachCsv,
+  outreachGroups,
   outreachNotice,
   parseCsv,
   parseSendLog,
   sendLogDate,
+  sentOnProblem,
+  UnclosedQuoteError,
 } from "./outreach"
 
 const SITE = "https://camsocs.vercel.app/"
+/** "Today" for the send-log tests, after every date they use. */
+const TODAY = "2026-11-10"
 
 function row(overrides: Partial<OutreachRow> = {}): OutreachRow {
   return {
@@ -57,8 +62,12 @@ describe("outreachNotice (doubles as the Art 14 notice)", () => {
 
   test("says the CRM keeps names and roles, and claims nothing the site cannot keep", () => {
     expect(notice).toContain("we also keep the names and roles of committee members")
-    expect(notice).toContain("never a personal CRSid or alumni address")
+    expect(notice).toContain("leaving out any that look like one person's CRSid or alumni address")
+    expect(notice).toContain("written not to name committee members")
+    expect(notice).toContain("replaced by the person's role")
     expect(notice).not.toContain("never personal ones")
+    expect(notice).not.toContain("names no committee members")
+    expect(notice).not.toMatch(/never a personal/)
     expect(notice).not.toMatch(/roles as your own pages publish them/)
   })
 
@@ -70,15 +79,36 @@ describe("outreachNotice (doubles as the Art 14 notice)", () => {
     expect(notice).not.toMatch(/commercial/i)
   })
 
-  test("names the regulator in full, once", () => {
-    expect(notice).toContain("the Information Commissioner's Office (ICO)")
-    expect(notice).not.toContain("Information Commission ")
+  test("names the regulator by its current name, as the privacy page does", () => {
+    expect(notice).toContain(
+      "the UK regulator, the Information Commission (formerly the Information Commissioner's Office, ICO)",
+    )
+    expect(notice.match(/Information Commission\b/g)).toHaveLength(1)
   })
 
   test("with nothing missing it offers corrections instead", () => {
     const complete = outreachNotice(row({ missingFields: [] }), SITE)
     expect(complete).not.toContain("could not find")
     expect(complete).toContain("If anything on it is wrong")
+  })
+})
+
+describe("outreachGroups (the reports page)", () => {
+  test("a listing without an outreach address is in noAddress, complete or not", () => {
+    const groups = outreachGroups([
+      row(),
+      row({ key: "org-done", missingFields: [] }),
+      row({ key: "org-webmail-done", bestAddress: undefined, missingFields: [] }),
+      row({ key: "org-list-gaps", bestAddress: undefined }),
+      row({ key: "org-hidden", hidden: true }),
+      row({ key: "org-bank", isCounterpart: true }),
+    ])
+    const keys = (rows: readonly OutreachRow[]) => rows.map((r) => r.key)
+    expect(keys(groups.address)).toEqual(["org-cu-chess-club"])
+    expect(keys(groups.complete)).toEqual(["org-done"])
+    expect(keys(groups.noAddress)).toEqual(["org-webmail-done", "org-list-gaps"])
+    expect(groups.withAddress).toBe(2)
+    expect(groups.excluded).toBe(1)
   })
 })
 
@@ -156,6 +186,7 @@ describe("parseSendLog (the send log, imported back as interactions)", () => {
   test("the export itself goes back: sent rows become entries, unsent ones are counted", () => {
     const log = parseSendLog(
       filled({ "org-cu-chess-club": ["2026-11-05", ""], "org-go": ["5/11/2026", "yes"] }),
+      TODAY,
     )
     expect(log.errors).toEqual([])
     expect(log.notSent).toBe(1)
@@ -179,6 +210,7 @@ describe("parseSendLog (the send log, imported back as interactions)", () => {
         "org-b,info@b.org,2026-11-06",
         "",
       ].join("\n"),
+      TODAY,
     )
     expect(log.errors).toEqual([])
     expect(log.entries).toEqual([
@@ -190,6 +222,7 @@ describe("parseSendLog (the send log, imported back as interactions)", () => {
   test("names each bad row, and a file without the columns", () => {
     const log = parseSendLog(
       "org_key,email,sent_on,bounced\norg-a,sec@a.org,31/02/2026,\n,nobody,2026-11-05,maybe\n",
+      TODAY,
     )
     expect(log.errors).toEqual([
       'Row 2: "31/02/2026" is not a date (YYYY-MM-DD)',
@@ -197,7 +230,7 @@ describe("parseSendLog (the send log, imported back as interactions)", () => {
       'Row 3: "nobody" is not an address',
       'Row 3: bounced should be "yes" or empty, not "maybe"',
     ])
-    expect(parseSendLog("org_name,email\nChess,sec@a.org\n").errors).toEqual([
+    expect(parseSendLog("org_name,email\nChess,sec@a.org\n", TODAY).errors).toEqual([
       'The file needs the columns "org_key" and "sent_on"',
     ])
   })
@@ -207,6 +240,41 @@ describe("parseSendLog (the send log, imported back as interactions)", () => {
     expect(sendLogDate(" 5/11/2026 ")).toBe("2026-11-05")
     expect(sendLogDate("2026-02-30")).toBeUndefined()
     expect(sendLogDate("11/5/26")).toBeUndefined()
+  })
+
+  test("a date outside the outreach period, such as a US-locale 11/5/2026, stops the file", () => {
+    const log = parseSendLog(
+      [
+        "org_key,email,sent_on",
+        "org-a,sec@a.org,11/5/2026",
+        "org-b,sec@b.org,2026-11-11",
+        "org-c,sec@c.org,2026-09-30",
+        "org-d,sec@d.org,2026-10-01",
+      ].join("\n"),
+      TODAY,
+    )
+    expect(log.errors).toEqual([
+      "Row 2: 2026-05-11 is outside the outreach period (2026-10-01 to 2026-11-10); check the sheet's date format",
+      "Row 3: 2026-11-11 is outside the outreach period (2026-10-01 to 2026-11-10); check the sheet's date format",
+      "Row 4: 2026-09-30 is outside the outreach period (2026-10-01 to 2026-11-10); check the sheet's date format",
+    ])
+    expect(sentOnProblem("2026-10-01", TODAY)).toBeUndefined()
+    expect(sentOnProblem(TODAY, TODAY)).toBeUndefined()
+  })
+
+  test("an unclosed quote refuses the whole file, naming the row it opens on", () => {
+    const text = [
+      "org_key,email,sent_on,notice",
+      'org-a,sec@a.org,2026-11-05,"Hello',
+      "org-b,sec@b.org,2026-11-05,Hello",
+      "org-c,sec@c.org,2026-11-05,Hello",
+    ].join("\r\n")
+    expect(() => parseCsv(text)).toThrow(UnclosedQuoteError)
+    expect(parseSendLog(text, TODAY)).toEqual({
+      entries: [],
+      notSent: 0,
+      errors: ["The file has an unclosed quote (from row 2)"],
+    })
   })
 })
 

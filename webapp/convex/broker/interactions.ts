@@ -1,5 +1,5 @@
 import { v } from "convex/values"
-import { SEND_LOG_BATCH } from "../../lib/broker/outreach"
+import { SEND_LOG_BATCH, sentOnProblem } from "../../lib/broker/outreach"
 import { sha1Hex } from "../../lib/hash"
 import { INTERACTION_CHANNELS } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
@@ -215,7 +215,9 @@ function sendLogInteraction(entry: {
  * Records the outreach send log (Art 5(2) evidence of who was told, and
  * when): one email interaction per organisation and address sent to. Done
  * again with the same rows it changes nothing, except that a send now marked
- * bounced gains the bounce and a follow-up; a bounce is never taken back.
+ * bounced gains the bounce and a follow-up; a bounce is never taken back,
+ * and an interaction the broker has since edited is left as it is. A date
+ * before `OUTREACH_FROM` or after today (Europe/London) is refused.
  * Unknown organisations are skipped and returned; `offListing` returns the
  * organisations whose address is not one their listing publishes (recorded
  * all the same: the log says what was sent).
@@ -251,9 +253,12 @@ export const recordSendLog = mutation({
       offListing: [] as string[],
     }
     const now = Date.now()
+    const today = londonIsoDate(now)
     for (const raw of args.entries) {
       const entry = { ...raw, email: raw.email.trim().toLowerCase() }
       checkIsoDate(entry.sentOn, "sent date")
+      const outside = sentOnProblem(entry.sentOn, today)
+      if (outside) throw new Error(`The sent date ${outside}`)
       if (entry.email.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(entry.email)) {
         throw new Error(`"${entry.email.slice(0, 80)}" is not an address`)
       }
@@ -281,7 +286,12 @@ export const recordSendLog = mutation({
           updatedAt: now,
         })
         result.recorded++
-      } else if (entry.bounced && existing.summary !== row.summary) {
+      } else if (
+        entry.bounced &&
+        existing.summary === sendLogInteraction({ ...entry, bounced: false }).summary
+      ) {
+        // Only the untouched "sent" record gains the bounce: one the broker
+        // has edited (a reply, a new address) or that already bounced stays.
         await ctx.db.patch("interactions", existing._id, {
           summary: row.summary,
           nextStep: row.nextStep,

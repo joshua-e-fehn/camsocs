@@ -272,15 +272,15 @@ describe("broker.interactions", () => {
 })
 
 describe("broker.interactions.recordSendLog", () => {
-  const sent = { orgKey: "org-chess", email: "President@cuchess.org", sentOn: "2026-11-05" }
+  const sent = { orgKey: "org-chess", email: "President@cuchess.org", sentOn: "2026-10-20" }
 
   test("one email interaction per organisation and address; a second import changes nothing", async () => {
     await asBroker(async (_t, broker) => {
       const first = await broker.mutation(api.broker.interactions.recordSendLog, {
         entries: [
           { ...sent, bounced: false },
-          { orgKey: "org-go", email: "secretary@cugo.org", sentOn: "2026-11-05", bounced: false },
-          { orgKey: "org-gone", email: "a@b.org", sentOn: "2026-11-05", bounced: false },
+          { orgKey: "org-go", email: "secretary@cugo.org", sentOn: "2026-10-20", bounced: false },
+          { orgKey: "org-gone", email: "a@b.org", sentOn: "2026-10-20", bounced: false },
         ],
       })
       expect(first).toEqual({
@@ -294,8 +294,8 @@ describe("broker.interactions.recordSendLog", () => {
       expect(chess).toHaveLength(1)
       expect(chess[0]).toMatchObject({
         channel: "email",
-        date: Date.parse("2026-11-05T12:00:00Z"),
-        summary: "Art 14 notice (outreach) sent to president@cuchess.org on 2026-11-05.",
+        date: Date.parse("2026-10-20T12:00:00Z"),
+        summary: "Art 14 notice (outreach) sent to president@cuchess.org on 2026-10-20.",
       })
       expect(chess[0].followUpOn).toBeUndefined()
       const again = await broker.mutation(api.broker.interactions.recordSendLog, {
@@ -318,9 +318,9 @@ describe("broker.interactions.recordSendLog", () => {
       const due = await broker.query(api.broker.interactions.followUps, {})
       expect(due).toHaveLength(1)
       expect(due[0]).toMatchObject({
-        followUpOn: "2026-11-05",
+        followUpOn: "2026-10-20",
         summary:
-          "Art 14 notice (outreach) sent to president@cuchess.org on 2026-11-05; it bounced.",
+          "Art 14 notice (outreach) sent to president@cuchess.org on 2026-10-20; it bounced.",
       })
       await broker.mutation(api.broker.interactions.recordSendLog, {
         entries: [{ ...sent, bounced: false }],
@@ -329,13 +329,48 @@ describe("broker.interactions.recordSendLog", () => {
     })
   })
 
-  test("refuses a bad date or address, and an oversized batch", async () => {
+  test("a bounce leaves an interaction the broker has edited as it is", async () => {
+    await asBroker(async (_t, broker) => {
+      await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: false }],
+      })
+      const [recorded] = await broker.query(api.broker.interactions.list, { orgKey: "org-chess" })
+      const edited = {
+        key: recorded.key,
+        date: recorded.date,
+        orgKey: "org-chess",
+        channel: "email" as const,
+        summary: "Art 14 notice sent; the president replied from a new address",
+        nextStep: "Update the role address",
+      }
+      await broker.mutation(api.broker.interactions.update, edited)
+      const bounce = await broker.mutation(api.broker.interactions.recordSendLog, {
+        entries: [{ ...sent, bounced: true }],
+      })
+      expect(bounce).toMatchObject({ recorded: 0, bounced: 0, unchanged: 1 })
+      const [after] = await broker.query(api.broker.interactions.list, { orgKey: "org-chess" })
+      expect(after).toMatchObject({ summary: edited.summary, nextStep: edited.nextStep })
+      expect(after.followUpOn).toBeUndefined()
+    })
+  })
+
+  test("refuses a bad or out-of-period date, a bad address, and an oversized batch", async () => {
     await asBroker(async (_t, broker) => {
       await expect(
         broker.mutation(api.broker.interactions.recordSendLog, {
           entries: [{ ...sent, sentOn: "5/11/2026", bounced: false }],
         }),
       ).rejects.toThrow("must be a date")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, sentOn: "2026-05-11", bounced: false }],
+        }),
+      ).rejects.toThrow("outside the outreach period")
+      await expect(
+        broker.mutation(api.broker.interactions.recordSendLog, {
+          entries: [{ ...sent, sentOn: "2099-01-01", bounced: false }],
+        }),
+      ).rejects.toThrow("outside the outreach period")
       await expect(
         broker.mutation(api.broker.interactions.recordSendLog, {
           entries: [{ ...sent, email: "nobody", bounced: false }],

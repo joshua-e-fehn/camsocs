@@ -35,8 +35,8 @@ import {
 import { humanize, todayIso } from "@/lib/broker/format"
 import {
   fieldLabel,
-  isOutreachCandidate,
   outreachCsv,
+  outreachGroups,
   outreachNotice,
   parseSendLog,
   SEND_LOG_BATCH,
@@ -66,15 +66,8 @@ export function BrokerReports() {
 
   const groups = useMemo(() => {
     if (!rows) return undefined
-    const candidates = rows.filter(isOutreachCandidate)
-    const incomplete = candidates.filter((row) => row.missingFields.length > 0)
-    return {
-      address: incomplete.filter((row) => row.bestAddress),
-      no_address: incomplete.filter((row) => !row.bestAddress),
-      complete: candidates.filter((row) => row.missingFields.length === 0),
-      excluded: rows.filter((row) => !row.isCounterpart && !isOutreachCandidate(row)).length,
-      withAddress: candidates.filter((row) => row.bestAddress).length,
-    }
+    const { noAddress, ...rest } = outreachGroups(rows)
+    return { ...rest, no_address: noAddress }
   }, [rows])
 
   const shown = useMemo(
@@ -103,7 +96,7 @@ export function BrokerReports() {
     <>
       <BrokerPageHeader
         title="Missing data"
-        description="What each listing lacks, and the phase-2 outreach export (also the Art 14 notice). Send by about 13 Nov 2026."
+        description="What each listing lacks, and the phase-2 outreach export (also the Art 14 notice). Send by 9 Nov 2026 (one month after the 9 Oct harvest)."
       >
         <SendLogImport />
         <Button onClick={download} disabled={!complete}>
@@ -122,11 +115,15 @@ export function BrokerReports() {
               hint="Listed, not suppressed, with an address"
             />
             <StatTile
-              label="Missing data, no address"
+              label="No outreach address"
               value={groups.no_address.length}
-              hint="No usable role address (lists and webmail are left out)"
+              hint="Needs the notice another way (lists and webmail are left out)"
             />
-            <StatTile label="Complete listings" value={groups.complete.length} />
+            <StatTile
+              label="Complete listings"
+              value={groups.complete.length}
+              hint="With an outreach address"
+            />
             <StatTile
               label="Left out"
               value={groups.excluded}
@@ -150,7 +147,7 @@ export function BrokerReports() {
         aria-label="Which organisations"
       >
         <ToggleGroupItem value="address">Missing data, with address</ToggleGroupItem>
-        <ToggleGroupItem value="no_address">No address</ToggleGroupItem>
+        <ToggleGroupItem value="no_address">No outreach address</ToggleGroupItem>
         <ToggleGroupItem value="complete">Complete</ToggleGroupItem>
       </ToggleGroup>
 
@@ -209,7 +206,9 @@ export function BrokerReports() {
                         </div>
                       </>
                     ) : (
-                      <span className="text-muted-foreground">none published</span>
+                      <span className="text-muted-foreground">
+                        {row.has.email ? "list or webmail only" : "none published"}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-right align-top">
@@ -322,7 +321,7 @@ function NoticePreview({ row }: { row: BrokerOrgRow }) {
         <DialogDescription>
           {row.bestAddress
             ? `To ${row.bestAddress.email} (${humanize(row.bestAddress.role).toLowerCase()}). Send it yourself; nothing is sent from here.`
-            : "No published address: this listing is not in the export."}
+            : "No outreach address: this listing is not in the export. Send the notice another way and add an interaction for it."}
         </DialogDescription>
       </DialogHeader>
       <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-4 font-sans text-sm whitespace-pre-wrap">
