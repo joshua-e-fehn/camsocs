@@ -3,7 +3,7 @@
 	"id": "rule_block_gpt_bot_and_claude_bot_training_crawlers_ctjYse",
 	"value": {
 		"name": "Training crawlers: cached public pages only",
-		"description": "Bot policy 2026-11-03, step 2 (was: block GPTBot and ClaudeBot site-wide since the 1 Nov CPU incident, when they hammered /events). The AI-training crawlers of webapp/lib/crawlers.ts AI_TRAINING_CRAWLERS (any case) may read edge-cached public pages; deny them the pages rendered per request (/events, /societies, /request, /talks and their .rsc), the talks pillar, .ics feeds, share images and any URL with a query string. /robots.txt is never denied. Browsers and search crawlers are unaffected.",
+		"description": "Bot policy 2026-11-03, step 2 (was: GPTBot/ClaudeBot blocked site-wide since 1 Nov): webapp/lib/crawlers.ts AI_TRAINING_CRAWLERS may read edge-cached pages; denied per-request pages, /talks, .ics, share images and query strings. /robots.txt never.",
 		"active": true,
 		"conditionGroup": [
 			{
@@ -21,7 +21,7 @@
 					{
 						"type": "path",
 						"op": "re",
-						"value": "^/((events|societies|request)(\\.rsc)?$|talks)|[/.]ics$|opengraph-image"
+						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
 					}
 				]
 			},
@@ -78,7 +78,7 @@
 					{
 						"type": "path",
 						"op": "re",
-						"value": "^/((events|societies|request)(\\.rsc)?$|talks)|[/.]ics$|opengraph-image"
+						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
 					}
 				]
 			},

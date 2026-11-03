@@ -51,6 +51,33 @@ export const TRAP_ALLOWS: readonly string[] = [
   "/talks?school=",
 ]
 
+/**
+ * The training crawlers' group (T3, step 2 of the bot policy 2026-11-03):
+ * the edge-cached public pages only, which is what the Vercel firewall lets
+ * them read (lib/firewall-rules.ts `UNCACHED_PATHS`, ops/vercel/
+ * training-crawlers.json). So robots.txt tells a compliant GPTBot what the
+ * firewall enforces, rather than allowing `/events` and then answering 403:
+ * the private paths, the talks pillar (G1), the pages rendered per request
+ * bare (`/events`, `/societies`, `/request`; their parameter views are
+ * caught by any query), any URL with a query string, every `.ics` feed and
+ * the generated share images. No Allow lines, so a first-match parser
+ * reads this group as a longest-match one does.
+ */
+export const TRAINING_DISALLOWS: readonly string[] = [
+  ...PRIVATE_PATHS,
+  "/talks",
+  "/events$",
+  "/events.rsc$",
+  "/societies$",
+  "/societies.rsc$",
+  "/request$",
+  "/request.rsc$",
+  "/*?",
+  "/*/ics$",
+  "/*.ics$",
+  "/*opengraph-image",
+]
+
 /** Whether a robots.txt path pattern matches a URL path (with its query), as
  * Google reads one: a prefix, where `*` is any run of characters and a final
  * `$` anchors the end. */

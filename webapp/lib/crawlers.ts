@@ -6,9 +6,10 @@
  *    everyone (ops/vercel/control-files-bypass.json).
  *  - T1 AI search and index crawlers and T2 user-triggered AI fetchers may
  *    read every canonical public page.
- *  - T3 AI training crawlers may too (step 2: GPTBot and ClaudeBot left the
- *    site-wide block of 2026-11-01), but the Vercel firewall keeps them on
- *    edge-cached pages (ops/vercel/training-crawlers.json): their hammering
+ *  - T3 AI training crawlers may read the edge-cached public pages (step 2:
+ *    GPTBot and ClaudeBot left the site-wide block of 2026-11-01); robots.txt
+ *    gives them their own group and the Vercel firewall keeps them there
+ *    (ops/vercel/training-crawlers.json): their hammering
  *    of /events, whose calendar parameter URLs are an unbounded crawl space,
  *    used most of the Fluid CPU allowance on 1 Nov.
  *  - None of T1-T3 may read the talks pillar. /talks, /talks/<key>,

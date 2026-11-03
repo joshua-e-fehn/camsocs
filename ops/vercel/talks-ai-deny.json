@@ -3,7 +3,7 @@
 	"id": null,
 	"value": {
 		"name": "Deny AI agents on /talks",
-		"description": "Bot policy 2026-11-03 and owner decision G1: deny the AI agents of webapp/lib/crawlers.ts AI_CRAWLERS (T1 search, T2 user-triggered, T3 training; tokens in any case) on the talks pillar, path prefix /talks (which covers /talks.ics), before compute. Browsers, Googlebot, Bingbot and other search crawlers stay allowed. robots.txt asks the same; proxy.ts refuses them too.",
+		"description": "Bot policy 2026-11-03, owner decision G1: deny the AI agents of webapp/lib/crawlers.ts AI_CRAWLERS (T1-T3) on path prefix /talks (with /talks.ics) before compute. Browsers, Googlebot and Bingbot stay allowed; proxy.ts refuses them too.",
 		"active": true,
 		"conditionGroup": [
 			{

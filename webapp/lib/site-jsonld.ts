@@ -49,6 +49,10 @@ export function websiteJsonLd(): Record<string, unknown> {
         inLanguage: "en-GB",
         publisher: { "@id": PUBLISHER_ID },
         publishingPrinciples: pageId("/about"),
+        // Intentionally a robots-disallowed slice (`/societies?q=` is a crawler
+        // trap, bot policy 2026-11-03): the action describes the site's search
+        // for readers and assistants; no crawler needs to fetch it (Google
+        // retired the sitelinks search box).
         potentialAction: {
           "@type": "SearchAction",
           target: {

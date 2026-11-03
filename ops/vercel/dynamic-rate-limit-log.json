@@ -3,7 +3,7 @@
 	"id": null,
 	"value": {
 		"name": "Rate limit dynamic paths (log only)",
-		"description": "Bot policy 2026-11-03, T5: log any IP making more than 120 requests a minute to the pages rendered per request (/events, /societies, /request, /sign-in and their .rsc), the talks pillar or /api/. Log mode: measure before refusing anything; switch the rate limit's action to deny only after reading the logs.",
+		"description": "Bot policy 2026-11-03, T5: log any IP over 120 requests a minute on the per-request pages (/events, /societies, /request, /sign-in, .rsc), /talks or /api/. Log only: measure first; set rateLimit.action to deny only after reading the logs.",
 		"active": true,
 		"conditionGroup": [
 			{

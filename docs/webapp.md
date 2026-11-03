@@ -65,8 +65,10 @@ app/                         Next.js App Router pages
   robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay and the parameter traps
                              (/events?, /societies?, /talks?, /request?, /talks/departments?, /events/*/ics;
                              canonical ?org= / ?page= / ?dept= / ?school= views allowed); AI agents
-                             (lib/crawlers.ts T1-T3) off /talks; SEO tools and scrapers (T4) off the site
-                             (bot policy 2026-11-03)
+                             (lib/crawlers.ts T1-T3) off /talks; training crawlers (T3) also off the
+                             per-request pages and any query, as the firewall denies them
+                             (crawl-traps.ts TRAINING_DISALLOWS); SEO tools and scrapers (T4) off the
+                             site (bot policy 2026-11-03)
   opengraph-image.tsx        Generic share image: wordmark and headline only (no University branding),
                              drawn by _og/card.tsx; a society's and an event's segment draw their own
                              (`opengraph-image.tsx`: name, kinds, logo / when, title, host, venue;

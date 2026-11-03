@@ -3,7 +3,7 @@
 	"id": null,
 	"value": {
 		"name": "Deny vulnerability probes and scrapers",
-		"description": "Bot policy 2026-11-03: deny requests for other software's paths (.env, .git, wp-*, xmlrpc, phpMyAdmin, .aws, .DS_Store, *.php; nothing here serves them) and the SEO-tool and commercial scrapers of webapp/lib/crawlers.ts SCRAPERS (T4, any case), which robots.txt asks to read nothing. Firewall-denied requests cost no function, CDN request or data transfer.",
+		"description": "Bot policy 2026-11-03, T4/T5: deny other software's paths (.env, .git, wp-*, xmlrpc, phpMyAdmin, .aws, .DS_Store, *.php) and the SEO-tool and commercial scrapers of webapp/lib/crawlers.ts SCRAPERS. Denied requests cost no function or CDN request.",
 		"active": true,
 		"conditionGroup": [
 			{

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
+import robots from "@/app/robots"
+import { robotsGroupAllows, TRAINING_DISALLOWS } from "./crawl-traps"
 import { AI_CRAWLERS, AI_TRAINING_CRAWLERS, SCRAPERS } from "./crawlers"
 import {
   type Condition,
@@ -89,10 +91,13 @@ describe("ops/vercel/", () => {
     ).toEqual(FIREWALL_FILES.map(({ file }) => file).sort())
   })
 
-  test("every rule fits the API: at most 25 groups of 65 conditions", () => {
+  test("every rule fits the API: at most 25 groups of 65 conditions, short texts", () => {
     for (const { file, body } of FIREWALL_FILES) {
       const value = body().value
       if (!("conditionGroup" in value)) continue
+      // The PATCH schema's maxLength (openapi.vercel.sh, rules.insert/update).
+      expect([file, value.description.length <= 256]).toEqual([file, true])
+      expect([file, value.name.length <= 160]).toEqual([file, true])
       expect([file, value.conditionGroup.length <= 25]).toEqual([file, true])
       for (const group of value.conditionGroup)
         expect(group.conditions.length).toBeLessThanOrEqual(65)
@@ -242,6 +247,9 @@ describe("training-crawlers.json (T3, step 2)", () => {
         { path: "/events.rsc" },
         { path: "/societies" },
         { path: "/request" },
+        { path: "/sign-in" },
+        { path: "/api/auth/get-session" },
+        { path: "/dashboard" },
         { path: "/talks" },
         { path: "/talks/departments" },
         { path: "/talks/talk-0" },
@@ -263,7 +271,52 @@ describe("training-crawlers.json (T3, step 2)", () => {
         false,
       )
     }
-    expect(new RegExp(UNCACHED_PATHS).test("/events/evt-0")).toBe(false)
+    for (const path of ["/sign-in", "/sign-in.rsc", "/api/auth/get-session", "/dashboard"]) {
+      expect([path, new RegExp(UNCACHED_PATHS).test(path)]).toEqual([path, true])
+    }
+    for (const path of ["/", "/about", "/societies/x", "/events/evt-0", "/sitemap.xml"]) {
+      expect([path, new RegExp(UNCACHED_PATHS).test(path)]).toEqual([path, false])
+    }
+  })
+
+  test("robots.txt tells training crawlers what the firewall enforces", () => {
+    const group = [robots().rules].flat().find((rule) => [rule.userAgent].flat().includes("GPTBot"))
+    expect(group?.disallow).toEqual([...TRAINING_DISALLOWS])
+    if (!group) return
+    for (const request of [
+      { path: "/" },
+      { path: "/about" },
+      { path: "/categories/sport" },
+      { path: "/societies/chess" },
+      { path: "/events/evt-0" },
+      { path: "/sitemap.xml" },
+      { path: "/sitemaps/events.xml" },
+      { path: "/llms.txt" },
+      { path: "/events" },
+      { path: "/events.rsc" },
+      { path: "/events", query: "org=chess" },
+      { path: "/events", query: "date=2026-11-03" },
+      { path: "/societies" },
+      { path: "/societies", query: "page=2" },
+      { path: "/request" },
+      { path: "/sign-in", query: "cam=1" },
+      { path: "/api/auth/get-session" },
+      { path: "/dashboard" },
+      { path: "/talks" },
+      { path: "/talks.ics" },
+      { path: "/events.ics" },
+      { path: "/events/evt-0/ics" },
+      { path: "/events/evt-0/opengraph-image-xy7nla" },
+      { path: "/societies/chess", query: "_rsc=abc12" },
+      { path: "/about", query: "utm_source=x" },
+    ]) {
+      const denied = matchesRule(training, { ...request, userAgent: shouted("GPTBot") })
+      const url = `${request.path}${request.query ? `?${request.query}` : ""}`
+      // Denied by the firewall: disallowed by robots.txt. Disallowed only by
+      // robots.txt (/relay, the rest of a private prefix) is fine.
+      if (denied) expect([url, robotsGroupAllows(group, url)]).toEqual([url, false])
+      else expect([url, robotsGroupAllows(group, url)]).toEqual([url, true])
+    }
   })
 
   test("never browsers, search crawlers or AI search agents", () => {
