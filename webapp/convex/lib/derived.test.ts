@@ -165,33 +165,54 @@ describe("deriveOrgStatus (data-model §6)", () => {
 
 describe("sweepGroupOf", () => {
   test("whole-source listings, per-URL listings and one-off readings", () => {
-    expect(sweepGroupOf("camdram", "https://www.camdram.net/shows/x.json", "show:1")).toBe(
-      "camdram",
-    )
-    expect(sweepGroupOf("ics", "https://Example.org/cal.ics/", "uid-1")).toBe(
+    expect(
+      sweepGroupOf("camdram", "https://www.camdram.net/shows/x.json", { externalId: "show:1" }),
+    ).toBe("camdram")
+    expect(sweepGroupOf("ics", "https://Example.org/cal.ics/", { externalId: "uid-1" })).toBe(
       "ics:example.org/cal.ics",
     )
-    expect(sweepGroupOf("mailing_list", "inbound:<m1>", "org-q:2026-11-10:quiz")).toBeUndefined()
+    expect(
+      sweepGroupOf("mailing_list", "inbound:<m1>", { externalId: "org-q:2026-11-10:quiz" }),
+    ).toBeUndefined()
   })
 
-  test("a society's pages and cards are one listing per society (ENG-36)", () => {
+  test("a society's pages and the cards they show are one listing per society (ENG-36)", () => {
     const calendar = "https://german-society.example/calendars/"
     const events = "https://german-society.example/our-events/"
-    expect(sweepGroupOf("website", calendar, "org-german-society:2026-11-07:med")).toBe(
+    const card = "https://german-society.example/wp-content/uploads/term-card.png"
+    const id = "org-german-society:2026-11-07:med"
+    expect(sweepGroupOf("website", calendar, { externalId: id, sourceUrl: calendar })).toBe(
       "own:org-german-society",
     )
-    expect(sweepGroupOf("termcard", events, "org-german-society:2026-11-07:med")).toBe(
+    // A card read off a page: its listing is the page, its source the file.
+    expect(sweepGroupOf("termcard", events, { externalId: id, sourceUrl: card })).toBe(
       "own:org-german-society",
     )
     // Another society on the same host is its own listing.
-    expect(sweepGroupOf("website", calendar, "org-french-society:2026-11-07:x")).toBe(
-      "own:org-french-society",
-    )
+    expect(
+      sweepGroupOf("website", calendar, { externalId: "org-french-society:2026-11-07:x" }),
+    ).toBe("own:org-french-society")
     // An external id without an organisation keeps its listing URL.
-    expect(sweepGroupOf("termcard", events, "list:x:2026-11-07:med")).toBe(
-      "termcard:german-society.example/our-events",
-    )
+    expect(
+      sweepGroupOf("termcard", events, { externalId: "list:x:2026-11-07:med", sourceUrl: card }),
+    ).toBe("termcard:german-society.example/our-events")
     expect(sweepGroupOf("website", calendar)).toBe("website:german-society.example/calendars")
+  })
+
+  test("a card read as a file keeps its own listing (ENG-36 review)", () => {
+    // A `termcardUrl` that is the file itself: fetched on its own, often from
+    // another host, so it may go unread while the society's site is read.
+    const file = "https://www.cambridgesu.co.uk/asset/Society/1234/termcard.pdf"
+    const id = "org-german-society:2026-11-07:med"
+    expect(sweepGroupOf("termcard", file, { externalId: id, sourceUrl: file })).toBe(
+      "termcard:cambridgesu.co.uk/asset/Society/1234/termcard.pdf",
+    )
+    // The same URL spelt differently is still the file.
+    expect(sweepGroupOf("termcard", `${file}/`, { externalId: id, sourceUrl: file })).toMatch(
+      /^termcard:/,
+    )
+    // Without a source URL nothing says the card was read off a page.
+    expect(sweepGroupOf("termcard", file, { externalId: id })).toMatch(/^termcard:/)
   })
 })
 

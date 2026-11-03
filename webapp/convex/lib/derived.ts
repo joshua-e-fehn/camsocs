@@ -92,16 +92,21 @@ export function termWeekLabel(ms: number, terms: readonly TermDates[]): string |
  */
 const WHOLE_SOURCE_LISTINGS = new Set(["camdram", "cucbc", "su_whatson"])
 /**
- * A society's own publications — its site's pages and the term cards and
- * posters they show or it links (`website`, `termcard`) — are one listing per
+ * A society's own site — its pages (`website`) and the term cards and posters
+ * those pages show or link (`termcard` read off a page: its listing URL, the
+ * page, differs from its source URL, the card file) — is one listing per
  * society, keyed by the organisation in the external id (`<org key>:<London
- * date>:<slug>`), not one per page or card (ENG-36). The website stage reads
- * the whole site each run and leaves out a card's event the site's own text
- * already lists, on any of its pages; a card event posted before the site's
- * text listed it would otherwise keep a listing of its own that nothing
- * sights any more, which withdraws nothing, and show beside the page's event
- * (the German Society's term card and its calendar page, 2026-11-02). An
- * external id without an organisation falls back to its listing URL.
+ * date>:<slug>`), not one per page (ENG-36). The website stage reads the
+ * whole site, its cards included, in one pass each run and leaves out a
+ * card's event the site's own text already lists, on any of its pages; a card
+ * event posted before the site's text listed it would otherwise keep a
+ * listing of its own that nothing sights any more, which withdraws nothing,
+ * and show beside the page's event (the German Society's term card and its
+ * calendar page, 2026-11-02). A card read as a file (a `termcardUrl` that is
+ * the file) is fetched on its own, often from another host, and may go
+ * unread while the site is still read (a failed fetch, the termcards stage's
+ * budget), so it keeps its own listing. An external id without an
+ * organisation falls back to its listing URL.
  */
 const OWN_SITE_SOURCES = new Set(["website", "termcard"])
 const ORG_SCOPED_ID = /^(org-[a-z0-9-]+):/
@@ -126,19 +131,36 @@ export const WITHDRAWN_AFTER_MS = 3 * DAY_MS
  * is compared with: a listing that is read again re-sights everything it
  * still shows, so an event it dropped falls behind — and a pipeline that
  * stops running stops every sighting at once, which hides nothing. A
- * society's own site and cards are one listing (`OWN_SITE_SOURCES`):
- * `own:<org key>`.
+ * society's own site and the cards read off its pages are one listing
+ * (`OWN_SITE_SOURCES`): `own:<org key>`.
  */
 export function sweepGroupOf(
   source: string,
   listingUrl: string | undefined,
-  externalId?: string,
+  row: { externalId?: string; sourceUrl?: string } = {},
 ): string | undefined {
   if (WHOLE_SOURCE_LISTINGS.has(source)) return source
-  const owner = OWN_SITE_SOURCES.has(source) ? externalId?.match(ORG_SCOPED_ID)?.[1] : undefined
+  const owner = ownSiteOf(source, listingUrl, row)
   if (owner) return `own:${owner}`
   if (PER_URL_LISTINGS.has(source) && listingUrl) return `${source}:${normaliseUrl(listingUrl)}`
   return undefined
+}
+
+/** The society whose own site an event was read from (`OWN_SITE_SOURCES`). */
+function ownSiteOf(
+  source: string,
+  listingUrl: string | undefined,
+  row: { externalId?: string; sourceUrl?: string },
+): string | undefined {
+  if (!OWN_SITE_SOURCES.has(source)) return undefined
+  if (source === "termcard") {
+    const readOffPage =
+      listingUrl !== undefined &&
+      row.sourceUrl !== undefined &&
+      normaliseUrl(listingUrl) !== normaliseUrl(row.sourceUrl)
+    if (!readOffPage) return undefined
+  }
+  return row.externalId?.match(ORG_SCOPED_ID)?.[1]
 }
 
 /** Whether a future event has fallen behind its listing (`sweepGroupOf`). */
