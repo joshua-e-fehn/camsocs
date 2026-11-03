@@ -544,6 +544,7 @@ describe("withdrawn events", () => {
     startsAt: number,
     seenAt: number,
     listing: string,
+    file = listing,
   ) {
     const key = eventKey(source, externalId)
     const sourceTypes = {
@@ -552,12 +553,14 @@ describe("withdrawn events", () => {
       website: "society_website",
       termcard: "termcard",
     } as const
-    const field = (name: string, value: unknown) =>
+    // A card read off a page claims its identity from the page and the rest
+    // from the card file (pipeline claims.py `claims_for_event`).
+    const field = (name: string, value: unknown, from = file) =>
       claim(key, name, value, {
         entityType: "event",
         sourceType: sourceTypes[source],
-        sourceKey: `src-${listing}`,
-        sourceUrl: listing,
+        sourceKey: `src-${from}`,
+        sourceUrl: from,
         retrievedAt: seenAt,
       })
     await t.mutation(internal.ingest.claims.ingest, {
@@ -565,9 +568,9 @@ describe("withdrawn events", () => {
         field("title", title),
         field("startsAt", startsAt),
         field("visibility", "public"),
-        field("source", source),
-        field("externalId", externalId),
-        field("sourceUrl", listing),
+        field("source", source, listing),
+        field("externalId", externalId, listing),
+        field("sourceUrl", file),
       ],
     })
   }
@@ -644,6 +647,50 @@ describe("withdrawn events", () => {
       (e) => e.title,
     )
     expect(titles).toEqual(["Pub quiz", "Social", "Talk 2"])
+  })
+
+  test("a card's events fall behind the society's site once its pages list them (ENG-36)", async () => {
+    const t = newTest()
+    // The term card on one page was read before the calendar page listed the
+    // same evenings; the site now gives every reading from its calendar page
+    // (the card's rows are left out as already listed), so nothing re-sights
+    // the card's own listing.
+    const events = "https://cugerman.example/our-events/"
+    const card = "https://cugerman.example/uploads/term-card.png"
+    const calendar = "https://cugerman.example/calendars/"
+    const old = NOW - 18 * DAY
+    const day = (n: number) => NOW + n * DAY
+    await listed(t, "termcard", "org-g:2026-11-07:med", "Med Night", day(4), old, events, card)
+    await listed(t, "termcard", "org-g:2026-11-10:pub", "Pub Night", day(7), old, events, card)
+    await listed(t, "website", "org-g:2026-11-07:med-2", "Med Night", NOW + 4 * DAY, NOW, calendar)
+    await listed(t, "website", "org-g:2026-11-10:pub-2", "Pub Night", NOW + 7 * DAY, NOW, calendar)
+    // Another society whose site has gone quiet keeps its events.
+    const cuh = "https://cuh.example/events/"
+    const cuhCard = "https://cuh.example/poster.jpg"
+    await listed(t, "termcard", "org-h:2026-11-12:quiz", "Quiz", day(9), old, cuh, cuhCard)
+    const rows = await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })
+    expect(rows.map((e) => [e.title, e.source])).toEqual([
+      ["Med Night", "website"],
+      ["Pub Night", "website"],
+      ["Quiz", "termcard"],
+    ])
+  })
+
+  test("a card read as a file stays while the society's site is read (ENG-36 review)", async () => {
+    const t = newTest()
+    // The termcards stage reads a `termcardUrl` file on its own: one it does
+    // not reach this run (its budget, a failed fetch) is carried forward with
+    // its old sighting, while the society's site is read every day.
+    const file = "https://www.cambridgesu.co.uk/asset/Society/1234/termcard.pdf"
+    const site = "https://cugerman.example/calendars/"
+    const old = NOW - 18 * DAY
+    await listed(t, "termcard", "org-g:2026-11-12:quiz", "Quiz", NOW + 9 * DAY, old, file)
+    await listed(t, "website", "org-g:2026-11-10:pub", "Pub Night", NOW + 7 * DAY, NOW, site)
+    const rows = await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })
+    expect(rows.map((e) => [e.title, e.source])).toEqual([
+      ["Pub Night", "website"],
+      ["Quiz", "termcard"],
+    ])
   })
 })
 

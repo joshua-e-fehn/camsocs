@@ -11,6 +11,7 @@ import {
   londonOffsetMs,
   nextHandoverDate,
   orgSearchText,
+  sweepGroupOf,
   type TermDates,
   termWeekLabel,
 } from "./derived"
@@ -138,6 +139,80 @@ describe("deriveOrgStatus (data-model §6)", () => {
 
   test("no signal at all is unknown", () => {
     expect(deriveOrgStatus({}, now)).toBe("unknown")
+  })
+
+  test("a Camdram listing alone is no current registration (ENG-36)", () => {
+    // Camdram keeps every society that ever put on a show.
+    const seen = { status: "found" as const, retrievedAt: now - DAY_MS }
+    const listed = {
+      registrations: { camdram: { registered: true } },
+      meta: { "registrations.camdram": seen },
+    }
+    expect(deriveOrgStatus(listed, now)).toBe("unknown")
+    expect(deriveOrgStatus({ ...listed, lastActiveAt: now - 400 * DAY_MS }, now)).toBe("dormant")
+    // A show this term counts as activity, like any event.
+    expect(deriveOrgStatus({ ...listed, lastActiveAt: now - 20 * DAY_MS }, now)).toBe("active")
+    // The registers that list only this year's groups still count.
+    const both = {
+      registrations: { camdram: { registered: true }, su: { registered: true, year: "2026-27" } },
+      meta: { "registrations.camdram": seen },
+    }
+    expect(deriveOrgStatus(both, now)).toBe("active")
+    const rowing = { registrations: { cucbc: { registered: true, year: "2026-27" } } }
+    expect(deriveOrgStatus(rowing, now)).toBe("active")
+  })
+})
+
+describe("sweepGroupOf", () => {
+  test("whole-source listings, per-URL listings and one-off readings", () => {
+    expect(
+      sweepGroupOf("camdram", "https://www.camdram.net/shows/x.json", { externalId: "show:1" }),
+    ).toBe("camdram")
+    expect(sweepGroupOf("ics", "https://Example.org/cal.ics/", { externalId: "uid-1" })).toBe(
+      "ics:example.org/cal.ics",
+    )
+    expect(
+      sweepGroupOf("mailing_list", "inbound:<m1>", { externalId: "org-q:2026-11-10:quiz" }),
+    ).toBeUndefined()
+  })
+
+  test("a society's pages and the cards they show are one listing per society (ENG-36)", () => {
+    const calendar = "https://german-society.example/calendars/"
+    const events = "https://german-society.example/our-events/"
+    const card = "https://german-society.example/wp-content/uploads/term-card.png"
+    const id = "org-german-society:2026-11-07:med"
+    expect(sweepGroupOf("website", calendar, { externalId: id, sourceUrl: calendar })).toBe(
+      "own:org-german-society",
+    )
+    // A card read off a page: its listing is the page, its source the file.
+    expect(sweepGroupOf("termcard", events, { externalId: id, sourceUrl: card })).toBe(
+      "own:org-german-society",
+    )
+    // Another society on the same host is its own listing.
+    expect(
+      sweepGroupOf("website", calendar, { externalId: "org-french-society:2026-11-07:x" }),
+    ).toBe("own:org-french-society")
+    // An external id without an organisation keeps its listing URL.
+    expect(
+      sweepGroupOf("termcard", events, { externalId: "list:x:2026-11-07:med", sourceUrl: card }),
+    ).toBe("termcard:german-society.example/our-events")
+    expect(sweepGroupOf("website", calendar)).toBe("website:german-society.example/calendars")
+  })
+
+  test("a card read as a file keeps its own listing (ENG-36 review)", () => {
+    // A `termcardUrl` that is the file itself: fetched on its own, often from
+    // another host, so it may go unread while the society's site is read.
+    const file = "https://www.cambridgesu.co.uk/asset/Society/1234/termcard.pdf"
+    const id = "org-german-society:2026-11-07:med"
+    expect(sweepGroupOf("termcard", file, { externalId: id, sourceUrl: file })).toBe(
+      "termcard:cambridgesu.co.uk/asset/Society/1234/termcard.pdf",
+    )
+    // The same URL spelt differently is still the file.
+    expect(sweepGroupOf("termcard", `${file}/`, { externalId: id, sourceUrl: file })).toMatch(
+      /^termcard:/,
+    )
+    // Without a source URL nothing says the card was read off a page.
+    expect(sweepGroupOf("termcard", file, { externalId: id })).toMatch(/^termcard:/)
   })
 })
 
