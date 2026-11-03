@@ -3,7 +3,7 @@ import Link from "next/link"
 import { CookieSettingsButton } from "@/components/molecules/cookie-settings-button"
 import { Crest } from "@/components/molecules/crest"
 import { formatDayShort } from "@/lib/calendar"
-import { requestLinkRel } from "@/lib/request-link"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 
@@ -85,7 +85,7 @@ export function SiteFooter({
                 href={link.href}
                 // A preset form (`?kind=`) is the same page as /request (its
                 // canonical): not worth a crawler's fetch (request-param-urls).
-                rel={requestLinkRel(link.href)}
+                rel={crawlerTrapRel(link.href)}
                 className={LINK}
               >
                 {link.label}

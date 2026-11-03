@@ -6,6 +6,7 @@ import { useState } from "react"
 import { CATEGORY_ICONS } from "@/components/molecules/category-icon"
 import { OrgMonogram, TONE_CLASSES } from "@/components/molecules/org-monogram"
 import { CATEGORY_TONE } from "@/lib/category-tone"
+import { crawlerTrapRel, linkProps } from "@/lib/crawl-traps"
 import { monogram } from "@/lib/monogram"
 import type { OrgCard, OrgRef } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
@@ -24,7 +25,8 @@ import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/vocab"
 
 export type Navigate = (href: string, event: React.MouseEvent<HTMLAnchorElement>) => void
 
-/** A tile's link: in place through `onNavigate`, else a next/link. */
+/** A tile's link: in place through `onNavigate`, else a next/link; a
+ * filtered directory view is rel=nofollow (lib/crawl-traps.ts). */
 function ShelfLink({
   href,
   onNavigate,
@@ -38,13 +40,18 @@ function ShelfLink({
 }) {
   if (onNavigate) {
     return (
-      <a href={href} onClick={(event) => onNavigate(href, event)} className={className}>
+      <a
+        href={href}
+        rel={crawlerTrapRel(href)}
+        onClick={(event) => onNavigate(href, event)}
+        className={className}
+      >
         {children}
       </a>
     )
   }
   return (
-    <Link href={href} prefetch={false} className={className}>
+    <Link {...linkProps(href)} prefetch={false} className={className}>
       {children}
     </Link>
   )

@@ -16,7 +16,9 @@ import { CATEGORIES, CATEGORY_LABELS, type Category, type OrgType } from "./voca
  *
  * A single-category or single-college view of `/societies` names its hub as
  * canonical; every other filtered or searched view is `noindex, follow`
- * (directory-pagination-search-canonical).
+ * (directory-pagination-search-canonical). Every parameter view but
+ * `?page=N` is also robots-disallowed and linked rel=nofollow (bot policy
+ * 2026-11-03, lib/crawl-traps.ts); the hubs are plain paths, crawlable.
  */
 
 export const CATEGORIES_PATH = "/categories"

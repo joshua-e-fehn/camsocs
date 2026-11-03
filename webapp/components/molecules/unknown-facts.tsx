@@ -1,6 +1,6 @@
 import { ChevronDownIcon, CircleDashedIcon } from "lucide-react"
 import Link from "next/link"
-import { requestLinkRel } from "@/lib/request-link"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { type PublicFieldMeta, sourceLine } from "@/lib/source-line"
 import { cn } from "@/lib/utils"
 
@@ -79,7 +79,7 @@ export function UnknownFacts({
           We only show what a public source states.{" "}
           <Link
             href={correctHref}
-            rel={requestLinkRel(correctHref)}
+            rel={crawlerTrapRel(correctHref)}
             className="text-foreground underline underline-offset-4"
           >
             Know any of these? Tell us

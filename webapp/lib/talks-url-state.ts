@@ -125,8 +125,9 @@ export function talksHref(state: TalksState): string {
  * (`/talks?dept=<slug>`) and one School's (`/talks?school=<school>`) are
  * pages of their own, canonical and indexable, each with its own title;
  * every other slice — a date, a preset, a kind, a search, an open talk — is
- * noindex, follow with the canonical of the page it slices. (AI agents may
- * not read any of them: robots.txt and proxy.ts.)
+ * noindex, follow with the canonical of the page it slices, robots-disallowed
+ * and linked rel=nofollow (bot policy 2026-11-03, lib/crawl-traps.ts). (AI
+ * agents may not read any of them: robots.txt and proxy.ts.)
  */
 export function talksIndexing(state: TalksState): { canonical: string; index: boolean } {
   const canonical = state.dept

@@ -31,6 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { analyticsContext } from "@/lib/analytics-events"
 import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { categoryHubPath } from "@/lib/directory-hubs"
 import { descriptionAttribution, type ProfileSource } from "@/lib/directory-profile"
 import { groupRuns } from "@/lib/event-runs"
@@ -152,7 +153,7 @@ function yesNo(value: boolean | undefined) {
 }
 
 /** A preset form for this listing: linked `rel="nofollow"`, as it is
- * /request under its canonical (lib/request-link.ts). */
+ * /request under its canonical, a robots.txt trap (lib/crawl-traps.ts). */
 function requestHref(org: OrgPublic, kind: "claim" | "correct" | "remove" | "object") {
   return `/request?kind=${kind}&org=${org.slug}`
 }
@@ -386,6 +387,9 @@ function DirectoryLink({
   return (
     <Link
       href={href}
+      // A filtered directory view is a robots.txt trap (bot policy
+      // 2026-11-03); a college's hub is not.
+      rel={crawlerTrapRel(href)}
       className={cn(
         "underline decoration-foreground/20 underline-offset-4 hover:decoration-primary",
         className,

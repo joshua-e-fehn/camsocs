@@ -4,6 +4,7 @@ import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { api } from "@/convex/_generated/api"
 import { formatDayShort, londonIsoDate } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
 import { SCHOOL_TONE, type TalkDepartment } from "@/lib/talks"
@@ -136,7 +137,8 @@ export default async function TalkDepartmentsPage({ searchParams }: Props) {
 
   const tab = (value: "school" | "az", label: string) => (
     <Link
-      href={value === "az" ? "/talks/departments?view=az" : "/talks/departments"}
+      // `?view=az` is a robots.txt trap (bot policy 2026-11-03): rel=nofollow.
+      {...linkProps(value === "az" ? "/talks/departments?view=az" : "/talks/departments")}
       aria-current={view === value ? "page" : undefined}
       className={cn(
         "inline-flex h-11 items-center rounded-full px-4 text-sm font-medium transition-colors sm:h-9",

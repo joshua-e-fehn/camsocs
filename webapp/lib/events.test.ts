@@ -329,10 +329,10 @@ describe("the event's page", () => {
     expect(nodes[1]).not.toHaveProperty("isPartOf")
     expect(nodes[2]).toMatchObject({
       itemListElement: [
+        // The visible trail (eventTrail; no day crumb, a robots.txt trap),
+        // then the event itself.
         { position: 1, name: "Events", item: "https://camsocs.uk/events" },
-        // The visible trail's day (eventTrail), then the event itself.
-        { position: 2, name: "Tue 3 Nov", item: "https://camsocs.uk/events?date=2026-11-03" },
-        { position: 3, name: "Jazz at the Union", item: `https://camsocs.uk/events/${EVENT.key}` },
+        { position: 2, name: "Jazz at the Union", item: `https://camsocs.uk/events/${EVENT.key}` },
       ],
     })
     expect(eventStructuredData({ ...PAGE, status: "tbc" })).toBeNull()

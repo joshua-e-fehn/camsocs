@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { ConvexProvider, ConvexReactClient } from "convex/react"
 import { renderToString } from "react-dom/server"
 import { EventPage } from "@/components/organisms/event-page"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { eventStructuredData } from "@/lib/events"
 import type { EventPublic } from "@/lib/public-api"
 
@@ -56,10 +57,9 @@ function visibleCrumbs(html: string): { name: string; href: string }[] {
 describe("the event page's breadcrumb (event-breadcrumb-mismatch)", () => {
   test("the JSON-LD BreadcrumbList is the visible trail, then the event", () => {
     const crumbs = visibleCrumbs(render(EVENT))
-    expect(crumbs).toEqual([
-      { name: "Events", href: "/events" },
-      { name: "Mon 2 Nov", href: "/events?date=2026-11-02" },
-    ])
+    // No day crumb: `/events?date=` is a robots.txt trap (bot policy 2026-11-03).
+    expect(crumbs).toEqual([{ name: "Events", href: "/events" }])
+    for (const crumb of crumbs) expect(crawlerTrapRel(crumb.href)).toBeUndefined()
     const graph = eventStructuredData(EVENT)?.["@graph"] as Record<string, unknown>[]
     const list = graph.find((node) => node["@type"] === "BreadcrumbList") as {
       itemListElement: { name: string; item: string }[]

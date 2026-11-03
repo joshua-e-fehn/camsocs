@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { robotsGroupAllows } from "@/lib/crawl-traps"
 import {
   AI_CRAWLERS,
   AI_SEARCH_CRAWLERS,
@@ -9,40 +10,15 @@ import {
 import { EMPTY_EVENTS, eventsHref, eventsIndexing, ORG_WEEKS } from "@/lib/url-state"
 import robots from "./robots"
 
-/** Whether a robots.txt path pattern matches a URL path (with its query), as
- * Google reads one: a prefix, where `*` is any run of characters and a final
- * `$` anchors the end. */
-function matches(pattern: string, path: string): boolean {
-  const anchored = pattern.endsWith("$")
-  const body = (anchored ? pattern.slice(0, -1) : pattern)
-    .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*")
-  return new RegExp(`^${body}${anchored ? "$" : ""}`).test(path)
-}
-
 /** The robots.txt verdict for one agent and path, by Google's rules: the
- * agent's own group, else the `*` group; the longest matching pattern wins,
- * and an Allow wins a tie (the least restrictive rule). */
+ * agent's own group (named in any case), else the `*` group. */
 function allowed(agent: string, path: string): boolean {
   const rules = [robots().rules].flat()
   const own = rules.find((rule) =>
     [rule.userAgent].flat().some((name) => name?.toLowerCase() === agent.toLowerCase()),
   )
   const group = own ?? rules.find((rule) => [rule.userAgent].flat().includes("*"))
-  if (!group) return true
-  let best: { length: number; allow: boolean } = { length: -1, allow: true }
-  for (const [list, allow] of [
-    [group.disallow, false],
-    [group.allow, true],
-  ] as const) {
-    for (const pattern of [list ?? []].flat()) {
-      if (matches(pattern, path) && pattern.length >= best.length) {
-        best = { length: pattern.length, allow }
-      }
-    }
-  }
-  return best.allow
+  return group ? robotsGroupAllows(group, path) : true
 }
 
 /** URLs whose page is canonical and indexable: every one must stay

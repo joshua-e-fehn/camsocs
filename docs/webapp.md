@@ -696,8 +696,16 @@ For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the
 canonical of the page it slices. Both carry a CollectionPage / ItemList of the event pages on
-screen. "Show next week" is a real link (handled in place on a click), so crawlers reach later
-weeks; event rows link their societies' profiles. Neither `/events` nor `/events/[key]` has a
+screen. "Show next week", "From <day>", the week and month arrows, "Today" and the day cells are
+real links for readers (handled in place on a click), but every slice of the calendar is a
+robots.txt trap since the bot policy of 2026-11-03: robots.txt disallows it and the links carry
+`rel="nofollow"` (`lib/crawl-traps.ts` `crawlerTrapRel`, the one list app/robots.ts reads). So do
+the directory's filter, facet and search links, the home page's "Try" and day links and the talks
+department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?dept=` and
+`/talks?school=` alone stay followed. Event pages are found through the sitemap
+(`sitemaps/events.xml`), the canonical calendars and the society profiles, whose rows link them;
+an event page's breadcrumb is "Events" alone (no day crumb, which would point at a trap), the same
+in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `loading.tsx`: their H1, text and JSON-LD are in the first HTML chunk.
 
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,

@@ -16,7 +16,6 @@ import { breadcrumbList, eventId, organizationId, pageId, WEBSITE_ID } from "./s
 import { physicalVenue } from "./talks"
 import { isTalksCamUrl } from "./talks-boundary"
 import { TERM_SHORT, type TermDatesRow, termWeekOf } from "./term-week"
-import { EMPTY_EVENTS, eventsHref } from "./url-state"
 import { EVENT_TYPE_LABELS, type EventType } from "./vocab"
 import { type DayCount, termWeekTag } from "./week-strip"
 
@@ -713,24 +712,22 @@ export function eventJsonLd(
 
 /**
  * The visible breadcrumb trail of `/events/<key>` (components/organisms/
- * event-page.tsx): the calendar, then the event's day on it. The page itself
- * is the H1, not a crumb; the JSON-LD BreadcrumbList is this trail with the
- * page appended, so the two say the same (review of the SEO audit,
- * event-breadcrumb-mismatch).
+ * event-page.tsx): the calendar. The page itself is the H1, not a crumb; the
+ * JSON-LD BreadcrumbList is this trail with the page appended, so the two say
+ * the same (review of the SEO audit, event-breadcrumb-mismatch). The event's
+ * day on the calendar (`/events?date=<day>`) is no crumb since the bot policy
+ * of 2026-11-03: it is a robots.txt trap (lib/crawl-traps.ts), and no crumb
+ * may point where a crawler is told not to go.
  */
-export function eventTrail(event: { startsAt: number }): { name: string; path: string }[] {
-  const day = londonIsoDate(event.startsAt)
-  return [
-    { name: "Events", path: "/events" },
-    { name: formatDayShort(day), path: eventsHref({ ...EMPTY_EVENTS, date: day }) },
-  ]
+export function eventTrail(): { name: string; path: string }[] {
+  return [{ name: "Events", path: "/events" }]
 }
 
 /**
  * The page's JSON-LD graph (SEO audit "jsonld-graph-breadcrumbs"): its
  * WebPage, part of the site's WebSite by `@id`, whose main entity is the
- * Event, and the BreadcrumbList of the visible trail (`eventTrail`: Events ›
- * its day) ending with the event. Null when the event gets no structured
+ * Event, and the BreadcrumbList of the visible trail (`eventTrail`: Events)
+ * ending with the event. Null when the event gets no structured
  * data at all.
  */
 export function eventStructuredData(
@@ -754,7 +751,7 @@ export function eventStructuredData(
         breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
       },
       eventJsonLd(event, pageUrl, venue),
-      breadcrumbList(path, [...eventTrail(event), { name, path }]),
+      breadcrumbList(path, [...eventTrail(), { name, path }]),
     ],
   }
 }
