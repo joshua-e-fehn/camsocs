@@ -188,6 +188,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   convex-url.ts              Build-time check that both Convex URLs name one deployment
 scripts/
   check-codegen.ts           Committed api.d.ts lists every convex module
+  firewall-rules.ts          Writes ops/vercel/*.json, the Vercel firewall bodies of the bot policy
+                             (lib/firewall-rules.ts; `bun run firewall:rules`; applying: docs/deploy.md)
   measure-public-api.ts      Response size and time of the public queries against .env.local's deployment
   build-env-defaults.sh      Placeholder Convex URLs only for builds going nowhere (+ .test.ts)
   convex-deploy-if-key.sh    Deploys only on Vercel; refuses a stray exported CONVEX_DEPLOY_KEY

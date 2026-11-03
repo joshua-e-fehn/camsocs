@@ -1,0 +1,52 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"name": "Rate limit dynamic paths (log only)",
+		"description": "Bot policy 2026-11-03, T5: log any IP making more than 120 requests a minute to the pages rendered per request (/events, /societies, /request, /sign-in and their .rsc), the talks pillar or /api/. Log mode: measure before refusing anything; switch the rate limit's action to deny only after reading the logs.",
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "re",
+						"value": "^/(events|societies|request|sign-in)(\\.rsc)?$"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "pre",
+						"value": "/talks"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "pre",
+						"value": "/api/"
+					}
+				]
+			}
+		],
+		"action": {
+			"mitigate": {
+				"action": "rate_limit",
+				"rateLimit": {
+					"algo": "fixed_window",
+					"window": 60,
+					"limit": 120,
+					"keys": [
+						"ip"
+					],
+					"action": "log"
+				}
+			}
+		}
+	}
+}

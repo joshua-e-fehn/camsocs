@@ -1,0 +1,34 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"name": "Deny vulnerability probes and scrapers",
+		"description": "Bot policy 2026-11-03: deny requests for other software's paths (.env, .git, wp-*, xmlrpc, phpMyAdmin, .aws, .DS_Store, *.php; nothing here serves them) and the SEO-tool and commercial scrapers of webapp/lib/crawlers.ts SCRAPERS (T4, any case), which robots.txt asks to read nothing. Firewall-denied requests cost no function, CDN request or data transfer.",
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "re",
+						"value": "^/(\\.env|\\.git|wp-|wordpress|xmlrpc|phpmyadmin|\\.aws|\\.DS_Store|.*\\.php$)"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Aa][Hh][Rr][Ee][Ff][Ss][Bb][Oo][Tt]|[Ss][Ee][Mm][Rr][Uu][Ss][Hh][Bb][Oo][Tt]|[Dd][Oo][Tt][Bb][Oo][Tt]|[Mm][Jj]12[Bb][Oo][Tt]|[Dd][Aa][Tt][Aa][Ff][Oo][Rr][Ss][Ee][Oo][Bb][Oo][Tt]|[Dd][Aa][Tt][Aa][Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr]\\.[Cc][Oo][Mm]|[Bb][Ll][Ee][Xx][Bb][Oo][Tt]|[Bb][Aa][Rr][Kk][Rr][Oo][Ww][Ll][Ee][Rr]|[Pp][Ee][Tt][Aa][Ll][Bb][Oo][Tt]|[Ii][Mm][Aa][Gg][Ee][Ss][Ii][Ff][Tt][Bb][Oo][Tt]|[Dd][Ii][Ff][Ff][Bb][Oo][Tt]|[Bb][Yy][Tt][Ee][Ss][Pp][Ii][Dd][Ee][Rr])"
+					}
+				]
+			}
+		],
+		"action": {
+			"mitigate": {
+				"action": "deny"
+			}
+		}
+	}
+}

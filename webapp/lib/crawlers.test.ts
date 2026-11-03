@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
-import path from "node:path"
 import {
   AI_CRAWLERS,
   AI_SEARCH_CRAWLERS,
@@ -14,9 +12,9 @@ import {
 
 /**
  * The crawler tiers (bot policy 2026-11-03) and the AI agents kept off the
- * talks pillar (owner decisions G1, G6): who is on each list, how a
- * request's user agent is matched, and that the reviewed Vercel firewall
- * rule names exactly the same agents.
+ * talks pillar (owner decisions G1, G6): who is on each list and how a
+ * request's user agent is matched. The Vercel firewall rules built from the
+ * same lists: lib/firewall-rules.test.ts.
  */
 
 const UAS = {
@@ -119,21 +117,5 @@ describe("isAiCrawler / refusesAiAgent", () => {
     for (const path of ["/", "/events", "/events/evt-x", "/societies/chess"]) {
       expect(refusesAiAgent(path, UAS.chatgptUser)).toBe(false)
     }
-  })
-})
-
-describe("ops/vercel/talks-ai-crawlers.json", () => {
-  test("denies exactly AI_CRAWLERS (as documented and in lower case) under /talks", () => {
-    const file = path.join(import.meta.dir, "..", "..", "ops", "vercel", "talks-ai-crawlers.json")
-    const rule = JSON.parse(readFileSync(file, "utf8"))
-    const [group] = rule.value.conditionGroup
-    expect(rule.value.conditionGroup).toHaveLength(1)
-    expect(group.conditions[0]).toEqual({ op: "pre", type: "path", value: "/talks" })
-    const variants = [...new Set(AI_CRAWLERS.flatMap((token) => [token, token.toLowerCase()]))]
-    expect(group.conditions[1]).toEqual({
-      op: "re",
-      type: "user_agent",
-      value: `(${variants.join("|")})`,
-    })
   })
 })
