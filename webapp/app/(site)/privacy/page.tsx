@@ -43,8 +43,9 @@ export const metadata: Metadata = pageMetadata({
  * University's events programme and Meta Business Discovery; the VPS host is
  * named, ⚠ its region still to confirm (record-of-processing, transfers); the
  * AI model is described as it is reached today, a ChatGPT subscription through
- * cliproxy with no API data processing agreement and the training opt-out
- * being set (ENG-41): change "The AI model" when either lands. The OpenAI
+ * cliproxy with no API data processing agreement. Training is off since
+ * 3 November 2026, and Joshua decided to stay on the subscription rather than
+ * move to the API (ENG-41): change "The AI model" if that changes. The OpenAI
  * company that holds the subscription and its transfer safeguard are not yet
  * checked (record-of-processing, transfers; ENG-41): the notice says
  * "not yet confirmed" until they are, then names them, here and in dpia-lite
@@ -348,11 +349,11 @@ export default function PrivacyPage() {
           processing agreement with OpenAI, so it is not a provider acting only on our instructions
           like those above. We have not yet confirmed which OpenAI company the subscription is with
           (for people in the UK and Europe it may be OpenAI’s Irish company) or what safeguard its
-          terms provide for transfers outside the UK; we will say so here once we have. We are
-          switching off the account setting that lets OpenAI use what it is sent to train its
-          models, and we send it as little as we can: talk listings from talks.cam and departments
-          never, and mailing-list messages only after quoted replies, signatures, addresses and
-          phone numbers are cut out.
+          terms provide for transfers outside the UK; we will say so here once we have. The account
+          setting that lets OpenAI use what it is sent to train its models is switched off (since 3
+          November 2026), and we send it as little as we can: talk listings from talks.cam and
+          departments never, and mailing-list messages only after quoted replies, signatures,
+          addresses and phone numbers are cut out.
         </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
