@@ -697,6 +697,14 @@ class TestUniEvents:
             ("org-french", "French Society", [], None, "society"),
             ("org-cu-society", "Cambridge University Society", [], None, "society"),
             ("org-museums", "University of Cambridge Museums", [], None, "uni_office"),
+            ("org-history", "History Society", ["CU History"], None, "society"),
+            (
+                "org-engineers",
+                "Engineering Society",
+                ["Cambridge University Engineering"],
+                None,
+                "society",
+            ),
         ):
             fields = [parser_field("name", name, extractor="t", evidence="primary")]
             fields.append(parser_field("aliases", aliases, extractor="t", evidence="primary"))
@@ -744,6 +752,11 @@ class TestUniEvents:
         assert credited("University of Cambridge Museums late") is None
         assert credited("Cambridge University Society lecture") is None
         assert credited("A Cambridge University open day") is None
+        # A University department, faculty or subject collection is not the
+        # group named "CU <subject>".
+        assert credited("University of Cambridge History of Art lecture") is None
+        assert credited("Cambridge University Engineering Department open day") is None
+        assert credited("CU History pub quiz") == "org-history"
         # Two groups named side by side are no single organiser.
         assert credited("German Society and French Society joint social") is None
         # The programme's organiser is read before the title.
@@ -758,6 +771,37 @@ class TestUniEvents:
         assert pattern is not None and pattern.search("Cambridge University Chess Club")
         assert uni_events.name_pattern("Chess Club", alias=True) is None
         assert uni_events.name_pattern("Chess Club") is not None
+
+    @pytest.mark.parametrize(
+        ("alias", "title"),
+        [
+            ("CU Music", "Cambridge University Music Faculty concert"),
+            ("CU Music", "CU Music Faculty concert"),
+            ("CU History", "University of Cambridge History of Art lecture"),
+            ("CU History", "Cambridge University History open day"),
+            ("CU Women", "Cambridge University Women's Boat Club Bumps"),
+            ("Cambridge University Women", "Cambridge University Women's Boat Club Bumps"),
+            (
+                "Cambridge University Engineering",
+                "Cambridge University Engineering Department open day",
+            ),
+            ("CU Jazz Orchestra", "Cambridge University Jazz Orchestra Library tour"),
+        ],
+    )
+    def test_a_university_institution_is_no_groups(self, alias: str, title: str) -> None:
+        """ENG-36 review: the University names its departments, faculties
+        and museums as "Cambridge University <subject> …"; a group aliased
+        "CU <subject>" is not credited with their events."""
+        pattern = uni_events.name_pattern(alias, alias=True)
+        assert pattern is None or pattern.search(title) is None
+
+    def test_a_one_word_cu_alias_still_names_its_group(self) -> None:
+        pattern = uni_events.name_pattern("CU Music", alias=True)
+        assert pattern is not None
+        assert pattern.search("Winter concert | CU Music")
+        assert pattern.search("cu  music plays Bach")
+        longer = uni_events.name_pattern("CU Jazz Orchestra", alias=True)
+        assert longer is not None and longer.search("CU Jazz Orchestra's winter concert")
 
     def test_the_stage_lists_every_public_university_event(
         self, ctx: StageContext, net: respx.MockRouter
