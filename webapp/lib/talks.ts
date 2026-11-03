@@ -313,7 +313,7 @@ const TITLE_MAX = MAX_TITLE_LENGTH
  * in the browser (after a filter change): the pillar's own, "Computer
  * Science talks & seminars in Cambridge" for a department or a School (SEO
  * audit "talks-department-hubs"), or the kind and scope for other slices.
- * Within 60 characters, the " · camsocs" suffix dropped first (`absolute`).
+ * Within 60 characters, the " · CAMsocs" suffix dropped first (`absolute`).
  */
 export function talksPageTitle(
   filters: { school?: TalkSchool; kind?: TalkKind },

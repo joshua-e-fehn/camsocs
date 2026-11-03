@@ -409,7 +409,7 @@ export function eventEndedLongAgo(event: Timed, now: number): boolean {
   return now - eventEnd(event) > ENDED_NOINDEX_MS
 }
 
-/** A document title, at most this long with the " · camsocs" the layout's
+/** A document title, at most this long with the " · CAMsocs" the layout's
  * template adds (owner decision G2's limit, applied to events too). */
 export const TITLE_MAX = MAX_TITLE_LENGTH
 
@@ -428,7 +428,7 @@ function clip(text: string, max: number): string {
  * — because a bare title ("Open training session", "Hunstanton") repeats
  * across nights and societies. Each night keeps its own page and title (a
  * distinct Event); the day tells them apart. At most `TITLE_MAX` characters:
- * the " · camsocs" suffix goes first (`absolute`), then the host, then the
+ * the " · CAMsocs" suffix goes first (`absolute`), then the host, then the
  * title is cut at a word. A host already named in the title is not repeated.
  * For one of the University's own listings the host is the University.
  */
@@ -765,7 +765,7 @@ export const EVENTS_TITLE = "What’s on: Cambridge student events this week"
 /**
  * The title of one society's calendar (`/events?org=<slug>`): "Chess Club
  * events in Cambridge", or without "in Cambridge" when the name says it
- * already or it would not fit — within `TITLE_MAX`, the " · camsocs" suffix
+ * already or it would not fit — within `TITLE_MAX`, the " · CAMsocs" suffix
  * dropped first (`absolute`).
  */
 export function orgEventsTitle(name: string): { title: string; absolute: boolean } {

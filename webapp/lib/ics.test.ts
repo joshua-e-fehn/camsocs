@@ -69,7 +69,7 @@ describe("foldLine", () => {
 })
 
 describe("talksCalendar", () => {
-  const calendar = talksCalendar([TALK], { name: "camsocs talks", now: NOW })
+  const calendar = talksCalendar([TALK], { name: "CAMsocs talks", now: NOW })
 
   test("is CRLF throughout, ends with CRLF, every line at most 75 octets", () => {
     expect(calendar.endsWith("\r\n")).toBe(true)
@@ -128,7 +128,7 @@ describe("talksCalendar", () => {
   })
 
   test("an empty feed is still a valid calendar", () => {
-    const text = talksCalendar([], { name: "camsocs talks", now: NOW })
+    const text = talksCalendar([], { name: "CAMsocs talks", now: NOW })
     expect(text).toStartWith("BEGIN:VCALENDAR\r\n")
     expect(text).toEndWith("END:VCALENDAR\r\n")
     expect(text).not.toContain("BEGIN:VEVENT")
@@ -163,7 +163,7 @@ describe("parseTalkFeedParams", () => {
       ok: true,
       filters: { online: false },
     })
-    expect(talkFeedName({ online: true })).toBe("camsocs talks · Online")
+    expect(talkFeedName({ online: true })).toBe("CAMsocs talks · Online")
   })
 })
 
@@ -193,11 +193,11 @@ describe("talkIcsFile (/talks/<key>/ics)", () => {
 
 describe("talkFeedName", () => {
   test("names the filters", () => {
-    expect(talkFeedName({})).toBe("camsocs talks")
+    expect(talkFeedName({})).toBe("CAMsocs talks")
     expect(talkFeedName({ school: "technology", kind: "seminar" })).toBe(
-      "camsocs talks · Technology · Seminars",
+      "CAMsocs talks · Technology · Seminars",
     )
-    expect(talkFeedName({ department: "history" }, "History")).toBe("camsocs talks · History")
+    expect(talkFeedName({ department: "history" }, "History")).toBe("CAMsocs talks · History")
   })
 })
 
@@ -258,13 +258,13 @@ describe("eventIcsFile (/events/<key>/ics)", () => {
   test("the events feed (/events.ics): named, refreshed, one VEVENT per event", () => {
     const other = { ...EVENT, key: `evt-${"c".repeat(40)}`, title: "Tea" }
     const body = eventsCalendar([EVENT, other], {
-      name: "CU Boat Club · camsocs",
+      name: "CU Boat Club · CAMsocs",
       now: NOW,
       pageUrl: (key) => `https://camsocs.uk/events/${key}`,
     })
     for (const line of body.split("\r\n")) expect(octets(line)).toBeLessThanOrEqual(75)
     const lines = unfold(body).split("\r\n")
-    expect(lines).toContain("X-WR-CALNAME:CU Boat Club · camsocs")
+    expect(lines).toContain("X-WR-CALNAME:CU Boat Club · CAMsocs")
     expect(lines).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT6H")
     expect(lines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(2)
     expect(lines).toContain(`UID:${other.key}@camsocs.uk`)

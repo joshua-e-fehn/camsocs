@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sidebar"
 import { authClient } from "@/lib/auth-client"
 
-const teams = [{ name: "camsocs", logo: <UsersIcon />, plan: "Broker" }]
+const teams = [{ name: "CAMsocs", logo: <UsersIcon />, plan: "Broker" }]
 
 /** The broker area's sections (app/dashboard/*). */
 const SECTIONS = [

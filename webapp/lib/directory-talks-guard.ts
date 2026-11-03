@@ -5,7 +5,7 @@ import { isTalksCamUrl } from "./talks-boundary"
  * 2026-11-02 talks-side-door): no talks.cam-derived text or talks.cam URL
  * may reach the server HTML, flight payload or JSON-LD of any URL outside
  * `/talks`, for any user agent. talks.cam's robots.txt blocks AI agents and
- * only `/talks` carries that block on camsocs (robots.ts, every AI group), so a
+ * only `/talks` carries that block on CAMsocs (robots.ts, every AI group), so a
  * society profile, a hub or the directory must never become a side door.
  *
  * A listing can carry such data in five ways, and this strips each:
@@ -81,7 +81,7 @@ function holdsTalksCamUrl(item: unknown): boolean {
  * the public projections require (convex/lib/projections.ts, a Convex
  * validator would reject the page without them; none is read from talks.cam
  * today), the required `registrations` object (its parts are still walked)
- * and vocabulary values, which are camsocs's own words, not a source's text.
+ * and vocabulary values, which are CAMsocs's own words, not a source's text.
  */
 const KEPT_FIELDS = new Set([
   "key",

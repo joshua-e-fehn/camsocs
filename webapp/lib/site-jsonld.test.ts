@@ -12,12 +12,12 @@ describe("the WebSite node on /", () => {
   const data = websiteJsonLd()
   const site = byType(data, "WebSite")
 
-  test("names camsocs at its stable id, with its publisher", () => {
+  test("names CAMsocs at its stable id, with its publisher", () => {
     expect(data["@context"]).toBe("https://schema.org")
     expect(site).toMatchObject({
       "@id": WEBSITE_ID,
       url: `${SITE_URL}/`,
-      name: "camsocs",
+      name: "CAMsocs",
       inLanguage: "en-GB",
       publisher: { "@id": PUBLISHER_ID },
     })
@@ -34,7 +34,7 @@ describe("the WebSite node on /", () => {
 })
 
 describe("the About page", () => {
-  const data = aboutPageJsonLd("How camsocs works.")
+  const data = aboutPageJsonLd("How CAMsocs works.")
 
   test("is about the site and says it is unofficial", () => {
     const page = byType(data, "AboutPage")

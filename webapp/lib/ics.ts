@@ -252,7 +252,7 @@ export function parseTalkFeedParams(
 
 /** The calendar's name in the subscriber's app, from the filters. */
 export function talkFeedName(filters: TalkFeedFilters, departmentName?: string): string {
-  const parts = ["camsocs talks"]
+  const parts = ["CAMsocs talks"]
   if (departmentName) parts.push(departmentName)
   else if (filters.school) parts.push(TALK_SCHOOL_LABELS[filters.school])
   if (filters.kind) {

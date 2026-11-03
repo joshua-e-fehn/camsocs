@@ -9,7 +9,7 @@
  * Off until both env vars are set on the deployment; nothing else is needed:
  *
  *   bunx convex env set RESEND_API_KEY re_…
- *   bunx convex env set RESEND_FROM "camsocs <sign-in@<your verified domain>>"
+ *   bunx convex env set RESEND_FROM "CAMsocs <sign-in@<your verified domain>>"
  *
  * Unset, the plugin is not registered at all (the endpoint answers 404) and
  * `auth.getSignInOptions` tells the sign-in page to show the option as off.
@@ -53,25 +53,25 @@ function escapeHtml(text: string): string {
 export function buildSignInEmail(from: string, to: string, url: string): SignInEmail {
   const minutes = SIGN_IN_LINK_TTL_SECONDS / 60
   const lines = [
-    "Sign in to camsocs with this link:",
+    "Sign in to CAMsocs with this link:",
     "",
     url,
     "",
     `It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.`,
     "",
-    "camsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.",
+    "CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.",
   ]
   const href = escapeHtml(url)
   const html = [
     '<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1f1d24">',
-    "<p>Sign in to camsocs with this link:</p>",
-    `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to camsocs</a></p>`,
+    "<p>Sign in to CAMsocs with this link:</p>",
+    `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to CAMsocs</a></p>`,
     `<p style="font-size:13px;color:#5f5a66">Or paste this address into your browser:<br><span style="word-break:break-all">${href}</span></p>`,
     `<p style="font-size:13px;color:#5f5a66">It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.</p>`,
-    '<p style="font-size:12px;color:#8a8590">camsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.</p>',
+    '<p style="font-size:12px;color:#8a8590">CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.</p>',
     "</div>",
   ].join("")
-  return { from, to: [to], subject: "Your camsocs sign-in link", text: lines.join("\n"), html }
+  return { from, to: [to], subject: "Your CAMsocs sign-in link", text: lines.join("\n"), html }
 }
 
 /**

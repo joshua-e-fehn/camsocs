@@ -12,7 +12,7 @@ import { isOrgSlug } from "@/lib/url-state"
  * listing gets the generic card. Read anonymously, like the page's public
  * facts; lib/page-metadata.ts leaves the page's Open Graph image to this.
  */
-export const alt = "A society's name, kinds and logo on a camsocs card"
+export const alt = "A society's name, kinds and logo on a CAMsocs card"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 

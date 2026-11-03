@@ -52,7 +52,7 @@ test("without a key, Accept sends nothing to PostHog and stores nothing", async 
     .getByRole("button", { name: "Accept analytics" })
     .click()
   // A client-side navigation: the SDK would send a pageview here.
-  await page.getByRole("contentinfo").getByRole("link", { name: "How camsocs works" }).click()
+  await page.getByRole("contentinfo").getByRole("link", { name: "How CAMsocs works" }).click()
   await expect(page).toHaveURL(/\/about$/)
   await page.waitForLoadState("networkidle")
   await page.reload()

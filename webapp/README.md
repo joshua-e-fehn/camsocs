@@ -1,4 +1,4 @@
-# camsocs webapp
+# CAMsocs webapp
 
 Next.js 16 + Convex + Better Auth (Google) + shadcn/ui. Bun is the only package manager.
 

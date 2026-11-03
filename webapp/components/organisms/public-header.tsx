@@ -92,7 +92,7 @@ export function PublicHeader() {
         <Link
           href="/"
           className="-mx-1 flex min-h-11 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label="camsocs home"
+          aria-label="CAMsocs home"
         >
           <Wordmark />
         </Link>

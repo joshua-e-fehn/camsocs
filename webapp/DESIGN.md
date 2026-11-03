@@ -1,4 +1,4 @@
-# UI/UX Design System — camsocs
+# UI/UX Design System — CAMsocs
 
 > **This file is the single source of truth for all frontend design decisions.**
 > It is referenced any time UI code is created or modified.
@@ -61,7 +61,7 @@ Use **CSS transitions only** for:
 
 | Property        | Value                                                                        |
 | --------------- | ---------------------------------------------------------------------------- |
-| **App Name**    | camsocs (always lower case; Young Serif, after the crest) |
+| **App Name**    | CAMsocs (always "CAM" upper case, "socs" lower case; Young Serif, after the crest) |
 | **Logo**        | The "Three pillars" crest (`components/molecules/crest.tsx`, `public/crest.svg`, `app/icon.svg`): a quartered shield in teal and deep river with a wave border; a mask, a quill, crossed oars and a knight. Our own drawing. `small` variant (quarters only) below 28px |
 | **Tagline**     | Cambridge societies, events and talks, sourced (`SITE_TAGLINE`, lib/site.ts) |
 | **Direction**   | "River & ink" (decided 2026-11-01): black ink on white paper, warmed by River & sunset — one sky band, teal links, apricot for today |
@@ -269,8 +269,8 @@ Never show a blank area. Provide:
 - **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the
   header box, or `openPalette()` (`lib/palette.ts`).
 - **Footer** (`site-footer.tsx`): the sky band; crest and one line about the site, Browse / For
-  societies / camsocs columns with the contact address, then the disclaimer and the term
-  (`loadTermClock`, lib/term-dates.ts). "Cookie settings" in the camsocs column reopens the
+  societies / CAMsocs columns with the contact address, then the disclaimer and the term
+  (`loadTermClock`, lib/term-dates.ts). "Cookie settings" in the CAMsocs column reopens the
   consent banner.
 - **Consent banner** (`organisms/consent-banner.tsx`): paper, not sky, fixed to the bottom with a
   hairline and a shadow; "Accept analytics" and "Reject" as two identical outline buttons (equal

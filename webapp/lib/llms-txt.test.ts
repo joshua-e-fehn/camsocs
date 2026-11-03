@@ -5,14 +5,14 @@ import { DISCLAIMER, SITE_URL } from "./site"
 const text = llmsTxt()
 
 test("follows llmstxt.org: a title, a summary, then sections of links", () => {
-  expect(text.startsWith("# camsocs\n\n> ")).toBe(true)
+  expect(text.startsWith("# CAMsocs\n\n> ")).toBe(true)
   expect(text).toContain("\n## Pages\n")
   expect(text).toContain(`- [Societies and clubs](${SITE_URL}/societies): `)
   expect(text).toContain(`- [Events](${SITE_URL}/events): `)
-  expect(text).toContain(`- [About camsocs](${SITE_URL}/about): `)
+  expect(text).toContain(`- [About CAMsocs](${SITE_URL}/about): `)
 })
 
-test("says camsocs is unofficial", () => {
+test("says CAMsocs is unofficial", () => {
   expect(text).toContain(DISCLAIMER)
 })
 

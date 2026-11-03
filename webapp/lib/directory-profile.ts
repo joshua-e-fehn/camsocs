@@ -103,7 +103,7 @@ export function societyFullName(org: Pick<Org, "name" | "aliases" | "shortName">
 
 /**
  * A profile's `<title>` (G2), never more than `MAX_TITLE` (60)
- * characters, " · camsocs" dropped first (`fitTitle`). The first that fits:
+ * characters, " · CAMsocs" dropped first (`fitTitle`). The first that fits:
  *  1. the full name (`societyFullName`);
  *  2. "<Name>, Cambridge" for a group in Cambridge (the name alone when it
  *     names Cambridge, or the group is elsewhere);
@@ -267,7 +267,7 @@ export type ProfileLead = {
  * A listing's lead, generated from its structured facts only — never a model,
  * never the source's prose (unique-lead-text): the society's own text is
  * shared word for word with its SU page, so the snippet engines quote should
- * be what camsocs adds — the kind of group, its college, its categories, when
+ * be what CAMsocs adds — the kind of group, its college, its categories, when
  * it meets, how many events are coming up and how to reach it.
  */
 export function profileLead({
@@ -388,7 +388,7 @@ export function descriptionAttribution(
 // --- JSON-LD -----------------------------------------------------------------------------
 
 /** schema.org type by org type (org-jsonld-thin). Never CollegeOrUniversity
- * or EducationalOrganization: camsocs lists student groups, and those types
+ * or EducationalOrganization: CAMsocs lists student groups, and those types
  * would describe them as the institution. */
 export function schemaType(orgType: Org["orgType"]): string {
   switch (orgType) {
@@ -438,7 +438,7 @@ export function societyJsonLd({
   eventKeys,
 }: {
   org: Org
-  /** The page title as shown (without " · camsocs"). */
+  /** The page title as shown (without " · CAMsocs"). */
   title: string
   description: string
   eventKeys: string[]

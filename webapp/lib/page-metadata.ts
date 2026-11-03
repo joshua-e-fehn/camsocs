@@ -36,7 +36,7 @@ export const MAX_DESCRIPTION_LENGTH = 155
 const MIN_SENTENCE_CUT = 70
 
 /**
- * A title for `metadata.title`: as is, so the layout adds " · camsocs",
+ * A title for `metadata.title`: as is, so the layout adds " · CAMsocs",
  * while that fits in `MAX_TITLE_LENGTH`; else `absolute`, the name alone:
  * the name matters more than the brand in a cut-off result (G2). A title too
  * long even alone stays whole: the caller picks a shorter form first where
@@ -96,7 +96,7 @@ export function pageMetadata({
   path,
   ownImage = OWN_IMAGE_PATHS.some((pattern) => pattern.test(path)),
 }: {
-  /** The page's name; `{ absolute }` skips the " · camsocs" suffix. */
+  /** The page's name; `{ absolute }` skips the " · CAMsocs" suffix. */
   title: string | { absolute: string }
   description: string
   /** Site-relative, e.g. `/societies/chess`. */

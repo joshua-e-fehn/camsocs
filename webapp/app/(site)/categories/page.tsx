@@ -10,7 +10,7 @@ import { CATEGORIES, CATEGORY_LABELS } from "@/lib/vocab"
 
 const TITLE = "Cambridge societies and clubs by category"
 const DESCRIPTION =
-  "Every category of Cambridge student society and club camsocs lists, from sport and music to faith, politics and volunteering, each with its own page of listings."
+  "Every category of Cambridge student society and club CAMsocs lists, from sport and music to faith, politics and volunteering, each with its own page of listings."
 
 export const metadata: Metadata = {
   ...pageMetadata({ title: TITLE, description: DESCRIPTION, path: CATEGORIES_PATH }),

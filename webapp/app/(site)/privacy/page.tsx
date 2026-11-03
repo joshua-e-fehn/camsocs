@@ -16,7 +16,7 @@ import {
 export const metadata: Metadata = pageMetadata({
   title: "Privacy notice",
   description:
-    "How camsocs uses personal data under UK GDPR: who is responsible, what is collected and from where, why, for how long, and your rights, including the right to object.",
+    "How CAMsocs uses personal data under UK GDPR: who is responsible, what is collected and from where, why, for how long, and your rights, including the right to object.",
   path: "/privacy",
 })
 

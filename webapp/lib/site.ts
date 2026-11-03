@@ -7,7 +7,7 @@
  * number, and the pages leave the line out. Never put a guessed value here.
  */
 
-export const SITE_NAME = "camsocs"
+export const SITE_NAME = "CAMsocs"
 
 /** What the root layout's title template appends to a page's title
  * (app/layout.tsx). */
@@ -33,7 +33,7 @@ export const SITE_DESCRIPTION =
  * (talks.cam), not the societies' own, as SITE_DESCRIPTION says (review of
  * 2026-11-03, site-intro-talks). */
 export const SITE_INTRO =
-  "camsocs is an unofficial, independent directory of Cambridge student societies and clubs, their events, and public academic talks."
+  "CAMsocs is an unofficial, independent directory of Cambridge student societies and clubs, their events, and public academic talks."
 
 /** The light theme's paper, the one colour the browser's chrome takes
  * (DESIGN.md "Light only"; app/globals.css `--background`): the viewport's
@@ -93,4 +93,4 @@ export const SHARE_IMAGE_ALT = `${SITE_NAME}: Everything on in Cambridge, in one
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =
-  "camsocs is an independent, unofficial project. It is not affiliated with, endorsed by or run by the University of Cambridge, any of its colleges or Cambridge SU."
+  "CAMsocs is an independent, unofficial project. It is not affiliated with, endorsed by or run by the University of Cambridge, any of its colleges or Cambridge SU."

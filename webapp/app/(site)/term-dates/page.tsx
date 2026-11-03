@@ -245,7 +245,7 @@ export default async function TermDatesPage() {
             short Week 9.
           </p>
           <p>
-            Societies’ term cards and events on camsocs use the same numbering, so “Week 4” on an
+            Societies’ term cards and events on CAMsocs use the same numbering, so “Week 4” on an
             event is the week shown here.
           </p>
         </ProseSection>

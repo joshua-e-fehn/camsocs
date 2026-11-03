@@ -96,7 +96,7 @@ describe("hub intros say only what the counts say", () => {
 
   test("category hub", () => {
     expect(categoryHubIntro("sport", cards)).toBe(
-      "camsocs lists 3 Cambridge student groups under Sport & Fitness: 2 university-wide and 1 run within a college. Many are also listed under Outdoors & Adventure. Each listing links to its sources; nothing here is official.",
+      "CAMsocs lists 3 Cambridge student groups under Sport & Fitness: 2 university-wide and 1 run within a college. Many are also listed under Outdoors & Adventure. Each listing links to its sources; nothing here is official.",
     )
     expect(categoryHubIntro("music", [])).toContain("no Music groups")
   })
@@ -110,7 +110,7 @@ describe("hub intros say only what the counts say", () => {
     ]
     expect(typeSummary(college)).toBe("2 college clubs, a boat club and a JCR")
     expect(collegeHubIntro("Christ's College", college)).toBe(
-      "camsocs lists 4 student societies and clubs at Christ's College, Cambridge, including 2 college clubs, a boat club and a JCR. The most common areas are Sport & Fitness, Identity, Community & Wellbeing and Music. Each listing links to its sources; nothing here is run by the college.",
+      "CAMsocs lists 4 student societies and clubs at Christ's College, Cambridge, including 2 college clubs, a boat club and a JCR. The most common areas are Sport & Fitness, Identity, Community & Wellbeing and Music. Each listing links to its sources; nothing here is run by the college.",
     )
     expect(collegeHubIntro("Christ's College", [])).toContain("no societies or clubs")
   })

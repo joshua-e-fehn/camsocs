@@ -1,11 +1,11 @@
 /**
- * What camsocs is, and who runs it, as schema.org (SEO audit 2026-11-02,
+ * What CAMsocs is, and who runs it, as schema.org (SEO audit 2026-11-02,
  * site-entity-jsonld): the WebSite node on `/`, and the About page with its
  * publisher on `/about`. Both join the rest of the graph by the stable ids of
  * lib/structured-data.ts.
  *
  * A lowercase brand on a new domain is easily misnamed, or taken for a
- * University resource; these nodes say plainly that camsocs is one person's
+ * University resource; these nodes say plainly that CAMsocs is one person's
  * independent project. Never add `parentOrganization`, `memberOf` or
  * `affiliation` naming the University, a college or Cambridge SU (AGENTS.md:
  * unofficial, no affiliation implied).

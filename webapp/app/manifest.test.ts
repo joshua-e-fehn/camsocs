@@ -11,7 +11,7 @@ const PUBLIC = join(import.meta.dir, "..", "public")
 test("the web manifest names the site, its light colour and its icons", () => {
   const data = manifest()
   expect(data).toMatchObject({
-    short_name: "camsocs",
+    short_name: "CAMsocs",
     start_url: "/",
     theme_color: THEME_COLOR,
     background_color: THEME_COLOR,

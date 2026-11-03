@@ -243,7 +243,7 @@ describe("the agenda's title", () => {
     expect(talksPageTitle({ kind: "lecture" }, "History").title).toBe("Lectures · History talks")
     const long = talksPageTitle({}, "Department of Invented and Unusually Long Studies Today")
     expect(documentTitle(long).length).toBeLessThanOrEqual(60)
-    expect(documentTitle({ title: "X", absolute: false })).toBe("X · camsocs")
+    expect(documentTitle({ title: "X", absolute: false })).toBe("X · CAMsocs")
     expect(documentTitle({ title: "X", absolute: true })).toBe("X")
   })
 })

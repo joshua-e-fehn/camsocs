@@ -275,7 +275,7 @@ test("closing the search palette returns focus to the header button", async ({ p
   await expect(button).toBeVisible()
   await button.focus()
   await page.keyboard.press("Enter")
-  const dialog = page.getByRole("dialog", { name: "Search camsocs" })
+  const dialog = page.getByRole("dialog", { name: "Search CAMsocs" })
   await expect(dialog).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(dialog).toBeHidden()

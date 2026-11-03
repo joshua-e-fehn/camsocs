@@ -1,8 +1,8 @@
-# camsocs: plan
+# CAMsocs: plan
 
 ## 1. Context
 
-camsocs is a verified, current database of every student society and sports club in Cambridge. On top of it sit two things:
+CAMsocs is a verified, current database of every student society and sports club in Cambridge. On top of it sit two things:
 
 - a public website for discovery: browse, filter, search, and an events calendar;
 - a private brokering layer, for connecting societies with each other and with external and internal Cambridge parties.

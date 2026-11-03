@@ -22,7 +22,7 @@ import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-
 import { jsonLdScript } from "@/lib/structured-data"
 
 const DESCRIPTION =
-  "Who runs camsocs, how it collects data (public sources, polite crawling, no Instagram scraping, names as roles, every fact sourced) and how takedowns work."
+  "Who runs CAMsocs, how it collects data (public sources, polite crawling, no Instagram scraping, names as roles, every fact sourced) and how takedowns work."
 
 export const metadata: Metadata = pageMetadata({
   title: "About",
@@ -82,7 +82,7 @@ export default async function AboutPage() {
       <div className="flex max-w-3xl flex-col gap-10">
         <header className="flex flex-col gap-3">
           <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
-            About camsocs
+            About CAMsocs
           </h1>
           <p className="text-lg text-muted-foreground">
             Cambridge student societies and sports clubs, their events, and the public academic
@@ -94,7 +94,7 @@ export default async function AboutPage() {
           <p>
             Cambridge has well over a thousand student groups, listed in many places that rarely
             agree: the SU directory, the Proctors’ register, Sport Cambridge, Camdram, college and
-            JCR/MCR sites, and each society’s own pages. camsocs brings them together into one
+            JCR/MCR sites, and each society’s own pages. CAMsocs brings them together into one
             record per group, keeps the record current, and shows the source, date and status of
             every fact, so you can judge it for yourself.
           </p>
@@ -129,7 +129,7 @@ export default async function AboutPage() {
               images): University Information Services, which runs the events service, and the
               Office of External Affairs and Communications, which runs the programme, gave
               permission on 2 November 2026 for it to be read and for the AI model to read its text.
-              Permission to read the programme is not an endorsement: camsocs remains unofficial and
+              Permission to read the programme is not an endorsement: CAMsocs remains unofficial and
               is not run by or for the University. The rest of that site keeps its robots.txt. Crawl
               delays always apply, and the harvester makes one request at a time per site.
             </li>

@@ -139,7 +139,7 @@ export function outreachNotice(row: OutreachRow, siteUrl: string): string {
   const sources = row.sourceHosts.length > 0 ? list([...row.sourceHosts]) : "public web pages"
   const paragraphs = [
     `Hello ${row.name},`,
-    "I run camsocs, a free-to-use directory of Cambridge student societies and clubs. It is a personal project by Joshua Fehn and is not affiliated with the University of Cambridge or Cambridge SU.",
+    "I run CAMsocs, a free-to-use directory of Cambridge student societies and clubs. It is a personal project by Joshua Fehn and is not affiliated with the University of Cambridge or Cambridge SU.",
     held.length > 0
       ? `Your listing currently shows your ${list(held)}. We collected this from public pages: ${sources}. Every fact on the listing shows where it came from and when.`
       : `Your listing currently shows only your name, collected from public pages: ${sources}.`,
@@ -150,7 +150,7 @@ export function outreachNotice(row: OutreachRow, siteUrl: string): string {
     "Privately, to suggest those introductions, we also keep the names and roles of committee members as your society's own public pages give them. These are never shown on the site, and we do not hand them or your addresses to sponsors or other organisations: an introduction is made by passing a message on. They are kept until the end of the academic year (30 June) and deleted within 30 days after it, unless the person agrees to more.",
     `You can object to this, or ask us to remove the listing or any committee member's details, at ${site}/request or by replying to this email; we will act on it. The privacy notice at ${site}/privacy explains what we hold, how long we keep it and your rights, including the right to complain to the UK regulator, the Information Commission (formerly the Information Commissioner's Office, ICO).`,
     "This is a one-off message; we will not email you again unless you reply.",
-    "Joshua Fehn, camsocs",
+    "Joshua Fehn, CAMsocs",
   ]
   return paragraphs.join("\n\n")
 }

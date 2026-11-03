@@ -76,7 +76,7 @@ export const STATUS_DETAILS: Record<
   },
   manual: {
     label: "Edited",
-    description: "Set by the camsocs editor.",
+    description: "Set by the CAMsocs editor.",
     tone: "neutral",
   },
   conflicting: {

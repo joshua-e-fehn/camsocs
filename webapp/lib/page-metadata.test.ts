@@ -82,14 +82,14 @@ describe("titles (G2: at most 60 characters)", () => {
 
   test("an absolute title stays absolute, and the share card gets the bare name", () => {
     const metadata = pageMetadata({
-      title: { absolute: "camsocs – Cambridge student societies, events & talks" },
+      title: { absolute: "CAMsocs – Cambridge student societies, events & talks" },
       description: "x",
       path: "/",
     })
     expect(metadata.title).toEqual({
-      absolute: "camsocs – Cambridge student societies, events & talks",
+      absolute: "CAMsocs – Cambridge student societies, events & talks",
     })
-    expect(metadata.openGraph?.title).toBe("camsocs – Cambridge student societies, events & talks")
+    expect(metadata.openGraph?.title).toBe("CAMsocs – Cambridge student societies, events & talks")
   })
 })
 
@@ -140,7 +140,7 @@ describe("meta descriptions (meta-description-quality)", () => {
   })
 
   test("the home hero says plainly what the site is, and whose it is not (home-metadata)", () => {
-    expect(SITE_INTRO).toMatch(/^camsocs is an unofficial, independent directory of Cambridge /)
+    expect(SITE_INTRO).toMatch(/^CAMsocs is an unofficial, independent directory of Cambridge /)
     for (const word of ["societies", "clubs", "events", "talks"]) expect(SITE_INTRO).toContain(word)
     // Not the societies' talks: talks.cam's public academic ones.
     expect(SITE_INTRO).toContain("public academic talks")

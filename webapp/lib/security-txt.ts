@@ -17,8 +17,8 @@ const ORIGIN = "https://camsocs.uk"
  */
 export function securityTxt(): string {
   return [
-    "# camsocs, an independent, unofficial directory of Cambridge student societies.",
-    "# Report a security problem, or personal data from camsocs where it should not",
+    "# CAMsocs, an independent, unofficial directory of Cambridge student societies.",
+    "# Report a security problem, or personal data from CAMsocs where it should not",
     "# be, to the address below; please do not test against other people's accounts",
     '# or data. RFC 9116. Renew "Expires" before it passes, keeping it under a year',
     "# ahead (RFC 9116 section 2.5.5).",
