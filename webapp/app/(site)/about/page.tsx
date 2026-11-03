@@ -263,10 +263,12 @@ export default async function AboutPage() {
             <li>what you would like us to do: remove it, credit it differently or link to you.</li>
           </ul>
           <p>
-            We act promptly: we aim to take the material down within two working days of a clear
-            request, while we look into it, and tell you what we did. Once it is removed, the
-            harvester does not bring it back. If the request is about personal data rather than
-            copyright, such as your name or address, the{" "}
+            We act promptly and tell you what we did. For a society’s listing or an event, we aim to
+            take the material down within two working days of a clear request, while we look into
+            it, and we record the removal so that the harvester does not bring it back (an event’s
+            image goes with the event). A talk is shown as its organiser publishes it, so for a talk
+            we ask the organiser to change the listing at its source, and ours follows. If the
+            request is about personal data rather than copyright, such as your name or address, the{" "}
             <Link href="/privacy#rights">privacy notice</Link> explains your rights.
           </p>
         </ProseSection>

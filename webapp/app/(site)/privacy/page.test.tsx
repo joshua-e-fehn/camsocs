@@ -109,6 +109,8 @@ describe("Privacy notice", () => {
     // The published side of the Art 14(5)(e) assessment (dpia-lite §4).
     expect(what).toContain("If we have not written to you")
     expect(what).toContain("person named in the title of a University event")
+    // The Art 14 notice to societies (J7) has not gone out yet.
+    expect(what).toContain("We are writing to every society we list")
   })
 
   test("names the VPS host, and says how the AI model is reached without implying a DPA", async () => {
@@ -117,6 +119,12 @@ describe("Privacy notice", () => {
     expect(sharing).toContain("ChatGPT subscription")
     expect(sharing).toContain("cliproxy")
     expect(sharing).toContain("We have no data processing agreement with OpenAI")
+    // Its contracting company and transfer safeguard are unchecked
+    // (record-of-processing, transfers): the notice must not claim either way.
+    expect(sharing).toContain("not yet confirmed")
+    expect(sharing).not.toMatch(/offer none|in the United\s+States, under/)
+    // What the VPS holds includes list mail, not only page copies.
+    expect(sharing).toContain("mailing-list messages being processed")
     // OpenAI is not in the list of providers that act on our behalf.
     const providers = sharing.slice(0, sharing.indexOf("The AI model"))
     expect(providers).not.toContain("OpenAI")

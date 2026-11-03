@@ -32,7 +32,7 @@ Not a breach: a correction request about an inaccurate fact (that is Art 16, han
 ## 1. Detect and record (at once)
 
 1. Write down the time Joshua became **aware** (reasonably certain that a security incident has compromised personal data). The 72 hours run from here, including weekends.
-2. Open a log entry (template below) before doing anything else. Keep the log **outside Git**: the repository is public. It lives in the 1Password Mya vault as a secure note, "camsocs breach log". Entries name people only where it is needed, and then by key (org key, person key), not by name.
+2. Open a log entry (template below) before doing anything else. Keep the log **outside Git**: the repository is public. Keep it also out of reach of the agents: not in the 1Password Mya vault, which the `mya-op` service account reads unattended, nor anywhere on the VPS or in a folder an agent works in, because the log holds the details of breaches and some of the cases above are an agent or a model reaching the data. **Joshua to choose** where it lives (for example a secure note "camsocs breach log" in his personal vault) and record the choice here. Entries name people only where it is needed, and then by key (org key, person key), not by name.
 
 ## 2. Contain (within the first hours)
 

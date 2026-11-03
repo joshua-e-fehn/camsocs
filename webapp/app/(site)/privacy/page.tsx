@@ -44,7 +44,13 @@ export const metadata: Metadata = pageMetadata({
  * named, ⚠ its region still to confirm (record-of-processing, transfers); the
  * AI model is described as it is reached today, a ChatGPT subscription through
  * cliproxy with no API data processing agreement and the training opt-out
- * being set (ENG-41): change "The AI model" when either lands. "If we have not
+ * being set (ENG-41): change "The AI model" when either lands. The OpenAI
+ * company that holds the subscription and its transfer safeguard are not yet
+ * checked (record-of-processing, transfers; ENG-41): the notice says
+ * "not yet confirmed" until they are, then names them, here and in dpia-lite
+ * R-4 alike. The Art 14 notice to societies (J7, ENG-32) is not sent yet, so
+ * "If we have not written to you" and "Changes" say "we are writing"; put
+ * them back in the present tense once it has gone out. "If we have not
  * written to you" is the published side of the Art 14(5)(e) assessment
  * (dpia-lite §4), and the faith, political and LGBTQ+ officers sentence
  * follows the Art 9 assessment (dpia-lite §5, decision pending, ENG-42): if
@@ -244,14 +250,15 @@ export default function PrivacyPage() {
         </p>
         <h3>If we have not written to you</h3>
         <p>
-          Societies we list are told about their listing directly, at the role address they publish.
-          We do not write to each speaker on a talk or event, each person named in the title of a
-          University event, or each sender of a mailing-list message: there are thousands of them,
-          for most we have no address, and finding one would mean collecting more about them than
-          the listing needs. This notice is how we tell them instead. To protect them, we show only
-          what the organiser published and link to it, infer nothing about anyone, delete talks 30
-          days and events a year after they took place, keep mailing-list messages private and
-          delete them on the schedule below, and remove a name for good when its owner asks.
+          We are writing to every society we list about its listing, at the role address it
+          publishes (by mid-November 2026). We do not write to each speaker on a talk or event, each
+          person named in the title of a University event, or each sender of a mailing-list message:
+          there are thousands of them, for most we have no address, and finding one would mean
+          collecting more about them than the listing needs. This notice is how we tell them
+          instead. To protect them, we show only what the organiser published and link to it, infer
+          nothing about anyone, delete talks 30 days and events a year after they took place, keep
+          mailing-list messages private and delete them on the schedule below, and remove a name for
+          good when its owner asks.
         </p>
       </ProseSection>
 
@@ -312,8 +319,10 @@ export default function PrivacyPage() {
           <li>Vercel (website hosting) and Convex (database and server code);</li>
           <li>
             Hostinger, from which the operator rents the virtual server that runs the harvester on a
-            schedule (region to be confirmed). It holds the harvester’s copies of the public pages
-            it reads (for 90 days) and runs the relay to the AI model described below;
+            schedule (region to be confirmed). It holds the harvester’s working copies: the public
+            pages it reads, staged listings and talks, and mailing-list messages being processed,
+            for up to 90 days (list mail for 30 days), and it runs the relay to the AI model
+            described below;
           </li>
           <li>Resend (sign-in emails and receiving forwarded mailing-list messages);</li>
           <li>Google (sign-in for the operator only);</li>
@@ -334,9 +343,12 @@ export default function PrivacyPage() {
           events programme (with its permission) and mailing-list messages, and replaces names in
           descriptions with roles, is one of OpenAI’s. We do not use OpenAI’s API service for it:
           the operator reaches the models through his own ChatGPT subscription, by way of a relay
-          (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI, in the United
-          States, under the subscription’s own terms. We have no data processing agreement with
-          OpenAI, so it is not a provider acting only on our instructions like those above. We are
+          (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI under the
+          subscription’s own terms, and may be processed in the United States. We have no data
+          processing agreement with OpenAI, so it is not a provider acting only on our instructions
+          like those above. We have not yet confirmed which OpenAI company the subscription is with
+          (for people in the UK and Europe it may be OpenAI’s Irish company) or what safeguard its
+          terms provide for transfers outside the UK; we will say so here once we have. We are
           switching off the account setting that lets OpenAI use what it is sent to train its
           models, and we send it as little as we can: talk listings from talks.cam and departments
           never, and mailing-list messages only after quoted replies, signatures, addresses and
@@ -345,8 +357,8 @@ export default function PrivacyPage() {
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
           Where they do, we rely on the safeguards each provider offers for transfers from the UK,
-          except for OpenAI, where the subscription’s terms offer none of the kind a data processing
-          agreement would. PostHog, a US company, stores analytics in the EU; where it or its
+          except for OpenAI, whose safeguard under the subscription’s terms we have not yet
+          confirmed (see above). PostHog, a US company, stores analytics in the EU; where it or its
           subprocessors handle the data elsewhere, its data processing agreement provides for the
           UK’s International Data Transfer Addendum to the EU standard contractual clauses and the
           UK Extension to the EU–US Data Privacy Framework. Ask us (see{" "}
@@ -491,8 +503,9 @@ export default function PrivacyPage() {
 
       <ProseSection id="changes" title="Changes to this notice">
         <p>
-          If we change how we use personal data, we update this page and its date. Societies whose
-          role addresses we list are told directly about the listing and how to object.
+          If we change how we use personal data, we update this page and its date. We are writing to
+          the societies whose role addresses we list, to tell them about the listing and how to
+          object.
         </p>
       </ProseSection>
     </div>
