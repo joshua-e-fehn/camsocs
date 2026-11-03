@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 import respx
 
+from camsocs_pipeline.claims import parser_field
 from camsocs_pipeline.events import (
     calendar_feeds,
     camdram,
@@ -672,6 +673,91 @@ class TestUniEvents:
         )
         assert uni_events.match_society(event("Department of Physics open day"), names) is None
         assert uni_events.match_society(event("Chess for all"), names) is None
+
+    def test_a_cu_name_or_a_distinctive_alias_credits_its_group(self) -> None:
+        """ENG-36: the programme names a group as "CU …", "Cambridge
+        University …" or by an alias, not always by its listing's name."""
+        index = OrgLookup()
+        for key, name, aliases, short, org_type in (
+            (
+                "org-jazz",
+                "Cambridge University Jazz Orchestra",
+                ["CU Jazz Orchestra"],
+                "CUJO",
+                "society",
+            ),
+            (
+                "org-gilbert",
+                "The Quokka Players",
+                ["Cambridge Gilbert and Sullivan Society"],
+                "CUGSS",
+                "theatre_company",
+            ),
+            ("org-german", "German Society", ["German Soc"], None, "society"),
+            ("org-french", "French Society", [], None, "society"),
+            ("org-cu-society", "Cambridge University Society", [], None, "society"),
+            ("org-museums", "University of Cambridge Museums", [], None, "uni_office"),
+        ):
+            fields = [parser_field("name", name, extractor="t", evidence="primary")]
+            fields.append(parser_field("aliases", aliases, extractor="t", evidence="primary"))
+            if short:
+                fields.append(parser_field("shortName", short, extractor="t", evidence="primary"))
+            index.add(
+                Observation(
+                    source_type="su_directory",
+                    source_key=key,
+                    source_url="https://x.org",
+                    retrieved_at=NOW,
+                    entity_type="organisation",
+                    identity=IdentityHints(name=name, org_type=org_type),
+                    entity_key=key,
+                    fields=fields,
+                )
+            )
+        names = uni_events.society_names(index)
+
+        def credited(title: str, organizer: str | None = None) -> str | None:
+            event = IcsEvent(
+                uid="u",
+                external_id="u",
+                title=title,
+                starts_at=NOW,
+                ends_at=None,
+                all_day=False,
+                organizer_name=organizer,
+            )
+            return uni_events.match_society(event, names)
+
+        # The group's own words after any of the University's names.
+        assert credited("Big band night | CU Jazz Orchestra") == "org-jazz"
+        assert credited("x", "University of Cambridge  Jazz Orchestra") == "org-jazz"
+        assert credited("Sonic Tapestries", "Cambridge University Jazz Orchestra") == "org-jazz"
+        # A distinctive alias, and the CU form of a name without it.
+        assert credited("The Cambridge Gilbert and Sullivan Society: Iolanthe") == "org-gilbert"
+        assert credited("CU German Society film night") == "org-german"
+        # Whole words only; never an acronym or a two-word alias.
+        assert credited("Jazz Orchestras of the world") is None
+        assert credited("CUJO plays Ellington") is None
+        assert credited("German Soc pub night") is None
+        # The University itself, alone or with a word every group shares, is
+        # nobody's; nor is a University office.
+        assert credited("University of Cambridge Museums late") is None
+        assert credited("Cambridge University Society lecture") is None
+        assert credited("A Cambridge University open day") is None
+        # Two groups named side by side are no single organiser.
+        assert credited("German Society and French Society joint social") is None
+        # The programme's organiser is read before the title.
+        assert credited("CU Jazz Orchestra", "German Society") == "org-german"
+
+    def test_a_university_name_pattern_needs_the_groups_own_words(self) -> None:
+        assert uni_events.name_pattern("University of Cambridge") is None
+        assert uni_events.name_pattern("Cambridge University") is None
+        assert uni_events.name_pattern("CU Soc") is None
+        assert uni_events.name_pattern("CU Ski") is None  # too short to be distinctive
+        pattern = uni_events.name_pattern("CU Chess Club")
+        assert pattern is not None and pattern.search("Cambridge University Chess Club")
+        assert uni_events.name_pattern("Chess Club", alias=True) is None
+        assert uni_events.name_pattern("Chess Club") is not None
 
     def test_the_stage_lists_every_public_university_event(
         self, ctx: StageContext, net: respx.MockRouter
