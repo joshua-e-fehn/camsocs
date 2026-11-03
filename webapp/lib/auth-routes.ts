@@ -30,6 +30,7 @@ export const PUBLIC_PATHS = [
   "/request",
   "/about",
   "/privacy",
+  "/terms",
 ] as const
 
 /** Routes that need a session (and, in Convex, a broker account). */

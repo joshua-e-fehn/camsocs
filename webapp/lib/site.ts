@@ -28,12 +28,25 @@ export const CONTROLLER_NAME = "Joshua Fehn"
  * fall back to the form alone if this is empty. */
 export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 
-/** The Information Commission data protection fee registration number, once
- * paid (PLAN.md J6). Empty until then. */
+/** The data protection fee registration number from the Information
+ * Commission (the ICO until 30 September 2026), once paid (PLAN.md J6).
+ * Empty until then. */
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-11-01"
+export const PRIVACY_NOTICE_UPDATED = "2026-11-03"
+
+/** When the terms of use (`/terms`) last changed in substance, `YYYY-MM-DD`. */
+export const TERMS_UPDATED = "2026-11-03"
+
+/** Where security problems and personal data breaches are reported (served in
+ * `/.well-known/security.txt`, lib/security-txt.ts; what happens next:
+ * docs/compliance/breach-procedure.md). The same alias as CONTACT_EMAIL. */
+export const SECURITY_CONTACT_EMAIL = CONTACT_EMAIL
+
+/** When `/.well-known/security.txt` stops being valid (RFC 9116 §2.5.5: under
+ * a year ahead). ⚠ Renew it in the July review, before it lapses. */
+export const SECURITY_TXT_EXPIRES = "2027-11-01T00:00:00.000Z"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
 export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.uk/about)"

@@ -102,6 +102,35 @@ describe("Privacy notice", () => {
     expect(rights).toContain("Article 20")
   })
 
+  test("the sources name the University's events programme and Meta Business Discovery", async () => {
+    const what = section(await render(<PrivacyPage />), "what")
+    expect(what).toContain("public events programme (What’s On, the Cambridge Festival")
+    expect(what).toContain("Business Discovery API")
+    // The published side of the Art 14(5)(e) assessment (dpia-lite §4).
+    expect(what).toContain("If we have not written to you")
+    expect(what).toContain("person named in the title of a University event")
+  })
+
+  test("names the VPS host, and says how the AI model is reached without implying a DPA", async () => {
+    const sharing = section(await render(<PrivacyPage />), "sharing")
+    expect(sharing).toContain("Hostinger")
+    expect(sharing).toContain("ChatGPT subscription")
+    expect(sharing).toContain("cliproxy")
+    expect(sharing).toContain("We have no data processing agreement with OpenAI")
+    // OpenAI is not in the list of providers that act on our behalf.
+    const providers = sharing.slice(0, sharing.indexOf("The AI model"))
+    expect(providers).not.toContain("OpenAI")
+  })
+
+  test("names the regulator one way: the Information Commission, formerly the ICO", async () => {
+    // The ICO became the Information Commission on 30 September 2026
+    // (landscape brief §5.2); every mention of the old name says "formerly".
+    const text = (await render(<PrivacyPage />)).textContent ?? ""
+    const full = "the Information Commission (formerly the Information Commissioner’s Office, ICO)"
+    expect(text).toContain(full)
+    expect(text.split("Information Commissioner’s Office").length).toBe(text.split(full).length)
+  })
+
   test("shows the date the notice last changed", async () => {
     const text = (await render(<PrivacyPage />)).textContent ?? ""
     expect(text).toContain(`Last updated ${formatDate(PRIVACY_NOTICE_UPDATED)}`)
