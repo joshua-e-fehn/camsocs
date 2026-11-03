@@ -239,7 +239,8 @@ export function AcceptRemovalDialog({
   )
   const [address, setAddress] = useState("")
   const [personKeys, setPersonKeys] = useState<string[]>([])
-  const [eventKeysText, setEventKeysText] = useState("")
+  // A request sent from an event's page names it (event-correction-link).
+  const [eventKeysText, setEventKeysText] = useState(request.eventKey ?? "")
   const [name, setName] = useState("")
   const eventKeys = eventKeysText
     .split(/[\s,]+/)

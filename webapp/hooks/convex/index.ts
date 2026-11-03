@@ -4,7 +4,7 @@
 //
 // A hook that must not run yet passes "skip" as the args:
 //   useQuery(api.x.y, ready ? { id } : "skip")
-import { useMutation, useQuery } from "convex/react"
+import { useConvexAuth, useMutation, useQuery } from "convex/react"
 import { useMemo } from "react"
 import { api } from "@/convex/_generated/api"
 import { addDays, londonIsoDate, londonMidnight } from "@/lib/calendar"
@@ -14,9 +14,15 @@ export function useCurrentUser() {
   return useQuery(api.auth.getCurrentUser)
 }
 
-/** `{ signedIn, isBroker }` for the caller, undefined while loading. */
+/**
+ * `{ signedIn, isBroker }` for the caller, undefined while loading — and while
+ * the Convex client is still taking up the session. The server hands it no
+ * token (app/layout.tsx), so on a fresh load of /dashboard the first answer
+ * would otherwise be a signed-out "no broker access" before the right one.
+ */
 export function useBrokerAccess() {
-  return useQuery(api.auth.getBrokerAccess)
+  const { isLoading } = useConvexAuth()
+  return useQuery(api.auth.getBrokerAccess, isLoading ? "skip" : {})
 }
 
 const ORG_SEARCH_LIMIT = 8
@@ -49,7 +55,12 @@ export function useEventSearch(q: string) {
     () => ({ from: londonMidnight(today), to: londonMidnight(addDays(today, EVENT_SEARCH_DAYS)) }),
     [today],
   )
-  return useQuery(api.events.list, text.length >= 2 ? { ...range, q: text } : "skip")
+  // The browser only, so talks.cam-derived events may be found too (owner
+  // decision G1 keeps them out of server renders, not out of search).
+  return useQuery(
+    api.events.list,
+    text.length >= 2 ? { ...range, q: text, talksCam: "include" as const } : "skip",
+  )
 }
 
 const TALK_SEARCH_LIMIT = 6
@@ -67,6 +78,12 @@ export function useTalkSearch(q: string) {
 /** One event the viewer may see (null if not), skipped without a key. */
 export function useEvent(key: string | undefined) {
   return useQuery(api.events.get, key ? { key } : "skip")
+}
+
+/** `{ title }` of the event a request is about: null for one this viewer may
+ * not see or a talks.cam-derived one (G1); undefined while loading. */
+export function useEventRequestLabel(key: string) {
+  return useQuery(api.events.requestLabel, { key })
 }
 
 /** The venues, for naming an event's `venueKey`; skipped until `enabled`. */

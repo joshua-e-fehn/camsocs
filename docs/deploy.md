@@ -64,13 +64,15 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `NEXT_PUBLIC_POSTHOG_KEY` | the PostHog project token (`phc_…`) | unset | Public by design (it ships to the browser). Read by the browser analytics client (`webapp/lib/analytics-client.ts`), which never loads when it is unset, and at runtime by the server's error reports (`webapp/lib/posthog-server.ts`, ENG-6), which are a no-op when it is unset. Inlined into the browser build, so a change needs a redeploy. 1Password Mya vault, item `PostHog` |
    | `NEXT_PUBLIC_POSTHOG_HOST` | `https://eu.i.posthog.com` | unset | EU Cloud ingestion host for the server's error reports (`lib/posthog-server.ts`; unset means this same host). The browser does not read it: it sends to the site's own `/relay` path, which `app/relay/[...path]/route.ts` forwards to the EU hosts (fixed in `lib/relay.ts`) |
    | `NEXT_PUBLIC_POSTHOG_ENV` | `production` | unset | Tags each browser event's `environment`; unset means `development`, which the project's internal/test filter hides (configured) |
+   | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | optional | unset | Search Console's `google-site-verification` meta tag (`lib/page-metadata.ts` `siteVerification`). Not needed when the property is verified by DNS (the plan); unset renders nothing |
+   | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | optional | unset | Bing Webmaster Tools' `msvalidate.01` meta tag, likewise; Bing can also import the Search Console property |
    | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the source map upload at build time (ENG-6, `next.config.ts`) |
    | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project, with error tracking write access (checked by a real upload on 2026-11-01). The upload runs only when both PostHog variables are set **and** `VERCEL_ENV` is `production`; otherwise the build skips it. A wrong or under-scoped key fails the production build (Turbopack), so rotate it with care. (The same key configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below; rotate all three together) |
 
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
 
-What the site serves for crawlers and sharing, already in the code: `app/robots.ts` (allow everything public; disallow `/dashboard`, `/api/`, `/sign-in`; sitemap link), `app/sitemap.ts` (rendered per request from `orgs.list`, so it never needs a build against real data), `metadataBase` = `SITE_URL` in `app/layout.tsx`, and `app/opengraph-image.tsx` (the camsocs wordmark and tagline as text, no University branding).
+What the site serves for crawlers and sharing, already in the code: `app/robots.ts` (allow everything public; disallow `/dashboard`, `/api/`, `/sign-in`; sitemap link), `/sitemap.xml` (an index of `/sitemaps/pages.xml`, `societies.xml` and `events.xml`, rendered per request from `orgs.sitemap` and `sitemap.events`, so it never needs a build against real data; `lib/sitemap.ts`), `metadataBase` = `SITE_URL` in `app/layout.tsx`, and `app/opengraph-image.tsx` (the camsocs wordmark and tagline as text, no University branding).
 
 ## 3. Convex production environment
 
@@ -111,12 +113,12 @@ The variables above are provisioned (2026-11-01). One PostHog project, `camsocs`
 
 | Event | Properties | Sent by | When |
 |---|---|---|---|
-| `ics_feed_fetched` | `feed`: `talks`, `event` or `talk`; `key`: the event or talk key (only for `event` / `talk`, only a valid key; never the `/talks.ics` filters, whose `q` is free text) | `app/talks.ics/route.ts`, `app/events/[key]/ics/route.ts`, `app/talks/[key]/ics/route.ts` → `countIcsFetch` (`webapp/lib/ics-telemetry.ts`) → `captureServerEvent` (allow-list `SERVER_EVENTS` in `lib/posthog-server.ts`) | Each `.ics` response served with status 200, never for a 400, 404 or 503. Sent inside Next's `after()`, so the response, its status and its `Cache-Control` are exactly as before and it adds no latency; a failure (or no `NEXT_PUBLIC_POSTHOG_KEY`) is silent |
+| `ics_feed_fetched` | `feed`: `talks`, `events`, `event` or `talk`; `key`: the event or talk key (only for `event` / `talk`, only a valid key; never a feed's filters, whose `q` is free text) | `app/talks.ics/route.ts`, `app/events.ics/route.ts`, `app/events/[key]/ics/route.ts` and `app/talks/events/[key]/ics/route.ts` (`lib/event-ics-response.ts`), `app/talks/[key]/ics/route.ts` → `countIcsFetch` (`webapp/lib/ics-telemetry.ts`) → `captureServerEvent` (allow-list `SERVER_EVENTS` in `lib/posthog-server.ts`) | Each `.ics` response served with status 200, never for a 400, 404 or 503. Sent inside Next's `after()`, so the response, its status and its `Cache-Control` are exactly as before and it adds no latency; a failure (or no `NEXT_PUBLIC_POSTHOG_KEY`) is silent |
 | `listing_request_received` | `kind`: `claim`, `correct`, `remove`, `object` or `add` | `convex/listingRequests.ts` `submit` → `ctx.scheduler.runAfter(0, internal.analytics.captureListingRequest, { kind })` → `POST ${POSTHOG_HOST}/i/v0/e/` (`convex/lib/posthog.ts`) | Each request accepted and stored, after all validation and rate limits (a refusal is never counted; the scheduled action runs only if the insert commits). One 3 s attempt; a refusal or network error is logged by HTTP status or error type and swallowed, so the submission never fails or retries because of PostHog. Nothing without `POSTHOG_KEY` and `POSTHOG_HOST` (production only) |
 
-⚠ `ics_feed_fetched` counts are **lower bounds**: `/talks.ics`, a talk's file and a public event's file are cached at Vercel's edge for an hour per URL (`s-maxage=3600`, then `stale-while-revalidate`), and a cache hit never reaches the function. A calendar app polling a subscribed feed is counted at most once an hour per distinct feed URL across all subscribers. Read them as trends and as "at least", never as subscribers or downloads. (A Cambridge-only event's file is `private, no-store`, so each of its downloads is counted.)
+⚠ `ics_feed_fetched` counts are **lower bounds**: `/talks.ics`, `/events.ics`, a talk's file and a public event's file are cached at Vercel's edge for an hour per URL (`s-maxage=3600`, then `stale-while-revalidate`), and a cache hit never reaches the function. A calendar app polling a subscribed feed is counted at most once an hour per distinct feed URL across all subscribers. Read them as trends and as "at least", never as subscribers or downloads. (A Cambridge-only event's file is `private, no-store`, so each of its downloads is counted.)
 
-The relay is not blocked or cached by the CPU protection below: the firewall rule denies only the GPTBot and ClaudeBot user agents, the anonymous Data Cache covers three Convex queries (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
+The relay is not blocked or cached by the CPU protection below: the firewall rule denies only the GPTBot and ClaudeBot user agents, the anonymous Data Cache covers only public pages' Convex reads (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
 
 **Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item (the VPS monitor uses the same key) — read into the environment without echoing it:
 
@@ -250,20 +252,37 @@ blindly insert duplicates. This project-level setting survives deployments.
 `robots.txt` also asks just those two training crawlers not to fetch the site.
 User agents can be spoofed; this is not an authentication mechanism.
 
-`lib/public-data.ts` caches anonymous events, anonymous restricted-event counts
-(counts only), and the public college list in Next's Data Cache for 60 seconds.
-The deployment URL and query arguments distinguish entries. Signed-in event
-queries bypass that cache entirely. Convex client subscriptions continue to
-update after hydration. Full HTML and authenticated responses are NOT put into
-a shared CDN cache: the root auth provider and calendar are personalized.
-No-cookie requests (and requests whose only cookies are PostHog's `ph_*` /
-`__ph_*`, ENG-4) skip the redundant server auth lookup; other cookie-bearing
-requests retain the existing auth flow. The former no-op proxy is removed;
+The talks pillar (`/talks`, `/talks/*`, `/talks.ics`) is closed to every AI agent
+in `webapp/lib/crawlers.ts` `AI_CRAWLERS` (owner decisions G1, G6): robots.txt asks
+them to stay out, and `proxy.ts` answers them 403 (it runs before the edge cache,
+so a cached `/talks.ics` is refused too). `ops/vercel/talks-ai-crawlers.json` is
+the reviewed body of a matching firewall rule (path prefix `/talks` and a
+user-agent regex of the same tokens, kept equal to the list by
+`lib/crawlers.test.ts`), so they are refused before compute. It is not applied
+by anything in the repo: the operator adds it as a separate named rule, read
+the current config first as above.
+
+That rule is a backstop only. Its user-agent regex is case-sensitive and lists
+a fixed set of spellings (for example `meta-externalfetcher` as Meta writes
+it), so an agent that changes the case of its token can pass the firewall. The
+proxy still refuses it, because `isAiCrawler` matches without regard to case.
+Do not loosen the proxy check on the assumption that the WAF rule covers it.
+
+Since the SEO audit of 2026-11-02 (no-cdn-cache) public pages are cached at
+Vercel's edge and regenerated at most every 5 minutes (docs/webapp.md
+"Caching"): every server render is anonymous, every server read of public data
+goes through `lib/public-data.ts` (Next's Data Cache, 300 seconds, keyed by
+deployment URL, function and arguments; no token can be passed), and nothing
+above a public page reads the session or a header. A signed-in reader's extra
+(Cambridge-only events) is fetched by the browser and never enters a shared
+cache. Pages that read their search params (`/societies`, `/events`, `/talks`)
+stay dynamic, with their reads cached. The auth route answers a cookieless
+`get-session` itself, without Convex. The former no-op proxy is removed;
 access checks remain in the existing Convex functions and client auth guard.
 Since ENG-20 a narrow `proxy.ts` runs on `/societies/<slug>`, `/events/<key>`
 and `/talks/<key>` only, to answer unknown listings with a real 404
 (docs/webapp.md "Unknown listing URLs"): one anonymous indexed Convex query
-per page view (a found listing is remembered for a minute per instance), none
+per page view (a found listing is remembered for 5 minutes per instance, as long as its page is cached), none
 for a malformed key; router and browser prefetches skip it in the matcher, so
 the directory and calendar cards cost nothing extra. A check slower than
 800 ms lets the page answer. An unknown URL renders only the not-found page,
@@ -273,3 +292,14 @@ This hotfix is based on the deployed commit 7df7d6c, not the in-progress redesig
 Frontend-only deployment must not redeploy or roll back Convex: build locally
 against the pulled production public URLs with CONVEX_DEPLOY_KEY removed from
 the gitignored build environment, then deploy the prebuilt output.
+
+## Function region (SEO audit 2026-11-02, region-iad1)
+
+Vercel Functions run in its default region, `iad1` (Washington, D.C.); `webapp/vercel.json` sets
+no `regions`, on purpose. The Convex production deployment (`cheerful-bandicoot-511`,
+docs/ops-vps.md) has a URL with no region segment, which is Convex's default US East region
+(a deployment in another region is `<name>.<region>.convex.cloud`; `webapp/lib/convex-url.ts`
+accepts both). A function next to its database pays one short hop per Convex read; one in London
+would pay a transatlantic round trip per read, several per page. UK readers are served from the
+edge cache instead (docs/webapp.md "Caching"). Revisit only if production moves to a Convex EU
+deployment: then `"regions": ["lhr1"]` (or `dub1`) belongs in `webapp/vercel.json`.

@@ -1,21 +1,26 @@
 import { describe, expect, mock, test } from "bun:test"
-import { readdirSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import {
+  FOUND_TTL_MS,
   isPrefetch,
   LISTING_SECTIONS,
-  type ListingExists,
+  type ListingGate,
+  type ListingKind,
+  type ListingLookup,
+  type ListingState,
+  listingGate,
   listingPath,
-  missingListing,
-  missingListingKind,
   rememberFound,
   withTimeout,
 } from "./missing-listing"
+import { talksBoundaryRedirect } from "./talks-boundary"
 
 /**
  * The request-time 404 gate (ENG-20): which paths it checks, which it
  * answers without Convex, and that it never 404s a static route or, on a
- * failed check, a real listing.
+ * failed check, a real listing — plus the talks boundary's one-way 308 from
+ * /events/<key> to /talks/events/<key> (owner decision G1).
  */
 
 const SLUG = "amateur-dramatic-club"
@@ -37,6 +42,13 @@ describe("listingPath", () => {
     })
     expect(listingPath(`/events/${EVENT}`)).toEqual({ kind: "event", key: EVENT, wellFormed: true })
     expect(listingPath(`/talks/${TALK}`)).toEqual({ kind: "talk", key: TALK, wellFormed: true })
+    expect(listingPath(`/talks/events/${EVENT}`)).toEqual({
+      kind: "event",
+      key: EVENT,
+      wellFormed: true,
+      underTalks: true,
+    })
+    expect(listingPath("/talks/events/evt-1")?.wellFormed).toBe(false)
   })
 
   test("marks keys of the wrong shape, decoded as the page would see them", () => {
@@ -58,7 +70,9 @@ describe("listingPath", () => {
       "/events",
       "/talks",
       "/talks/departments",
+      "/talks/events",
       `/events/${EVENT}/ics`,
+      `/talks/events/${EVENT}/ics`,
       `/talks/${TALK}/ics`,
       "/talks.ics",
       "/dashboard/organisations",
@@ -119,57 +133,118 @@ describe("static routes beside a listing", () => {
   }
 })
 
-describe("missingListing", () => {
-  const answering = (value: boolean | Error) =>
-    mock<ListingExists>(async () => {
+describe("listingGate", () => {
+  const answering = (value: ListingState | Error) =>
+    mock<ListingLookup>(async () => {
       if (value instanceof Error) throw value
       return value
     })
+  const missing = (kind: ListingKind): ListingGate => ({ action: "missing", kind })
+  const next: ListingGate = { action: "next" }
 
   test("asks Convex about a well-formed key and 404s only a missing one", async () => {
-    const absent = answering(false)
-    expect(await missingListing(get(`/events/${EVENT}`), absent)).toBe("event")
-    expect(absent).toHaveBeenCalledWith({ kind: "event", key: EVENT, wellFormed: true })
-    expect(await missingListing(get(`/talks/${TALK}`), absent)).toBe("talk")
-    expect(await missingListing(get(`/societies/${SLUG}`), answering(true))).toBeNull()
+    const absent = answering("missing")
+    expect(await listingGate(get(`/events/${EVENT}`), absent)).toEqual(missing("event"))
+    expect(absent).toHaveBeenCalledWith({ kind: "event", key: EVENT })
+    expect(await listingGate(get(`/talks/${TALK}`), absent)).toEqual(missing("talk"))
+    expect(await listingGate(get(`/talks/events/${EVENT}`), absent)).toEqual(missing("event"))
+    expect(await listingGate(get(`/societies/${SLUG}`), answering("found"))).toEqual(next)
+  })
+
+  test("a talks.cam-derived event's page is under /talks: a 308 there, never back (G1)", async () => {
+    expect(await listingGate(get(`/events/${EVENT}`), answering("talks"))).toEqual({
+      action: "redirect",
+      path: `/talks/events/${EVENT}`,
+    })
+    expect(await listingGate(get(`/talks/events/${EVENT}`), answering("talks"))).toEqual(next)
+    // Any other event renders under /talks too (canonical /events/<key>).
+    expect(await listingGate(get(`/talks/events/${EVENT}`), answering("found"))).toEqual(next)
+    expect(await listingGate(get(`/events/${EVENT}`), answering("found"))).toEqual(next)
+  })
+
+  test("a fresh proxy and a stale page that disagree never loop (talks-boundary-redirect-loop)", async () => {
+    // Follows redirects from `start` the way a browser would: the proxy
+    // first (its verdict, `proxyState`), then the page's own fallback with
+    // the page's verdict (`pageTalksDerived`), which may be a cache behind.
+    async function follow(start: string, proxyState: ListingState, pageTalksDerived: boolean) {
+      const visited = [start]
+      let at = start
+      for (let hop = 0; hop < 5; hop++) {
+        const gate = await listingGate(get(at), answering(proxyState))
+        const underTalks = at.startsWith("/talks/")
+        const next =
+          gate.action === "redirect"
+            ? gate.path
+            : talksBoundaryRedirect({ key: EVENT, talksDerived: pageTalksDerived }, underTalks)
+        if (next === null) return visited
+        visited.push(next)
+        at = next
+      }
+      throw new Error(`redirect loop: ${visited.join(" → ")}`)
+    }
+    // A harvest made the event talks.cam-derived; the page's cache has not seen it.
+    expect(await follow(`/events/${EVENT}`, "talks", false)).toEqual([
+      `/events/${EVENT}`,
+      `/talks/events/${EVENT}`,
+    ])
+    // The other way round: the proxy's memo is behind, the page's cache is fresh.
+    expect(await follow(`/events/${EVENT}`, "found", true)).toEqual([
+      `/events/${EVENT}`,
+      `/talks/events/${EVENT}`,
+    ])
+    for (const state of ["found", "talks"] as const) {
+      for (const derived of [false, true]) {
+        expect(await follow(`/talks/events/${EVENT}`, state, derived)).toEqual([
+          `/talks/events/${EVENT}`,
+        ])
+      }
+    }
   })
 
   test("a malformed key is missing without a Convex round trip", async () => {
-    const exists = answering(true)
-    expect(await missingListing(get("/societies/Bad_Slug!"), exists)).toBe("society")
-    expect(await missingListing(get("/events/not-an-event"), exists)).toBe("event")
-    expect(await missingListing(get("/talks/nope"), exists)).toBe("talk")
-    expect(exists).not.toHaveBeenCalled()
+    const lookup = answering("found")
+    expect(await listingGate(get("/societies/Bad_Slug!"), lookup)).toEqual(missing("society"))
+    expect(await listingGate(get("/events/not-an-event"), lookup)).toEqual(missing("event"))
+    expect(await listingGate(get("/talks/events/not-an-event"), lookup)).toEqual(missing("event"))
+    expect(await listingGate(get("/talks/nope"), lookup)).toEqual(missing("talk"))
+    expect(lookup).not.toHaveBeenCalled()
   })
 
   test("lets through static routes, prefetches and other methods unchecked", async () => {
-    const exists = answering(false)
-    expect(await missingListing(get("/talks/departments"), exists)).toBeNull()
-    expect(await missingListing(get("/societies"), exists)).toBeNull()
+    const lookup = answering("missing")
+    expect(await listingGate(get("/talks/departments"), lookup)).toEqual(next)
+    expect(await listingGate(get("/talks/events"), lookup)).toEqual(next)
+    expect(await listingGate(get("/societies"), lookup)).toEqual(next)
     // Router prefetches never reach the proxy (its matcher); a browser's
     // speculative prefetch is also caught here.
     const prefetch = { "sec-purpose": "prefetch" }
-    expect(await missingListing(get(`/societies/${SLUG}`, prefetch), exists)).toBeNull()
+    expect(await listingGate(get(`/societies/${SLUG}`, prefetch), lookup)).toEqual(next)
     const post = { ...get(`/societies/${SLUG}`), method: "POST" }
-    expect(await missingListing(post, exists)).toBeNull()
-    expect(exists).not.toHaveBeenCalled()
-    expect(await missingListing({ ...get(`/talks/${TALK}`), method: "HEAD" }, exists)).toBe("talk")
+    expect(await listingGate(post, lookup)).toEqual(next)
+    expect(lookup).not.toHaveBeenCalled()
+    expect(await listingGate({ ...get(`/talks/${TALK}`), method: "HEAD" }, lookup)).toEqual(
+      missing("talk"),
+    )
   })
 
   test("a failed check lets the page answer: an outage never 404s a real listing", async () => {
     const down = answering(new Error("Convex unreachable"))
-    expect(await missingListing(get(`/societies/${SLUG}`), down)).toBeNull()
+    expect(await listingGate(get(`/societies/${SLUG}`), down)).toEqual(next)
+    expect(await listingGate(get(`/events/${EVENT}`), down)).toEqual(next)
   })
 })
 
 describe("withTimeout", () => {
   test("passes an answer through and fails a check slower than the limit", async () => {
     const listing = { kind: "society" as const, key: SLUG }
-    expect(await withTimeout(async () => true, 50)(listing)).toBe(true)
-    const slow = withTimeout(() => new Promise<boolean>((r) => setTimeout(() => r(false), 200)), 10)
+    expect(await withTimeout(async () => "found", 50)(listing)).toBe("found")
+    const slow = withTimeout(
+      () => new Promise<ListingState>((r) => setTimeout(() => r("missing"), 200)),
+      10,
+    )
     await expect(slow(listing)).rejects.toThrow("timed out")
-    // …which missingListing treats like an outage: the page answers.
-    expect(await missingListing(get(`/societies/${SLUG}`), slow)).toBeNull()
+    // …which listingGate treats like an outage: the page answers.
+    expect(await listingGate(get(`/societies/${SLUG}`), slow)).toEqual({ action: "next" })
   })
 })
 
@@ -179,29 +254,38 @@ describe("rememberFound", () => {
   test("remembers a found listing for the TTL, never a missing one", async () => {
     let clock = 0
     const known = new Set(["a"])
-    const exists = mock<ListingExists>(async ({ key }) => known.has(key))
-    const cached = rememberFound(exists, { ttlMs: 1000, max: 10, now: () => clock })
-    expect(await cached(society("a"))).toBe(true)
+    const lookup = mock<ListingLookup>(async ({ key }) => (known.has(key) ? "found" : "missing"))
+    const cached = rememberFound(lookup, { ttlMs: 1000, max: 10, now: () => clock })
+    expect(await cached(society("a"))).toBe("found")
     known.delete("a")
-    expect(await cached(society("a"))).toBe(true)
-    expect(exists).toHaveBeenCalledTimes(1)
+    expect(await cached(society("a"))).toBe("found")
+    expect(lookup).toHaveBeenCalledTimes(1)
     clock = 1001
-    expect(await cached(society("a"))).toBe(false)
-    expect(await cached(society("b"))).toBe(false)
+    expect(await cached(society("a"))).toBe("missing")
+    expect(await cached(society("b"))).toBe("missing")
     known.add("b")
-    expect(await cached(society("b"))).toBe(true)
-    expect(exists).toHaveBeenCalledTimes(4)
+    expect(await cached(society("b"))).toBe("found")
+    expect(lookup).toHaveBeenCalledTimes(4)
+  })
+
+  test("remembers which side of the talks boundary an event is on", async () => {
+    const lookup = mock<ListingLookup>(async () => "talks")
+    const cached = rememberFound(lookup, { ttlMs: 1000, max: 10, now: () => 0 })
+    const event = { kind: "event" as const, key: EVENT }
+    expect(await cached(event)).toBe("talks")
+    expect(await cached(event)).toBe("talks")
+    expect(lookup).toHaveBeenCalledTimes(1)
   })
 
   test("keys by kind and drops the oldest past the cap", async () => {
-    const exists = mock<ListingExists>(async () => true)
-    const cached = rememberFound(exists, { ttlMs: 1000, max: 2, now: () => 0 })
+    const lookup = mock<ListingLookup>(async () => "found")
+    const cached = rememberFound(lookup, { ttlMs: 1000, max: 2, now: () => 0 })
     await cached(society("a"))
     await cached({ kind: "talk", key: "a" })
     await cached(society("b"))
-    expect(exists).toHaveBeenCalledTimes(3)
+    expect(lookup).toHaveBeenCalledTimes(3)
     await cached(society("a"))
-    expect(exists).toHaveBeenCalledTimes(4)
+    expect(lookup).toHaveBeenCalledTimes(4)
   })
 
   test("a failed check is not remembered", async () => {
@@ -215,18 +299,22 @@ describe("rememberFound", () => {
   })
 })
 
-describe("isPrefetch / missingListingKind", () => {
+describe("isPrefetch", () => {
   test("recognises browser prefetches", () => {
     expect(isPrefetch(new Headers({ "sec-purpose": "prefetch;prerender" }))).toBe(true)
     expect(isPrefetch(new Headers({ purpose: "prefetch" }))).toBe(true)
     expect(isPrefetch(new Headers({ rsc: "1" }))).toBe(false)
   })
+})
 
-  test("reads only the three kinds from the header", () => {
-    expect(missingListingKind("talk")).toBe("talk")
-    expect(missingListingKind("society")).toBe("society")
-    expect(missingListingKind("event")).toBe("event")
-    expect(missingListingKind("dashboard")).toBeNull()
-    expect(missingListingKind(null)).toBeNull()
+describe("FOUND_TTL_MS", () => {
+  test("is as long as a public page is cached at the edge", () => {
+    const layout = readFileSync(
+      path.join(import.meta.dir, "..", "app", "(site)", "layout.tsx"),
+      "utf8",
+    )
+    const revalidate = /export const revalidate = (\d+)/.exec(layout)?.[1]
+    expect(revalidate).toBeDefined()
+    expect(FOUND_TTL_MS).toBe(Number(revalidate) * 1000)
   })
 })

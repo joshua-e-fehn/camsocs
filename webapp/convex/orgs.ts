@@ -1,7 +1,11 @@
 import { paginationOptsValidator } from "convex/server"
 import { v } from "convex/values"
 import { londonMidnight } from "../lib/calendar"
+import { isThinListing } from "../lib/directory-indexing"
 import { ORG_SORTS } from "../lib/directory-sort"
+import { withoutTalksCam } from "../lib/directory-talks-guard"
+import { isTalksCamUrl, isTalksDerivedEvent } from "../lib/talks-boundary"
+import { CATEGORIES } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { londonIsoDate, type TermDates, termWeekLabel } from "./lib/derived"
@@ -62,6 +66,14 @@ const MAX_CARDS = 5_000
 const MAX_SEARCH_RESULTS = 1_024
 const MAX_PAGE_SIZE = 100
 const MAX_QUERY_LENGTH = 200
+
+/** A card as every public list sends it: no address or name removed on
+ * request (lib/suppressions.ts), and nothing from talks.cam in its text
+ * (owner decision G1: the directory, hubs and profiles are open to AI
+ * crawlers; talks.cam content stays under /talks). */
+function publicCard<T>(card: T, contacts: ReadonlySet<string>, names: ReadonlySet<string>): T {
+  return withoutTalksCam(scrubAddresses(card, contacts, names))
+}
 
 /** Candidate cards: search-ranked for a query, else every listed card by name. */
 async function candidates(ctx: QueryCtx, q: string | undefined): Promise<Doc<"orgCards">[]> {
@@ -205,7 +217,7 @@ export const list = query({
     return {
       page: await Promise.all(
         slice.map(async (card) => ({
-          ...scrubAddresses(await orgCardPublic(ctx, card), contacts, names),
+          ...publicCard(await orgCardPublic(ctx, card), contacts, names),
           activity: await cardActivity(ctx, card.key, window, removed, withdrawn, today),
         })),
       ),
@@ -323,6 +335,195 @@ export const home = query({
   },
 })
 
+/** A listing as a hub lists it: enough for a line of text and a link, no
+ * logo (a hub lists hundreds; html-bloat) and no activity count. */
+const hubCardValidator = v.object({
+  key: v.string(),
+  slug: v.string(),
+  name: v.string(),
+  shortName: v.optional(v.string()),
+  shortDescription: v.optional(v.string()),
+  orgType: orgCardPublicValidator.fields.orgType,
+  level: orgCardPublicValidator.fields.level,
+  status: orgCardPublicValidator.fields.status,
+  collegeKeys: v.array(v.string()),
+  categories: orgCardPublicValidator.fields.categories,
+  sport: v.optional(v.object({ sport: v.optional(v.string()) })),
+})
+
+/**
+ * Every listing of one category or one college, by name, for its hub page
+ * (`/categories/<slug>`, a college's `/societies/<slug>`; SEO audit
+ * 2026-11-02, no-category-college-hubs, owner decision G13): the whole list
+ * server-rendered on one indexable page, where the directory pages through
+ * it. The directory's own rules: no counterparts, nothing archived.
+ */
+export const hub = query({
+  args: {
+    category: v.optional(literalUnion(CATEGORIES)),
+    collegeKey: v.optional(v.string()),
+  },
+  returns: v.array(hubCardValidator),
+  handler: async (ctx, args) => {
+    const selected = selections({
+      categories: args.category ? [args.category] : undefined,
+      collegeKeys: args.collegeKey ? [args.collegeKey] : undefined,
+    })
+    const cards = (await candidates(ctx, undefined)).filter((card) => matches(card, selected))
+    const contacts = await loadContactHashes(ctx)
+    const names = await loadNameHashes(ctx)
+    return cards.map((card) =>
+      publicCard(
+        {
+          key: card.key,
+          slug: card.slug,
+          name: card.name,
+          shortName: card.shortName,
+          shortDescription: card.shortDescription,
+          orgType: card.orgType,
+          level: card.level,
+          status: card.status,
+          collegeKeys: card.collegeKeys,
+          categories: card.categories,
+          sport: card.sport?.sport ? { sport: card.sport.sport } : undefined,
+        },
+        contacts,
+        names,
+      ),
+    )
+  },
+})
+
+/** Organiser rows read to tell whether a listing has any public event. */
+const EVENT_PROBE = 25
+
+/** Whether a listing has any public event, past or upcoming, that is not
+ * suppressed (owner decision G3: one of the three things that make a profile
+ * worth indexing). Visitor-independent: crawlers see public events only.
+ * talks.cam events do not count (G1): the profile never shows them, so a
+ * listing with only those has nothing to index. The probe stops at the first
+ * event that counts, so it reads one or two events for most listings. */
+async function hasPublicEvents(
+  ctx: QueryCtx,
+  orgKey: string,
+  removed: ReadonlySet<string>,
+): Promise<boolean> {
+  const rows = await ctx.db
+    .query("eventOrganisers")
+    .withIndex("by_org_startsAt", (i) => i.eq("orgKey", orgKey))
+    .order("desc")
+    .take(EVENT_PROBE)
+  for (const row of rows) {
+    if (row.visibility !== "public" || removed.has(row.eventKey)) continue
+    const event = await ctx.db
+      .query("events")
+      .withIndex("by_key", (i) => i.eq("key", row.eventKey))
+      .unique()
+    if (event && event.visibility === "public" && !isTalksDerivedEvent(event)) return true
+  }
+  return false
+}
+
+/**
+ * A listing as its profile shows it: the public projection less fields
+ * removed on request (suppressions) and removed addresses or names, with
+ * nothing from talks.cam (G1). `getBySlug` and `sitemap` both build it here,
+ * so the sitemap's thinness (G3) is the page's.
+ */
+async function shownOrg(
+  ctx: QueryCtx,
+  org: Doc<"organisations">,
+  suppressed: readonly Doc<"suppressions">[],
+  contacts: ReadonlySet<string>,
+  names: ReadonlySet<string>,
+) {
+  const fields = new Set(
+    suppressed.flatMap((row) => (row.scope === "field" && row.field ? [row.field] : [])),
+  )
+  return withoutTalksCam(
+    scrubAddresses(withoutSuppressed(await orgPublic(ctx, org), fields, contacts), contacts, names),
+  )
+}
+
+const SITEMAP_PAGE = 100
+
+/**
+ * One page of the society URLs the sitemap lists (lib/sitemap-societies.ts):
+ * every directory listing, plus each college's own page, which is its hub
+ * (G13), with when it last changed and whether it is worth indexing — a thin
+ * profile (G3: no description, no public event, no website) and an empty
+ * college hub are not. The cursor is an offset, as in `list`.
+ */
+export const sitemap = query({
+  args: { cursor: v.optional(v.string()), numItems: v.optional(v.number()) },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        slug: v.string(),
+        kind: v.union(v.literal("listing"), v.literal("college")),
+        updatedAt: v.number(),
+        indexable: v.boolean(),
+      }),
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const listings = await candidates(ctx, undefined)
+    const listed = listings.filter((card) => matches(card, selections({})))
+    const colleges = (
+      await ctx.db
+        .query("orgCards")
+        .withIndex("by_orgType", (i) => i.eq("orgType", "college"))
+        .take(200)
+    ).sort((a, b) => a.nameSort.localeCompare(b.nameSort))
+    const all = [
+      ...listed.map((card) => ({ card, kind: "listing" as const })),
+      ...colleges
+        .filter((card) => card.isCounterpart)
+        .map((card) => ({ card, kind: "college" as const })),
+    ]
+    const offset = Math.max(0, Number.parseInt(args.cursor ?? "0", 10) || 0)
+    const size = Math.max(1, Math.min(SITEMAP_PAGE, Math.floor(args.numItems ?? SITEMAP_PAGE)))
+    const slice = all.slice(offset, offset + size)
+    const removed = await loadSuppressedEvents(ctx)
+    const contacts = await loadContactHashes(ctx)
+    const names = await loadNameHashes(ctx)
+    const page = []
+    for (const { card, kind } of slice) {
+      if (kind === "college") {
+        const members = listed.filter((item) => item.collegeKeys.includes(card.key))
+        const changed = Math.max(card.updatedAt, ...members.map((item) => item.updatedAt))
+        page.push({ slug: card.slug, kind, updatedAt: changed, indexable: members.length > 0 })
+        continue
+      }
+      const org = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (i) => i.eq("key", card.key))
+        .unique()
+      if (!org || org.hidden === true) continue
+      const suppressed = await ctx.db
+        .query("suppressions")
+        .withIndex("by_orgKey", (i) => i.eq("orgKey", org.key))
+        .take(MAX_SUPPRESSIONS)
+      // Removed whole on request: its page is a 404 (listedOrg).
+      if (suppressed.some((row) => row.scope === "organisation")) continue
+      const thin = isThinListing(
+        await shownOrg(ctx, org, suppressed, contacts, names),
+        await hasPublicEvents(ctx, org.key, removed),
+      )
+      page.push({
+        slug: card.slug,
+        kind,
+        updatedAt: Math.max(card.updatedAt, org.updatedAt),
+        indexable: !thin,
+      })
+    }
+    const end = offset + slice.length
+    return { page, isDone: end >= all.length, continueCursor: String(end) }
+  },
+})
+
 const BUSY_LIMIT = 12
 /** Public events read for the "Busy this week" shelf: one week's worth. */
 const MAX_WEEK_EVENTS = 1_000
@@ -378,7 +579,7 @@ export const busy = query({
       to: window.to,
       orgs: await Promise.all(
         ranked.slice(0, limit).map(async ({ card, count }) => ({
-          card: scrubAddresses(await orgCardPublic(ctx, card), contacts, names),
+          card: publicCard(await orgCardPublic(ctx, card), contacts, names),
           count,
         })),
       ),
@@ -413,7 +614,7 @@ export const related = query({
     const names = await loadNameHashes(ctx)
     return await Promise.all(
       relatedCards(base, cards, limit).map(async (card) =>
-        scrubAddresses(await orgCardPublic(ctx, card), contacts, names),
+        publicCard(await orgCardPublic(ctx, card), contacts, names),
       ),
     )
   },
@@ -457,9 +658,10 @@ export const exists = query({
 /**
  * One organisation's page: its public projection (with per-field `meta` for
  * the SourceLine), teams, regular sessions, upcoming events the viewer may
- * see (public; `cam_only` too for a verified @cam.ac.uk viewer), and its
- * public relationships with the counterpart's name. Null when no such slug,
- * or when the broker has hidden the listing.
+ * see (public; `cam_only` too for a verified @cam.ac.uk viewer; never a
+ * talks.cam-derived one, G1), and its public relationships with the
+ * counterpart's name. Null when no such slug, or when the broker has hidden
+ * the listing.
  */
 export const getBySlug = query({
   args: { slug: v.string() },
@@ -471,6 +673,10 @@ export const getBySlug = query({
       sessions: v.array(sessionPublicValidator),
       events: v.array(eventListItemValidator),
       relationships: v.array(relationshipPublicValidator),
+      /** Whether it has any public event, past or upcoming (owner decision
+       * G3: a profile without one, a description or a website is noindex).
+       * Visitor-independent, unlike `events`. */
+      hasPublicEvents: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -520,38 +726,47 @@ export const getBySlug = query({
         .query("events")
         .withIndex("by_key", (i) => i.eq("key", link.eventKey))
         .unique()
-      if (event && tiers.includes(event.visibility as never) && !(await withdrawn(event))) {
+      // A talks.cam-derived event never reaches a server render outside /talks
+      // (owner decision G1, lib/talks-boundary.ts), and this list is the
+      // profile's: it is left out here, where the rule sees every field, not
+      // in the page, which sees a list item's few.
+      if (
+        event &&
+        tiers.includes(event.visibility as never) &&
+        !isTalksDerivedEvent(event) &&
+        !(await withdrawn(event))
+      ) {
         events.push(await eventListItem(event, lookup))
       }
     }
     const contacts = await loadContactHashes(ctx)
     const names = await loadNameHashes(ctx)
 
-    const projected = withoutSuppressed(
-      await orgPublic(ctx, org),
-      new Set(suppressed.flatMap((row) => (row.scope === "field" && row.field ? [row.field] : []))),
-      contacts,
-    )
-
     // Every text, conflict reading and session or event of the listing: no
     // address or name removed on request, wherever it was quoted
-    // (lib/suppressions.ts).
-    return scrubAddresses(
-      {
-        org: projected,
-        teams: teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(teamPublic),
-        sessions: sessions
-          .sort(
-            (a, b) =>
-              (a.dayOfWeek ?? 7) - (b.dayOfWeek ?? 7) ||
-              (a.startTime ?? "").localeCompare(b.startTime ?? ""),
-          )
-          .map(sessionPublic),
-        events,
-        relationships: await publicRelationships(ctx, org.key, lookup),
-      },
-      contacts,
-      names,
+    // (lib/suppressions.ts), and nothing from talks.cam (owner decision G1,
+    // lib/directory-talks-guard.ts): talks.cam events, links, sources and
+    // values read from it. Applied here so every caller is covered, not
+    // only the profile page.
+    return withoutTalksCam(
+      scrubAddresses(
+        {
+          org: await shownOrg(ctx, org, suppressed, contacts, names),
+          teams: teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(teamPublic),
+          sessions: sessions
+            .sort(
+              (a, b) =>
+                (a.dayOfWeek ?? 7) - (b.dayOfWeek ?? 7) ||
+                (a.startTime ?? "").localeCompare(b.startTime ?? ""),
+            )
+            .map(sessionPublic),
+          events,
+          relationships: await publicRelationships(ctx, org.key, lookup),
+          hasPublicEvents: await hasPublicEvents(ctx, org.key, removed),
+        },
+        contacts,
+        names,
+      ),
     )
   },
 })
@@ -578,6 +793,16 @@ async function publicRelationships(
   ] as const) {
     for (const edge of edges) {
       if (edge.visibility !== "public") continue
+      // An edge seen only on talks.cam pages rests on talks.cam alone, and
+      // this renders on /societies/<slug>, outside /talks (owner decision G1):
+      // it is left out, as the directory guard (lib/directory-talks-guard.ts)
+      // drops a relationship whose evidence was all talks.cam.
+      if (
+        edge.evidence.length > 0 &&
+        edge.evidence.every((entry) => isTalksCamUrl(entry.sourceUrl))
+      ) {
+        continue
+      }
       const counterpart = await lookup(direction === "outgoing" ? edge.toKey : edge.fromKey)
       if (!counterpart) continue
       out.push({
@@ -588,9 +813,10 @@ async function publicRelationships(
         lastSeenAt: edge.lastSeenAt,
         confidence: edge.confidence,
         // Only links a visitor can follow; event keys stay inside (the
-        // event may be in a tier this viewer cannot see).
+        // event may be in a tier this viewer cannot see). A talks.cam page
+        // never (owner decision G1).
         evidence: edge.evidence
-          .filter((entry) => isHttpUrl(entry.sourceUrl))
+          .filter((entry) => isHttpUrl(entry.sourceUrl) && !isTalksCamUrl(entry.sourceUrl))
           .map(({ sourceUrl, seenAt }) => ({ sourceUrl, seenAt })),
       })
     }

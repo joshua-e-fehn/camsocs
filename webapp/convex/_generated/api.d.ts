@@ -61,6 +61,7 @@ import type * as listingRequests from "../listingRequests.js";
 import type * as orgs from "../orgs.js";
 import type * as retention from "../retention.js";
 import type * as runs from "../runs.js";
+import type * as sitemap from "../sitemap.js";
 import type * as talks from "../talks.js";
 import type * as termDates from "../termDates.js";
 import type * as venues from "../venues.js";
@@ -125,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   orgs: typeof orgs;
   retention: typeof retention;
   runs: typeof runs;
+  sitemap: typeof sitemap;
   talks: typeof talks;
   termDates: typeof termDates;
   venues: typeof venues;

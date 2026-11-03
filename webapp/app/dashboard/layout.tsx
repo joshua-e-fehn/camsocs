@@ -1,8 +1,14 @@
+import type { Metadata } from "next"
 import { AppSidebar } from "@/components/organisms/app-sidebar"
 import { BrokerGate } from "@/components/organisms/broker-gate"
 import { Header } from "@/components/organisms/header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+
+/** Never in a search index (SEO audit 2026-11-02, private-routes-noindex):
+ * a signed-out visit renders the shell with status 200. next.config.ts sends
+ * the same as an X-Robots-Tag header. */
+export const metadata: Metadata = { robots: { index: false, follow: false } }
 
 /**
  * The private brokering area. AuthGuard (root layout) sends a signed-out

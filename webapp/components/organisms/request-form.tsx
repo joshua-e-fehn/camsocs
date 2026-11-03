@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { CircleCheckIcon, PlusIcon, TrashIcon } from "lucide-react"
+import { CalendarDaysIcon, CircleCheckIcon, PlusIcon, TrashIcon, XIcon } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { OrgPicker } from "@/components/molecules/org-picker"
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { useSubmitListingRequest } from "@/hooks/convex"
+import { useEventRequestLabel, useSubmitListingRequest } from "@/hooks/convex"
 import { track } from "@/lib/analytics"
 import {
   CORRECTABLE_FIELDS,
@@ -46,6 +46,7 @@ import {
   LISTING_REQUEST_KINDS,
   type ListingRequestKind,
   ORGANISATION_FIELD_LABELS,
+  requestNeedsListing,
 } from "@/lib/vocab"
 
 const NEXT_STEPS: Record<ListingRequestKind, string> = {
@@ -66,17 +67,25 @@ const NEXT_STEPS: Record<ListingRequestKind, string> = {
  * calls `listingRequests.submit`, which stores the request for review — it
  * never edits a listing directly. A hidden honeypot field catches form-filling
  * bots: if it is filled, the form pretends to succeed and sends nothing.
+ *
+ * Opened from an event page's correction link (`?event=evt-…`), it is about
+ * that event too, and sends its key (event-correction-link).
  */
 export function RequestForm({
   initialKind,
   initialOrg,
+  initialEventKey = null,
 }: {
   initialKind: ListingRequestKind
   initialOrg: OrgRef | null
+  /** A well-formed event key from `?event=`; the page checks the shape only. */
+  initialEventKey?: string | null
 }) {
   const submit = useSubmitListingRequest()
   const reduceMotion = useReducedMotion()
-  const [draft, setDraft] = useState<RequestDraft>(() => emptyDraft(initialKind, initialOrg))
+  const [draft, setDraft] = useState<RequestDraft>(() =>
+    emptyDraft(initialKind, initialOrg, initialEventKey),
+  )
   const [org, setOrg] = useState<OrgRef | null>(initialOrg)
   const [errors, setErrors] = useState<DraftErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
@@ -176,7 +185,7 @@ export function RequestForm({
             <Button
               variant="ghost"
               onClick={() => {
-                setDraft(emptyDraft(draft.kind, org))
+                setDraft(emptyDraft(draft.kind, org, draft.eventKey))
                 setDone(null)
               }}
             >
@@ -243,7 +252,13 @@ export function RequestForm({
               </>
             ) : (
               <Field data-invalid={Boolean(errors.org)}>
-                <FieldLabel htmlFor="request-org">Listing</FieldLabel>
+                <FieldLabel htmlFor="request-org">
+                  {/* About an event, the event says what to check: a University
+                      listing has no host (event-correction-no-org). */}
+                  {requestNeedsListing(draft.kind, Boolean(draft.eventKey))
+                    ? "Listing"
+                    : "Listing (optional)"}
+                </FieldLabel>
                 <OrgPicker
                   id="request-org"
                   value={org}
@@ -256,6 +271,10 @@ export function RequestForm({
                 />
                 <FieldError>{errors.org}</FieldError>
               </Field>
+            )}
+
+            {draft.kind !== "add" && draft.eventKey && (
+              <AboutEvent eventKey={draft.eventKey} onClear={() => update({ eventKey: null })} />
             )}
 
             {(draft.kind === "correct" || draft.kind === "claim") && (
@@ -419,5 +438,56 @@ export function RequestForm({
         </motion.form>
       )}
     </AnimatePresence>
+  )
+}
+
+/**
+ * The event a request from an event page is about. Its title is read in the
+ * browser (`events.requestLabel`, the title the event page showed this
+ * viewer); the server HTML, and an event this viewer may not see, show the
+ * key alone. A talks.cam-derived event is named by its key only, here as
+ * everywhere outside /talks (owner decision G1, lib/talks-boundary.ts):
+ * Convex sends no title for it, so none of its text reaches this page.
+ */
+function AboutEvent({ eventKey, onClear }: { eventKey: string; onClear: () => void }) {
+  const title = useEventRequestLabel(eventKey)?.title ?? null
+  return (
+    // A box, not a control: a <label for> cannot name it, so the title names
+    // the field's group (`Field` is role="group"; review of 2026-11-03,
+    // about-event-a11y).
+    <Field aria-labelledby="request-event-label" aria-describedby="request-event-help">
+      <FieldTitle id="request-event-label">Event</FieldTitle>
+      <div
+        id="request-event"
+        className="flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm"
+      >
+        <CalendarDaysIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <p className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {title && <span className="font-medium">{title}</span>}
+          <span className="font-mono text-xs break-all text-muted-foreground">{eventKey}</span>
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="-my-1 shrink-0"
+          aria-label="Not about this event"
+          onClick={() => {
+            onClear()
+            // The button goes with the box: keep focus in the form, on the
+            // field that came next, not on <body>.
+            const next =
+              document.getElementById("request-corrections") ??
+              document.getElementById("request-email")
+            next?.focus()
+          }}
+        >
+          <XIcon />
+        </Button>
+      </div>
+      <FieldDescription id="request-event-help">
+        Sent with your request so we know which event to check. Say what is wrong in the message.
+      </FieldDescription>
+    </Field>
   )
 }

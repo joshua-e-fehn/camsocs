@@ -1,6 +1,7 @@
-# The hourly production checks against PostHog (`camsocs monitor`, ENG-10):
-# an error spike, a stale harvest, a high zero-result search rate, no
-# pageviews. Started by camsocs-monitor.timer, or by hand:
+# The hourly production checks (`camsocs monitor`, ENG-10, ENG-33): against
+# PostHog an error spike, a stale harvest, a high zero-result search rate, no
+# pageviews and new listing requests; camsocs.uk answering 200 (two HEAD
+# requests, status only). Started by camsocs-monitor.timer, or by hand:
 # `systemctl start camsocs-monitor.service`. Runbook:
 # /opt/camsocs/docs/ops-vps.md "Monitor". Installed by install.sh from a
 # reviewed commit; like the harvest it runs the checkout's pipeline as camsocs.
@@ -9,8 +10,9 @@ Description=camsocs production checks against PostHog
 Documentation=file:/opt/camsocs/docs/ops-vps.md
 Wants=network-online.target
 After=network-online.target
-# A failed check (exit 1) or a broken monitor DMs the operator; a PostHog
-# outage does not (the checks are `unknown` and the run exits 0).
+# A failed check, a site check's recovery or a new listing request (exit 1)
+# or a broken monitor DMs the operator; a PostHog outage does not (the checks
+# are `unknown` and the run exits 0).
 OnFailure=camsocs-alert@monitor.service
 # The unit runs the checkout's code, which only the harvest pulls: right after
 # the upgrade that installs this unit, or while a commit from before ENG-10 is
@@ -29,7 +31,8 @@ WorkingDirectory=/opt/camsocs
 # /opt/camsocs/pipeline/.env.prod; without them the run checks nothing.
 ExecStart=/usr/local/bin/pixi run --as-is --manifest-path /opt/camsocs/pixi.toml pipeline -- --env prod monitor --status-json /var/lib/camsocs/status-monitor.json
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-# Four queries of at most 30 s each, plus starting Python.
+# Five queries of at most 30 s each, two site checks of at most 25 s each
+# (two 10 s tries, 5 s apart), plus starting Python.
 TimeoutStartSec=10min
 # /var/lib/camsocs holds the status file the alert reads (0640, group camsocs).
 StateDirectory=camsocs
@@ -37,7 +40,7 @@ StateDirectoryMode=0750
 UMask=0027
 Nice=10
 
-# --- hardening: it reads the checkout and talks to eu.posthog.com -------------
+# --- hardening: it reads the checkout, talks to eu.posthog.com, asks camsocs.uk
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

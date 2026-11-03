@@ -61,6 +61,15 @@ describe("the consent banner", () => {
     expect(text).toContain("aggregate usage statistics")
     expect(text).toContain("ph_*")
     expect(text).toContain("180 days")
+    // Phones get a two-line version of the same facts, desktops the paragraph.
+    const short = region?.querySelector(".md\\:hidden")?.textContent ?? ""
+    for (const fact of ["PostHog (EU Cloud)", "aggregate usage statistics", "ph_*", "180 days"]) {
+      expect(short).toContain(fact)
+    }
+    expect(short).toContain("Nothing is collected unless you accept.")
+    expect(region?.querySelector(".max-md\\:hidden")?.textContent).toContain(
+      "change it any time under Cookie settings",
+    )
     expect(region?.querySelector('a[href="/privacy#cookies"]')).not.toBeNull()
     // Not a dialog: it blocks nothing and traps no focus.
     expect(region?.getAttribute("role")).toBeNull()

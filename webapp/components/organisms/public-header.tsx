@@ -13,7 +13,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Wordmark } from "@/components/molecules/wordmark"
-import { CommandPalette } from "@/components/organisms/command-palette"
+import { LazyCommandPalette } from "@/components/organisms/lazy-command-palette"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -29,12 +29,22 @@ import { authClient } from "@/lib/auth-client"
 import { openPalette } from "@/lib/palette"
 import { cn } from "@/lib/utils"
 
-/** The main sections, in the order a student looks for them. */
+/**
+ * The main sections, in the order a student looks for them.
+ *
+ * `prefetch`: whether the header, on every page, prefetches the section as
+ * it comes into view. Not the three that read their URL's filters: they are
+ * rendered per request (docs/webapp.md "Caching"), so each prefetch would be
+ * a server render on every page view, three per view, for a payload Next
+ * then cuts at the page anyway (SEO audit 2026-11-02,
+ * extra-invocations-per-view). About is a cached page: its prefetch is an
+ * edge hit.
+ */
 const NAV = [
-  { href: "/events", label: "Events", hint: "Socials, shows, matches" },
-  { href: "/talks", label: "Talks", hint: "Seminars and lectures" },
-  { href: "/societies", label: "Societies", hint: "The directory" },
-  { href: "/about", label: "About", hint: "Sources and method" },
+  { href: "/events", label: "Events", hint: "Socials, shows, matches", prefetch: false },
+  { href: "/talks", label: "Talks", hint: "Seminars and lectures", prefetch: false },
+  { href: "/societies", label: "Societies", hint: "The directory", prefetch: false },
+  { href: "/about", label: "About", hint: "Sources and method", prefetch: undefined },
 ] as const
 
 function isActive(pathname: string, href: string) {
@@ -87,6 +97,7 @@ export function PublicHeader() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={item.prefetch}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "group relative flex items-center px-3 text-[0.9375rem] font-medium text-muted-foreground transition-colors duration-150 hover:text-brand-text focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
@@ -178,7 +189,7 @@ export function PublicHeader() {
           </Sheet>
         </div>
       </div>
-      <CommandPalette />
+      <LazyCommandPalette />
     </header>
   )
 }

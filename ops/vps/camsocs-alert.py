@@ -35,8 +35,12 @@ from the checkout the harvest can write.
 - **The monitor** (``<group>`` ``monitor``): from ``status-monitor.json``,
   which ``camsocs monitor --status-json`` writes, only the failing checks'
   names (of a check name's shape) and their numbers — value, threshold,
-  window and named counts, each a number — and the names of the checks
-  PostHog could not answer. No event property is in that file to begin with.
+  window and named counts, each a number, and a site check's failure reason
+  (an exception class name or ``HTTP 503``) — the names of the checks PostHog
+  could not answer and of the site checks that recovered, and new listing
+  requests as a count per kind (a kind's shape, a number) with the window's
+  times (ENG-33). No event property and no page text is in that file to
+  begin with.
 - ``--dry-run`` prints the message instead of sending it.
 
 Standard library only (the host's python3). Exit 0 when the message was sent
@@ -84,6 +88,12 @@ _CHECK = re.compile(r"[a-z][a-z_]{0,39}")
 _COUNT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]{0,39}")
 #: Checks named at most.
 MAX_CHECKS = 8
+#: A site check's failure reason: an exception class name or `HTTP 503`.
+_REASON = re.compile(r"[A-Z][A-Za-z]{0,39}|HTTP \d{3}")
+#: A listing request's kind (`LISTING_REQUEST_KINDS`, or `other`).
+_KIND = re.compile(r"[a-z]{1,20}")
+#: Where requests are read and answered.
+REQUESTS_INBOX = "https://camsocs.uk/dashboard/requests"
 
 #: An environment-style name that says it holds a secret (LLM_API_KEY, SLACK_BOT_TOKEN).
 _SECRET_ENV_NAME = r"[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL)[A-Z0-9_]*"
@@ -273,13 +283,14 @@ def _number(value: Any) -> str | None:
 
 
 def _check_line(check: Mapping[str, Any]) -> str | None:
-    """`• error_spike: 34 (fails when > 20, last 1 h)`, from numbers only."""
+    """`• error_spike: 34 (fails when > 20, last 1 h)`, from numbers only;
+    `• site_home: 0 (fails when ≠ 200) · attempts 2 · ConnectTimeout`."""
     name = _shaped(check.get("name"), _CHECK)
     value, threshold = _number(check.get("value")), _number(check.get("threshold"))
     window = _number(check.get("windowHours"))
     op = check.get("op")
     # A list or dict here would be unhashable: shape-check before the lookup.
-    sign = {"gt": ">", "lt": "<"}.get(op) if isinstance(op, str) else None
+    sign = {"gt": ">", "lt": "<", "ne": "≠"}.get(op) if isinstance(op, str) else None
     if name is None or value is None or threshold is None or sign is None:
         return f"• {name}" if name else None
     line = f"• {name}: {value} (fails when {sign} {threshold}" + (
@@ -291,7 +302,41 @@ def _check_line(check: Mapping[str, Any]) -> str | None:
         for key, raw in (detail.items() if isinstance(detail, dict) else [])
         if _shaped(key, _COUNT_NAME) and (shown := _number(raw)) is not None
     ]
-    return line + (f" · {', '.join(counts[:4])}" if counts else "")
+    line += f" · {', '.join(counts[:4])}" if counts else ""
+    reason = _shaped(check.get("reason"), _REASON)
+    return line + (f" · {reason}" if reason else "")
+
+
+def _names(value: Any) -> list[str]:
+    """The check names in `value` (a list), shape-checked, at most `MAX_CHECKS`."""
+    names = [n for n in (value if isinstance(value, list) else []) if _shaped(n, _CHECK)]
+    return names[:MAX_CHECKS]
+
+
+def _requests_lines(requests: Any) -> list[str]:
+    """New listing requests: their total and a count per kind, from numbers
+    and kinds of a known shape only (never a request's content: there is none
+    in the file). Nothing when there are none or they were not counted."""
+    if not isinstance(requests, dict) or requests.get("status") != "ok":
+        return []
+    by_kind = requests.get("byKind")
+    counts = [
+        (kind, int(raw))
+        for kind, raw in (by_kind.items() if isinstance(by_kind, dict) else [])
+        if _shaped(kind, _KIND) and _number(raw) is not None and raw > 0
+    ]
+    total = sum(count for _kind, count in counts)
+    if not total:
+        return []
+    noun = "request" if total == 1 else "requests"
+    kinds = ", ".join(f"{kind} {count}" for kind, count in counts[:MAX_CHECKS])
+    since = _shaped(requests.get("since"), _INSTANT)
+    until = _shaped(requests.get("until"), _INSTANT)
+    span = f" (stored {since} to {until})" if since and until else ""
+    return [
+        f":inbox_tray: camsocs: {total} new listing {noun}: {kinds}{span}",
+        f"Read and answer: {REQUESTS_INBOX}",
+    ]
 
 
 def build_monitor_message(
@@ -301,9 +346,10 @@ def build_monitor_message(
     host: str,
     known_secrets: Iterable[str] = (),
 ) -> str:
-    """The monitor's alert: which checks failed, with their numbers, from the
-    status file of this run; when the run wrote none (pixi or Python failed,
-    a timeout), that the monitor itself failed."""
+    """The monitor's alert, from the status file of this run: the failing
+    checks with their numbers when they page, the site checks that recovered,
+    and new listing requests by kind (ENG-33); when the run wrote none (pixi
+    or Python failed, a timeout), that the monitor itself failed."""
     invocation = environ.get("MONITOR_INVOCATION_ID")
     current = (
         status.get("kind") == "monitor"
@@ -315,11 +361,16 @@ def build_monitor_message(
         for check in (status.get("checks") if current else None) or []
         if isinstance(check, dict) and check.get("status") == "failed"
     ]
+    # A status file from before ENG-33 has no `checksPaged`: its page was
+    # always about its failing checks.
+    checks_paged = bool(failed) and status.get("checksPaged") is not False
+    recovered = _names(status.get("recoveredChecks")) if current else []
+    requests = _requests_lines(status.get("requests")) if current else []
     tail = (
         f"status: {DEFAULT_STATE_DIR}/status-monitor.json · "
         "journalctl -u camsocs-monitor · docs/ops-vps.md"
     )
-    if not failed:
+    if not (checks_paged or recovered or requests):
         exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR) or "?"
         result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
         body = [
@@ -329,15 +380,26 @@ def build_monitor_message(
             tail,
         ]
         return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
-    lines = [line for check in failed[:MAX_CHECKS] if (line := _check_line(check))]
-    noun = "check" if len(failed) == 1 else "checks"
-    body = [f":rotating_light: camsocs monitor: {len(failed)} {noun} failing on {host}", *lines]
-    unknown = status.get("unknownChecks")
-    names = [n for n in (unknown if isinstance(unknown, list) else []) if _shaped(n, _CHECK)]
-    if names:
-        body.append(f"not checked (PostHog did not answer): {', '.join(names[:MAX_CHECKS])}")
+    body: list[str] = []
+    if checks_paged:
+        lines = [line for check in failed[:MAX_CHECKS] if (line := _check_line(check))]
+        noun = "check" if len(failed) == 1 else "checks"
+        body += [f":rotating_light: camsocs monitor: {len(failed)} {noun} failing on {host}"]
+        body += lines
+        if names := _names(status.get("unknownChecks")):
+            body.append(f"not checked (PostHog did not answer): {', '.join(names)}")
+    if recovered:
+        body.append(
+            f":white_check_mark: camsocs monitor: {', '.join(recovered)} ok again on {host}"
+        )
+    body += requests
+    if failed and not checks_paged:
+        names = [name for check in failed if (name := _shaped(check.get("name"), _CHECK))]
+        if names:
+            body.append(f"still failing (paged before): {', '.join(names[:MAX_CHECKS])}")
     if checked := _shaped(status.get("checkedAt"), _INSTANT):
-        body.append(f"checked {checked}; a check still failing reminds every 6 h")
+        reminder = "; a check still failing reminds every 6 h" if failed else ""
+        body.append(f"checked {checked}{reminder}")
     body.append(tail)
     return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
 

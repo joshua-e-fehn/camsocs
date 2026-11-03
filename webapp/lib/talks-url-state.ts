@@ -119,6 +119,24 @@ export function talksHref(state: TalksState): string {
   return `/talks${serializeTalksState(state)}`
 }
 
+/**
+ * How search engines should treat a /talks URL (SEO audit
+ * "talks-department-hubs"): the agenda (`/talks`), one department's
+ * (`/talks?dept=<slug>`) and one School's (`/talks?school=<school>`) are
+ * pages of their own, canonical and indexable, each with its own title;
+ * every other slice — a date, a preset, a kind, a search, an open talk — is
+ * noindex, follow with the canonical of the page it slices. (AI agents may
+ * not read any of them: robots.txt and proxy.ts.)
+ */
+export function talksIndexing(state: TalksState): { canonical: string; index: boolean } {
+  const canonical = state.dept
+    ? talksHref({ dept: state.dept })
+    : state.school
+      ? talksHref({ school: state.school })
+      : "/talks"
+  return { canonical, index: talksHref(state) === canonical }
+}
+
 /** The `/talks.ics` query for a state's filters (no dates, no open talk):
  * the feed always runs from today for 60 days. */
 export function talksFeedQuery(state: TalksState): string {

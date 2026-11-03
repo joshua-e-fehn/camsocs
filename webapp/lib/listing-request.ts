@@ -6,6 +6,7 @@ import {
   type ListingRequestKind,
   ORGANISATION_FIELD_LABELS,
   type OrganisationField,
+  requestNeedsListing,
 } from "./vocab"
 
 /**
@@ -98,6 +99,11 @@ export type RequestDraft = {
   role: string
   message: string
   corrections: Correction[]
+  /** The event the request is about (`?event=evt-…`, from an event page's
+   * correction link), or null; sent with any kind but `add`. A correction
+   * about an event may name no listing (`requestNeedsListing`;
+   * event-correction-link, event-correction-no-org). */
+  eventKey: string | null
 }
 
 export type DraftErrors = Partial<
@@ -112,10 +118,12 @@ export type SubmitArgs = FunctionArgs<typeof api.listingRequests.submit>
 export function emptyDraft(
   kind: ListingRequestKind = "claim",
   org: RequestDraft["org"] = null,
+  eventKey: string | null = null,
 ): RequestDraft {
   return {
     kind,
     org,
+    eventKey,
     newName: "",
     newLink: "",
     email: "",
@@ -147,7 +155,7 @@ export function validateDraft(
     if (link !== "" && !isHttpUrl(link)) {
       errors.newLink = "Give a full web address starting with https://, or leave this empty."
     }
-  } else if (draft.org === null) {
+  } else if (draft.org === null && requestNeedsListing(draft.kind, Boolean(draft.eventKey))) {
     errors.org = "Choose the listing this is about."
   }
 
@@ -191,6 +199,7 @@ export function validateDraft(
       ...(role ? { role } : {}),
       message,
       ...(Object.keys(fields).length > 0 ? { fields } : {}),
+      ...(draft.kind !== "add" && draft.eventKey ? { eventKey: draft.eventKey } : {}),
     },
   }
 }

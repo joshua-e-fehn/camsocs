@@ -37,21 +37,49 @@ app/                         Next.js App Router pages
                              Toaster (light only); site-wide metadata (metadataBase, Open Graph)
   (site)/                    The public site (route group: header + footer frame, error, not-found)
     page.tsx                 Home: search, category tiles, this week's public events, explainer
-    societies/page.tsx       Directory: URL-synced filters + facet counts + search + pages
-    societies/[slug]/page.tsx  Organisation profile, a SourceLine under every fact
+    societies/page.tsx       Directory: URL-synced filters + facet counts + search + pages; one category or
+                             college canonical to its hub, searches and combinations noindex
+    societies/[slug]/page.tsx  Organisation profile, a SourceLine under every fact and a Sources list; a
+                             college's own page is its hub (its listings by category). talks.cam content
+                             is stripped first (lib/directory-talks-guard.ts, decision G1)
+    categories/page.tsx, categories/[category]/page.tsx
+                             Category hubs: every listing of a category on one self-canonical page
+                             (lib/directory-hubs.ts; outside /societies/ so no slug can collide)
     events/page.tsx          Calendar: list / week / month, filters, event sheet (?event=)
-    request/page.tsx         Claim / correct / remove / object / add form (?kind=&org=<slug>)
+    request/page.tsx         Claim / correct / remove / object / add form (?kind=&org=<slug>&event=<key>;
+                             an event is named by its key in the HTML, its title read in the browser
+                             with events.requestLabel, which sends none for a talks.cam-derived one;
+                             preset links are rel=nofollow)
     about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
+    term-dates/page.tsx      Full Term dates by academic year, the week of term today and each week's
+                             dates (`termDates` + lib/term-calendar.ts; no hand-written dates)
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
                              it is closed): overview, organisations (?org=<key> opens the drawer),
                              people, interactions, introductions, graph, reports (missing data +
                              outreach CSV), requests
-  sitemap.ts / robots.ts     Per-request sitemap of listings; robots disallows /dashboard, /api/, /sign-in,
-                             /relay
-  opengraph-image.tsx        Share image: wordmark and tagline only (no University branding)
-  not-found.tsx              404 for any unmatched URL, server-rendered; an unknown listing (proxy.ts) gets
-                             the site frame and its segment's not-found page (see "Unknown listing URLs")
+  sitemap.xml/, sitemaps/    Sitemap index + pages / societies / events files (lib/sitemap.ts,
+                             lib/sitemap-societies.ts, convex/sitemap.ts, orgs.sitemap): lastmod, edge-cached
+                             an hour, 503 on a backend failure; category hubs and college pages listed; thin
+                             profiles (G3), ended and talks.cam-derived events (G1) left out
+  robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay; AI agents off /talks
+  opengraph-image.tsx        Generic share image: wordmark and headline only (no University branding),
+                             drawn by _og/card.tsx; a society's and an event's segment draw their own
+                             (`opengraph-image.tsx`: name, kinds, logo / when, title, host, venue;
+                             lib/og-card.ts: never a non-public or talks.cam-derived event, G1). Young
+                             Serif is vendored in _og/fonts/ (SIL OFL, OFL.txt beside it) and read from
+                             disk, so no card's text goes to a font service; file tracing ships it with
+                             each card's function, as public/crest.svg
+  manifest.ts                /manifest.webmanifest (name, light theme colour, icons); public/ also serves
+                             apple-touch-icon.png and .well-known/security.txt (RFC 9116: renew its
+                             Expires before 2027-09-01)
+  llms.txt/route.ts          /llms.txt (lib/llms-txt.ts), static: what camsocs is, that it is unofficial,
+                             its societies, category hubs, events, term dates and About pages; never the
+                             talks pillar (G1)
+  not-found.tsx              404 for any unmatched URL, server-rendered in the site frame, titled "Page not
+                             found"; an unknown listing (proxy.ts) gets it too, a talk the talks pillar's
+                             once hydrated (not-found-variant.tsx; see "Unknown listing URLs"). Static:
+                             it reads no request header (see "Caching")
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
   relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
                              next.config rewrite: that would pass cookies on)
@@ -66,7 +94,7 @@ convex/
   schema.ts                  The domain schema (docs/data-model.md is the contract; header states the rules)
   http.ts                    Better Auth routes + /api/pipeline/* (Bearer PIPELINE_API_KEY)
                              + /api/inbound/email (forwarded list mail; Svix / Bearer, see below)
-  orgs.ts events.ts venues.ts termDates.ts listingRequests.ts
+  orgs.ts events.ts venues.ts termDates.ts listingRequests.ts sitemap.ts
                              PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
                              relationships + eventOrganisers, broker, files, inbound, termDates, purge,
@@ -171,8 +199,10 @@ e2e/                         Playwright smoke suite (not part of `bun test`; bun
 playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
 instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
 instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
-proxy.ts                     Listing pages only: unknown society / event / talk URL → real 404 (see
-                             "Unknown listing URLs"; lib/missing-listing.ts)
+proxy.ts                     Listing pages and the talks pillar only: unknown society / event / talk
+                             URL → real 404 (see "Unknown listing URLs"; lib/missing-listing.ts); a
+                             talks.cam-derived event → 308 to /talks/events/<key> ("The talks
+                             boundary"); an AI agent on /talks* → 403 (lib/crawlers.ts)
 next.config.ts               Turbopack root, image hosts, trailing-slash redirect (and why there is no
                              /api/auth or /relay rewrite); PostHog source map upload on Vercel
                              production builds only (withSourceMapUpload, + next.config.test.ts)
@@ -191,13 +221,75 @@ next.config.ts               Turbopack root, image hosts, trailing-slash redirec
 Convex hooks only (`hooks/convex/`), via `useQuery`/`useMutation` from `convex/react`. There is no
 REST layer and no React Query; never wrap a Convex query in another fetching library.
 
-Public pages render on the server. A page with interaction (directory, calendar) parses its URL
-state (`lib/url-state.ts`), calls `preloadQuery` from `convex/nextjs` and hands the result to a
-client organism that reads it with `usePreloadedQuery` (live afterwards); a filter change is a
-`router.push` of the new URL. A page without interaction (profile, home, About) uses `fetchQuery`
-and ships no client JavaScript of its own. Viewer-dependent queries (`events.*`,
-`orgs.getBySlug`) get `{ token: await getToken() }` (`lib/auth-server.ts`, memoised per request).
-Opening an event only changes `?event=` with `window.history.pushState` (no server round trip).
+Public pages render on the server, anonymously (see "Caching"). A page with interaction
+(directory, calendar) parses its URL state (`lib/url-state.ts`), calls `publicPreload`
+(`lib/public-data.ts`) and hands the result to a client organism that reads it with
+`usePreloadedQuery` (live afterwards); a filter change is a `router.push` of the new URL. A page
+without interaction (profile, home, About) uses `publicQuery` and ships no client JavaScript of its
+own. No server render of a page passes a token: what only a signed-in reader may see is added in the
+browser. Opening an event only changes `?event=` with `window.history.pushState` (no server round
+trip).
+
+### Caching (SEO audit 2026-11-02, no-cdn-cache)
+
+Public pages are served from Vercel's edge, rendered again at most every 5 minutes (incremental
+static regeneration), so a crawler's or a reader's view is usually no function call and no Convex
+read. What makes that work, and what keeps it working:
+
+- **Nothing above a public page reads the request.** The root layout reads no session (no
+  `getToken()`, so the Convex provider has no `initialToken`), and `app/not-found.tsx`, which Next
+  renders into every route's payload, reads no header (`app/not-found-variant.tsx` picks the
+  talks pillar's not-found page in the browser). One `headers()` or `cookies()` call in either makes
+  every page dynamic again.
+- **Every server read of public data is `publicQuery` / `publicPreload`** (`lib/public-data.ts`):
+  anonymous by signature, kept in Next's Data Cache per function and arguments for
+  `PUBLIC_DATA_REVALIDATE` (300 s). `fetchQuery` from `convex/nextjs` sends `cache: "no-store"`,
+  which makes the page that calls it dynamic, so it is left for route handlers (`.ics` feeds,
+  sitemaps, share cards, the proxy).
+- **`revalidate = 300`** in `app/(site)/layout.tsx` (a literal; `PUBLIC_DATA_REVALIDATE` and the
+  proxy's `FOUND_TTL_MS` are held equal to it by tests). Pages that read their search params stay
+  dynamic (`/societies`, `/events`, `/talks`, `/talks/departments`, `/request`), with their reads
+  cached. A cached page can be up to twice that behind the database; the interactive pages' live
+  queries catch up once hydrated.
+- **Dynamic segments build nothing** (`generateStaticParams` returns `[]` on `/societies/[slug]`,
+  `/events/[key]`, `/categories/[category]`, `/talks/[key]`, `/talks/events/[key]`): each page is
+  rendered on its first request, so `next build` never reads Convex for them. Pages without a
+  segment (`/`, `/about`, `/privacy`, `/categories`, `/term-dates`) are prerendered by a real
+  build from its own deployment, as any static page is. A build against
+  `scripts/build-env-defaults.sh`'s placeholder must not contact Convex, so there every cached read
+  calls `connection()` first and those pages become dynamic in that build only (`lib/convex-url.ts`
+  `isPlaceholderDeployment`). The build's route table therefore shows them as `ƒ` in CI; build
+  with real `NEXT_PUBLIC_CONVEX_*` URLs to see `○ … 5m`. A real build whose deployment fails a read
+  (a preview's dev deployment unreachable, or behind the branch's functions) does not fail either:
+  during `next build` only (`NEXT_PHASE === "phase-production-build"`), a failed cached read logs
+  a `console.warn` naming the function (one per failed read) and calls `connection()`, so that page is `ƒ` in that
+  build and renders on its first request (review of the SEO audit 2026-11-02, build-coupling).
+  Never on Vercel Production (`VERCEL_ENV=production`): its functions were just pushed to the
+  production deployment, so a failed read there is an outage and the build fails, leaving the
+  last good deployment live (build-fallback-production). Outside the build the error propagates
+  unchanged, and Next's own control-flow errors are rethrown first (`unstable_rethrow`). A
+  `public-data: … failed during the build` warning in a build log means a page that should be
+  static was not.
+- **Signed-in readers get their extra in the browser.** The Convex client fetches the session after
+  hydration and its queries rerun with it: the calendar's `events.list` and `restrictedCount`
+  subscriptions gain a `@cam.ac.uk` reader's Cambridge-only events by themselves; a society
+  profile's "Coming up" (`ProfileCamOnlyEvents`) and an event page that says "not available"
+  (`RestrictedEvent`) ask `events.*` again only once the client is authenticated
+  (`useSignedInEventWindow`, `useSignedInEvent`), so a signed-out view costs no extra read. The
+  broker's `BrokerGate` waits for the client's session before asking `getBrokerAccess`. These
+  additions are never in the server's HTML, so they are never in the shared cache.
+- **The proxy still runs on every listing view** (it runs before the edge cache): one remembered
+  existence check per instance and listing (`FOUND_TTL_MS`), as the 404 gate needs (below).
+- **The auth client** reads the session once per page load, not on every tab focus
+  (`sessionOptions.refetchOnWindowFocus: false`; the broker's area reads it again on focus,
+  `AuthGuard`), and a browser with no cookie but PostHog's is answered `null` by the
+  `/api/auth/[...all]` handler without asking Convex (`isAnonymousSessionRead`).
+- **Region.** Functions run in Vercel's default `iad1` (Washington, D.C.), beside the Convex
+  production deployment: its URL carries no region segment (`<name>.convex.cloud`, docs/deploy.md),
+  which is Convex's default US East region (a non-default region is `<name>.<region>.convex.cloud`,
+  `lib/convex-url.ts`). Moving functions to London would put a transatlantic round trip on every
+  Convex read; the edge cache is what brings pages close to UK readers. Only a Convex deployment in
+  an EU region would make `lhr1` / `dub1` the better choice.
 
 ### Unknown listing URLs (ENG-20)
 
@@ -205,20 +297,26 @@ Opening an event only changes `?event=` with `window.history.pushState` (no serv
 site's not-found page in the server's HTML, for browsers and crawlers alike. The page cannot do it
 itself in Next 16: under a `loading.tsx` its `notFound()` comes after a 200 (a noindex soft 404),
 and outside every Suspense boundary Next sends the 404 with an empty `html#__next_error__` shell
-that only JavaScript fills in. So `proxy.ts`, matched on those three paths only, decides first
+that only JavaScript fills in. (`/societies`, `/societies/<slug>`, `/events` and `/events/<key>`
+have no `loading.tsx` since the SEO audit of 2026-11-02, content-in-hidden-suspense: a streamed
+page put the H1, cards and JSON-LD in hidden `<div>`s after the footer, which non-JS extractors
+drop. Their fallback `notFound()` is a real 404 status with that empty shell.) So `proxy.ts`,
+matched on those three paths (and the rest of the talks pillar, for its AI-agent 403), decides first
 (`lib/missing-listing.ts`): a malformed key (`isOrgSlug` / `isEventKey` / `isTalkKey`) is missing
 without a Convex call; a well-formed one costs one anonymous indexed query (`orgs.exists`,
-`events.exists`, `talks.exists`, which share their test with `getBySlug` / `get`). A missing listing
-is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404; the
-`x-camsocs-missing-listing` request header makes it wrap the (site) frame around the talks
-not-found page for a talk and the site's own for the rest. Only the proxy can set that header: a
-last matcher entry catches any request that brings its own copy, and the proxy drops it. Router and
+`events.locate`, `talks.exists`, which share their test with `getBySlug` / `get`); a talks.cam-derived
+event is answered with a 308 to `/talks/events/<key>` (see "The talks boundary"). A missing listing
+is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404: the
+site's not-found page in the (site) frame, which becomes the talks not-found page in the browser
+for a talk's address (`app/not-found-variant.tsx`; deciding on the server would need a request
+header, see "Caching"). Router and
 browser prefetches skip the proxy in its matcher (`missing` header conditions: Next strips
 `next-router-prefetch` and `rsc` from the headers a proxy sees, so a check in code never fires).
 Static siblings (`/talks/departments`, or a metadata file such as `opengraph-image` in the section;
 the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
 one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
-listing is remembered for 60 s per instance (missing ones never), so repeat views skip the round
+listing is remembered per instance for as long as a page is cached (`FOUND_TTL_MS`, 300 s;
+missing ones never), so repeat views skip the round
 trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
 page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
 hidden since the check. A client-side navigation to a missing listing becomes a full page load (the
@@ -398,7 +496,7 @@ record of processing P12). Full table, settings and caveats: `docs/deploy.md` "P
 
 | Event | Properties | Sender |
 |---|---|---|
-| `ics_feed_fetched` | `feed` (`talks` / `event` / `talk`), `key?` (a valid event or talk key) | the three `.ics` route handlers → `countIcsFetch` (`lib/ics-telemetry.ts`) in `after()` → `captureServerEvent` |
+| `ics_feed_fetched` | `feed` (`talks` / `events` / `event` / `talk`), `key?` (a valid event or talk key) | the `.ics` route handlers → `countIcsFetch` (`lib/ics-telemetry.ts`) in `after()` → `captureServerEvent` |
 | `listing_request_received` | `kind` (`LISTING_REQUEST_KINDS`) | `listingRequests.submit` schedules `internal.analytics.captureListingRequest` → capture API (`convex/lib/posthog.ts`) |
 
 - A new server event needs an entry in `SERVER_EVENTS` (Next) or its own internal action (Convex),
@@ -453,6 +551,13 @@ project's functions onto another project's production (2026-07-29).
 All frontend design decisions are governed by `webapp/DESIGN.md`. Any time UI is created or
 modified, consult it. Sections marked ✏️ are meant to evolve.
 
+Document titles stay within 60 characters (`MAX_TITLE_LENGTH`), " · camsocs" dropped first. A
+profile's (`societyTitle`, owner decision G2) is the first that fits of: the society's own full name
+naming Cambridge, "<Name>, Cambridge", a shorter name the sources give (longest first, as is when it
+names Cambridge, else with ", Cambridge"), the name, and the name cut at a word with "…" (plus
+", Cambridge"). Never "University of Cambridge …" of our making; a society so named leads with a
+shorter name when the sources give one, else keeps its own.
+
 ## Public API
 
 Everything a page needs comes from these Convex functions (via `hooks/convex/`). They are safe
@@ -495,10 +600,17 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 | `orgs.list` | `OrgFilters & { sort?: "relevance" \| "name" \| "active", paginationOpts }` | `{ page: (OrgCardPublic & { activity? })[], isDone, continueCursor }` — `relevance` (default): search rank with `q`, else name; `name`: A–Z also with `q`; `active`: most counted events this term first (`convex/lib/orgActivity.ts`: public events a listing organises or co-hosts, not taking-part ones). `activity` = `{ count, inTerm, next?: { startsAt, allDay, termWeekLabel? } }` (term = Week 0 to the end of Full Term; outside term, the next 8 weeks). Works with `usePaginatedQuery` (cursor = offset) |
 | `orgs.facets` | `OrgFilters` | `{ total, categories, levels, orgTypes, collegeKeys, activityTypes, audiences, statuses, blueStatus, gender, beginnerFriendly, truncated }`, each but the last `Record<value, count>`; disjunctive (a facet ignores its own selection); `total` = what `list` returns; `truncated` when a search matched more than one query returns (1,024, Convex's limit) and the counts cover the best matches only |
 | `orgs.exists` | `{ slug }` | `boolean`: whether `getBySlug` would show a listing (not hidden, not suppressed); viewer-independent, for the 404 gate in `proxy.ts` |
-| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[] }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn ones; relationships are public edges with `direction` and the counterpart's `{key, slug, name}` |
+| `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[], hasPublicEvents? }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn or talks.cam-derived ones (`isTalksDerivedEvent`); relationships are public edges with `direction` and the counterpart's `{key, slug, name}`, whose evidence never links a talks.cam page (an edge seen only on talks.cam pages is left out); `hasPublicEvents`: any public event not from talks.cam, past or upcoming, viewer-independent (decision G3). The whole result is passed through the talks guard (decision G1) |
+| `orgs.hub` | `{ category?, collegeKey? }` | Every listing of one category or one college, by name: `{ key, slug, name, shortName?, shortDescription?, orgType?, level?, status, collegeKeys, categories, sport?: {sport?} }[]` (no logo, no activity); the directory's rules (no counterparts, nothing archived). For the hub pages (decision G13) |
+| `orgs.sitemap` | `{ cursor?, numItems? }` | `{ page: { slug, kind: "listing" \| "college", updatedAt, indexable }[], isDone, continueCursor }` (offset cursor, ≤ 100 a page): every listing and college page; `indexable` false for a thin profile (no description, no public event, no website: decision G3, `lib/directory-indexing.ts` `isThinListing`, judged on the same guarded projection the profile shows, so suppressed fields, talks.cam websites and talks.cam events do not count) and a college that lists nobody; a listing removed on request is left out. Read by `lib/sitemap-societies.ts` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 | `orgs.busy` | `{ limit? }` | `{ label?, from, to, orgs: { card: OrgCardPublic, count }[] }` — the "Busy this week" shelf: listings with the most counted, not cancelled events this term week (Thu–Wed; `label` "MT26 Wk 4"), else the next 7 days; at most 12 |
-| `orgs.related` | `{ slug, limit? }` | `OrgCardPublic[]` (≤ 6): the same college first, then shared categories (`relatedScore`); empty for an unknown or hidden slug |
+| `orgs.related` | `{ slug, limit? }` | `OrgCardPublic[]` (≤ 6): the same college first, then what the group does: the same sport, shared categories, telling words shared in the name, the same specific kind, shared activities and audiences (`relatedScore`); ties in a fixed per-pair hash order, never the alphabet; empty for an unknown or hidden slug |
+
+Every card these return (`list`, `busy`, `related`, `hub`) and the whole of `getBySlug` are
+stripped of talks.cam content (`lib/directory-talks-guard.ts`, decision G1): talks.cam events and
+links, values whose source is talks.cam, and relationships resting only on talks.cam pages. The
+directory and profiles are open to AI crawlers; talks.cam content stays under `/talks`.
 
 `OrgCardPublic`: `key, slug, name, shortName?, shortDescription?, orgType?, level?, status,
 collegeKeys, categories, activityTypes, audiences, beginnerFriendly?, sport?: {sport?, blueStatus?,
@@ -517,15 +629,17 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default). `university` filters after the per-tier index reads (`.take(1000)` starting, `.take(200)` spanning, no index on `fromUniversity`), so a window holding more than 1,000 events of a tier can drop its later days from either view without a sign; safe for What's On (about 100 rows in 10 weeks), not for a Cambridge Festival window: store the flag with an index (widen, backfill, switch) or page past the cap before the Festival's events are loaded (ENG-24 follow-up). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university?, talksCam? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default); `talksCam` (`exclude` by default, `only`, `include`): talks.cam-derived events (see "The talks boundary" below). `university` filters after the per-tier index reads (`.take(1000)` starting, `.take(200)` spanning, no index on `fromUniversity`), so a window holding more than 1,000 events of a tier can drop its later days from either view without a sign; safe for What's On (about 100 rows in 10 weeks), not for a Cambridge Festival window: store the flag with an index (widen, backfill, switch) or page past the cap before the Festival's events are loaded (ENG-24 follow-up). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
 | `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
+| `events.requestLabel` | `{ key }` | `{ title: string \| null }`: the title `get` would show this viewer, null when it shows nothing or for a talks.cam-derived event (G1); for the request form at `/request?event=`, so no talks.cam text reaches it |
 | `events.exists` | `{ key }` | `boolean`: whether `get` would return the event to a verified @cam.ac.uk viewer (so `cam_only` is true for everyone; `members_only`, withdrawn, suppressed or every host hidden is false); for the 404 gate in `proxy.ts` |
-| `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
+| `events.locate` | `{ key }` | `"missing" \| "event" \| "talks"`: `missing` when `exists` is false, `talks` for a talks.cam-derived event (its page is `/talks/events/<key>`); for the gate in `proxy.ts` |
+| `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored; talks.cam-derived events count unless `talksCam: "exclude"`, which a society profile passes) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers: {key, slug, name, role}[], speakers,
 price?, bookingUrl?, signupRequired?, visibility, eventType, imageUrl?, cancelled, status, source,
-sourceUrl? (absent for mailing-list events), hosting, externalUrl?, fromUniversity, lastSeenAt,
+sourceUrl? (absent for mailing-list events), hosting, externalUrl?, talksDerived, fromUniversity, lastSeenAt,
 confidence, meta`.
 
 `hosting` (decision D6) is `hosts` or `takes_part`: someone else's event (a CTF, a conference,
@@ -567,23 +681,81 @@ less than a week so the week strip has a count for every day. The search box (`?
 matched in the browser over the loaded days, against title, organisers and venue
 (`lib/events.ts`), so `q` is not sent to `events.list`. Each event has a page,
 `/events/[key]`, and a one-event `.ics` at `/events/[key]/ics` (read with the viewer's
-session; a Cambridge-only event's file is `private, no-store`).
+session; a Cambridge-only event's file is `private, no-store`). `/events.ics` is the feed of
+the next 60 days' public events, "Cambridge events · camsocs": societies' and the University's
+own listings, as the calendar's default (`?org=<slug>` for one society's, named for it),
+edge-cached an hour, and the calendar and event pages advertise their `.ics` as a
+`text/calendar` alternate. It reads `events.list` once, so the 1,000-per-tier cap there applies
+to both kinds together.
+
+For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
+and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
+with its own title; every other combination of the URL's filters is noindex, follow with the
+canonical of the page it slices. Both carry a CollectionPage / ItemList of the event pages on
+screen. "Show next week" is a real link (handled in place on a click), so crawlers reach later
+weeks; event rows link their societies' profiles. Neither `/events` nor `/events/[key]` has a
+`loading.tsx`: their H1, text and JSON-LD are in the first HTML chunk.
 
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,
-status, source, sourceUrl?, hosting, externalUrl?, fromUniversity` — no description, speakers, price, image or
-`meta`. A month of events
+status, source, sourceUrl?, hosting, externalUrl?, talksDerived, fromUniversity, meta?` — no description, speakers, price,
+image or full `meta`: `meta` holds only `startsAt: { status }`, which decides (with the fields above)
+whether the event's page has an Event node (`eventHasStructuredData`), so a profile's JSON-LD links
+only events whose `@id` exists. A month of events
 was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);
 the sheet reads the rest with `events.get`.
+
+### The talks boundary (owner decision G1)
+
+No talks.cam-derived text (a talk's title, speakers, abstract, a department's talk listing, a
+talks.cam URL) appears in the server HTML, RSC payload, JSON-LD, sitemap or feeds of any URL outside
+`/talks`: robots.txt keeps AI agents out of `/talks` only, as talks.cam's own robots.txt keeps them
+out of talks.cam (`lib/crawlers.ts`). The rule is `lib/talks-boundary.ts`: a society event is
+talks.cam-derived when its source is `talks_cam`, its source URL, own page, booking link or
+description points at talks.cam, or any field's provenance (`meta[field].sourceUrl` or a
+conflicting reading's) is on talks.cam.
+
+The rule runs in Convex only, over the stored event: a projection drops fields it reads
+(`externalUrl` outside `takes_part`, a mailing-list event's `sourceUrl`, and a list item's
+description and booking link), so running it again there could disagree with `events.locate` and
+send a talks.cam-derived event's readers to the wrong side. Its answer travels as `talksDerived`
+on `EventListItem` and `EventPublic`; pages, links (`eventPath`), feeds and JSON-LD read that.
+Such an event:
+
+- is left out of `events.list` unless the caller passes `talksCam` other than `exclude`, which no
+  server module outside the /talks routes does (`app/talks-boundary.test.tsx` scans app/,
+  components/ and lib/ for it); `/events` adds them in the browser after hydration
+  (`useTalksSideEvents`), and `orgs.getBySlug` leaves them out of a profile's "Coming up";
+- has its page at `/talks/events/<key>` (and `.ics` beside it), with no JSON-LD; `/events/<key>`
+  answers 308 there (`proxy.ts`, `events.locate`, with `Cache-Control: no-store`; the page and the
+  `.ics` route redirect too, should the proxy's check fail). Only outward
+  (`talksBoundaryRedirect`): `/talks/events/<key>` renders any event, one not talks.cam-derived
+  with its canonical at `/events/<key>`. The proxy reads `events.locate` fresh while the pages read
+  `events.get` through Next's Data Cache (300 s), so for a while after a harvest changes an
+  event's verdict the two can disagree; a redirect each way then looped;
+- is never in a sitemap or `/events.ics`, and never drawn on a share card (`lib/og-card.ts`, by
+  `talksDerived`).
+
+Two predicates, one host test: `isTalksCamUrl` (`lib/talks-boundary.ts`) is the only talks.cam URL
+check. The stored-event rule above uses it, and so does the directory's deep guard
+(`lib/directory-talks-guard.ts` `withoutTalksCam`), which strips talks.cam links, values read from
+talks.cam and relationships resting on talks.cam pages alone from every `orgs.*` result; its
+`isTalksCamEvent` takes a projection's `talksDerived` verdict first. A society's connection whose
+evidence is all talks.cam pages is left out of `getBySlug` (the co-hosting rests on talks.cam
+alone); one with other evidence keeps it, minus the talks.cam links.
+
+The home page's Talks column carries counts from the server; its rows (titles, speakers, series) are
+read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 
 ### Reference data and the form
 
 | Function | Args | Returns |
 |---|---|---|
 | `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
+| `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, more than 5 requests per address per hour, or a full hourly budget (removals and objections have their own, larger one) (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, more than 5 requests per address per hour, or a full hourly budget (removals and objections have their own, larger one) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
