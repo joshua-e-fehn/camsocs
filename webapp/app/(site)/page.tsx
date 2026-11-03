@@ -41,7 +41,7 @@ import { CATEGORIES, CATEGORY_LABELS, TALK_SCHOOL_LABELS } from "@/lib/vocab"
  * canonical that folds `?utm_…` and `?ref=` variants into `/`.
  */
 export const metadata: Metadata = pageMetadata({
-  title: { absolute: "camsocs – Cambridge student societies, events & talks" },
+  title: { absolute: "CAMsocs – Cambridge student societies, events & talks" },
   description:
     "Find Cambridge student societies and sports clubs, what they are running this week, and public talks, each fact linked to its source. Unofficial.",
   path: "/",
@@ -488,7 +488,7 @@ export default async function HomePage() {
             href="/about"
             className="inline-flex min-h-6 items-center text-foreground underline underline-offset-4 hover:text-brand-text"
           >
-            How camsocs works
+            How CAMsocs works
           </Link>
         </p>
         <p className="mt-2 font-mono text-[0.6875rem] tracking-wide text-muted-foreground">

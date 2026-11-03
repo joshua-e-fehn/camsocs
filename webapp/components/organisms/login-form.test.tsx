@@ -56,7 +56,7 @@ describe("the sign-in card", () => {
     expect(page.querySelector('[aria-label="Sign-in method"]')).toBeNull()
     expect(buttons(page)).toContain("Continue with Google")
     expect(page.querySelector("button[disabled]")).toBeNull()
-    expect(page.textContent).toContain("For the camsocs administrator")
+    expect(page.textContent).toContain("For the CAMsocs administrator")
   })
 
   test("with only the Cambridge link, shows its form and no toggle", async () => {

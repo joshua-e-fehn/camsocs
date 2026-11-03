@@ -1,7 +1,7 @@
 /**
  * The single source of truth for which routes need a session.
  *
- * Pattern from Bundestracker (lib/auth-routes.ts), adapted: camsocs has a
+ * Pattern from Bundestracker (lib/auth-routes.ts), adapted: CAMsocs has a
  * public directory and a private brokering area, so routes are classified
  * explicitly into one of two lists and `lib/auth-routes.test.ts` reads `app/`
  * and fails if any page is in neither (or both). An unlisted page would

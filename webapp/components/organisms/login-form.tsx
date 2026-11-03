@@ -88,7 +88,7 @@ export function SignInCard({
             <CardDescription>
               {method === "cam"
                 ? "Cambridge members see Cambridge-only events"
-                : "For the camsocs administrator"}
+                : "For the CAMsocs administrator"}
             </CardDescription>
           )}
         </CardHeader>
@@ -144,7 +144,7 @@ export function SignInCard({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        Browsing the directory needs no account. camsocs is unofficial and not affiliated with the
+        Browsing the directory needs no account. CAMsocs is unofficial and not affiliated with the
         University of Cambridge or Cambridge SU.
       </FieldDescription>
     </div>

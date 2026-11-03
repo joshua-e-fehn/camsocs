@@ -2,8 +2,8 @@ import { Crest } from "@/components/molecules/crest"
 import { cn } from "@/lib/utils"
 
 /**
- * The camsocs logo: the Three pillars crest and "camsocs" in Young Serif,
- * always lower case. The crest is our own (components/molecules/crest.tsx);
+ * The CAMsocs logo: the Three pillars crest and "CAMsocs" in Young Serif,
+ * written exactly so: "CAM" upper case, "socs" lower case. The crest is our own (components/molecules/crest.tsx);
  * nothing in it is the University's arms or styling — the project is
  * unofficial (AGENTS.md).
  */
@@ -16,7 +16,7 @@ export function Wordmark({ className }: { className?: string }) {
       )}
     >
       <Crest className="w-[1.3em]" />
-      camsocs
+      CAMsocs
     </span>
   )
 }

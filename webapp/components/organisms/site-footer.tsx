@@ -29,9 +29,9 @@ const COLUMNS = [
     ],
   },
   {
-    title: "camsocs",
+    title: "CAMsocs",
     links: [
-      { href: "/about", label: "How camsocs works" },
+      { href: "/about", label: "How CAMsocs works" },
       { href: "/privacy", label: "Privacy notice" },
       { href: "/terms", label: "Terms of use" },
     ],
@@ -61,7 +61,7 @@ export function SiteFooter({
         <div className="col-span-2 flex items-start gap-3.5 md:col-span-1">
           <Crest className="w-10 shrink-0" />
           <div className="flex flex-col gap-1">
-            <p className="font-serif text-2xl leading-tight">camsocs</p>
+            <p className="font-serif text-2xl leading-tight">CAMsocs</p>
             <p className="max-w-xs text-sm text-muted-foreground">
               Everything on in Cambridge, in one place. Made by a student, for anyone curious.
             </p>
@@ -72,7 +72,7 @@ export function SiteFooter({
             key={column.title}
             aria-label={column.title}
             className={
-              column.title === "camsocs"
+              column.title === "CAMsocs"
                 ? "col-span-2 flex flex-col md:col-span-1"
                 : "flex flex-col"
             }
@@ -93,8 +93,8 @@ export function SiteFooter({
                 {link.label}
               </Link>
             ))}
-            {column.title === "camsocs" && <CookieSettingsButton className={LINK} />}
-            {column.title === "camsocs" && (
+            {column.title === "CAMsocs" && <CookieSettingsButton className={LINK} />}
+            {column.title === "CAMsocs" && (
               <p className="mt-3 flex flex-col gap-0.5 text-sm text-muted-foreground">
                 Missing a society or a talk series?
                 <a

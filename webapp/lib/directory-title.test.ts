@@ -25,10 +25,10 @@ test("the directory's title names Cambridge, a query, a single category or the p
 describe("fitTitle (owner decision G2)", () => {
   test("keeps the template while the whole title fits in 60 characters", () => {
     expect(fitTitle("Chess Club, Cambridge")).toBe("Chess Club, Cambridge")
-    expect(titleText(fitTitle("Chess Club, Cambridge"))).toBe("Chess Club, Cambridge · camsocs")
+    expect(titleText(fitTitle("Chess Club, Cambridge"))).toBe("Chess Club, Cambridge · CAMsocs")
   })
 
-  test("drops ' · camsocs' when it would overflow", () => {
+  test("drops ' · CAMsocs' when it would overflow", () => {
     const long = "Cambridge University Hindu Cultural Society Association"
     expect(long.length).toBeLessThanOrEqual(MAX_TITLE)
     expect(fitTitle(long)).toEqual({ absolute: long })

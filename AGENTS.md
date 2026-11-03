@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-camsocs is a verified, current database of Cambridge student societies and sports clubs, built from automated harvesting plus LLM extraction. Every field records its source and status. On top of the database sit a public discovery site (browse, filter, events calendar) and a **private brokering CRM** (people, needs and offers, interactions, introductions).
+CAMsocs is a verified, current database of Cambridge student societies and sports clubs, built from automated harvesting plus LLM extraction. Every field records its source and status. On top of the database sit a public discovery site (browse, filter, events calendar) and a **private brokering CRM** (people, needs and offers, interactions, introductions).
 
 - Personal / portfolio project by Joshua Fehn.
 - **Unofficial.** It is not affiliated with the University of Cambridge or Cambridge SU. Never use the crest or logo, or "University of Cambridge" / "Cambridge University", as branding.

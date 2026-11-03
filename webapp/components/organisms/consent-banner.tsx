@@ -112,7 +112,7 @@ export function ConsentBanner() {
               Nothing is collected unless you accept.
             </span>
             <span className="max-md:hidden">
-              With your permission, camsocs uses PostHog (EU Cloud, Frankfurt) to collect aggregate
+              With your permission, CAMsocs uses PostHog (EU Cloud, Frankfurt) to collect aggregate
               usage statistics that help us improve the site. PostHog then keeps first-party cookies
               and browser storage entries named <span className="font-mono">ph_*</span> on this
               device for {CONSENT_MAX_AGE_DAYS} days. Nothing is collected unless you accept. We

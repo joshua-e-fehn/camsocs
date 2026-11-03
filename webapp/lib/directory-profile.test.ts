@@ -104,7 +104,7 @@ describe("societyTitle (G2)", () => {
 
   // Invented names of the shapes the audit found (title-length-overflow-minor).
   const text = (title: string | { absolute: string }) =>
-    typeof title === "string" ? `${title} · camsocs` : title.absolute
+    typeof title === "string" ? `${title} · CAMsocs` : title.absolute
   const longName = "Association of Invented and Imaginary University Students" // 57
 
   test("a name too long for ', Cambridge' takes a shorter name that keeps it", () => {

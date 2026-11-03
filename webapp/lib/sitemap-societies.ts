@@ -16,7 +16,7 @@ import { readAllPages, type SitemapEntry } from "./sitemap"
  * `orgs.sitemap` judges thinness on the same guarded projection the profile
  * renders (`isThinListing`), so the file never lists a URL the page marks
  * noindex. Nothing under /talks, and no talks.cam URL (G1): these are
- * camsocs paths.
+ * CAMsocs paths.
  */
 
 export type SocietySitemapPage = FunctionReturnType<typeof api.orgs.sitemap>

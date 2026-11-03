@@ -132,7 +132,7 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
 // Better Auth Options
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   return {
-    appName: "camsocs",
+    appName: "CAMsocs",
     baseURL: process.env.SITE_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     // The browser calls the auth API from the Next.js origin while this backend

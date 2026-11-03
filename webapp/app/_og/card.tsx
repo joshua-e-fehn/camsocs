@@ -27,7 +27,7 @@ const SKY = "#E8F2F6"
 const SKY_LINE = "#D2E4EB"
 const APRICOT = "#F29E4C"
 
-const WORDMARK = "camsocs"
+const WORDMARK = "CAMsocs"
 const FOOTNOTE = "Unofficial · every fact sourced"
 
 /** A logo request may take this long: a stalled one must not hang a render. */

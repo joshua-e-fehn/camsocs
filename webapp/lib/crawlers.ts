@@ -16,7 +16,7 @@
  *    /talks/departments, /talks/events and the .ics feeds republish
  *    talks.cam and department listings, whose own robots.txt keeps these
  *    agents out (talks.cam names ClaudeBot, anthropic-ai, GPTBot and CCBot
- *    among others); camsocs must not become the side door (owner decision
+ *    among others); CAMsocs must not become the side door (owner decision
  *    G1, lib/talks-boundary.ts). Rules match by prefix, so "/talks" covers
  *    "/talks.ics" and every page under /talks.
  *  - T4 SEO-tool and commercial scrapers may read nothing (robots.txt

@@ -210,7 +210,7 @@ const header = (s: Snapshot, name: string) => s.headers.find(([k]) => k === name
     "public, s-maxage=3600, stale-while-revalidate=86400",
   )
   const unfolded = snapshot.body.replace(/\r\n /g, "")
-  assert.ok(unfolded.includes("X-WR-CALNAME:CU Chess Club · camsocs"))
+  assert.ok(unfolded.includes("X-WR-CALNAME:CU Chess Club · CAMsocs"))
   assert.ok(unfolded.includes("LOCATION:The Invented Hall"))
   assert.ok(unfolded.includes(`URL:https://camsocs.uk/events/${EVENT_KEY}`))
   assert.ok(!unfolded.includes("Invented seminar"))
@@ -220,7 +220,7 @@ const header = (s: Snapshot, name: string) => s.headers.find(([k]) => k === name
   // (ENG-24) too, as the calendar's default; named for that, not "society".
   const all = await serve(eventsIcs())
   assert.equal(all.snapshot.status, 200)
-  assert.ok(all.snapshot.body.includes("X-WR-CALNAME:Cambridge events · camsocs\r\n"))
+  assert.ok(all.snapshot.body.includes("X-WR-CALNAME:Cambridge events · CAMsocs\r\n"))
   assert.equal(listArgs?.university, undefined)
   assert.equal(listArgs?.orgKey, undefined)
   const bad = await serve(eventsIcs("?org=Not_A_Slug"))

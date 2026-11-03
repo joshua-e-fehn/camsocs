@@ -121,12 +121,12 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function categoryHubIntro(category: Category, cards: readonly HubCard[]): string {
   const label = CATEGORY_LABELS[category]
   if (cards.length === 0) {
-    return `camsocs lists no ${label} groups in Cambridge yet. If you run one, tell us and we will add it.`
+    return `CAMsocs lists no ${label} groups in Cambridge yet. If you run one, tell us and we will add it.`
   }
   const university = cards.filter((card) => card.level === "university").length
   const college = cards.filter((card) => card.collegeKeys.length > 0).length
   const parts = [
-    `camsocs lists ${plural(cards.length, "Cambridge student group", "Cambridge student groups")} under ${label}`,
+    `CAMsocs lists ${plural(cards.length, "Cambridge student group", "Cambridge student groups")} under ${label}`,
   ]
   const split = [
     university > 0 ? `${university} university-wide` : undefined,
@@ -181,7 +181,7 @@ export function typeSummary(cards: readonly HubCard[]): string | undefined {
  */
 export function collegeHubIntro(college: string, cards: readonly HubCard[]): string {
   if (cards.length === 0) {
-    return `camsocs lists no societies or clubs at ${college} yet. If you know one, tell us and we will add it.`
+    return `CAMsocs lists no societies or clubs at ${college} yet. If you know one, tell us and we will add it.`
   }
   const kinds = typeSummary(cards)
   const top = [...countBy(cards, (card) => card.categories)]
@@ -189,7 +189,7 @@ export function collegeHubIntro(college: string, cards: readonly HubCard[]): str
     .slice(0, 3)
     .map(([category]) => CATEGORY_LABELS[category as Category])
   return [
-    `camsocs lists ${plural(cards.length, "student society or club", "student societies and clubs")} at ${college}, Cambridge${kinds ? `, including ${kinds}` : ""}.`,
+    `CAMsocs lists ${plural(cards.length, "student society or club", "student societies and clubs")} at ${college}, Cambridge${kinds ? `, including ${kinds}` : ""}.`,
     top.length > 0 ? ` The most common areas are ${listWords(top)}.` : "",
     " Each listing links to its sources; nothing here is run by the college.",
   ].join("")

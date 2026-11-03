@@ -88,7 +88,7 @@ async function readFeed(from: number, to: number, slug: string | undefined) {
   ])
   if (page === null) return null
   return {
-    name: page ? `${page.org.name} · camsocs` : "Cambridge events · camsocs",
+    name: page ? `${page.org.name} · CAMsocs` : "Cambridge events · CAMsocs",
     events,
     venues: new Map(venues.map((venue) => [venue.key, venue.name])),
   }

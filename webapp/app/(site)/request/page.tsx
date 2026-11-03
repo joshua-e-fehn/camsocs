@@ -13,7 +13,7 @@ type Props = { searchParams: Promise<SearchParams> }
 export const metadata: Metadata = pageMetadata({
   title: "Claim, correct or remove a listing",
   description:
-    "Societies can claim, correct or remove their camsocs listing, ask for a missing society to be added, or object to how their data is used.",
+    "Societies can claim, correct or remove their CAMsocs listing, ask for a missing society to be added, or object to how their data is used.",
   path: "/request",
 })
 
@@ -64,7 +64,7 @@ export default async function RequestPage({ searchParams }: Props) {
         <div className="flex flex-col gap-2 rounded-xl border p-5">
           <h2 className="font-semibold">Your right to object</h2>
           <p className="text-muted-foreground">
-            If personal data about you appears on camsocs, you can object to its use at any time (UK
+            If personal data about you appears on CAMsocs, you can object to its use at any time (UK
             GDPR Article 21). Choose “Object to processing” above
             {CONTACT_EMAIL ? (
               <>

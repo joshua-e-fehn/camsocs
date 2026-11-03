@@ -1,4 +1,4 @@
-# camsocs data model
+# CAMsocs data model
 
 This file is the contract for the Convex schema (`webapp/convex/schema.ts`), the pipeline's wire models (`pipeline/src/camsocs_pipeline/models/`) and the UI. Any change goes here first, then into code.
 

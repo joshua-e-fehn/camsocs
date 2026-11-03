@@ -12,7 +12,7 @@ import { isEventKey } from "@/lib/url-state"
  * outside /talks, an image included). lib/page-metadata.ts leaves the page's
  * Open Graph image to this.
  */
-export const alt = "An event's date, title, host and venue on a camsocs card"
+export const alt = "An event's date, title, host and venue on a CAMsocs card"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 

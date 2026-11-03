@@ -20,7 +20,7 @@ const ENV = {
   BETTER_AUTH_SECRET: "test-secret-for-better-auth-0123456789",
   SITE_URL: SITE,
   RESEND_API_KEY: "re_test_not_a_real_key",
-  RESEND_FROM: "camsocs <sign-in@example.org>",
+  RESEND_FROM: "CAMsocs <sign-in@example.org>",
 }
 
 type Sent = { url: string; headers: Headers; body: { to: string[]; text: string; from: string } }

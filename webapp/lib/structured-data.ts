@@ -12,10 +12,10 @@
 
 import { SITE_URL } from "./site"
 
-/** The camsocs WebSite node (on `/`). */
+/** The CAMsocs WebSite node (on `/`). */
 export const WEBSITE_ID = `${SITE_URL}/#website`
 
-/** The person who runs camsocs, as publisher (on `/about`). */
+/** The person who runs CAMsocs, as publisher (on `/about`). */
 export const PUBLISHER_ID = `${SITE_URL}/about#publisher`
 
 /** A page's own WebPage node: its canonical URL. `path` is site-relative. */

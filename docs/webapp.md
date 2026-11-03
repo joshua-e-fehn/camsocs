@@ -1,4 +1,4 @@
-# camsocs webapp internals
+# CAMsocs webapp internals
 
 Folded from the template's `webapp/agents.md`. Root rules live in `/AGENTS.md`.
 
@@ -79,7 +79,7 @@ app/                         Next.js App Router pages
   manifest.ts                /manifest.webmanifest (name, light theme colour, icons); public/ also serves
                              apple-touch-icon.png and .well-known/security.txt (RFC 9116, held equal to
                              lib/security-txt.ts by its test: renew its Expires before 2027-09-01)
-  llms.txt/route.ts          /llms.txt (lib/llms-txt.ts), static: what camsocs is, that it is unofficial,
+  llms.txt/route.ts          /llms.txt (lib/llms-txt.ts), static: what CAMsocs is, that it is unofficial,
                              its societies, category hubs, events, term dates and About pages; never the
                              talks pillar (G1)
   not-found.tsx              404 for any unmatched URL, server-rendered in the site frame, titled "Page not
@@ -441,7 +441,7 @@ and the ICO's consent guidance). The pieces:
   `padding-bottom` and `scroll-padding-bottom`: the end of the page scrolls clear of it and a
   focused control is never hidden behind it (WCAG 2.2 SC 2.4.11). Capped at the viewport below the
   header and scrolling inside itself past that, so it stays readable at 400% zoom (SC 1.4.10).
-- **Reopen, `molecules/cookie-settings-button.tsx`**: "Cookie settings" in the footer's camsocs
+- **Reopen, `molecules/cookie-settings-button.tsx`**: "Cookie settings" in the footer's CAMsocs
   column; each press moves focus to the banner (also while it is already open) and a choice returns
   focus to the button. A choice made without it (a first visit) hands focus to `<main id="main">`
   (`tabIndex={-1}`), not `<body>`.
@@ -572,7 +572,7 @@ project's functions onto another project's production (2026-07-29).
 All frontend design decisions are governed by `webapp/DESIGN.md`. Any time UI is created or
 modified, consult it. Sections marked ✏️ are meant to evolve.
 
-Document titles stay within 60 characters (`MAX_TITLE_LENGTH`), " · camsocs" dropped first. A
+Document titles stay within 60 characters (`MAX_TITLE_LENGTH`), " · CAMsocs" dropped first. A
 profile's (`societyTitle`, owner decision G2) is the first that fits of: the society's own full name
 naming Cambridge, "<Name>, Cambridge", a shorter name the sources give (longest first, as is when it
 names Cambridge, else with ", Cambridge"), the name, and the name cut at a word with "…" (plus
@@ -703,7 +703,7 @@ matched in the browser over the loaded days, against title, organisers and venue
 (`lib/events.ts`), so `q` is not sent to `events.list`. Each event has a page,
 `/events/[key]`, and a one-event `.ics` at `/events/[key]/ics` (read with the viewer's
 session; a Cambridge-only event's file is `private, no-store`). `/events.ics` is the feed of
-the next 60 days' public events, "Cambridge events · camsocs": societies' and the University's
+the next 60 days' public events, "Cambridge events · CAMsocs": societies' and the University's
 own listings, as the calendar's default (`?org=<slug>` for one society's, named for it),
 edge-cached an hour, and the calendar and event pages advertise their `.ics` as a
 `text/calendar` alternate. It reads `events.list` once, so the 1,000-per-tier cap there applies

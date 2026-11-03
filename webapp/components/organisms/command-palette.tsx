@@ -76,7 +76,7 @@ const PAGES = [
   { href: "/societies", label: "Societies and clubs", hint: "The directory" },
   { href: "/events", label: "Events", hint: "This term's calendar" },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures" },
-  { href: "/about", label: "About camsocs", hint: "Sources and method" },
+  { href: "/about", label: "About CAMsocs", hint: "Sources and method" },
   { href: "/request?kind=add", label: "Add a missing society", hint: "Request" },
   { href: "/request?kind=claim", label: "Claim or correct a listing", hint: "Request" },
   { href: "/privacy", label: "Privacy notice", hint: "Your data" },
@@ -288,7 +288,7 @@ export function CommandPalette({
           "max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:ring-0",
         )}
       >
-        <DialogTitle className="sr-only">Search camsocs</DialogTitle>
+        <DialogTitle className="sr-only">Search CAMsocs</DialogTitle>
         <DialogDescription className="sr-only">
           Societies, events, talks, colleges, categories and pages. Use the arrow keys to move and
           Enter to open; Delete forgets a highlighted recent search.
@@ -313,7 +313,7 @@ export function CommandPalette({
           }}
           loop
           className="rounded-none! bg-transparent p-0 max-sm:h-full"
-          label="Search camsocs"
+          label="Search CAMsocs"
         >
           <div className="flex items-center gap-2 border-b px-4">
             <SearchIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />

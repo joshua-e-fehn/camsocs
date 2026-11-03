@@ -223,7 +223,7 @@ describe("molecules", () => {
   test("the listing link snippet is plain HTML to our page", () => {
     const html = renderToString(<ListingLinkSnippet slug="chess-club" />)
     expect(html).toContain(
-      "&lt;a href=&quot;https://camsocs.uk/societies/chess-club&quot;&gt;Find us on camsocs&lt;/a&gt;",
+      "&lt;a href=&quot;https://camsocs.uk/societies/chess-club&quot;&gt;Find us on CAMsocs&lt;/a&gt;",
     )
   })
 
