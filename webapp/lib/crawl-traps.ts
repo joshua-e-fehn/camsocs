@@ -101,8 +101,42 @@ export function crawlerTrapRel(href: string): "nofollow" | undefined {
   return robotsGroupAllows(EVERYONE, href) ? undefined : "nofollow"
 }
 
-/** A link's `href` with its `rel` (`<Link {...linkProps(href)}>`). */
-export function linkProps(href: string): { href: string; rel?: "nofollow" } {
+/** The pages rendered per request (they read their URL's parameters; docs/
+ * webapp.md "Caching"): a prefetch of one is a server render. */
+const DYNAMIC_PAGES: readonly string[] = [
+  "/events",
+  "/societies",
+  "/talks",
+  "/talks/departments",
+  "/request",
+]
+
+/**
+ * `false` for a link to a page rendered per request (any of its parameter
+ * views too), else Next's default. A next/link prefetches what comes into
+ * view, so a link on every page (the footer, the home page's overview, an
+ * edge-cached event or profile page) to `/events` would cost a function
+ * invocation per view for a payload nobody may open (bot policy 2026-11-03,
+ * as the header since the SEO audit's extra-invocations-per-view).
+ */
+export function dynamicPrefetch(href: string): false | undefined {
+  if (!href.startsWith("/")) return undefined
+  const path = href.split(/[?#]/)[0]
+  return DYNAMIC_PAGES.includes(path) ? false : undefined
+}
+
+/** A next/link's `href` with its `rel` and `prefetch`
+ * (`<Link {...linkProps(href)}>`; a plain `<a>` takes `crawlerTrapRel`). */
+export function linkProps(href: string): {
+  href: string
+  rel?: "nofollow"
+  prefetch?: false
+} {
   const rel = crawlerTrapRel(href)
-  return rel ? { href, rel } : { href }
+  const prefetch = dynamicPrefetch(href)
+  return {
+    href,
+    ...(rel ? { rel } : {}),
+    ...(prefetch === false ? { prefetch } : {}),
+  }
 }

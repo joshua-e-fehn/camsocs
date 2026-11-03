@@ -31,7 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { analyticsContext } from "@/lib/analytics-events"
 import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
-import { crawlerTrapRel } from "@/lib/crawl-traps"
+import { linkProps } from "@/lib/crawl-traps"
 import { categoryHubPath } from "@/lib/directory-hubs"
 import { descriptionAttribution, type ProfileSource } from "@/lib/directory-profile"
 import { groupRuns } from "@/lib/event-runs"
@@ -386,10 +386,9 @@ function DirectoryLink({
 }) {
   return (
     <Link
-      href={href}
       // A filtered directory view is a robots.txt trap (bot policy
       // 2026-11-03); a college's hub is not.
-      rel={crawlerTrapRel(href)}
+      {...linkProps(href)}
       className={cn(
         "underline decoration-foreground/20 underline-offset-4 hover:decoration-primary",
         className,
@@ -687,7 +686,10 @@ export function OrgProfile({
           <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
             <ol className="flex flex-wrap items-center gap-x-2">
               <li>
-                <Link href="/societies" className={cn("hover:text-foreground", PHONE_TARGET)}>
+                <Link
+                  {...linkProps("/societies")}
+                  className={cn("hover:text-foreground", PHONE_TARGET)}
+                >
                   Societies
                 </Link>
               </li>
@@ -978,7 +980,7 @@ export function OrgProfile({
               className="scroll-mt-[calc(var(--site-header-height,4rem)+4rem)]"
               action={
                 <Link
-                  href={calendarHref}
+                  {...linkProps(calendarHref)}
                   className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-8"
                 >
                   In the calendar
@@ -1002,7 +1004,7 @@ export function OrgProfile({
               )}
               {runs.length > UPCOMING_RUNS_SHOWN && (
                 <Link
-                  href={calendarHref}
+                  {...linkProps(calendarHref)}
                   className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline-offset-4 hover:underline"
                 >
                   All {events.length} upcoming events in the calendar

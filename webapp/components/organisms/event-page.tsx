@@ -69,7 +69,7 @@ export function EventPage({
           className="mx-auto flex w-full max-w-7xl items-center gap-1.5 px-4 py-3 text-sm text-muted-foreground sm:px-6"
         >
           <Link
-            href={underTalks ? "/talks" : calendar.path}
+            {...linkProps(underTalks ? "/talks" : calendar.path)}
             className="inline-flex min-h-11 items-center gap-1 underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-8"
           >
             <ArrowLeftIcon aria-hidden className="size-3.5 sm:hidden" />
@@ -239,7 +239,7 @@ export function EventUnavailable({ path }: { path: string }) {
         </span>
       </p>
       <Link
-        href="/events"
+        {...linkProps("/events")}
         className="inline-flex h-11 items-center gap-2 rounded-full border bg-card px-4 text-sm font-medium transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <ArrowLeftIcon aria-hidden className="size-4" />

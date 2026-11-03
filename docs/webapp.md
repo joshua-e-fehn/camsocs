@@ -255,6 +255,13 @@ read. What makes that work, and what keeps it working:
   dynamic (`/societies`, `/events`, `/talks`, `/talks/departments`, `/request`), with their reads
   cached. A cached page can be up to twice that behind the database; the interactive pages' live
   queries catch up once hydrated.
+- **No prefetch of a dynamic page from a link on every page** (bot policy 2026-11-03). A
+  next/link prefetches what comes into view, and a prefetch of one of the pages above is a server
+  render. The header's sections, the footer, the home page's overview and "Try" links, the event
+  and talk pages' breadcrumbs and a profile's calendar and filter links are `prefetch={false}` for
+  them (the header by its `NAV` list, the rest through `lib/crawl-traps.ts` `linkProps` /
+  `dynamicPrefetch`, which also sets a crawler trap's `rel="nofollow"`); links to cached pages
+  keep Next's default.
 - **Dynamic segments build nothing** (`generateStaticParams` returns `[]` on `/societies/[slug]`,
   `/events/[key]`, `/categories/[category]`, `/talks/[key]`, `/talks/events/[key]`): each page is
   rendered on its first request, so `next build` never reads Convex for them. Pages without a

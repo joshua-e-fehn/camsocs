@@ -451,7 +451,7 @@ export default async function HomePage() {
               .map((column) => (
                 <li key={column.school} className="flex min-w-0">
                   <Link
-                    href={`/talks?school=${column.school}`}
+                    {...linkProps(`/talks?school=${column.school}`)}
                     className="group flex min-h-12 min-w-0 flex-1 flex-col justify-center border-b py-3 focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     <span className="flex items-baseline justify-between gap-2.5">

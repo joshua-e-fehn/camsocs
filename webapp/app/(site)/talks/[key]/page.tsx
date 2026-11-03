@@ -8,6 +8,7 @@ import { TrackView } from "@/components/molecules/track-view"
 import { api } from "@/convex/_generated/api"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { londonIsoDate } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
 import { SITE_URL } from "@/lib/site"
@@ -84,7 +85,7 @@ export default async function TalkPage({ params }: Props) {
           className="mx-auto flex w-full max-w-7xl items-center gap-1.5 px-4 py-3 text-sm text-muted-foreground sm:px-6"
         >
           <Link
-            href="/talks"
+            {...linkProps("/talks")}
             className="inline-flex min-h-11 items-center gap-1 underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-8"
           >
             <ArrowLeftIcon aria-hidden className="size-3.5 sm:hidden" />
@@ -94,7 +95,7 @@ export default async function TalkPage({ params }: Props) {
             <>
               <ChevronRightIcon aria-hidden className="hidden size-3.5 sm:block" />
               <Link
-                href={talksHref({ dept: department.slug })}
+                {...linkProps(talksHref({ dept: department.slug }))}
                 className="hidden min-h-8 items-center underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex"
               >
                 {department.shortName}
@@ -135,7 +136,7 @@ export default async function TalkPage({ params }: Props) {
               </p>
               <div className="flex flex-col gap-2">
                 <Link
-                  href={talksHref({ dept: department.slug })}
+                  {...linkProps(talksHref({ dept: department.slug }))}
                   className="inline-flex h-11 items-center justify-between gap-2 rounded-full border px-4 text-sm font-medium transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
                 >
                   All its talks
