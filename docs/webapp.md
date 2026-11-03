@@ -172,7 +172,7 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              messages and stacks, frame paths only (browser and server)
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
-                             notice), force-layout, format
+                             notice + send log), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
@@ -779,15 +779,54 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, best non-personal address, held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
 | `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
-| `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove` |
+| `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
 | `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
 | `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status, the latest `coverage` snapshot, the latest resolve stage's `quarantine` counts), `refreshCoverage` (schedules the fold now) |
 | `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?, eventKeys?, name?})` (remove / object → suppressions, enforced at once; `event` and `name` need no listing) |
 | `broker/suppressions` | `list({orgKey?})` (an address shows only as `contact: true`), `lift({key})` |
 | `broker/session` | `me` |
+
+### Sending the Art 14 notice
+
+The phase-2 outreach email is also each society's UK GDPR Art 14 notice (J7). Nothing in the app
+sends it; the broker sends it and records what went out, which is the Art 5(2) evidence of who
+was told and when. Send it by **9 Nov 2026**: Art 14(3)(a) allows one month from the 9 Oct
+harvest that collected the data.
+
+1. **Export.** `/dashboard/reports` → "Download outreach CSV": one row per listed, non-suppressed
+   society with an outreach address (`lib/broker/outreach.ts`). The address is a role address
+   (`email`, with `role` and `email_kind`); personal CRSid, lists.cam.ac.uk and webmail
+   addresses are never chosen. A society that publishes only those, or no address at all, is
+   left out of the CSV and counted under "No outreach address", complete listing or not; it needs
+   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   empty.
+2. **Send** from the published contact address (`CONTACT_EMAIL`, set up as a "Send mail as"
+   address so replies reach it) with a mail merge over the CSV, in batches of a few hundred a
+   day. Send one test to your own @cam.ac.uk address first and check where it lands.
+3. **Log.** In the sheet, put the date each row went out in `sent_on` (`YYYY-MM-DD`; a UK
+   `DD/MM/YYYY` is read too) and leave rows not sent empty. Put `yes` in `bounced` for each
+   bounce. Download it as CSV and use "Import send log" on the same page. Any bad row stops the
+   whole file with the row named; nothing is recorded until it is fixed. A minimal log with just
+   `org_key,email,sent_on,bounced` works as well.
+4. **Bounces.** A bounce becomes a follow-up on the interaction ("Send the notice to the next
+   role address, or find another route"). Send it to the next address, add that row to the log
+   and import again: rows already recorded are left as they are, and a bounce is never undone.
+   An interaction you have edited since (a reply, a new address) is not overwritten.
+5. **Other routes.** For each society under "No outreach address", send the notice (the
+   "Notice" button copies its text) through its contact form or social account, then add an
+   interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice
+   (outreach) sent via … on YYYY-MM-DD". That is the record for those societies; the import
+   takes email sends only.
+
+`sent_on` must fall between 1 Oct 2026 and today. A date outside that, usually a sheet in a US
+locale that wrote 5 Nov as `11/5/2026`, stops the import with the row named; a file with an
+unclosed quote is refused as a whole.
+
+Each recorded send is an `email` interaction on the organisation ("Art 14 notice (outreach) sent
+to … on …"), shown in its drawer and under Interactions.
 
 ## Ingestion API (pipeline only)
 

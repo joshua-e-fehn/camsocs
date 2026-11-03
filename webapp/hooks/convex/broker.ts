@@ -116,6 +116,7 @@ export function useBrokerInteractionMutations() {
     update: useMutation(api.broker.interactions.update),
     completeFollowUp: useMutation(api.broker.interactions.completeFollowUp),
     remove: useMutation(api.broker.interactions.remove),
+    recordSendLog: useMutation(api.broker.interactions.recordSendLog),
   }
 }
 
