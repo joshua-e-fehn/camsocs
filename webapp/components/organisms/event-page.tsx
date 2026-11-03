@@ -224,8 +224,8 @@ function FromUniversity({ listingUrl }: { listingUrl?: string }) {
 }
 
 /** The page of an event this viewer may not see (taken down since the
- * proxy's check, or Cambridge-only): says so, with the sign-in. */
-/** With the @cam.ac.uk sign-in link off, says a Cambridge-only event stays
+ * proxy's check, or Cambridge-only): says so, with the @cam.ac.uk sign-in
+ * while that link is on; with it off, says a Cambridge-only event stays
  * hidden rather than offering a sign-in that cannot happen (ENG-35). */
 export function EventUnavailable({ path, camSignIn }: { path: string; camSignIn: boolean }) {
   return (

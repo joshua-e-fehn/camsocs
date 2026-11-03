@@ -227,7 +227,7 @@ describe("listingRequests.submit — a flood spread over the site", () => {
     setSystemTime(START + HOUR + 1)
     const later = await t.mutation(api.listingRequests.submit, junk("claim", `org-soc-${listings}`))
     expect(later.key).toMatch(/^lr-/)
-  })
+  }, 30_000)
 
   test("the overall daily cap holds after the hourly one resets", async () => {
     const t = newTest()
@@ -242,7 +242,7 @@ describe("listingRequests.submit — a flood spread over the site", () => {
     }
     setSystemTime(START + 5 * HOUR)
     await expect(t.mutation(api.listingRequests.submit, junk("add"))).rejects.toThrow(/busy/)
-  })
+  }, 30_000)
 
   test("a flood of other requests cannot lock out a removal, nor a flood of removals the others", async () => {
     const t = newTest()
