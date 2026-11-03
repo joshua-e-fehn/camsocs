@@ -378,14 +378,18 @@ code /events 'Mozilla/5.0 (compatible; Googlebot/2.1)'  # 200
 code /talks 'Mozilla/5.0 (Macintosh)'          # 200 (browser)
 ```
 
-One assumption to confirm live, then record here:
+Checked live when the rules were applied (2026-11-03, firewall config v10):
 
-- **A.** `raw_path` includes the query string, so `raw_path re \?` matches any URL
-  with one. If `/about?x=1` above answers 200, it does not. The fallback is
-  safe: every route that reads search parameters is in `UNCACHED_PATHS`, so a
-  missing `raw_path` query only lets T3 read cached pages with an ignored
-  query, and the `_rsc` group still covers Next's RSC fetches; drop the
-  `raw_path` groups or replace them.
+- **A. Does not hold.** `raw_path` carries no query string: `/about?x=1` answers
+  200 to GPTBot. The fallback is safe and was confirmed live: every route that
+  reads search parameters is in `UNCACHED_PATHS`, and a cached page with an
+  unknown query is still an edge-cache HIT (`/about?x=…`, `/?z=…` and
+  `/societies/<slug>?y=…` all answered `x-vercel-cache: HIT`), so it costs no
+  function; robots.txt's `Disallow: /*?` asks T3 not to fetch them at all. The
+  `raw_path` groups match nothing and can be dropped in the next regeneration.
+- All the other checks above answered as listed; the order is bypass first,
+  then the training, probes/scrapers, `/talks` and rate-limit rules, with Bot
+  Protection in log.
 
 Settled by Vercel's documentation and schema:
 
