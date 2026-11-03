@@ -16,7 +16,7 @@ import { eventHasEnded, eventTrail } from "@/lib/events"
 import type { EventPublic } from "@/lib/public-api"
 import { camSignInHref, SITE_URL } from "@/lib/site"
 import { eventPath } from "@/lib/talks-boundary"
-import { EMPTY_EVENTS, eventsHref } from "@/lib/url-state"
+import { EMPTY_EVENTS, eventsHref, eventsIndexing } from "@/lib/url-state"
 
 /**
  * An event's own, shareable page (talks-redesign-spec §6 "/events"): what the
@@ -50,10 +50,13 @@ export function EventPage({
   const lead = hosts[0]
   const ended = eventHasEnded(event, now)
   // An ended University listing (ENG-24) points on to the University's view.
+  // The lead society's link is its calendar's canonical, `/events?org=<slug>`
+  // (four weeks, no other parameter), which robots.txt allows; any other
+  // slice of it is a crawler trap (bot policy 2026-11-03).
   const upcomingHref = event.fromUniversity
     ? eventsHref({ ...EMPTY_EVENTS, university: "only" })
     : lead
-      ? eventsHref({ ...EMPTY_EVENTS, org: lead.slug })
+      ? eventsIndexing({ ...EMPTY_EVENTS, org: lead.slug }).canonical
       : "/events"
   const correctHref = `/request?${new URLSearchParams({
     kind: "correct",
@@ -233,7 +236,7 @@ export function EventUnavailable({ path, camSignIn }: { path: string; camSignIn:
           <span>
             It may have been taken down, or it is a Cambridge-only event:{" "}
             <Link
-              href={camSignInHref(path)}
+              {...linkProps(camSignInHref(path))}
               className="font-medium text-foreground underline underline-offset-4"
             >
               sign in with your @cam.ac.uk email

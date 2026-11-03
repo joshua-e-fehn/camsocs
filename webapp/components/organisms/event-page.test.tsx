@@ -86,6 +86,31 @@ describe("the event page's correction link", () => {
   })
 })
 
+describe("the event page's society calendar link (bot policy 2026-11-03)", () => {
+  test("is the society calendar's canonical, followed and crawlable", () => {
+    const html = render(EVENT)
+    const tags = [...html.matchAll(/<a [^>]*href="(\/events\?[^"]*)"[^>]*>/g)]
+    expect(tags.length).toBeGreaterThan(0)
+    for (const [tag, href] of tags) {
+      expect(href.replaceAll("&amp;", "&")).toBe("/events?org=invented-society")
+      expect(crawlerTrapRel(href)).toBeUndefined()
+      expect(tag).not.toMatch(/rel="nofollow"/)
+    }
+  })
+
+  test("is the same link once the event has ended", () => {
+    const html = render({
+      ...EVENT,
+      startsAt: NOW - 86_400_000,
+      endsAt: NOW - 82_800_000,
+    } as EventPublic)
+    expect(html).toContain("This event has ended.")
+    const hrefs = [...html.matchAll(/<a [^>]*href="(\/events\?[^"]*)"/g)].map((m) => m[1])
+    expect(hrefs.length).toBeGreaterThanOrEqual(2)
+    for (const href of hrefs) expect(href).toBe("/events?org=invented-society")
+  })
+})
+
 describe("the event page's poster (mobile-lcp-js-weight)", () => {
   test("is fetched first and never lazily: it is the likely LCP element", () => {
     const html = render({
