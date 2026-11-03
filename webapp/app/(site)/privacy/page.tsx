@@ -53,11 +53,16 @@ export const metadata: Metadata = pageMetadata({
  * "If we have not written to you" and "Changes" say "we are writing"; put
  * them back in the present tense once it has gone out. "If we have not
  * written to you" is the published side of the Art 14(5)(e) assessment
- * (dpia-lite §4), and the faith, political and LGBTQ+ officers sentence
- * follows the Art 9 assessment (dpia-lite §5, decision pending, ENG-42): if
- * those names are dropped, say so there. The regulator is the Information
- * Commission (the ICO until 30 September 2026): each mention gives the old
- * name too, as the Art 14 notice (lib/broker/outreach.ts) should.
+ * (dpia-lite §4), and the faith, political, LGBTQ+, ethnic, national, health
+ * and disability society officers sentences
+ * follow the Art 9 decision (dpia-lite §5, ENG-42, 3 November 2026): such
+ * names are kept under Art 9(2)(e), only as the society's own pages list its
+ * officers, never published or passed to a partner without the officer's
+ * agreement; if that changes (the names dropped, another source), change
+ * "Committee members" and the lawful basis here too. The regulator is the
+ * Information Commission (the ICO until 30 September 2026): each mention
+ * gives the old name too, as the Art 14 notice (lib/broker/outreach.ts)
+ * should.
  */
 export default function PrivacyPage() {
   const contact = CONTACT_EMAIL ? (
@@ -147,9 +152,13 @@ export default function PrivacyPage() {
           names and roles in private notes, used to contact societies and to make introductions
           between them and possible partners. These notes are not public, are marked out of date
           after each year’s handover, and are deleted on the schedule below. Some societies are
-          about a faith, a political view or LGBTQ+ identity, so being named as one of their
-          officers can itself say something about a person. Such names are never published, nothing
-          is inferred from them, and you can ask for yours to be deleted at any time.
+          about a faith, a political view, LGBTQ+ identity, or an ethnic, national, health or
+          disability identity, so being named as one of their officers can itself say something
+          about a person. We keep such names only as the society’s own pages list its officers, on
+          the basis that the officers made them public there (UK GDPR Article 9(2)(e)). They are
+          never published, nothing is inferred from them, they are not passed to a partner without
+          the officer’s agreement, and you can object or ask for yours to be deleted and kept out at
+          any time (see <a href="#rights">Your rights</a>).
         </p>
         <h3>Society mailing lists</h3>
         <p>
@@ -285,8 +294,11 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Private notes for contacting societies and making introductions</strong> between
-            them and possible partners: legitimate interests. We do not send marketing email without
-            the consent the law requires, and every message says how to opt out.
+            them and possible partners: legitimate interests. For officers of faith, political,
+            LGBTQ+ and ethnic, national, health or disability societies, also that the officers made
+            their names public on the society’s own pages (Article 9(2)(e)). We do not send
+            marketing email without the consent the law requires, and every message says how to opt
+            out.
           </li>
           <li>
             <strong>Answering requests and complaints</strong>: legitimate interests, and our legal
