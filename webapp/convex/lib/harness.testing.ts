@@ -28,6 +28,7 @@ const appModules = {
   "./orgs.ts": () => import("../orgs"),
   "./retention.ts": () => import("../retention"),
   "./runs.ts": () => import("../runs"),
+  "./sitemap.ts": () => import("../sitemap"),
   "./talks.ts": () => import("../talks"),
   "./termDates.ts": () => import("../termDates"),
   "./venues.ts": () => import("../venues"),

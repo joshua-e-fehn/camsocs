@@ -1,14 +1,22 @@
 import {
   addDays,
+  DAY_MS,
   formatDayShort,
   formatEventWhen,
   londonIsoDate,
+  londonMidnight,
   londonTime,
   spanEndOf,
 } from "./calendar"
 import type { CategoryTone } from "./category-tone"
 import { universityListingLine, utcStamp } from "./ics"
+import { summary } from "./rich-text"
+import { MAX_TITLE_LENGTH, TITLE_SUFFIX } from "./site"
+import { breadcrumbList, eventId, organizationId, pageId, WEBSITE_ID } from "./structured-data"
+import { physicalVenue } from "./talks"
+import { isTalksCamUrl } from "./talks-boundary"
 import { TERM_SHORT, type TermDatesRow, termWeekOf } from "./term-week"
+import { EMPTY_EVENTS, eventsHref } from "./url-state"
 import { EVENT_TYPE_LABELS, type EventType } from "./vocab"
 import { type DayCount, termWeekTag } from "./week-strip"
 
@@ -113,6 +121,18 @@ export function eventTimes(event: Timed): { start: string; end?: string } {
   if (until) return { start, end: until }
   if (event.endsAt === undefined || event.endsAt <= event.startsAt) return { start }
   return { start, end: londonTime(event.endsAt) }
+}
+
+/** Two lists of events as one, by start time; a key in both appears once. */
+export function mergeByStart<T extends { key: string; startsAt: number }>(
+  first: readonly T[],
+  second: readonly T[],
+): T[] {
+  if (second.length === 0) return [...first]
+  const seen = new Set(first.map((event) => event.key))
+  return [...first, ...second.filter((event) => !seen.has(event.key))].sort(
+    (a, b) => a.startsAt - b.startsAt,
+  )
 }
 
 /** The week strip's days with how many events each lists (`byDay`, as
@@ -300,11 +320,156 @@ export function eventOutlookCalendarUrl(
 
 // --- the event's page ---------------------------------------------------------------------
 
-/** The page's meta description: type, when, where, who. */
-export function eventMetaDescription(
-  event: CalendarEvent & { eventType: EventType },
-  venueName?: string,
-): string {
+/** What the page, its metadata and its JSON-LD read of an event (`EventPublic`
+ * has all of it; the tests pass less). */
+export type PageEvent = Omit<CalendarEvent, "organisers"> & {
+  eventType: EventType
+  organisers: readonly (Organiser & { key?: string; slug?: string })[]
+  status?: string
+  visibility?: string
+  source: string
+  sourceUrl?: string
+  externalUrl?: string
+  bookingUrl?: string
+  description?: string
+  imageUrl?: string
+  price?: { free: boolean; minPence?: number; maxPence?: number; text?: string }
+  speakers?: readonly { name: string; affiliation?: string }[]
+  meta?: Record<string, { status?: string } | undefined>
+  /** Convex's talks-boundary verdict (lib/talks-boundary.ts). */
+  talksDerived: boolean
+}
+
+/** A venue resolved from the event's `venueKey` (`venues.get`). */
+export type EventVenue = {
+  name: string
+  address?: string
+  /** A college venue: in Cambridge by definition. */
+  collegeKey?: string
+  lat?: number
+  lng?: number
+}
+
+/** Cambridge, generously: the city and its edges (Girton, the West Cambridge
+ * site, Addenbrooke's). A venue inside it is a Cambridge venue. */
+const CAMBRIDGE_BOUNDS = { south: 52.15, north: 52.26, west: 0.03, east: 0.22 }
+const NAMES_CAMBRIDGE = /\bcambridge\b/i
+
+/**
+ * Whether an event's place is known to be in Cambridge, so the JSON-LD may
+ * say so (review of 2026-11-02: never assert a town no source gave). A keyed
+ * venue that is a college's, whose coordinates fall in the city or whose
+ * address names it; else a venue text that names Cambridge. An away fixture
+ * written as a place ("Iffley Road, Oxford") is not.
+ */
+export function placeIsInCambridge(venue: EventVenue | undefined, venueText?: string): boolean {
+  if (venue) {
+    if (venue.collegeKey) return true
+    const { lat, lng } = venue
+    if (
+      lat !== undefined &&
+      lng !== undefined &&
+      lat >= CAMBRIDGE_BOUNDS.south &&
+      lat <= CAMBRIDGE_BOUNDS.north &&
+      lng >= CAMBRIDGE_BOUNDS.west &&
+      lng <= CAMBRIDGE_BOUNDS.east
+    ) {
+      return true
+    }
+    return NAMES_CAMBRIDGE.test(venue.address ?? "") || NAMES_CAMBRIDGE.test(venue.name)
+  }
+  return NAMES_CAMBRIDGE.test(venueText ?? "")
+}
+
+/** The organisers who run it — none for someone else's event it only takes
+ * part in (D6), never a sponsor. */
+function runners(event: Pick<PageEvent, "organisers" | "hosting">): PageEvent["organisers"] {
+  return event.hosting === "takes_part"
+    ? []
+    : event.organisers.filter((organiser) => organiser.role !== "sponsor")
+}
+
+/** When an event is over: its end, else the end of its (London) day — an
+ * event with no end time is "on" all its day. */
+export function eventEnd(event: Timed): number {
+  if (event.endsAt !== undefined && event.endsAt > event.startsAt) return event.endsAt
+  return londonMidnight(addDays(londonIsoDate(event.startsAt), 1))
+}
+
+/** Owner decision G4: an event's page says it has ended once it has, and is
+ * marked noindex this long after (the page stays, and keeps its links, until
+ * retention purges it — then its URL is a 404). */
+export const ENDED_NOINDEX_MS = 30 * DAY_MS
+
+export function eventHasEnded(event: Timed, now: number): boolean {
+  return eventEnd(event) <= now
+}
+
+/** Whether search engines should drop the page: ended over 30 days ago (G4). */
+export function eventEndedLongAgo(event: Timed, now: number): boolean {
+  return now - eventEnd(event) > ENDED_NOINDEX_MS
+}
+
+/** A document title, at most this long with the " · camsocs" the layout's
+ * template adds (owner decision G2's limit, applied to events too). */
+export const TITLE_MAX = MAX_TITLE_LENGTH
+
+/** `text` cut at a word to at most `max` characters, ending in "…". */
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max - 1)
+  const space = cut.lastIndexOf(" ")
+  const words = space > max * 0.5 ? cut.slice(0, space) : cut
+  return `${words.replace(/[\s,;:.–—-]+$/, "")}…`
+}
+
+/**
+ * The page's document title (SEO audit "event-titles-generic"): the event, who
+ * runs it and the day — "The Union Ball – Cambridge Union Society, Fri 6 Nov"
+ * — because a bare title ("Open training session", "Hunstanton") repeats
+ * across nights and societies. Each night keeps its own page and title (a
+ * distinct Event); the day tells them apart. At most `TITLE_MAX` characters:
+ * the " · camsocs" suffix goes first (`absolute`), then the host, then the
+ * title is cut at a word. A host already named in the title is not repeated.
+ * For one of the University's own listings the host is the University.
+ */
+export function eventPageTitle(event: PageEvent): { title: string; absolute: boolean } {
+  const name = `${event.cancelled ? "Cancelled: " : ""}${spokenTitle(event.title)}`
+  // The University's own listing (ENG-24) has no organisers here: its host is
+  // the University, as the description, row and JSON-LD say.
+  const host = event.fromUniversity ? UNIVERSITY_NAME : runners(event)[0]?.name
+  const day = formatDayShort(londonIsoDate(event.startsAt))
+  const withHost =
+    host && !name.toLowerCase().includes(host.toLowerCase())
+      ? `${name} – ${host}, ${day}`
+      : undefined
+  const plain = `${name}, ${day}`
+  for (const title of [withHost, plain]) {
+    if (!title) continue
+    if (title.length + TITLE_SUFFIX.length <= TITLE_MAX) return { title, absolute: false }
+    if (title.length <= TITLE_MAX) return { title, absolute: true }
+  }
+  return { title: `${clip(name, TITLE_MAX - day.length - 2)}, ${day}`, absolute: true }
+}
+
+/** "Tue 3 Nov 2026, 19:30–22:00": `formatEventWhen` with the year, which a
+ * search result shows without the page's context. */
+function whenWithYear(event: Timed): string {
+  const when = formatEventWhen(event)
+  const day = londonIsoDate(event.startsAt)
+  const head = formatDayShort(day)
+  return when.startsWith(head) ? `${head} ${day.slice(0, 4)}${when.slice(head.length)}` : when
+}
+
+/** A meta description's length: what search results show before cutting. */
+const DESCRIPTION_MAX = 160
+
+/**
+ * The page's meta description: type, who, when (with the year), where — the
+ * venue named by its key too — then as much of the event's own description
+ * as fits in about 160 characters.
+ */
+export function eventMetaDescription(event: PageEvent, venueName?: string): string {
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
   const who = event.fromUniversity
     ? `listed by the ${UNIVERSITY_NAME}`
@@ -313,34 +478,192 @@ export function eventMetaDescription(
       : event.hosting === "takes_part"
         ? `with ${names.join(", ")} taking part`
         : `by ${names.join(", ")}`
-  const where = event.venueText ?? venueName
+  const where = usableVenueText(event.venueText) ?? venueName
   const lead = `${EVENT_TYPE_LABELS[event.eventType]}${who ? ` ${who}` : ""}`
-  return [lead, formatEventWhen(event), where].filter(Boolean).join(" · ")
+  const facts = [lead, whenWithYear(event), where].filter(Boolean).join(" · ")
+  const room = DESCRIPTION_MAX - facts.length - 2
+  const about = event.description && room >= 40 ? summary(event.description, room) : ""
+  return about ? `${facts}. ${about}` : facts
 }
 
-/** schema.org `Event` for an event's page. Organisers are named only when
- * they run it (never for an event they only take part in, decision D6); one
- * of the University's own listings names the University (ENG-24), and its
- * `sameAs` is the University's page for it. */
-export function eventJsonLd(
-  event: CalendarEvent & { externalUrl?: string },
-  pageUrl: string,
-  venueName?: string,
-): Record<string, unknown> {
-  const where = event.venueText ?? venueName
-  const day = londonIsoDate(event.startsAt)
-  const organisers =
-    event.hosting === "takes_part"
-      ? []
-      : event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
+/** Venue texts that name no place: a fixture's side, a placeholder. */
+const NO_PLACE =
+  /^\W*(?:(?:home|away)(?:\s+(?:game|match|fixture))?|tb[ac]|to be (?:confirmed|announced)|various|n\/?a)\W*$/i
+
+/** The venue text when it names a place; undefined for "Home Game", "TBC"… */
+export function usableVenueText(text: string | undefined): string | undefined {
+  const trimmed = text?.trim()
+  return trimmed && !NO_PLACE.test(trimmed) ? trimmed : undefined
+}
+
+/** Whether the venue text only names a meeting service ("Zoom", "Online"),
+ * as talks are read (lib/talks.ts `physicalVenue`). */
+export function isOnlineOnly(text: string | undefined): boolean {
+  return !!text && physicalVenue(text) === null
+}
+
+/** URL path endings that are a file, not a page about one event. */
+const FILE_PATH = /\.(?:ics|ical|png|jpe?g|gif|webp|svg|pdf|docx?|pptx?)$/i
+/** Calendar feeds by host and path. */
+const FEED = [
+  /^calendar\.google\.com$/i,
+  /^(?:api\.)?lu\.ma$/i,
+  /^outlook\.(?:live|office|office365)\.com$/i,
+]
+
+/**
+ * Whether `url` can be the `sameAs` of one event (SEO audit
+ * "event-sameas-misuse"): an http(s) page, not a file (a poster, an `.ics`
+ * feed, a PDF term card), not a calendar feed, never talks.cam (G1). A page
+ * shared by many events (a fixtures list, a society's "talks" page) cannot be
+ * told apart here, so callers pass only URLs that belong to the event: its
+ * own page (`externalUrl`) or a per-event listing (Camdram, Luma, the SU).
+ */
+export function isEventIdentityUrl(url: string | undefined): url is string {
+  if (!url) return false
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+  if (isTalksCamUrl(url)) return false
+  if (FILE_PATH.test(parsed.pathname)) return false
+  if (FEED.some((host) => host.test(parsed.hostname)) && /ical|\/ics|\.ics/i.test(url)) return false
+  return parsed.pathname.replace(/\/+$/, "") !== ""
+}
+
+/** Sources whose `sourceUrl` is the event's own listing page, one per event
+ * (a show on Camdram, an event on Luma or the SU's what's-on, the
+ * University's own listing, ENG-24). Others
+ * (a society's calendar feed, website or term card) list many events. */
+const PER_EVENT_SOURCES = new Set(["camdram", "luma", "su_whatson", "uni_events_api"])
+
+/** The event's `sameAs`, if one of its URLs is a page about it alone. */
+export function eventSameAs(event: PageEvent): string | undefined {
+  if (isEventIdentityUrl(event.externalUrl)) return event.externalUrl
+  if (PER_EVENT_SOURCES.has(event.source) && isEventIdentityUrl(event.sourceUrl)) {
+    return event.sourceUrl
+  }
+  return undefined
+}
+
+/** A title that says its date is not settled ("Formal (DATE TBC)"). */
+const TBC_TITLE = /\b(?:date\s+)?(?:tbc|tba)\b|to be (?:confirmed|announced)/i
+
+/** What `eventHasStructuredData` reads: fields an event's page
+ * (`EventPublic`) and a list item (`EventListItem`) both carry. */
+export type StructuredDataFacts = {
+  title: string
+  visibility?: string
+  status?: string
+  meta?: { startsAt?: { status?: string } }
+  talksDerived: boolean
+}
+
+/**
+ * Whether an event's page carries schema.org JSON-LD (SEO audit
+ * "event-tbc-marked-scheduled"): only a public, confirmed event with a start
+ * time that was read, not inferred, and whose title does not say "TBC" —
+ * an Event rich result with a guessed date would mislead. Never a
+ * talks.cam-derived event (owner decision G1). Over a list item too, so a
+ * profile links by `@id` only the Event nodes that exist
+ * (lib/directory-profile.ts `jsonLdEvents`).
+ */
+export function eventHasStructuredData(event: StructuredDataFacts): boolean {
+  return (
+    event.visibility === "public" &&
+    (event.status ?? "confirmed") === "confirmed" &&
+    event.meta?.startsAt?.status !== "inferred" &&
+    !TBC_TITLE.test(event.title) &&
+    !event.talksDerived
+  )
+}
+
+/** schema.org `Place` / `VirtualLocation` for an event: the venue its key
+ * names (with its address and coordinates) before the source's venue text,
+ * and nothing for a text that names no place ("Home Game", "TBC"). The town
+ * only when it is known to be Cambridge (`placeIsInCambridge`); an online
+ * event's VirtualLocation only where one joins it (its booking link) — our
+ * own page is not where anyone attends (review of 2026-11-02). */
+function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
+  if (!venue && isOnlineOnly(event.venueText)) {
+    return event.bookingUrl ? { "@type": "VirtualLocation", url: event.bookingUrl } : undefined
+  }
+  const name = venue?.name ?? usableVenueText(event.venueText)
+  if (!name) return undefined
+  const local = placeIsInCambridge(venue, event.venueText)
+  const address = {
+    ...(venue?.address ? { streetAddress: venue.address } : {}),
+    ...(local
+      ? { addressLocality: "Cambridge", addressRegion: "Cambridgeshire", addressCountry: "GB" }
+      : {}),
+  }
   return {
-    "@context": "https://schema.org",
+    "@type": "Place",
+    name,
+    ...(Object.keys(address).length > 0
+      ? { address: { "@type": "PostalAddress", ...address } }
+      : {}),
+    ...(venue?.lat !== undefined && venue.lng !== undefined
+      ? { geo: { "@type": "GeoCoordinates", latitude: venue.lat, longitude: venue.lng } }
+      : {}),
+  }
+}
+
+/** schema.org `Offer` from the structured price only (never its free text):
+ * free → 0; a range → low and high. */
+function eventOffers(event: PageEvent, pageUrl: string) {
+  const price = event.price
+  if (!price) return undefined
+  const offer = {
+    "@type": "Offer",
+    url: event.bookingUrl ?? pageUrl,
+    priceCurrency: "GBP",
+  }
+  if (price.free) return { ...offer, price: 0 }
+  const { minPence: min, maxPence: max } = price
+  if (min !== undefined && max !== undefined && max > min) {
+    return { ...offer, "@type": "AggregateOffer", lowPrice: min / 100, highPrice: max / 100 }
+  }
+  const one = min ?? max
+  return one === undefined ? undefined : { ...offer, price: one / 100 }
+}
+
+/**
+ * schema.org `Event` for an event's page, as a node of the site's graph
+ * (`@id` from lib/structured-data.ts). Organisers are named — and linked to
+ * their profile's Organization — only when they run it, never for an event
+ * they only take part in (D6). Speakers are performers only for a talk or
+ * workshop (D1 publishes them only there). One of the University's own
+ * listings names the University instead (ENG-24); its `sameAs` is the
+ * University's page for it. Callers check `eventHasStructuredData` first.
+ */
+export function eventJsonLd(
+  event: PageEvent & { key: string },
+  pageUrl: string,
+  venue?: EventVenue,
+): Record<string, unknown> {
+  const day = londonIsoDate(event.startsAt)
+  const online = !venue && isOnlineOnly(event.venueText)
+  const location = eventLocation(event, venue)
+  const offers = eventOffers(event, pageUrl)
+  const sameAs = eventSameAs(event)
+  const organizers = runners(event)
+  const performers =
+    (event.eventType === "talk" || event.eventType === "workshop") && event.speakers
+      ? event.speakers
+      : []
+  const description = event.description ? summary(event.description, 300) : ""
+  return {
     "@type": "Event",
+    "@id": eventId(event.key),
     name: event.title,
     url: pageUrl,
-    ...(event.externalUrl || event.sourceUrl
-      ? { sameAs: event.externalUrl ?? event.sourceUrl }
-      : {}),
+    ...(description ? { description } : {}),
+    ...(event.imageUrl ? { image: [event.imageUrl] } : {}),
+    ...(sameAs ? { sameAs } : {}),
     startDate: event.allDay ? day : new Date(event.startsAt).toISOString(),
     ...(event.endsAt !== undefined && event.endsAt > event.startsAt
       ? {
@@ -350,26 +673,160 @@ export function eventJsonLd(
     eventStatus: event.cancelled
       ? "https://schema.org/EventCancelled"
       : "https://schema.org/EventScheduled",
-    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    ...(where
+    eventAttendanceMode: online
+      ? "https://schema.org/OnlineEventAttendanceMode"
+      : "https://schema.org/OfflineEventAttendanceMode",
+    ...(location ? { location } : {}),
+    ...(offers ? { offers } : {}),
+    ...(performers.length > 0
       ? {
-          location: {
-            "@type": "Place",
-            name: where,
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: "Cambridge",
-              addressCountry: "GB",
-            },
-          },
+          performer: performers.map((speaker) => ({
+            "@type": "Person",
+            name: speaker.name,
+            ...(speaker.affiliation
+              ? { affiliation: { "@type": "Organization", name: speaker.affiliation } }
+              : {}),
+          })),
         }
       : {}),
     ...(event.fromUniversity
       ? { organizer: [{ "@type": "Organization", name: UNIVERSITY_NAME, url: UNIVERSITY_URL }] }
-      : organisers.length > 0
+      : organizers.length > 0
         ? {
-            organizer: organisers.map((name) => ({ "@type": "Organization", name })),
+            // A reference to the society's node on its profile, by `@id`.
+            // No `url` here: that node's `url` is the society's own website
+            // (lib/directory-profile.ts societyJsonLd), and one `@id` must not
+            // carry two (integration of the SEO audit lanes, 2026-11-02).
+            organizer: organizers.map((organiser) =>
+              organiser.slug
+                ? {
+                    "@type": "Organization",
+                    "@id": organizationId(organiser.slug),
+                    name: organiser.name,
+                  }
+                : { "@type": "Organization", name: organiser.name },
+            ),
           }
         : {}),
+  }
+}
+
+/**
+ * The visible breadcrumb trail of `/events/<key>` (components/organisms/
+ * event-page.tsx): the calendar, then the event's day on it. The page itself
+ * is the H1, not a crumb; the JSON-LD BreadcrumbList is this trail with the
+ * page appended, so the two say the same (review of the SEO audit,
+ * event-breadcrumb-mismatch).
+ */
+export function eventTrail(event: { startsAt: number }): { name: string; path: string }[] {
+  const day = londonIsoDate(event.startsAt)
+  return [
+    { name: "Events", path: "/events" },
+    { name: formatDayShort(day), path: eventsHref({ ...EMPTY_EVENTS, date: day }) },
+  ]
+}
+
+/**
+ * The page's JSON-LD graph (SEO audit "jsonld-graph-breadcrumbs"): its
+ * WebPage, part of the site's WebSite by `@id`, whose main entity is the
+ * Event, and the BreadcrumbList of the visible trail (`eventTrail`: Events ›
+ * its day) ending with the event. Null when the event gets no structured
+ * data at all.
+ */
+export function eventStructuredData(
+  event: PageEvent & { key: string },
+  venue?: EventVenue,
+): Record<string, unknown> | null {
+  if (!eventHasStructuredData(event)) return null
+  const path = `/events/${event.key}`
+  const pageUrl = pageId(path)
+  const name = spokenTitle(event.title)
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": pageUrl,
+        url: pageUrl,
+        name,
+        isPartOf: { "@id": WEBSITE_ID },
+        mainEntity: { "@id": eventId(event.key) },
+        breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
+      },
+      eventJsonLd(event, pageUrl, venue),
+      breadcrumbList(path, [...eventTrail(event), { name, path }]),
+    ],
+  }
+}
+
+// --- the calendar page (/events) -------------------------------------------------------------
+
+/** The calendar's document title (SEO audit "hub-page-titles-weak"): what a
+ * search for this week's Cambridge events should find. */
+export const EVENTS_TITLE = "What’s on: Cambridge student events this week"
+
+/**
+ * The title of one society's calendar (`/events?org=<slug>`): "Chess Club
+ * events in Cambridge", or without "in Cambridge" when the name says it
+ * already or it would not fit — within `TITLE_MAX`, the " · camsocs" suffix
+ * dropped first (`absolute`).
+ */
+export function orgEventsTitle(name: string): { title: string; absolute: boolean } {
+  const named = /\bcambridge\b/i.test(name)
+  const candidates = [named ? undefined : `${name} events in Cambridge`, `${name} events`]
+  for (const title of candidates) {
+    if (title && title.length + TITLE_SUFFIX.length <= TITLE_MAX) return { title, absolute: false }
+  }
+  for (const title of candidates) {
+    if (title && title.length <= TITLE_MAX) return { title, absolute: true }
+  }
+  return { title: `${clip(name, TITLE_MAX - " events".length)} events`, absolute: true }
+}
+
+/**
+ * The calendar's JSON-LD (SEO audit "listing-itemlist"): a CollectionPage,
+ * part of the site, whose main entity is the URL-only ItemList of the event
+ * pages it shows — the Event itself is on each page, not repeated here. Only
+ * public events (a signed-in reader's Cambridge-only ones are not for
+ * search), never cancelled ones; the list never holds a talks.cam-derived
+ * event (owner decision G1: `events.list` leaves them out).
+ */
+export function eventsListStructuredData({
+  path,
+  name,
+  events,
+}: {
+  /** The page's canonical path: `/events` or `/events?org=<slug>`. */
+  path: string
+  name: string
+  events: readonly {
+    key: string
+    talksDerived: boolean
+    visibility: string
+    cancelled: boolean
+  }[]
+}): Record<string, unknown> {
+  const listed = events
+    .filter((event) => event.visibility === "public" && !event.cancelled)
+    .filter((event) => !event.talksDerived)
+    .slice(0, 100)
+  const pageUrl = pageId(path)
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": pageUrl,
+    url: pageUrl,
+    name,
+    isPartOf: { "@id": WEBSITE_ID },
+    mainEntity: {
+      "@type": "ItemList",
+      itemListOrder: "https://schema.org/ItemListOrderAscending",
+      numberOfItems: listed.length,
+      itemListElement: listed.map((event, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: pageId(`/events/${event.key}`),
+      })),
+    },
   }
 }

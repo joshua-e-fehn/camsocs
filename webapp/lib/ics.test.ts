@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   escapeText,
   eventIcsFile,
+  eventsCalendar,
   foldLine,
   type IcsTalk,
   parseTalkFeedParams,
@@ -252,6 +253,22 @@ describe("eventIcsFile (/events/<key>/ics)", () => {
 
   test("a title with nothing to keep is event.ics", () => {
     expect(eventIcsFile({ ...EVENT, title: "🎉🎉" }, PAGE, NOW).filename).toBe("event.ics")
+  })
+
+  test("the events feed (/events.ics): named, refreshed, one VEVENT per event", () => {
+    const other = { ...EVENT, key: `evt-${"c".repeat(40)}`, title: "Tea" }
+    const body = eventsCalendar([EVENT, other], {
+      name: "CU Boat Club · camsocs",
+      now: NOW,
+      pageUrl: (key) => `https://camsocs.uk/events/${key}`,
+    })
+    for (const line of body.split("\r\n")) expect(octets(line)).toBeLessThanOrEqual(75)
+    const lines = unfold(body).split("\r\n")
+    expect(lines).toContain("X-WR-CALNAME:CU Boat Club · camsocs")
+    expect(lines).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT6H")
+    expect(lines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(2)
+    expect(lines).toContain(`UID:${other.key}@camsocs.uk`)
+    expect(lines).toContain(`URL:https://camsocs.uk/events/${other.key}`)
   })
 
   test("the University's own listing names the programme and its page there (ENG-24)", () => {

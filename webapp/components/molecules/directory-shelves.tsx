@@ -17,10 +17,38 @@ import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/vocab"
  * carries a one-line note on how it is put together. Links into the
  * directory go through `onNavigate` (the URL is the state, updated in place),
  * so a plain click filters without a page load and a modified click still
- * opens a new tab.
+ * opens a new tab. Without `onNavigate` a shelf links elsewhere (the hubs,
+ * owner decision G13) through next/link: a client navigation, not a full
+ * document load, and no viewport prefetch of every tile (as nav-main).
  */
 
 export type Navigate = (href: string, event: React.MouseEvent<HTMLAnchorElement>) => void
+
+/** A tile's link: in place through `onNavigate`, else a next/link. */
+function ShelfLink({
+  href,
+  onNavigate,
+  className,
+  children,
+}: {
+  href: string
+  onNavigate?: Navigate
+  className: string
+  children: React.ReactNode
+}) {
+  if (onNavigate) {
+    return (
+      <a href={href} onClick={(event) => onNavigate(href, event)} className={className}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <Link href={href} prefetch={false} className={className}>
+      {children}
+    </Link>
+  )
+}
 
 function ShelfHeader({
   id,
@@ -129,7 +157,7 @@ export function CategoryTiles({
 }: {
   counts: Record<string, number>
   hrefFor: (category: Category) => string
-  onNavigate: Navigate
+  onNavigate?: Navigate
 }) {
   const categories = CATEGORIES.filter((category) => (counts[category] ?? 0) > 0)
   return (
@@ -145,9 +173,9 @@ export function CategoryTiles({
           const href = hrefFor(category)
           return (
             <li key={category}>
-              <a
+              <ShelfLink
                 href={href}
-                onClick={(event) => onNavigate(href, event)}
+                onNavigate={onNavigate}
                 className="group grid h-full min-h-14 grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-3 transition-colors duration-150 hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:grid-cols-[auto_1fr_auto] sm:p-2.5 sm:pr-3"
               >
                 <span
@@ -165,7 +193,7 @@ export function CategoryTiles({
                 <span className="col-span-2 min-w-0 text-sm leading-tight font-medium text-pretty sm:col-span-1">
                   {CATEGORY_LABELS[category]}
                 </span>
-              </a>
+              </ShelfLink>
             </li>
           )
         })}
@@ -190,7 +218,7 @@ export function CollegeGrid({
   colleges: OrgRef[]
   counts: Record<string, number>
   hrefFor: (collegeKey: string) => string
-  onNavigate: Navigate
+  onNavigate?: Navigate
 }) {
   const [expanded, setExpanded] = useState(false)
   const listed = colleges.filter((college) => (counts[college.key] ?? 0) > 0)
@@ -211,9 +239,9 @@ export function CollegeGrid({
               key={college.key}
               className={cn(!expanded && index >= COLLEGES_FOLDED && "hidden sm:block")}
             >
-              <a
+              <ShelfLink
                 href={href}
-                onClick={(event) => onNavigate(href, event)}
+                onNavigate={onNavigate}
                 className="group flex h-full min-h-14 items-center gap-3 rounded-xl border bg-card p-2.5 pr-3 transition-colors duration-150 hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <span
@@ -227,7 +255,7 @@ export function CollegeGrid({
                 <span className="font-mono text-xs text-muted-foreground tabular-nums">
                   {counts[college.key]}
                 </span>
-              </a>
+              </ShelfLink>
             </li>
           )
         })}

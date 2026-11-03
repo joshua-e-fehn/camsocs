@@ -177,6 +177,12 @@ class Settings(BaseSettings):
         default=DEFAULT_POSTHOG_APP_HOST, validation_alias="POSTHOG_APP_HOST"
     )
 
+    #: Optional IndexNow pings after a load (`indexnow.py`, SEO audit G15):
+    #: the public site's origin, ``https://camsocs.uk`` in pipeline/.env.prod.
+    #: Unset (dev, CI, tests) → nothing is sent: only the production
+    #: deployment's data is what the site shows.
+    indexnow_site_url: str = Field(default="", validation_alias="INDEXNOW_SITE_URL")
+
     @field_validator(
         "convex_url", "convex_http_url", "llm_base_url", "posthog_host", "posthog_app_host"
     )
@@ -193,6 +199,7 @@ class Settings(BaseSettings):
         "meta_graph_version",
         "posthog_env",
         "posthog_project_id",
+        "indexnow_site_url",
     )
     @classmethod
     def _strip(cls, value: str) -> str:

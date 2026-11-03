@@ -86,10 +86,30 @@ export function termWeekLabel(ms: number, terms: readonly TermDates[]): string |
  * dropped — even though nobody says so. A society's events page and a
  * termcard are re-read (from the reply cache) on every run, and their events'
  * keys come from the model's wording and the date, so a renamed or moved
- * event is a new key and the old one must fall behind its page (review
- * 2026-10-10). Mail, posts and manual entries are one-off readings: never.
+ * event is a new key and the old one must fall behind its society's site
+ * (review 2026-10-10; `OWN_SITE_SOURCES`). Mail, posts and manual entries are
+ * one-off readings: never.
  */
 const WHOLE_SOURCE_LISTINGS = new Set(["camdram", "cucbc", "su_whatson"])
+/**
+ * A society's own site — its pages (`website`) and the term cards and posters
+ * those pages show or link (`termcard` read off a page: its listing URL, the
+ * page, differs from its source URL, the card file) — is one listing per
+ * society, keyed by the organisation in the external id (`<org key>:<London
+ * date>:<slug>`), not one per page (ENG-36). The website stage reads the
+ * whole site, its cards included, in one pass each run and leaves out a
+ * card's event the site's own text already lists, on any of its pages; a card
+ * event posted before the site's text listed it would otherwise keep a
+ * listing of its own that nothing sights any more, which withdraws nothing,
+ * and show beside the page's event (the German Society's term card and its
+ * calendar page, 2026-11-02). A card read as a file (a `termcardUrl` that is
+ * the file) is fetched on its own, often from another host, and may go
+ * unread while the site is still read (a failed fetch, the termcards stage's
+ * budget), so it keeps its own listing. An external id without an
+ * organisation falls back to its listing URL.
+ */
+const OWN_SITE_SOURCES = new Set(["website", "termcard"])
+const ORG_SCOPED_ID = /^(org-[a-z0-9-]+):/
 const PER_URL_LISTINGS = new Set([
   "talks_cam",
   "ics",
@@ -110,12 +130,37 @@ export const WITHDRAWN_AFTER_MS = 3 * DAY_MS
  * a one-off source. Its newest sighting is what the event's own `lastSeenAt`
  * is compared with: a listing that is read again re-sights everything it
  * still shows, so an event it dropped falls behind — and a pipeline that
- * stops running stops every sighting at once, which hides nothing.
+ * stops running stops every sighting at once, which hides nothing. A
+ * society's own site and the cards read off its pages are one listing
+ * (`OWN_SITE_SOURCES`): `own:<org key>`.
  */
-export function sweepGroupOf(source: string, listingUrl: string | undefined): string | undefined {
+export function sweepGroupOf(
+  source: string,
+  listingUrl: string | undefined,
+  row: { externalId?: string; sourceUrl?: string } = {},
+): string | undefined {
   if (WHOLE_SOURCE_LISTINGS.has(source)) return source
+  const owner = ownSiteOf(source, listingUrl, row)
+  if (owner) return `own:${owner}`
   if (PER_URL_LISTINGS.has(source) && listingUrl) return `${source}:${normaliseUrl(listingUrl)}`
   return undefined
+}
+
+/** The society whose own site an event was read from (`OWN_SITE_SOURCES`). */
+function ownSiteOf(
+  source: string,
+  listingUrl: string | undefined,
+  row: { externalId?: string; sourceUrl?: string },
+): string | undefined {
+  if (!OWN_SITE_SOURCES.has(source)) return undefined
+  if (source === "termcard") {
+    const readOffPage =
+      listingUrl !== undefined &&
+      row.sourceUrl !== undefined &&
+      normaliseUrl(listingUrl) !== normaliseUrl(row.sourceUrl)
+    if (!readOffPage) return undefined
+  }
+  return row.externalId?.match(ORG_SCOPED_ID)?.[1]
 }
 
 /** Whether a future event has fallen behind its listing (`sweepGroupOf`). */
@@ -159,10 +204,20 @@ export function isUniversityListing(event: {
 type RegistrationLike = { registered: boolean; year?: string }
 
 /**
+ * The registers that list only the current year's groups (the SU directory,
+ * the Proctors' register, the Sports Service, CUCBC). Camdram is a directory
+ * that keeps every society that ever put on a show (ENG-36: "Sketch Club"
+ * listed since 2017, and 0 of 801 groups dormant), so a Camdram listing is
+ * not a current registration; a theatre group's shows count through its
+ * events (`lastActiveAt`), like any group's.
+ */
+export const CURRENT_YEAR_REGISTERS = REGISTRATION_BODIES.filter((body) => body !== "camdram")
+
+/**
  * `active` if dated activity falls within 180 days or the organisation is on
- * a register for the current academic year; `dormant` if its last activity is
- * older and it is on no current register; `archived` if marked defunct;
- * otherwise `unknown` (data-model §6).
+ * a register for the current academic year (`CURRENT_YEAR_REGISTERS`);
+ * `dormant` if its last activity is older and it is on no current register;
+ * `archived` if marked defunct; otherwise `unknown` (data-model §6).
  *
  * A registration without a `year` counts as current when the claim that
  * reported it was retrieved in the current academic year — the registers list
@@ -179,7 +234,7 @@ export function deriveOrgStatus(
 ): OrgStatus {
   if (org.defunct === true) return "archived"
   const currentYear = academicYearOf(now)
-  const registeredNow = REGISTRATION_BODIES.some((body) => {
+  const registeredNow = CURRENT_YEAR_REGISTERS.some((body) => {
     const registration = org.registrations?.[body]
     if (!registration?.registered) return false
     if (registration.year !== undefined) return registration.year === currentYear

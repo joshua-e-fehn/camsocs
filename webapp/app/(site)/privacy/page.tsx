@@ -41,12 +41,18 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   const contact = CONTACT_EMAIL ? (
     <>
-      the <Link href="/request?kind=object">request form</Link> or{" "}
-      <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      the{" "}
+      <Link href="/request?kind=object" rel="nofollow">
+        request form
+      </Link>{" "}
+      or <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
     </>
   ) : (
     <>
-      the <Link href="/request?kind=object">request form</Link>
+      the{" "}
+      <Link href="/request?kind=object" rel="nofollow">
+        request form
+      </Link>
     </>
   )
 

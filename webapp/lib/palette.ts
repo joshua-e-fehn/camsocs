@@ -16,6 +16,19 @@ export function openPalette(request: PaletteRequest = {}): void {
   window.dispatchEvent(new CustomEvent<PaletteRequest>(PALETTE_EVENT, { detail: request }))
 }
 
+/** Whether a key press asks to open the palette: ⌘K / Ctrl+K anywhere, `/`
+ * when the reader is not typing somewhere. */
+export function isPaletteShortcut(
+  event: Pick<
+    KeyboardEvent,
+    "defaultPrevented" | "isComposing" | "metaKey" | "ctrlKey" | "altKey" | "key" | "target"
+  >,
+): boolean {
+  if (event.defaultPrevented || event.isComposing || event.altKey) return false
+  if (event.metaKey || event.ctrlKey) return event.key.toLowerCase() === "k"
+  return event.key === "/" && !isTypingTarget(event.target)
+}
+
 /** Whether a key press is aimed at a text field (so `/` types a slash). */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false

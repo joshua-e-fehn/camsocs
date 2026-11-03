@@ -83,6 +83,36 @@ describe("validateDraft", () => {
     expect(!result.ok && result.errors.corrections).toBeDefined()
   })
 
+  test("a request from an event page names the event, unless it becomes an add", () => {
+    const eventKey = `evt-${"c".repeat(40)}`
+    const draft = {
+      ...emptyDraft("correct", chess, eventKey),
+      email: "a@example.org",
+      message: "The start time is wrong.",
+    }
+    expect(validateDraft(draft)).toMatchObject({ ok: true, args: { orgKey: chess.key, eventKey } })
+    const add = validateDraft({ ...draft, kind: "add", newName: "CU Go Society" })
+    expect(add.ok && add.args).not.toHaveProperty("eventKey")
+  })
+
+  test("a correction about an event may name no listing (event-correction-no-org)", () => {
+    const eventKey = `evt-${"d".repeat(40)}`
+    const draft = {
+      ...emptyDraft("correct", null, eventKey),
+      email: "a@example.org",
+      message: "The room has changed.",
+    }
+    const result = validateDraft(draft)
+    expect(result).toMatchObject({ ok: true, args: { kind: "correct", eventKey } })
+    expect(result.ok && result.args).not.toHaveProperty("orgKey")
+    for (const kind of ["claim", "remove", "object"] as const) {
+      const other = validateDraft({ ...draft, kind })
+      expect(!other.ok && other.errors.org).toBe("Choose the listing this is about.")
+    }
+    const cleared = validateDraft({ ...draft, eventKey: null })
+    expect(!cleared.ok && cleared.errors.org).toBe("Choose the listing this is about.")
+  })
+
   test("isRequestKind", () => {
     expect(isRequestKind("object")).toBe(true)
     expect(isRequestKind("delete")).toBe(false)

@@ -247,7 +247,14 @@ describe("events.list / events.get", () => {
     expect(camEvents[1].sourceUrl).toBeUndefined()
 
     // Lists carry no description or provenance; the details come from events.get.
-    expect(Object.keys(anonymous[0])).not.toContain("meta")
+    // Of `meta`, only how the start time was read (whether the event's page has
+    // an Event node: lib/events.ts eventHasStructuredData) — no source or quote.
+    for (const event of anonymous) {
+      if (event.meta === undefined) continue
+      expect(Object.keys(event.meta)).toEqual(["startsAt"])
+      expect(Object.keys(event.meta.startsAt)).toEqual(["status"])
+    }
+    expect(anonymous[0].meta?.startsAt.status).toBe("found")
     expect(Object.keys(anonymous[0])).not.toContain("description")
     const details = await t.query(api.events.get, { key: anonymous[0].key })
     expect(details?.meta.title?.status).toBe("found")
@@ -536,6 +543,7 @@ describe("withdrawn events", () => {
     startsAt: number,
     seenAt: number,
     listing: string,
+    file = listing,
   ) {
     const key = eventKey(source, externalId)
     const sourceTypes = {
@@ -544,12 +552,14 @@ describe("withdrawn events", () => {
       website: "society_website",
       termcard: "termcard",
     } as const
-    const field = (name: string, value: unknown) =>
+    // A card read off a page claims its identity from the page and the rest
+    // from the card file (pipeline claims.py `claims_for_event`).
+    const field = (name: string, value: unknown, from = file) =>
       claim(key, name, value, {
         entityType: "event",
         sourceType: sourceTypes[source],
-        sourceKey: `src-${listing}`,
-        sourceUrl: listing,
+        sourceKey: `src-${from}`,
+        sourceUrl: from,
         retrievedAt: seenAt,
       })
     await t.mutation(internal.ingest.claims.ingest, {
@@ -557,9 +567,9 @@ describe("withdrawn events", () => {
         field("title", title),
         field("startsAt", startsAt),
         field("visibility", "public"),
-        field("source", source),
-        field("externalId", externalId),
-        field("sourceUrl", listing),
+        field("source", source, listing),
+        field("externalId", externalId, listing),
+        field("sourceUrl", file),
       ],
     })
   }
@@ -637,6 +647,50 @@ describe("withdrawn events", () => {
     )
     expect(titles).toEqual(["Pub quiz", "Social", "Talk 2"])
   })
+
+  test("a card's events fall behind the society's site once its pages list them (ENG-36)", async () => {
+    const t = newTest()
+    // The term card on one page was read before the calendar page listed the
+    // same evenings; the site now gives every reading from its calendar page
+    // (the card's rows are left out as already listed), so nothing re-sights
+    // the card's own listing.
+    const events = "https://cugerman.example/our-events/"
+    const card = "https://cugerman.example/uploads/term-card.png"
+    const calendar = "https://cugerman.example/calendars/"
+    const old = NOW - 18 * DAY
+    const day = (n: number) => NOW + n * DAY
+    await listed(t, "termcard", "org-g:2026-11-07:med", "Med Night", day(4), old, events, card)
+    await listed(t, "termcard", "org-g:2026-11-10:pub", "Pub Night", day(7), old, events, card)
+    await listed(t, "website", "org-g:2026-11-07:med-2", "Med Night", NOW + 4 * DAY, NOW, calendar)
+    await listed(t, "website", "org-g:2026-11-10:pub-2", "Pub Night", NOW + 7 * DAY, NOW, calendar)
+    // Another society whose site has gone quiet keeps its events.
+    const cuh = "https://cuh.example/events/"
+    const cuhCard = "https://cuh.example/poster.jpg"
+    await listed(t, "termcard", "org-h:2026-11-12:quiz", "Quiz", day(9), old, cuh, cuhCard)
+    const rows = await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })
+    expect(rows.map((e) => [e.title, e.source])).toEqual([
+      ["Med Night", "website"],
+      ["Pub Night", "website"],
+      ["Quiz", "termcard"],
+    ])
+  })
+
+  test("a card read as a file stays while the society's site is read (ENG-36 review)", async () => {
+    const t = newTest()
+    // The termcards stage reads a `termcardUrl` file on its own: one it does
+    // not reach this run (its budget, a failed fetch) is carried forward with
+    // its old sighting, while the society's site is read every day.
+    const file = "https://www.cambridgesu.co.uk/asset/Society/1234/termcard.pdf"
+    const site = "https://cugerman.example/calendars/"
+    const old = NOW - 18 * DAY
+    await listed(t, "termcard", "org-g:2026-11-12:quiz", "Quiz", NOW + 9 * DAY, old, file)
+    await listed(t, "website", "org-g:2026-11-10:pub", "Pub Night", NOW + 7 * DAY, NOW, site)
+    const rows = await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })
+    expect(rows.map((e) => [e.title, e.source])).toEqual([
+      ["Pub Night", "website"],
+      ["Quiz", "termcard"],
+    ])
+  })
 })
 
 describe("public meta", () => {
@@ -667,6 +721,65 @@ describe("public meta", () => {
     const meta = (await t.query(api.orgs.getBySlug, { slug: "chess" }))?.org.meta
     expect(meta?.website.status).toBe("inferred")
     expect(meta?.website.conflicts).toBeUndefined()
+  })
+})
+
+describe("listingRequests.submit — from an event page (event-correction-link)", () => {
+  const request = {
+    kind: "correct" as const,
+    orgKey: "org-chess",
+    submitterEmail: "member@example.org",
+    message: "The blitz night starts at eight, not seven.",
+  }
+  test("keeps the event the request is about", async () => {
+    const t = newTest()
+    const { open: eventKey } = await seed(t)
+    const { key } = await t.mutation(api.listingRequests.submit, { ...request, eventKey })
+    const row = await t.run(async (ctx) => await ctx.db.query("listingRequests").first())
+    expect(row).toMatchObject({ key, eventKey })
+  })
+
+  test("a correction about an event may name no listing; other kinds still must", async () => {
+    // A University listing has no host, so its event page links here with
+    // no listing (ENG-24; event-correction-no-org).
+    const t = newTest()
+    const keys = await seed(t)
+    const { orgKey: _, ...noListing } = request
+    const { key } = await t.mutation(api.listingRequests.submit, {
+      ...noListing,
+      eventKey: keys.open,
+    })
+    const row = await t.run(async (ctx) => await ctx.db.query("listingRequests").first())
+    expect(row).toMatchObject({ key, kind: "correct", eventKey: keys.open })
+    expect(row?.orgKey).toBeUndefined()
+    for (const kind of ["claim", "remove", "object"] as const) {
+      await expect(
+        t.mutation(api.listingRequests.submit, { ...noListing, kind, eventKey: keys.open }),
+      ).rejects.toThrow(/Which listing/)
+    }
+  })
+
+  test("refuses what is not an event key, an unknown event, and an event on a new listing", async () => {
+    const t = newTest()
+    const { open: eventKey } = await seed(t)
+    await expect(
+      t.mutation(api.listingRequests.submit, { ...request, eventKey: "evt-nope" }),
+    ).rejects.toThrow(/Not an event key/)
+    await expect(
+      t.mutation(api.listingRequests.submit, {
+        ...request,
+        eventKey: `evt-${"c".repeat(40)}`,
+      }),
+    ).rejects.toThrow(/event was not found/)
+    await expect(
+      t.mutation(api.listingRequests.submit, {
+        kind: "add",
+        submitterEmail: "member@example.org",
+        message: "Please add the Go Society.",
+        fields: { name: "CU Go Society" },
+        eventKey,
+      }),
+    ).rejects.toThrow(/no events/)
   })
 })
 

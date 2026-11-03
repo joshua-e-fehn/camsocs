@@ -56,7 +56,8 @@ export function serverEnvironment(env: Env = process.env): "production" | "devel
  * enums, numbers or booleans, never free text.
  *
  *  - `ics_feed_fetched` (ENG-7, `lib/ics-telemetry.ts`): `feed` is `talks`,
- *    `event` or `talk`; `key` the event or talk key, never the feed filters.
+ *    `events`, `event` or `talk`; `key` the event or talk key, never the
+ *    feed filters.
  *
  * (`listing_request_received` is sent by Convex, `convex/analytics.ts`, not
  * from here.)

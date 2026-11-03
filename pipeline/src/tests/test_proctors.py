@@ -13,6 +13,7 @@ from camsocs_pipeline.sources.proctors import (
     RegisterEntry,
     classify_link,
     parse_register,
+    published_aliases,
     register_name,
     register_observation,
 )
@@ -171,14 +172,14 @@ def test_social_links_become_socials(entries) -> None:
 
 def test_an_su_link_is_identity_only(entries) -> None:
     observation = register_observation(entries["AI in Law Society (CU, CUAILS)"], PAGE)
-    assert set(by_field(observation)) == {"registrations.proctors", "name"}
+    assert set(by_field(observation)) == {"registrations.proctors", "name", "aliases"}
     assert observation.identity.su_id == "28488"
     assert "CUAILS" in observation.identity.aliases
 
 
 def test_an_entry_without_a_link_says_nothing_about_a_website(entries) -> None:
     observation = register_observation(entries["Guandan Society (CU)"], PAGE)
-    assert set(by_field(observation)) == {"registrations.proctors", "name"}
+    assert set(by_field(observation)) == {"registrations.proctors", "name", "aliases"}
 
 
 def test_a_share_link_claims_no_social() -> None:
@@ -189,3 +190,31 @@ def test_a_share_link_claims_no_social() -> None:
         link="https://www.facebook.com/share/15JuhhyJCR/?mibextid=LQQJ4d",
     )
     assert set(by_field(register_observation(entry, PAGE))) == {"registrations.proctors", "name"}
+
+
+def test_the_registered_full_name_and_acronyms_are_public_aliases(entries) -> None:
+    # The SU's "AI in Law Society" usually wins `name`: the register's full
+    # name and acronym stay on the listing as aliases (entity-aliases-missing).
+    observed = by_field(register_observation(entries["AI in Law Society (CU, CUAILS)"], PAGE))
+    aliases = observed["aliases"]
+    assert aliases.value == ["Cambridge University AI in Law Society", "CUAILS"]
+    assert (aliases.evidence, aliases.extractor) == ("secondary", "proctors_register.aliases")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Chess Club (CU, CUCC)", ["Cambridge University Chess Club", "CUCC"]),
+        ("Cambridge University Physics Society", ["Cambridge University Physics Society"]),
+        # Only "The" moved: the same name, nothing to add.
+        ("Building Bridges Society (The)", []),
+        ("Women in Ophthalmology Society", []),
+        ("Hindu Cultural Society (HCS)", ["HCS"]),
+    ],
+)
+def test_published_aliases_skip_the_registers_own_spellings(raw, expected) -> None:
+    name, aliases = register_name(raw)
+    entry = RegisterEntry(raw_name=raw, name=name, aliases=aliases, link=None)
+    assert published_aliases(entry) == expected
+    if not expected:
+        assert "aliases" not in by_field(register_observation(entry, PAGE))

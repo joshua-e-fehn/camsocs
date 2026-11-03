@@ -212,36 +212,99 @@ export function sortByActivity<T extends { key: string }>(
 type RelatedCard = Pick<
   Doc<"orgCards">,
   "key" | "nameSort" | "categories" | "collegeKeys" | "level" | "status" | "isCounterpart"
->
+> &
+  Partial<Pick<Doc<"orgCards">, "orgType" | "sport" | "activityTypes" | "audiences">>
+
+/** Words that say nothing about what a group does ("Cambridge University
+ * Chess Club" and "Cambridge University Netball Club" share only these). */
+const NAME_STOPWORDS = new Set([
+  "a",
+  "and",
+  "association",
+  "cambridge",
+  "club",
+  "college",
+  "cu",
+  "for",
+  "group",
+  "in",
+  "of",
+  "society",
+  "soc",
+  "student",
+  "students",
+  "team",
+  "the",
+  "uni",
+  "university",
+])
+
+/** A name's telling words: "Cambridge University Boat Club" → {"boat"}. */
+export function nameTokens(nameSort: string): Set<string> {
+  return new Set(
+    nameSort
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length > 2 && !NAME_STOPWORDS.has(word)),
+  )
+}
+
+const overlap = <T>(a: readonly T[] | undefined, b: readonly T[] | undefined) =>
+  a && b ? a.filter((item) => b.includes(item)).length : 0
 
 /**
  * How closely `card` relates to `base`: a shared college weighs most (the
- * other societies of a student's own college), then each shared category,
- * with a bonus for the same main category; the same level and an active
- * status only break ties between related cards. 0 = unrelated.
+ * other societies of a student's own college), then what the group does —
+ * the same sport, shared categories (more for the same main one), words its
+ * name shares ("Boat", "Chess"), the same specific kind (a boat club, a
+ * theatre company), shared activities and audiences; the same level and an
+ * active status only break ties. 0 = unrelated: nothing in common but the
+ * level (SEO audit 2026-11-02, related-links-alphabetical: by categories and
+ * the alphabet alone CUBC's related list was netball and boxing, not rowing).
  */
 export function relatedScore(base: RelatedCard, card: RelatedCard): number {
   if (card.key === base.key || card.isCounterpart || card.status === "archived") return 0
-  const sharedColleges = card.collegeKeys.filter((key) => base.collegeKeys.includes(key)).length
-  const sharedCategories = card.categories.filter((c) => base.categories.includes(c)).length
-  if (sharedColleges === 0 && sharedCategories === 0) return 0
+  const sharedColleges = overlap(card.collegeKeys, base.collegeKeys)
+  const sharedCategories = overlap(card.categories, base.categories)
+  const baseSport = base.sport?.sport?.trim().toLowerCase()
+  const sameSport = Boolean(baseSport) && card.sport?.sport?.trim().toLowerCase() === baseSport
+  const baseWords = nameTokens(base.nameSort)
+  const sharedWords = [...nameTokens(card.nameSort)].filter((word) => baseWords.has(word)).length
+  if (sharedColleges === 0 && sharedCategories === 0 && !sameSport && sharedWords === 0) return 0
   let score = (sharedColleges > 0 ? 4 : 0) + 2 * Math.min(sharedCategories, 2)
   if (base.categories[0] && card.categories[0] === base.categories[0]) score += 1
+  if (sameSport) score += 3
+  score += 1.5 * Math.min(sharedWords, 2)
+  const specific = base.orgType && base.orgType !== "society" && base.orgType !== "other"
+  if (specific && card.orgType === base.orgType) score += 1
+  score += 0.5 * Math.min(overlap(card.activityTypes, base.activityTypes), 2)
+  score += 0.5 * Math.min(overlap(card.audiences, base.audiences), 1)
   if (base.level && card.level === base.level) score += 0.5
   if (card.status === "active") score += 0.25
   return score
 }
 
-/** The `limit` listings most related to `base`, closest first, then by name. */
+/** A stable pseudo-random order per pair (FNV-1a of both keys): equal
+ * scores are not settled by the alphabet, so the A–B listings of a category
+ * do not collect every related link while the rest get none. */
+export function pairHash(a: string, b: string): number {
+  const text = `${a}|${b}`
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193)
+  return hash >>> 0
+}
+
+/** The `limit` listings most related to `base`, closest first, ties in a
+ * fixed order per listing (`pairHash`). */
 export function relatedCards<T extends RelatedCard>(
   base: RelatedCard,
   cards: readonly T[],
   limit: number,
 ): T[] {
   return cards
-    .map((card) => ({ card, score: relatedScore(base, card) }))
+    .map((card) => ({ card, score: relatedScore(base, card), tie: pairHash(base.key, card.key) }))
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.card.nameSort.localeCompare(b.card.nameSort))
+    .sort((a, b) => b.score - a.score || a.tie - b.tie || a.card.key.localeCompare(b.card.key))
     .slice(0, limit)
     .map((entry) => entry.card)
 }

@@ -33,6 +33,7 @@ const listed: EventListItem = {
   source: "google_calendar",
   hosting: "takes_part",
   externalUrl: "https://ctf.deadface.io/",
+  talksDerived: false,
   fromUniversity: false,
 }
 

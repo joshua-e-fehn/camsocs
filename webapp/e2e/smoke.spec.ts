@@ -69,6 +69,9 @@ for (const { name, path, dark } of PAGES) {
  * well-formed key the data does not have costs one existence query; a
  * malformed one none.
  */
+// `heading` once hydrated; the server's HTML has the site's "Not found" for
+// every kind (app/not-found-variant.tsx: the root not-found reads no request
+// header, so it leaves every page cacheable).
 const UNKNOWN: { name: string; path: string; heading: string }[] = [
   { name: "society", path: "/societies/zzqx-no-such-society", heading: "Not found" },
   { name: "society-malformed", path: "/societies/No_Such!", heading: "Not found" },
@@ -94,11 +97,11 @@ test.describe("without JavaScript, as a crawler", () => {
     javaScriptEnabled: false,
     userAgent: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
   })
-  for (const { name, path, heading } of UNKNOWN) {
+  for (const { name, path } of UNKNOWN) {
     test(`an unknown ${name} answers 404 with its not-found page in the HTML`, async ({ page }) => {
       const response = await page.goto(path)
       expect(response?.status(), `${path} status`).toBe(404)
-      await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible()
+      await expect(page.getByRole("heading", { level: 1, name: "Not found" })).toBeVisible()
       await expect(page.locator("html#__next_error__")).toHaveCount(0)
     })
   }
@@ -110,23 +113,24 @@ test.describe("without JavaScript, as a crawler", () => {
   })
 })
 
-test("router prefetches skip the 404 gate, and only the proxy names a missing listing", async ({
-  request,
-}) => {
+test("router prefetches skip the 404 gate", async ({ request }) => {
   // The proxy's matcher keeps prefetches away (Next strips the header inside
-  // the proxy), so a prefetch of a well-formed unknown key is not rewritten.
+  // the proxy), so a prefetch of a well-formed unknown key is not rewritten
+  // to the missing-listing path (lib/missing-listing.ts MISSING_LISTING_PATH).
+  // It may still be a 404: with no loading.tsx the page's own notFound()
+  // sets the status (SEO audit, content-in-hidden-suspense) — in an RSC
+  // payload, not the proxy's rewritten not-found page.
   const prefetch = await request.get(UNKNOWN[0].path, {
     headers: { RSC: "1", "Next-Router-Prefetch": "1" },
     maxRedirects: 0,
   })
-  expect(prefetch.status()).not.toBe(404)
-  // A visitor's own x-camsocs-missing-listing header is dropped: an unmatched
-  // URL keeps the plain 404, not the framed talks page.
-  const spoofed = await request.get("/zzqx-no-such-page", {
-    headers: { "x-camsocs-missing-listing": "talk" },
-  })
-  expect(spoofed.status()).toBe(404)
-  expect(await spoofed.text()).not.toContain("This talk is no longer listed")
+  expect(prefetch.headers()["content-type"]).toContain("text/x-component")
+  expect(prefetch.headers()["x-nextjs-rewritten-path"]).toBeUndefined()
+  // The same request without the prefetch header passes the proxy, which
+  // rewrites it: the header above would show a rewrite.
+  const navigation = await request.get(UNKNOWN[0].path, { headers: { RSC: "1" }, maxRedirects: 0 })
+  expect(navigation.status()).toBe(404)
+  expect(navigation.headers()["x-nextjs-rewritten-path"]).toBe("/_missing-listing")
 })
 
 test("dashboard sends a signed-out visitor to sign-in", async ({ page }, testInfo) => {
@@ -219,11 +223,24 @@ test("robots.txt, the sitemap and the share image are served", async ({ request 
   expect(robotsText).toContain("Disallow: /relay")
   expect(robotsText).toMatch(/Sitemap: https?:\/\/\S+\/sitemap\.xml/)
 
+  // An index of three files (lib/sitemap.ts): pages, societies, events.
   const sitemap = await request.get("/sitemap.xml")
   expect(sitemap.status()).toBe(200)
-  const xml = await sitemap.text()
-  expect(xml).toContain("<urlset")
-  expect(xml).toContain(`/societies/${PROFILES["profile-university"]}</loc>`)
+  const index = await sitemap.text()
+  expect(index).toContain("<sitemapindex")
+  expect(index).toContain("/sitemaps/societies.xml</loc>")
+
+  const societies = await request.get("/sitemaps/societies.xml")
+  expect(societies.status()).toBe(200)
+  const societiesXml = await societies.text()
+  expect(societiesXml).toContain("<urlset")
+  expect(societiesXml).toContain(`/societies/${PROFILES["profile-university"]}</loc>`)
+  expect(societiesXml).toContain("/categories/")
+
+  // No talks page in any sitemap outside /talks (owner decision G1).
+  const events = await request.get("/sitemaps/events.xml")
+  expect(events.status()).toBe(200)
+  expect(await events.text()).not.toContain("/talks")
 
   const image = await request.get("/opengraph-image")
   expect(image.status()).toBe(200)

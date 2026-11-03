@@ -1,0 +1,30 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"action": {
+			"mitigate": {
+				"action": "deny"
+			}
+		},
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"op": "pre",
+						"type": "path",
+						"value": "/talks"
+					},
+					{
+						"op": "re",
+						"type": "user_agent",
+						"value": "(GPTBot|gptbot|ChatGPT-User|chatgpt-user|OAI-SearchBot|oai-searchbot|ClaudeBot|claudebot|Claude-User|claude-user|Claude-SearchBot|claude-searchbot|Claude-Web|claude-web|anthropic-ai|CCBot|ccbot|Google-Extended|google-extended|Google-CloudVertexBot|google-cloudvertexbot|Applebot-Extended|applebot-extended|PerplexityBot|perplexitybot|Perplexity-User|perplexity-user|Bytespider|bytespider|Amazonbot|amazonbot|meta-externalagent|meta-externalfetcher|FacebookBot|facebookbot|cohere-ai|cohere-training-data-crawler|Diffbot|diffbot|DuckAssistBot|duckassistbot|MistralAI-User|mistralai-user|YouBot|youbot|AI2Bot|ai2bot|Ai2Bot-Dolma|ai2bot-dolma|Timpibot|timpibot|ImagesiftBot|imagesiftbot|omgili|omgilibot)"
+					}
+				]
+			}
+		],
+		"description": "Keep browsers, Googlebot, Bingbot and other search crawlers allowed. Deny the AI agents of webapp/lib/crawlers.ts AI_CRAWLERS (each token as documented and in lower case) on the talks pillar, path prefix /talks (which covers /talks.ics), before compute. robots.txt already asks them to stay out (owner decision G1); proxy.ts refuses them too.",
+		"name": "Deny AI agents on /talks"
+	}
+}

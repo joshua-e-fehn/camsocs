@@ -4,6 +4,7 @@ import {
   CONVEX_INGRESS_UNSAFE_HEADERS,
   convexAuthForwardHeaders,
   convexAuthRouteHandlers,
+  isAnonymousSessionRead,
   stripConvexIngressUnsafeHeaders,
 } from "./auth-forwarded-headers"
 
@@ -147,7 +148,11 @@ describe("convexAuthRouteHandlers", () => {
   }
 
   test("forwards GET to the same path on the Convex site URL", async () => {
-    const { outbound } = await runHandler("GET", incomingRequest("/api/auth/get-session"))
+    // With a cookie: a cookieless session read is answered here (below).
+    const { outbound } = await runHandler(
+      "GET",
+      incomingRequest("/api/auth/get-session", { headers: { cookie: "a=b" } }),
+    )
     expect(outbound.url).toBe(`${SITE}/api/auth/get-session`)
   })
 
@@ -482,4 +487,55 @@ describe.if(LIVE)("against the live Convex deployment", () => {
     // the auth layer answers at all.
     expect(response.status).toBe(200)
   }, 30_000)
+})
+
+describe("the anonymous session read", () => {
+  /** Runs one GET with a `fetch` that fails the test if it is called. */
+  async function answerWithoutConvex(request: Request) {
+    let forwarded = false
+    const original = globalThis.fetch
+    globalThis.fetch = (async () => {
+      forwarded = true
+      return new Response("{}", { status: 200 })
+    }) as unknown as typeof globalThis.fetch
+    try {
+      const response = await convexAuthRouteHandlers(SITE).GET(request)
+      return { response, forwarded }
+    } finally {
+      globalThis.fetch = original
+    }
+  }
+
+  test("is answered null here, without Convex, and never shared", async () => {
+    const { response, forwarded } = await answerWithoutConvex(
+      incomingRequest("/api/auth/get-session"),
+    )
+    expect(forwarded).toBe(false)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBeNull()
+    expect(response.headers.get("cache-control")).toContain("no-store")
+  })
+
+  test("counts analytics cookies as no session", () => {
+    const request = incomingRequest("/api/auth/get-session", {
+      headers: { cookie: "ph_phc_abc_posthog=%7B%7D" },
+    })
+    expect(isAnonymousSessionRead(request)).toBe(true)
+  })
+
+  test("forwards any request that could carry a session, and every other route", async () => {
+    const withCookie = incomingRequest("/api/auth/get-session", {
+      headers: { cookie: "better-auth.session_token=tok" },
+    })
+    const withBearer = incomingRequest("/api/auth/get-session", {
+      headers: { authorization: "Bearer tok" },
+    })
+    expect(isAnonymousSessionRead(withCookie)).toBe(false)
+    expect(isAnonymousSessionRead(withBearer)).toBe(false)
+    expect(isAnonymousSessionRead(incomingRequest("/api/auth/convex/token"))).toBe(false)
+    expect(
+      isAnonymousSessionRead(incomingRequest("/api/auth/get-session", { method: "POST" })),
+    ).toBe(false)
+    expect((await answerWithoutConvex(withCookie)).forwarded).toBe(true)
+  })
 })

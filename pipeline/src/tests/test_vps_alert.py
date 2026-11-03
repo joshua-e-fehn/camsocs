@@ -279,6 +279,107 @@ def test_a_monitor_that_wrote_no_status_this_run_says_it_failed_itself() -> None
         assert "error_spike" not in text
 
 
+# --- the monitor's news: requests and recoveries (ENG-33) ---------------------------------
+
+
+def monitor_news(*, failing: tuple[str, ...] = (), previous: dict | None = None, **kw) -> dict:
+    """A status file of a run that pages for new requests and/or a recovery."""
+    from datetime import UTC, datetime, timedelta
+
+    from camsocs_pipeline.monitor import CheckResult, RequestCount, assess
+
+    now = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    results = [
+        CheckResult(name, "failed" if name in failing else "ok", 0, 1, "lt", 26)
+        for name in ("stale_harvest", "pageview_heartbeat")
+    ] + [
+        CheckResult("site_home", "ok", 200, 200, "ne", None, {"attempts": 1}, None, True),
+    ]
+    requests = RequestCount(
+        "ok", now - timedelta(minutes=70), now - timedelta(minutes=10), kw.pop("by_kind", {})
+    )
+    verdict = assess(results, previous or {}, now=now, requests=requests)
+    return verdict.status_payload("f" * 32) | kw
+
+
+def test_new_requests_send_their_counts_by_kind_and_where_to_answer_them() -> None:
+    text = monitor_message(monitor_news(by_kind={"claim": 1, "remove": 2}))
+    lines = text.split("\n")
+    assert lines[0] == (
+        ":inbox_tray: camsocs: 3 new listing requests: claim 1, remove 2 "
+        "(stored 2026-11-01T10:50:00Z to 2026-11-01T11:50:00Z)"
+    )
+    assert "https://camsocs.uk/dashboard/requests" in text
+    assert "failing" not in text and ":rotating_light:" not in text
+    one = monitor_message(monitor_news(by_kind={"object": 1}))
+    assert "1 new listing request: object 1" in one
+
+
+def test_requests_show_only_kinds_and_numbers_of_the_right_shape() -> None:
+    status = monitor_news(by_kind={"claim": 1})
+    status["requests"]["byKind"] = {
+        "claim": 1,
+        "Jane Example": 4,
+        "remove": "two, from jane@example.org",
+        "object": True,
+        "add": 1,
+    }
+    status["requests"]["since"] = "<@U123> yesterday"
+    text = monitor_message(status)
+    for leaked in ("Jane", "jane@", "<@U123>", "object"):
+        assert leaked not in text
+    assert "2 new listing requests: claim 1, add 1" in text
+    assert "stored" not in text, "a window of the wrong shape is left out"
+
+
+def test_requests_that_were_not_counted_or_were_none_send_nothing_of_their_own() -> None:
+    for requests in (
+        {"status": "unknown", "byKind": {"claim": 3}},
+        {"status": "ok", "byKind": {}},
+        "3 new",
+    ):
+        status = monitor_news() | {"requests": requests, "paged": True}
+        assert "camsocs monitor failed on" in monitor_message(status)
+
+
+def test_a_recovered_site_check_says_it_is_ok_again() -> None:
+    previous = {"alertedChecks": ["site_home"], "lastAlertAt": "2026-11-01T11:00:00Z"}
+    status = monitor_news(previous=previous)
+    assert status["recoveredChecks"] == ["site_home"]
+    text = monitor_message(status)
+    first = text.split("\n")[0]
+    assert first == ":white_check_mark: camsocs monitor: site_home ok again on srv1608974"
+    status["recoveredChecks"] = ["site_home", "<@U123> ping"]
+    assert "<@U123>" not in monitor_message(status)
+
+
+def test_news_during_a_failure_already_paged_names_it_without_paging_it_again() -> None:
+    previous = {"alertedChecks": ["stale_harvest"], "lastAlertAt": "2026-11-01T10:00:00Z"}
+    status = monitor_news(failing=("stale_harvest",), previous=previous, by_kind={"claim": 1})
+    assert status["checksPaged"] is False
+    text = monitor_message(status)
+    assert ":rotating_light:" not in text and "• stale_harvest" not in text
+    assert "still failing (paged before): stale_harvest" in text
+    assert "1 new listing request: claim 1" in text
+
+
+def test_a_failing_site_check_shows_its_status_and_reason() -> None:
+    status = monitor_news()
+    status["checks"][2] |= {"status": "failed", "value": 0, "reason": "ConnectTimeout"}
+    status |= {"checksPaged": True, "failedChecks": ["site_home"]}
+    text = monitor_message(status)
+    assert "• site_home: 0 (fails when ≠ 200) · attempts 1 · ConnectTimeout" in text
+    status["checks"][2]["reason"] = "<html>talk titles</html>"
+    assert "talk" not in monitor_message(status)
+
+
+def test_a_status_file_from_before_eng_33_still_lists_its_failing_checks() -> None:
+    status = monitor_status()
+    for key in ("checksPaged", "recoveredChecks", "requests", "requestsCountedUntil"):
+        status.pop(key)
+    assert "camsocs monitor: 2 checks failing on srv1608974" in monitor_message(status)
+
+
 # --- sending ----------------------------------------------------------------------------
 
 
@@ -546,6 +647,10 @@ def test_the_monitor_timer_runs_hourly_spread_out() -> None:
     values = unit("camsocs-monitor.timer")
     assert values["Timer.OnCalendar"] == ["hourly"]
     assert values["Timer.RandomizedDelaySec"] == ["15min"]
+    # One offset per host, so runs are exactly an hour apart (ENG-33: a
+    # request is announced within about an hour, not up to 85 minutes).
+    assert values["Timer.FixedRandomDelay"] == ["yes"]
+    assert values["Timer.AccuracySec"] == ["1s"]
     assert values["Timer.Unit"] == ["camsocs-monitor.service"]
     assert values["Install.WantedBy"] == ["timers.target"]
 

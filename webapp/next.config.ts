@@ -1,6 +1,9 @@
 import path from "node:path"
 import { withPostHogConfig } from "@posthog/nextjs-config"
 import type { NextConfig } from "next"
+// An internal Next path, not a public export: if an upgrade moves it the build
+// fails loudly here, and HTML_LIMITED_BOTS below needs re-pointing (or a copy).
+import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots"
 
 /**
  * No `/api/auth/*` rewrite here, deliberately.
@@ -23,6 +26,56 @@ import type { NextConfig } from "next"
  * ⚠ Do not reintroduce a rewrite for `/api/auth/:path*`. It would silently take
  * over from the route handler again.
  */
+/**
+ * User agents that get their `<title>`, description and canonical in
+ * `<head>` (SEO audit 2026-11-02, metadata-streamed-into-body).
+ *
+ * Next 16 streams `generateMetadata` that awaits Convex: the loading shell
+ * flushes `</head>` first and the tags arrive in `<body>` about 85 KB later,
+ * where a head-only parser misses them and Google honours no canonical. Next
+ * blocks on metadata only for the user agents in this regex, and setting it
+ * replaces Next's own list, so it starts from that list (imported, so an
+ * upgrade carries its changes) and adds the AI search and answer fetchers it
+ * lacks plus Googlebot itself, which Next leaves out because it renders
+ * (it then raced: head on some fetches, body on others). This changes only
+ * where the tags are placed for these agents, at a small cost in time to
+ * first byte for them; what they may crawl is robots.txt's business.
+ */
+export const HTML_LIMITED_BOTS = new RegExp(
+  [
+    HTML_LIMITED_BOT_UA_RE.source,
+    "Googlebot",
+    "OAI-SearchBot",
+    "ChatGPT-User",
+    "PerplexityBot",
+    "Perplexity-User",
+    "Claude-SearchBot",
+    "Claude-User",
+    "DuckAssistBot",
+    "MistralAI-User",
+    "YouBot",
+    "Meta-ExternalFetcher",
+    "Amazonbot",
+  ].join("|"),
+  "i",
+)
+
+/**
+ * Routes with nothing for a search engine: the broker area, the sign-in page,
+ * the auth and pipeline endpoints and the analytics relay (SEO audit
+ * 2026-11-02, private-routes-noindex). robots.txt asks crawlers not to fetch
+ * them, but a disallowed URL linked from elsewhere can still be listed
+ * ("Indexed, though blocked by robots.txt"); the header says noindex even on
+ * a response a crawler never parses as HTML. /dashboard also says it in its
+ * layout's metadata.
+ */
+export const NOINDEX_SOURCES = [
+  "/dashboard/:path*",
+  "/sign-in/:path*",
+  "/api/:path*",
+  "/relay/:path*",
+] as const
+
 const nextConfig: NextConfig = {
   // No `x-powered-by: Next.js`: it tells a scanner nothing we want it to know.
   poweredByHeader: false,
@@ -30,6 +83,7 @@ const nextConfig: NextConfig = {
   // for lockfiles and can adopt an unrelated one above the repo (it picked
   // ~/package-lock.json on the scaffold machine), which changes file tracing.
   turbopack: { root: path.join(__dirname) },
+  htmlLimitedBots: HTML_LIMITED_BOTS,
   // Logos and event images are our own stored copies (data-model §2: never
   // hotlinked), served from Convex file storage; nothing else is optimised.
   images: {
@@ -55,20 +109,32 @@ const nextConfig: NextConfig = {
     ]
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders() }]
+    return [
+      { source: "/:path*", headers: securityHeaders() },
+      ...NOINDEX_SOURCES.map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      })),
+    ]
   },
 }
 
 /**
  * The browser protections every response carries (ENG-35, launch audit
- * 2026-11-02). HSTS is not among them: Vercel already sends
- * `strict-transport-security: max-age=63072000` on camsocs.uk, and a second
- * copy here could only disagree with it.
+ * 2026-11-02; SEO audit 2026-11-02, security-headers): no MIME sniffing; only
+ * the origin as referrer to other sites (the browser default, made explicit;
+ * outbound links keep `noreferrer`, G7); no camera, microphone, location or
+ * other device feature; and no framing by any site. HSTS is not among them:
+ * Vercel already sends `strict-transport-security: max-age=63072000` on
+ * camsocs.uk (G10), and a second copy here could only disagree with it.
  *
- * The Content-Security-Policy is report-only: a browser reports what it
- * would block in its console and blocks nothing, so a source this list
- * forgot cannot break a page. Enforce it (rename the header) once the pages
- * show no reports. Scripts and styles keep 'unsafe-inline' because the App
+ * Framing is refused for real twice over: `X-Frame-Options: DENY` for old
+ * browsers and an enforced Content-Security-Policy that is `frame-ancestors
+ * 'none'` alone, since a report-only policy never enforces frame-ancestors.
+ * The full policy beside it is report-only: a browser reports what it would
+ * block in its console and blocks nothing, so a source this list forgot
+ * cannot break a page. Enforce it (fold it into the enforced header) once the
+ * pages show no reports. Scripts and styles keep 'unsafe-inline' because the App
  * Router inlines its flight data and framer-motion writes style attributes;
  * a nonce would need the proxy on every page, which was removed for CPU
  * (docs/deploy.md "CPU protection").
@@ -99,6 +165,7 @@ export function securityHeaders(
         "browsing-topics=()",
       ].join(", "),
     },
+    { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
     { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy(env) },
   ]
 }

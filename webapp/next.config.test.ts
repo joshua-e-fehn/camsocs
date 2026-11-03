@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import nextConfigExport, {
   contentSecurityPolicy,
+  HTML_LIMITED_BOTS,
   nextConfig,
   securityHeaders,
   sourceMapUploadOptions,
@@ -58,7 +59,8 @@ describe("the source map upload gate", () => {
 })
 
 /**
- * The browser protections (ENG-35): on every path, the CSP report-only, and
+ * The browser protections (ENG-35, security-headers): on every path, framing
+ * refused, the full CSP report-only, and
  * the policy naming the Convex deployment the build talks to.
  */
 const PROD = {
@@ -79,17 +81,35 @@ function directives(policy: string): Record<string, string[]> {
 
 describe("the security headers", () => {
   test("apply to every path", async () => {
-    const rules = await nextConfig.headers?.()
-    expect(rules?.map((rule) => rule.source)).toEqual(["/:path*"])
-    const names = rules?.[0].headers.map((header) => header.key)
+    const rules = (await nextConfig.headers?.()) ?? []
+    const all = rules.filter((rule) => rule.source === "/:path*")
+    expect(all).toHaveLength(1)
+    const names = all[0].headers.map((header) => header.key)
     expect(names).toEqual([
       "X-Content-Type-Options",
       "Referrer-Policy",
       "X-Frame-Options",
       "Permissions-Policy",
+      "Content-Security-Policy",
       "Content-Security-Policy-Report-Only",
     ])
+  })
+
+  test("Next does not advertise itself", () => {
     expect(nextConfig.poweredByHeader).toBe(false)
+  })
+
+  test("enforce frame-ancestors alone, the rest report-only (security-headers)", () => {
+    const headers = securityHeaders(PROD)
+    expect(headers).toContainEqual({ key: "X-Content-Type-Options", value: "nosniff" })
+    expect(headers).toContainEqual({
+      key: "Referrer-Policy",
+      value: "strict-origin-when-cross-origin",
+    })
+    expect(headers).toContainEqual({
+      key: "Content-Security-Policy",
+      value: "frame-ancestors 'none'",
+    })
   })
 
   test("refuse framing and sniffing, trim referrers and switch off device features", () => {
@@ -102,8 +122,9 @@ describe("the security headers", () => {
     }
     // HSTS is Vercel's (max-age=63072000 on camsocs.uk); never a second copy.
     expect(byName["Strict-Transport-Security"]).toBeUndefined()
-    // Report-only until the pages show no reports; never enforced by accident.
-    expect(byName["Content-Security-Policy"]).toBeUndefined()
+    // Only framing is enforced; the full policy stays report-only until the
+    // pages show no reports, never enforced by accident.
+    expect(byName["Content-Security-Policy"]).toBe("frame-ancestors 'none'")
   })
 
   test("the CSP allows self, the build's own Convex deployment and stored images", () => {
@@ -139,5 +160,71 @@ describe("the security headers", () => {
     expect(preview["script-src"]).toContain("https://vercel.live")
     expect(preview["frame-src"]).toEqual(["https://vercel.live"])
     expect(preview["frame-ancestors"]).toEqual(["'none'"])
+  })
+})
+
+describe("blocking metadata for crawlers (metadata-streamed-into-body)", () => {
+  const ua = (token: string) => `Mozilla/5.0 (compatible; ${token}/1.0; +https://example.org/bot)`
+
+  test("is the config Next reads", () => {
+    expect(nextConfig.htmlLimitedBots).toBe(HTML_LIMITED_BOTS)
+  })
+
+  test("keeps Next's own list and adds the AI fetchers and Googlebot", () => {
+    for (const token of [
+      // Next's defaults, which setting the option would otherwise drop.
+      "bingbot",
+      "DuckDuckBot",
+      "facebookexternalhit",
+      "Twitterbot",
+      "Slackbot",
+      "LinkedInBot",
+      "WhatsApp",
+      "Discordbot",
+      "applebot",
+      "AdsBot-Google",
+      // Added.
+      "Googlebot",
+      "OAI-SearchBot",
+      "ChatGPT-User",
+      "PerplexityBot",
+      "Perplexity-User",
+      "Claude-SearchBot",
+      "Claude-User",
+      "DuckAssistBot",
+      "MistralAI-User",
+    ]) {
+      expect(HTML_LIMITED_BOTS.test(ua(token))).toBe(true)
+    }
+  })
+
+  test("leaves people's browsers streaming", () => {
+    for (const browser of [
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+      "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
+    ]) {
+      expect(HTML_LIMITED_BOTS.test(browser)).toBe(false)
+    }
+  })
+})
+
+describe("private routes say noindex (private-routes-noindex)", () => {
+  test("by header on the broker area, sign-in, the API and the relay", async () => {
+    const rules = (await nextConfig.headers?.()) ?? []
+    for (const source of ["/dashboard/:path*", "/sign-in/:path*", "/api/:path*", "/relay/:path*"]) {
+      const rule = rules.find((candidate) => candidate.source === source)
+      expect(rule?.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex, nofollow" })
+    }
+  })
+
+  test("and on nothing public", async () => {
+    const rules = (await nextConfig.headers?.()) ?? []
+    const noindex = rules.filter((rule) =>
+      rule.headers.some((header) => header.key === "X-Robots-Tag"),
+    )
+    for (const rule of noindex) {
+      expect(rule.source).toMatch(/^\/(dashboard|sign-in|api|relay)\//)
+    }
   })
 })
