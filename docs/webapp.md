@@ -62,7 +62,11 @@ app/                         Next.js App Router pages
                              lib/sitemap-societies.ts, convex/sitemap.ts, orgs.sitemap): lastmod, edge-cached
                              an hour, 503 on a backend failure; category hubs and college pages listed; thin
                              profiles (G3), ended and talks.cam-derived events (G1) left out
-  robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay; AI agents off /talks
+  robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay and the parameter traps
+                             (/events?, /societies?, /talks?, /request?, /talks/departments?, /events/*/ics;
+                             canonical ?org= / ?page= / ?dept= / ?school= views allowed); AI agents
+                             (lib/crawlers.ts T1-T3) off /talks; SEO tools and scrapers (T4) off the site
+                             (bot policy 2026-11-03)
   opengraph-image.tsx        Generic share image: wordmark and headline only (no University branding),
                              drawn by _og/card.tsx; a society's and an event's segment draw their own
                              (`opengraph-image.tsx`: name, kinds, logo / when, title, host, venue;

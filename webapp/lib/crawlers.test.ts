@@ -1,12 +1,22 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { AI_CRAWLERS, isAiCrawler, refusesAiAgent } from "./crawlers"
+import {
+  AI_CRAWLERS,
+  AI_SEARCH_CRAWLERS,
+  AI_TRAINING_CRAWLERS,
+  AI_USER_AGENTS,
+  isAiCrawler,
+  isScraper,
+  refusesAiAgent,
+  SCRAPERS,
+} from "./crawlers"
 
 /**
- * The AI agents kept off the talks pillar (owner decisions G1, G6): who is
- * on the list, how a request's user agent is matched, and that the reviewed
- * Vercel firewall rule names exactly the same agents.
+ * The crawler tiers (bot policy 2026-11-03) and the AI agents kept off the
+ * talks pillar (owner decisions G1, G6): who is on each list, how a
+ * request's user agent is matched, and that the reviewed Vercel firewall
+ * rule names exactly the same agents.
  */
 
 const UAS = {
@@ -22,39 +32,70 @@ const UAS = {
   mistral:
     "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; MistralAI-User/1.0; +https://docs.mistral.ai/robots)",
   facebookPreview: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+  amznSearch:
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/119.0.6045.214 Safari/537.36",
+  metaIndexer:
+    "meta-webindexer/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+  ahrefs: "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)",
+  bytespider:
+    "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider; spider-feedback@bytedance.com)",
 }
 
-describe("AI_CRAWLERS", () => {
-  test("names the AI answer engines, fetchers and training crawlers (G6)", () => {
+describe("the crawler tiers", () => {
+  test("AI_CRAWLERS is the search, user-triggered and training tiers (G6)", () => {
+    expect(AI_CRAWLERS).toEqual([...AI_SEARCH_CRAWLERS, ...AI_USER_AGENTS, ...AI_TRAINING_CRAWLERS])
     for (const token of [
-      "DuckAssistBot",
-      "MistralAI-User",
-      "meta-externalfetcher",
-      "YouBot",
-      "AI2Bot",
-      "Ai2Bot-Dolma",
-      "Timpibot",
-      "ImagesiftBot",
-      "omgili",
-      "Google-CloudVertexBot",
-      "FacebookBot",
+      "OAI-SearchBot",
+      "Claude-SearchBot",
+      "meta-webindexer",
+      "Amzn-SearchBot",
     ]) {
-      expect(AI_CRAWLERS).toContain(token)
+      expect(AI_SEARCH_CRAWLERS).toContain(token)
     }
-    expect(new Set(AI_CRAWLERS.map((token) => token.toLowerCase())).size).toBe(AI_CRAWLERS.length)
+    for (const token of ["ChatGPT-User", "Claude-User", "Perplexity-User", "Amzn-User"]) {
+      expect(AI_USER_AGENTS).toContain(token)
+    }
+    for (const token of ["GPTBot", "ClaudeBot", "CCBot", "meta-externalagent", "Amazonbot"]) {
+      expect(AI_TRAINING_CRAWLERS).toContain(token)
+    }
+  })
+
+  test("no token is listed twice, in any tier", () => {
+    const all = [...AI_CRAWLERS, ...SCRAPERS].map((token) => token.toLowerCase())
+    expect(new Set(all).size).toBe(all.length)
+  })
+
+  test("bulk scrapers are not AI agents (bot policy 2026-11-03)", () => {
+    for (const token of ["Bytespider", "Diffbot", "ImagesiftBot", "AhrefsBot", "PetalBot"]) {
+      expect(SCRAPERS).toContain(token)
+      expect(AI_CRAWLERS).not.toContain(token)
+    }
   })
 
   test("never a general search crawler", () => {
-    for (const token of ["Googlebot", "Bingbot", "Applebot", "GoogleOther", "PetalBot"]) {
-      expect(AI_CRAWLERS.map((agent) => agent.toLowerCase())).not.toContain(token.toLowerCase())
+    const listed = [...AI_CRAWLERS, ...SCRAPERS].map((agent) => agent.toLowerCase())
+    for (const token of ["Googlebot", "Bingbot", "Applebot", "GoogleOther"]) {
+      expect(listed).not.toContain(token.toLowerCase())
     }
   })
 })
 
 describe("isAiCrawler / refusesAiAgent", () => {
   test("matches the agents' tokens in a user agent string, in any case", () => {
-    for (const ua of [UAS.chatgptUser, UAS.duckAssist, UAS.metaFetcher, UAS.mistral]) {
+    for (const ua of [
+      UAS.chatgptUser,
+      UAS.duckAssist,
+      UAS.metaFetcher,
+      UAS.mistral,
+      UAS.amznSearch,
+      UAS.metaIndexer,
+    ]) {
       expect(isAiCrawler(ua)).toBe(true)
+      expect(isScraper(ua)).toBe(false)
+    }
+    for (const ua of [UAS.ahrefs, UAS.bytespider]) {
+      expect(isScraper(ua)).toBe(true)
+      expect(isAiCrawler(ua)).toBe(false)
     }
     expect(isAiCrawler("CLAUDEBOT/1.0")).toBe(true)
     for (const ua of [UAS.chrome, UAS.googlebot, UAS.bingbot, UAS.facebookPreview, "", null]) {
@@ -71,6 +112,7 @@ describe("isAiCrawler / refusesAiAgent", () => {
       "/talks/events/x",
     ]) {
       expect(refusesAiAgent(path, UAS.chatgptUser)).toBe(true)
+      expect(refusesAiAgent(path, UAS.bytespider)).toBe(true)
       expect(refusesAiAgent(path, UAS.googlebot)).toBe(false)
       expect(refusesAiAgent(path, UAS.chrome)).toBe(false)
     }

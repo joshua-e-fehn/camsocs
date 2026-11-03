@@ -249,7 +249,9 @@ both camsocs.uk and camsocs.vercel.app. `ops/vercel/training-crawlers.json`
 is the reviewed PATCH body for `/v1/security/firewall/config?projectId=…`.
 Read the current config first and update the existing named rule; do not
 blindly insert duplicates. This project-level setting survives deployments.
-`robots.txt` also asks just those two training crawlers not to fetch the site.
+Since the bot policy of 2026-11-03 `robots.txt` no longer asks them to stay off the
+site: they share the AI agents' group (canonical public pages, never `/talks` or
+the parameter traps); see "Bot policy" below.
 User agents can be spoofed; this is not an authentication mechanism.
 
 The talks pillar (`/talks`, `/talks/*`, `/talks.ics`) is closed to every AI agent

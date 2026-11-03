@@ -261,7 +261,7 @@ test("the talks feed is a calendar, and AI crawlers are kept off talks", async (
 
   const robots = await (await request.get("/robots.txt")).text()
   const aiGroup = robots.slice(robots.indexOf("User-Agent: GPTBot"))
-  expect(aiGroup).toContain("Disallow: /talks")
+  expect(aiGroup).toMatch(/^Disallow: \/talks$/m)
 })
 
 test("closing the search palette returns focus to the header button", async ({ page }) => {
