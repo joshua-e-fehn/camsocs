@@ -431,24 +431,59 @@ function clip(text: string, max: number): string {
  * the " · CAMsocs" suffix goes first (`absolute`), then the host, then the
  * title is cut at a word. A host already named in the title is not repeated.
  * For one of the University's own listings the host is the University.
+ *
+ * With `atTime` (another event of the same name starts at another time that
+ * London day, a matinee and an evening: `repeatsThatDay`), the start time
+ * follows the day, "Cinderella – CUADC, Sat 28 Nov, 14:30"; when that is too
+ * long the weekday goes first, then the name is cut, never the time (SEO
+ * re-check 2026-11-03, duplicate-event-titles).
  */
-export function eventPageTitle(event: PageEvent): { title: string; absolute: boolean } {
+export function eventPageTitle(
+  event: PageEvent,
+  atTime = false,
+): { title: string; absolute: boolean } {
   const name = `${event.cancelled ? "Cancelled: " : ""}${spokenTitle(event.title)}`
   // The University's own listing (ENG-24) has no organisers here: its host is
   // the University, as the description, row and JSON-LD say.
   const host = event.fromUniversity ? UNIVERSITY_NAME : runners(event)[0]?.name
   const day = formatDayShort(londonIsoDate(event.startsAt))
-  const withHost =
-    host && !name.toLowerCase().includes(host.toLowerCase())
-      ? `${name} – ${host}, ${day}`
-      : undefined
-  const plain = `${name}, ${day}`
-  for (const title of [withHost, plain]) {
-    if (!title) continue
-    if (title.length + TITLE_SUFFIX.length <= TITLE_MAX) return { title, absolute: false }
-    if (title.length <= TITLE_MAX) return { title, absolute: true }
+  // A second performance that day: the time tells them apart, and without
+  // the weekday ("28 Nov, 14:30") before the name is cut.
+  const time = atTime && !event.allDay ? londonTime(event.startsAt) : undefined
+  const whens = time ? [`${day}, ${time}`, `${day.slice(day.indexOf(" ") + 1)}, ${time}`] : [day]
+  const named = host && !name.toLowerCase().includes(host.toLowerCase())
+  for (const when of whens) {
+    for (const title of [named ? `${name} – ${host}, ${when}` : undefined, `${name}, ${when}`]) {
+      if (!title) continue
+      if (title.length + TITLE_SUFFIX.length <= TITLE_MAX) return { title, absolute: false }
+      if (title.length <= TITLE_MAX) return { title, absolute: true }
+    }
   }
-  return { title: `${clip(name, TITLE_MAX - day.length - 2)}, ${day}`, absolute: true }
+  const when = whens[whens.length - 1]
+  return { title: `${clip(name, TITLE_MAX - when.length - 2)}, ${when}`, absolute: true }
+}
+
+/** The fields `repeatsThatDay` compares. */
+type DayListed = Pick<PageEvent, "key" | "title" | "startsAt" | "allDay">
+
+/** Whether another of `listed` (the event's London day, from `events.list`)
+ * has the same title at another start time, a matinee and an evening, so
+ * the page title needs the time (`eventPageTitle`'s `atTime`). A second
+ * record at the very same minute is a double record, which a time cannot
+ * tell apart: not counted. */
+export function repeatsThatDay(event: DayListed, listed: readonly DayListed[]): boolean {
+  if (event.allDay) return false
+  const day = londonIsoDate(event.startsAt)
+  const time = londonTime(event.startsAt)
+  const name = spokenTitle(event.title).toLowerCase()
+  return listed.some(
+    (other) =>
+      other.key !== event.key &&
+      !other.allDay &&
+      londonIsoDate(other.startsAt) === day &&
+      londonTime(other.startsAt) !== time &&
+      spokenTitle(other.title).toLowerCase() === name,
+  )
 }
 
 /** "Tue 3 Nov 2026, 19:30–22:00": `formatEventWhen` with the year, which a

@@ -23,6 +23,7 @@ import {
   nextDayWithEvents,
   orgEventsTitle,
   placeIsInCambridge,
+  repeatsThatDay,
   splitEmoji,
   spokenTitle,
   stripPages,
@@ -300,6 +301,89 @@ describe("the event's page", () => {
     expect(long.absolute).toBe(true)
     expect(long.title.length).toBeLessThanOrEqual(60)
     expect(long.title.endsWith("…, Tue 3 Nov")).toBe(true)
+  })
+
+  test("title: with the start time when the name repeats that day (duplicate-event-titles)", () => {
+    expect(
+      eventPageTitle(
+        { ...PAGE, title: "Open mic", organisers: [{ name: "Jazz Soc", role: "organiser" }] },
+        true,
+      ),
+    ).toEqual({ title: "Open mic – Jazz Soc, Tue 3 Nov, 19:30", absolute: false })
+    // The weekday goes before the name is cut.
+    expect(
+      eventPageTitle(
+        { ...PAGE, title: "Invented Revue Pantomime 2026: Puss in Boots", hosting: "takes_part" },
+        true,
+      ),
+    ).toEqual({
+      title: "Invented Revue Pantomime 2026: Puss in Boots, 3 Nov, 19:30",
+      absolute: true,
+    })
+    // A very long name is cut, never the time.
+    const long = eventPageTitle({ ...PAGE, title: "A very long title ".repeat(6).trim() }, true)
+    expect(long.absolute).toBe(true)
+    expect(long.title.length).toBeLessThanOrEqual(60)
+    expect(long.title.endsWith("…, 3 Nov, 19:30")).toBe(true)
+    // London time, in summer too.
+    expect(
+      eventPageTitle(
+        {
+          ...PAGE,
+          startsAt: at("2026-06-13T13:30:00Z"),
+          endsAt: undefined,
+          title: "Matinee",
+          hosting: "takes_part",
+        },
+        true,
+      ).title,
+    ).toBe("Matinee, Sat 13 Jun, 14:30")
+    // An all-day event has no time to add.
+    expect(eventPageTitle({ ...PAGE, allDay: true }, true)).toEqual(
+      eventPageTitle({ ...PAGE, allDay: true }),
+    )
+  })
+
+  describe("repeatsThatDay", () => {
+    const SHOW = {
+      key: "evt-a",
+      title: "Invented Panto",
+      startsAt: at("2026-11-28T19:45:00Z"),
+      allDay: false,
+    }
+    const other = (fields: Partial<typeof SHOW>) => ({ ...SHOW, key: "evt-b", ...fields })
+
+    test("a matinee and an evening of one name", () => {
+      expect(repeatsThatDay(SHOW, [SHOW, other({ startsAt: at("2026-11-28T14:30:00Z") })])).toBe(
+        true,
+      )
+      const matinee = at("2026-11-28T14:30:00Z")
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, title: "🎭 Invented Panto" })])).toBe(
+        true,
+      )
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, title: "INVENTED panto" })])).toBe(
+        true,
+      )
+    })
+
+    test("not a double record, itself, another name or another day", () => {
+      // The same minute: a time cannot tell them apart.
+      expect(repeatsThatDay(SHOW, [SHOW, other({})])).toBe(false)
+      expect(repeatsThatDay(SHOW, [SHOW])).toBe(false)
+      expect(
+        repeatsThatDay(SHOW, [other({ startsAt: at("2026-11-28T14:30:00Z"), title: "Panto" })]),
+      ).toBe(false)
+      expect(repeatsThatDay(SHOW, [other({ startsAt: at("2026-11-29T14:30:00Z") })])).toBe(false)
+      // 23:30Z on 13 Jun is 14 Jun in London.
+      const june = { ...SHOW, startsAt: at("2026-06-13T19:30:00Z") }
+      expect(repeatsThatDay(june, [other({ startsAt: at("2026-06-13T23:30:00Z") })])).toBe(false)
+    })
+
+    test("never for an all-day event", () => {
+      const matinee = at("2026-11-28T14:30:00Z")
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, allDay: true })])).toBe(false)
+      expect(repeatsThatDay({ ...SHOW, allDay: true }, [other({ startsAt: matinee })])).toBe(false)
+    })
   })
 
   test("structured data only for a public, confirmed event with a read start time", () => {

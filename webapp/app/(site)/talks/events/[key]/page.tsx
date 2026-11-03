@@ -6,6 +6,7 @@ import { londonIsoDate } from "@/lib/calendar"
 import {
   eventMetadata,
   loadEvent,
+  loadRepeatsThatDay,
   loadTerms,
   loadVenue,
   UNAVAILABLE_METADATA,
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (event === null) return UNAVAILABLE_METADATA
   // Any event renders here; one not talks.cam-derived has `/events/<key>` as
   // its canonical URL (eventMetadata, by `eventPath`).
-  return eventMetadata(event, await loadVenue(event.venueKey), Date.now())
+  const [venue, atTime] = await Promise.all([loadVenue(event.venueKey), loadRepeatsThatDay(event)])
+  return eventMetadata(event, venue, Date.now(), atTime)
 }
 
 /**

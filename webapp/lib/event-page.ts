@@ -2,11 +2,13 @@ import type { Metadata } from "next"
 import { unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { api } from "@/convex/_generated/api"
+import { addDays, londonIsoDate, londonMidnight } from "./calendar"
 import {
   type EventVenue,
   eventEndedLongAgo,
   eventMetaDescription,
   eventPageTitle,
+  repeatsThatDay,
   spokenTitle,
 } from "./events"
 import { pageMetadata } from "./page-metadata"
@@ -46,6 +48,30 @@ export const loadVenue = cache(async (venueKey: string | undefined) => {
   }
 })
 
+/** Whether the event's title needs its start time (`repeatsThatDay`): one
+ * anonymous, cached `events.list` read of its London day, by the title's
+ * words, narrowed to its first organiser (a show's nights share it) when it
+ * has one. Decoration: a failed read says no. An all-day event never needs
+ * it; a talks.cam-derived one is not looked up, since `list` here leaves its
+ * twins out (G1). */
+export async function loadRepeatsThatDay(event: EventPublic): Promise<boolean> {
+  if (event.allDay || event.talksDerived) return false
+  const day = londonIsoDate(event.startsAt)
+  const orgKey = event.organisers[0]?.key
+  try {
+    const listed = await publicQuery(api.events.list, {
+      from: londonMidnight(day),
+      to: londonMidnight(addDays(day, 1)),
+      q: spokenTitle(event.title),
+      ...(orgKey ? { orgKey } : {}),
+    })
+    return repeatsThatDay(event, listed)
+  } catch (error) {
+    unstable_rethrow(error)
+    return false
+  }
+}
+
 /** Term dates for the week tag. Decoration: without them the page renders. */
 export async function loadTerms(): Promise<TermDatesRow[]> {
   try {
@@ -64,14 +90,20 @@ export function venueNameOf(event: EventPublic, venue: EventVenue | undefined) {
 
 /**
  * An event's metadata: the title with its host and day (`eventPageTitle`,
- * at most 60 characters), the description with the venue and year, the
+ * at most 60 characters; with the start time, `atTime`, when another of its
+ * name starts at another time that day), the description with the venue and year, the
  * canonical URL on its side of the talks boundary, its `.ics` advertised as a
  * calendar alternate (public events), and robots:
  *  - a Cambridge-only event is for signed-in readers, not search;
  *  - one that ended over 30 days ago is noindex, follow (owner decision G4).
  */
-export function eventMetadata(event: EventPublic, venue: EventVenue | undefined, now: number) {
-  const { title, absolute } = eventPageTitle(event)
+export function eventMetadata(
+  event: EventPublic,
+  venue: EventVenue | undefined,
+  now: number,
+  atTime = false,
+) {
+  const { title, absolute } = eventPageTitle(event, atTime)
   const path = eventPath(event)
   const base = pageMetadata({
     title,
