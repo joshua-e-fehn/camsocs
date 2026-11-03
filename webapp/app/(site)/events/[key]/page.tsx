@@ -13,6 +13,7 @@ import { getToken } from "@/lib/auth-server"
 import { formatDayShort, londonIsoDate } from "@/lib/calendar"
 import { eventJsonLd, eventMetaDescription, spokenTitle } from "@/lib/events"
 import { pageMetadata } from "@/lib/page-metadata"
+import { camSignInOpen } from "@/lib/sign-in-options"
 import { camSignInHref, SITE_NAME, SITE_URL } from "@/lib/site"
 import { jsonLdScript } from "@/lib/talks"
 import { fetchTermDates } from "@/lib/term-dates"
@@ -74,7 +75,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * calendar's sheet shows, as an article with schema.org `Event` JSON-LD and a
  * canonical URL; on a phone a sticky bar carries Add to calendar, the source
  * and Share. A Cambridge-only event the viewer may not see gets a page that
- * says so, with the sign-in, rather than a 404 that would hide whether it
+ * says so, with the sign-in while it is open, rather than a 404 that would hide whether it
  * exists only from the signed-in. A key with no event anyone may see is a
  * real 404 before this runs (proxy.ts, `events.exists`); `notFound()` and
  * `Unavailable` here also cover an event taken down since that check.
@@ -83,7 +84,7 @@ export default async function EventPage({ params }: Props) {
   const { key } = await params
   const event = await loadEvent(key)
   if (event === undefined) notFound()
-  if (event === null) return <Unavailable eventKey={key} />
+  if (event === null) return <Unavailable eventKey={key} camSignIn={await camSignInOpen()} />
 
   const [terms, venueName] = await Promise.all([
     loadTerms(),
@@ -237,7 +238,9 @@ function FromUniversity({ listingUrl }: { listingUrl?: string }) {
   )
 }
 
-function Unavailable({ eventKey }: { eventKey: string }) {
+/** With the @cam.ac.uk sign-in link off, says a Cambridge-only event stays
+ * hidden rather than offering a sign-in that cannot happen (ENG-35). */
+function Unavailable({ eventKey, camSignIn }: { eventKey: string; camSignIn: boolean }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-start gap-4 px-4 py-16 sm:px-6 sm:py-24">
       <p className="flex items-center gap-2 font-mono text-[0.6875rem] font-medium tracking-[0.14em] text-events uppercase">
@@ -249,16 +252,23 @@ function Unavailable({ eventKey }: { eventKey: string }) {
       </h1>
       <p className="flex gap-2.5 text-pretty text-muted-foreground">
         <LockIcon aria-hidden className="mt-1 size-4 shrink-0" />
-        <span>
-          It may have been taken down, or it is a Cambridge-only event:{" "}
-          <Link
-            href={camSignInHref(`/events/${eventKey}`)}
-            className="font-medium text-foreground underline underline-offset-4"
-          >
-            sign in with your @cam.ac.uk email
-          </Link>{" "}
-          to see those.
-        </span>
+        {camSignIn ? (
+          <span>
+            It may have been taken down, or it is a Cambridge-only event:{" "}
+            <Link
+              href={camSignInHref(`/events/${eventKey}`)}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              sign in with your @cam.ac.uk email
+            </Link>{" "}
+            to see those.
+          </span>
+        ) : (
+          <span>
+            It may have been taken down, or it is a Cambridge-only event, which stays hidden until
+            Cambridge sign-in opens.
+          </span>
+        )}
       </p>
       <Link
         href="/events"

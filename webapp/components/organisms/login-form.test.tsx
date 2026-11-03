@@ -45,6 +45,7 @@ describe("the sign-in card", () => {
     const text = page.textContent ?? ""
     expect(text).toContain("Sign-in is not open yet")
     expect(text).not.toContain("not configured")
+    expect(text).toContain("Cambridge-only events stay hidden")
     expect(page.querySelector("form")).toBeNull()
     expect(page.querySelector('[aria-label="Sign-in method"]')).toBeNull()
     expect(page.querySelector("a")?.getAttribute("href")).toBe("/events?view=list")

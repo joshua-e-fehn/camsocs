@@ -1391,7 +1391,7 @@ export function EventsCalendar({
                     to see those.
                   </>
                 ) : (
-                  "It may have been taken down, or it is only shown to Cambridge members."
+                  "It may have been taken down, or it is a Cambridge-only event, which stays hidden until Cambridge sign-in opens."
                 )}
               </SheetDescription>
             </SheetHeader>

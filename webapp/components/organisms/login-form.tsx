@@ -158,8 +158,8 @@ function NotOpen({ next }: { next?: string }) {
       <LockKeyholeIcon className="size-12 text-muted-foreground" aria-hidden="true" />
       <p className="font-medium">Sign-in is not open yet</p>
       <p className="text-sm text-muted-foreground">
-        There is nothing to sign in to for now. Everything camsocs lists can be read without an
-        account.
+        Cambridge email sign-in opens later. Until then Cambridge-only events stay hidden, and
+        everything else can be read without an account.
       </p>
       <Button variant="outline" asChild>
         <Link href={next ?? "/events"}>{next ? "Go back" : "See what’s on"}</Link>

@@ -9,6 +9,7 @@ import { getToken } from "@/lib/auth-server"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
 import { plainLine, summary } from "@/lib/rich-text"
+import { camSignInOpen } from "@/lib/sign-in-options"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
 import { isOrgSlug } from "@/lib/url-state"
 
@@ -75,11 +76,15 @@ export default async function SocietyPage({ params }: Props) {
   const page = await loadOrg((await params).slug)
   if (!page) notFound()
   const token = await getToken()
-  const [colleges, hiddenEvents, related] = await Promise.all([
+  const [colleges, camSignIn, hiddenCount, related] = await Promise.all([
     fetchQuery(api.orgs.colleges, {}),
+    camSignInOpen(),
     hiddenEventCount(page.org.key, token),
     relatedOrgs(page.org.slug),
   ])
+  // The count's prompt is a sign-in link: none while the link is off, as on
+  // /events (ENG-35).
+  const hiddenEvents = camSignIn ? hiddenCount : null
   const collegeNames = Object.fromEntries(colleges.map((college) => [college.key, college.name]))
 
   const { org } = page

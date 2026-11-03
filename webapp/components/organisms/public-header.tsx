@@ -62,7 +62,6 @@ export function PublicHeader() {
   const router = useRouter()
   const access = useViewerTier()
   const signInOptions = useSignInOptions()
-  const showAccount = access?.signedIn === true || signInOptions?.camEmail === true
   const [menuOpen, setMenuOpen] = useState(false)
   const [shortcut, setShortcut] = useState("⌘K")
 
@@ -135,11 +134,12 @@ export function PublicHeader() {
             <span className="sr-only">Search</span>
           </Button>
 
-          {showAccount && (
-            <div className="hidden md:block">
-              <AccountMenu access={access} onSignOut={signOut} />
-            </div>
-          )}
+          <HeaderAccount
+            place="menu"
+            access={access}
+            signInOptions={signInOptions}
+            onSignOut={signOut}
+          />
 
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
@@ -176,15 +176,13 @@ export function PublicHeader() {
                   )
                 })}
               </nav>
-              {showAccount && (
-                <div className="flex flex-col gap-5 border-t px-5 py-4">
-                  <AccountLinks
-                    access={access}
-                    onSignOut={signOut}
-                    onNavigate={() => setMenuOpen(false)}
-                  />
-                </div>
-              )}
+              <HeaderAccount
+                place="sheet"
+                access={access}
+                signInOptions={signInOptions}
+                onSignOut={signOut}
+                onNavigate={() => setMenuOpen(false)}
+              />
             </SheetContent>
           </Sheet>
         </div>
@@ -195,6 +193,38 @@ export function PublicHeader() {
 }
 
 type Access = ReturnType<typeof useViewerTier>
+type SignInOptions = ReturnType<typeof useSignInOptions>
+
+/**
+ * The account menu (`menu`, beside the search box from `md` up) or its links
+ * (`sheet`, the mobile menu), or nothing: signed out, it is there only while
+ * the @cam.ac.uk sign-in link is on (the rule in `PublicHeader`'s docstring).
+ * Exported for its test.
+ */
+export function HeaderAccount({
+  place,
+  access,
+  signInOptions,
+  onSignOut,
+  onNavigate = () => {},
+}: {
+  place: "menu" | "sheet"
+  access: Access
+  signInOptions: SignInOptions
+  onSignOut: () => void
+  onNavigate?: () => void
+}) {
+  if (access?.signedIn !== true && signInOptions?.camEmail !== true) return null
+  return place === "menu" ? (
+    <div className="hidden md:block">
+      <AccountMenu access={access} onSignOut={onSignOut} />
+    </div>
+  ) : (
+    <div className="flex flex-col gap-5 border-t px-5 py-4">
+      <AccountLinks access={access} onSignOut={onSignOut} onNavigate={onNavigate} />
+    </div>
+  )
+}
 
 function AccountMenu({ access, onSignOut }: { access: Access; onSignOut: () => void }) {
   return (
