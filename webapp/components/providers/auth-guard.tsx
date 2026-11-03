@@ -21,6 +21,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // internal `/_not-found` segment, and treating it as public keeps a mistyped
   // URL on the 404 page instead of bouncing to `/sign-in`.
   const isNotFound = useSelectedLayoutSegment() === "/_not-found"
+  // On Vercel's ISR re-render of "/" the server's pathname is "/index", which
+  // `isPublicPath` folds into "/" (lib/auth-routes.ts `routePathname`);
+  // without that the cached home page is this guard's spinner.
   const isPublic = isNotFound || isPublicPath(pathname)
 
   // ⚠ A hydration guard, not a loading flag. The branches below return

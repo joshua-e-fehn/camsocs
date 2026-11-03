@@ -409,6 +409,10 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   enforced in Convex**: every `convex/broker/*` function calls `requireBrokerUser`, which admits
   only verified emails listed in the Convex env var `BROKER_EMAILS` (comma-separated); unset or
   empty means nobody.
+  `AuthGuard` sits in the root layout, so a public page's cached HTML depends on `isPublicPath`
+  classifying the server's pathname: on Vercel an ISR re-render of "/" reports "/index", which
+  `routePathname` (`lib/auth-routes.ts`) folds into "/" (SEO re-check 2026-11-03,
+  home-ssr-spinner).
 - OAuth callback (Google console): `<SITE_URL>/api/auth/callback/google`, dev and prod.
 - Never re-export the library's `handler`/`getToken` from `lib/auth-server.ts`, and never add a
   `next.config` rewrite for `/api/auth/*` (see next.config.ts).
