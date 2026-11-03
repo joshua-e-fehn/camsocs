@@ -647,6 +647,10 @@ def test_the_monitor_timer_runs_hourly_spread_out() -> None:
     values = unit("camsocs-monitor.timer")
     assert values["Timer.OnCalendar"] == ["hourly"]
     assert values["Timer.RandomizedDelaySec"] == ["15min"]
+    # One offset per host, so runs are exactly an hour apart (ENG-33: a
+    # request is announced within about an hour, not up to 85 minutes).
+    assert values["Timer.FixedRandomDelay"] == ["yes"]
+    assert values["Timer.AccuracySec"] == ["1s"]
     assert values["Timer.Unit"] == ["camsocs-monitor.service"]
     assert values["Install.WantedBy"] == ["timers.target"]
 

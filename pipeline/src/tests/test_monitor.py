@@ -11,7 +11,8 @@ and the command are tested against respx routes (never the network).
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+import re
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -59,22 +60,41 @@ QUERY_URL = f"{HOST}/api/projects/{PROJECT}/query/"
 KEY = "phx" + "_" + "monitor-test-key-not-real"
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
 
+#: Rows for a query, or a function of the query's text giving them (the
+#: requests query, whose answer echoes its window's bounds).
+Rows = list[list[Any]] | Callable[[str], list[list[Any]]]
+
+
+def requests_row(total: int, **kinds: int) -> Callable[[str], list[list[Any]]]:
+    """The requests query's answer: the total, a count per kind, then the
+    window's two bounds as PostHog reads them back (`toDateTime` echoed)."""
+
+    def answer(query: str) -> list[list[Any]]:
+        bounds = re.findall(r"toDateTime\('([^']+)'\)", query)[:2]
+        return [[total, *(kinds.get(kind, 0) for kind in LISTING_REQUEST_KINDS), *bounds]]
+
+    return answer
+
+
 #: Rows that pass every check: 3 exceptions, 1 recent harvest (2 h ago),
-#: 40 searches of which 4 found nothing, 120 pageviews.
-HEALTHY: dict[str, list[list[Any]]] = {
+#: 40 searches of which 4 found nothing, 120 pageviews, no new request.
+HEALTHY: dict[str, Rows] = {
     "error_spike": [[3]],
     "stale_harvest": [[1, 120]],
     "zero_result_rate": [[40, 4]],
     "pageview_heartbeat": [[120]],
-    # Total, then claim, correct, remove, object, add: none new.
-    "listing_requests": [[0, 0, 0, 0, 0, 0]],
+    "listing_requests": requests_row(0),
 }
+
+
+def rows_for(answer: Rows, query: str) -> list[list[Any]]:
+    return answer(query) if callable(answer) else answer
 
 
 class FakeQueryClient:
     """Answers each check's query by the check's name (the query `name`)."""
 
-    def __init__(self, answers: Mapping[str, list[list[Any]] | Exception]) -> None:
+    def __init__(self, answers: Mapping[str, Rows | Exception]) -> None:
         self.answers = {**HEALTHY, **answers}
         self.queries: list[tuple[str, str]] = []
 
@@ -83,10 +103,10 @@ class FakeQueryClient:
         answer = self.answers[name.removeprefix("camsocs monitor ")]
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return rows_for(answer, query)
 
 
-def results(**answers: list[list[Any]] | Exception) -> dict[str, CheckResult]:
+def results(**answers: Rows | Exception) -> dict[str, CheckResult]:
     return {r.name: r for r in run_checks(FakeQueryClient(answers))}
 
 
@@ -281,18 +301,20 @@ def test_a_status_file_that_makes_no_sense_pages(previous: dict) -> None:
 # --- new listing requests (ENG-33) -------------------------------------------------------
 
 
-def requests_row(total: int, **kinds: int) -> list[list[Any]]:
-    return [[total, *(kinds.get(kind, 0) for kind in LISTING_REQUEST_KINDS)]]
-
-
 def test_the_requests_query_counts_production_requests_by_kind_between_two_instants() -> None:
     query = requests_query(NOW - timedelta(hours=1), NOW)
     assert query.startswith("SELECT count(), countIf(properties.kind = 'claim')")
     assert query.count("countIf(") == len(LISTING_REQUEST_KINDS)
     assert "event LIKE 'listing_request_received'" in query
     assert "properties.environment = 'production'" in query
-    assert "timestamp > toDateTime('2026-11-01T11:00:00Z')" in query
-    assert "timestamp <= toDateTime('2026-11-01T12:00:00Z')" in query
+    # On ingestion time, so a backlog cannot slip a request into a window
+    # already counted; the event's own time only narrows the scan.
+    assert "created_at > toDateTime('2026-11-01T11:00:00Z')" in query
+    assert "created_at <= toDateTime('2026-11-01T12:00:00Z')" in query
+    assert "timestamp > now() - INTERVAL 31 DAY" in query
+    assert "timestamp > toDateTime" not in query and "timestamp <= toDateTime" not in query
+    # The bounds come back too, so a bound PostHog could not read is seen.
+    assert ", toDateTime('2026-11-01T11:00:00Z'), toDateTime('2026-11-01T12:00:00Z') FROM" in query
     # Counts only: no property is selected, so none can be printed.
     assert "SELECT properties" not in query and "GROUP BY" not in query
 
@@ -316,7 +338,17 @@ def test_requests_are_counted_by_kind_and_a_kind_the_vocabulary_lacks_as_other()
         (QueryFailed("HTTP 503"), "HTTP 503"),
         ([], "malformed answer"),
         ([[1, 1]], "malformed answer"),
-        ([["1", 0, 0, 0, 0, 0]], "malformed answer"),
+        ([[0, 0, 0, 0, 0, 0]], "malformed answer"),
+        (lambda query: [["1", *requests_row(0)(query)[0][1:]]], "malformed answer"),
+        # toDateTime of a string PostHog could not parse is NULL: every row
+        # misses, and the 0 it counts is not to be believed.
+        ([[0, 0, 0, 0, 0, 0, None, "2026-11-01T12:00:00Z"]], "malformed answer"),
+        ([[0, 0, 0, 0, 0, 0, "2026-11-01T11:00:00Z", None]], "malformed answer"),
+        # Read as another instant (a timezone taken wrongly).
+        (
+            [[0, 0, 0, 0, 0, 0, "2026-11-01T11:00:00+01:00", "2026-11-01T12:00:00Z"]],
+            "malformed answer",
+        ),
     ],
 )
 def test_requests_posthog_cannot_count_are_left_for_the_next_run(answer: Any, reason: str) -> None:
@@ -325,6 +357,25 @@ def test_requests_posthog_cannot_count_are_left_for_the_next_run(answer: Any, re
     assert found.status == "unknown" and found.reason == reason
     assert found.counted_until == since, "the cursor stays where it was"
     assert found.to_json()["total"] is None
+
+
+@pytest.mark.parametrize(
+    "start, end",
+    [
+        ("2026-11-01T11:00:00+00:00", "2026-11-01T12:00:00.000000Z"),
+        ("2026-11-01T12:00:00+01:00", "2026-11-01T13:00:00+01:00"),
+        # No offset: the project's own timezone, which cannot be compared.
+        ("2026-11-01 11:00:00", "2026-11-01 12:00:00"),
+    ],
+)
+def test_bounds_read_back_in_any_form_of_the_same_instant_are_believed(
+    start: str, end: str
+) -> None:
+    answer = [[1, 1, 0, 0, 0, 0, start, end]]
+    found = count_requests(
+        FakeQueryClient({"listing_requests": answer}), NOW - timedelta(hours=1), NOW
+    )
+    assert found.status == "ok" and dict(found.by_kind) == {"claim": 1}
 
 
 def test_an_empty_window_asks_posthog_nothing() -> None:
@@ -362,7 +413,7 @@ def test_a_cursor_after_the_window_counts_nothing_twice() -> None:
 
 
 def test_consecutive_runs_count_every_instant_exactly_once() -> None:
-    """Runs 45 to 75 minutes apart (the timer's random delay), one of them
+    """Runs at uneven gaps (a missed hour, a run by hand), one of them
     without an answer from PostHog: the counted windows meet end to end."""
     previous: dict[str, Any] = {}
     counted: list[tuple[datetime, datetime]] = []
@@ -564,7 +615,8 @@ def answer_by_name(answers: Mapping[str, Any]):
         rows = {**HEALTHY, **answers}[name]
         if isinstance(rows, int):
             return httpx.Response(rows, text="server trouble with SELECT secret")
-        return httpx.Response(200, json={"results": rows})
+        query = json.loads(request.content)["query"]["query"]
+        return httpx.Response(200, json={"results": rows_for(rows, query)})
 
     return respond
 
@@ -675,8 +727,8 @@ def test_new_requests_exit_one_and_the_next_run_counts_from_where_this_one_stopp
     ]
     assert len(windows) == 2
     first_until = written["requestsCountedUntil"]
-    assert f"timestamp <= toDateTime('{first_until}')" in windows[0]
-    assert f"timestamp > toDateTime('{first_until}')" in windows[1]
+    assert f"created_at <= toDateTime('{first_until}')" in windows[0]
+    assert f"created_at > toDateTime('{first_until}')" in windows[1]
 
 
 def test_the_site_down_pages_and_its_recovery_pages_once(

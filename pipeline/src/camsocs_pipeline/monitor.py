@@ -40,13 +40,24 @@ From outside, without PostHog (ENG-33):
 `listing_request_received` events (Convex sends one per stored claim,
 correction, removal, objection or addition, with its `kind` only) since the
 previous run, and pages when there is at least one, with the count of each
-kind. The window runs from the previous run's `requestsCountedUntil` (the
-status file) to `REQUESTS_LAG` before now, so consecutive windows meet
-exactly: an event is counted by one run only, and one PostHog ingests late
-(within the lag) is still counted. A query PostHog does not answer leaves
-the cursor where it was, so the next run counts those hours too. Without a
-status file the window is the last `REQUESTS_FIRST_WINDOW`; it never reaches
-back more than `REQUESTS_MAX_WINDOW`.
+kind. The window is on PostHog's ingestion time (`created_at`, when its
+ingestion processed the event), not the event's `timestamp`: an event that
+waits in an ingestion backlog arrives with an old `timestamp` but a new
+`created_at`, so a window counted before it arrived does not lose it. The
+window runs from the previous run's `requestsCountedUntil` (the status file)
+to `REQUESTS_LAG` before now, so consecutive windows meet exactly: an event
+is counted by one run only, and one written to ClickHouse up to the lag after
+PostHog processed it is still counted. A query PostHog does not answer, or
+one whose window bounds it could not read, leaves the cursor where it was, so
+the next run counts those hours too. Without a status file the window is the
+last `REQUESTS_FIRST_WINDOW`; it never reaches back more than
+`REQUESTS_MAX_WINDOW`.
+
+What is never announced: a request whose capture failed (Convex logs it and
+carries on, so PostHog never has it), one written to ClickHouse more than
+`REQUESTS_LAG` after PostHog processed it, and one whose DM Slack refused
+(the cursor has moved on; `journalctl -u camsocs-alert@monitor` shows the
+refusal). The inbox, `/dashboard/requests`, is the record to trust.
 
 **What is printed.** Structured facts only: the check's name, its counts, its
 threshold and window. The queries select counts, never event properties, and
@@ -132,13 +143,18 @@ SITE_USER_AGENT = f"camsocs-monitor/0.1 (+{ABOUT_URL})"
 REQUESTS_EVENT = "listing_request_received"
 #: … its name in the output and the status file, …
 REQUESTS_NAME = "listing_requests"
-#: … how long before the run a window ends (PostHog ingests within seconds
-#: as a rule; a later event is counted by the next run, never missed), …
-REQUESTS_LAG = timedelta(minutes=10)
+#: … how long before the run a window ends: a processed event is written to
+#: ClickHouse within seconds as a rule, and one up to `REQUESTS_LAG` late is
+#: still counted (by the next run); the window is on ingestion time, so a
+#: backlog before processing needs no lag (`requests_query`), …
+REQUESTS_LAG = timedelta(minutes=2)
 #: … the window when no earlier run left a cursor, …
 REQUESTS_FIRST_WINDOW = timedelta(hours=1)
-#: … and the furthest a window reaches back (a monitor off for weeks).
+#: … and the furthest a window reaches back (a monitor off for weeks); …
 REQUESTS_MAX_WINDOW = timedelta(days=30)
+#: … the events' own time is bounded a day further back, so ClickHouse reads
+#: only the recent partitions.
+REQUESTS_SCAN_DAYS = REQUESTS_MAX_WINDOW.days + 1
 
 Status = Literal["ok", "failed", "unknown"]
 #: How a check's value fails: above (`gt`) or below (`lt`) its threshold, or
@@ -187,19 +203,30 @@ HEARTBEAT_QUERY = (
 
 
 def requests_query(since: datetime, until: datetime) -> str:
-    """New listing requests in `(since, until]`: the total, then a count of
-    each kind (`LISTING_REQUEST_KINDS` order). Counts only, never a property.
-    The event is matched with LIKE: the launch audit saw an exact `event =`
-    count 0 for some events PostHog had, and `_`, LIKE's one-character
-    wildcard, still matches only this name among the project's events. The
+    """New listing requests PostHog ingested in `(since, until]`: the total,
+    a count of each kind (`LISTING_REQUEST_KINDS` order), then the two bounds
+    as PostHog read them. Counts only, never a property.
+
+    The window is on `created_at`, the time PostHog's ingestion processed the
+    event, not `timestamp` (when PostHog received it: Convex sends none), so
+    an ingestion backlog cannot slip an event into a window already counted;
+    `timestamp` only narrows the scan to the last `REQUESTS_SCAN_DAYS`. The
     bounds are absolute UTC instants, so the host's and PostHog's clocks need
-    not agree for consecutive windows to meet."""
+    not agree for consecutive windows to meet. HogQL's `toDateTime` of a
+    string it cannot parse is NULL, which would make every row miss and the
+    count a silent 0; the bounds are selected too, so `count_requests` can
+    refuse that answer. The event is matched with LIKE: the launch audit saw
+    an exact `event =` count 0 for some events PostHog had, and `_`, LIKE's
+    one-character wildcard, still matches only this name among the project's
+    events."""
     kinds = "".join(f", countIf(properties.kind = '{kind}')" for kind in LISTING_REQUEST_KINDS)
+    start, end = f"toDateTime('{_iso(since)}')", f"toDateTime('{_iso(until)}')"
     return (
-        f"SELECT count(){kinds} FROM events WHERE event LIKE '{REQUESTS_EVENT}'"
+        f"SELECT count(){kinds}, {start}, {end}"
+        f" FROM events WHERE event LIKE '{REQUESTS_EVENT}'"
         " AND properties.environment = 'production'"
-        f" AND timestamp > toDateTime('{_iso(since)}')"
-        f" AND timestamp <= toDateTime('{_iso(until)}')"
+        f" AND created_at > {start} AND created_at <= {end}"
+        f" AND timestamp > now() - INTERVAL {REQUESTS_SCAN_DAYS} DAY"
     )
 
 
@@ -537,21 +564,37 @@ def requests_window(previous: Mapping[str, Any], *, now: datetime) -> tuple[date
 
 def count_requests(client: QueryClient, since: datetime, until: datetime) -> RequestCount:
     """This window's new requests by kind; `unknown` when PostHog does not
-    answer (never an error). An empty window asks nothing."""
+    answer, or answers with a bound it did not read as this window's (never
+    an error). An empty window asks nothing."""
     if since >= until:
         return RequestCount("ok", since, until)
-    width = 1 + len(LISTING_REQUEST_KINDS)
+    width = 1 + len(LISTING_REQUEST_KINDS) + 2
     try:
         rows = client.hogql(requests_query(since, until), name=f"camsocs monitor {REQUESTS_NAME}")
         if len(rows) != 1 or len(rows[0]) != width:
             raise QueryFailed("malformed answer")
-        total, *each = (int(_number(value)) for value in rows[0])
+        *counts, start, end = rows[0]
+        _check_bound(start, since)
+        _check_bound(end, until)
+        total, *each = (int(_number(value)) for value in counts)
     except QueryFailed as error:
         return RequestCount("unknown", since, until, {}, str(error))
     by_kind = {kind: n for kind, n in zip(LISTING_REQUEST_KINDS, each, strict=True) if n > 0}
     if (other := total - sum(each)) > 0:
         by_kind["other"] = other
     return RequestCount("ok", since, until, by_kind)
+
+
+def _check_bound(value: object, meant: datetime) -> None:
+    """A window bound as PostHog read it: NULL (a string it could not parse)
+    or another instant is a malformed answer. A time without an offset (the
+    project's own timezone) cannot be compared, so it is let through."""
+    if not isinstance(value, str) or not value:
+        raise QueryFailed("malformed answer")
+    read = _instant(value)
+    # Compared as the query wrote it: whole seconds, UTC.
+    if read is not None and _iso(read) != _iso(meant):
+        raise QueryFailed("malformed answer")
 
 
 def _instant(value: object) -> datetime | None:
@@ -717,6 +760,7 @@ __all__ = [
     "REQUESTS_LAG",
     "REQUESTS_MAX_WINDOW",
     "REQUESTS_NAME",
+    "REQUESTS_SCAN_DAYS",
     "SITE_ATTEMPTS",
     "SITE_CHECKS",
     "SITE_CHECK_NAMES",
