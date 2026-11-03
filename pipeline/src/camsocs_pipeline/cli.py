@@ -13,8 +13,9 @@
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
     camsocs clean-events [--titles] [--apply]   stored events no reader restates; --apply
                                          only with --env prod (docs/deploy.md §7)
-    camsocs monitor [--status-json PATH] production checks against PostHog (ENG-10);
-                                         exits 1 when one fails (docs/ops-vps.md)
+    camsocs monitor [--status-json PATH] production checks against PostHog and the site,
+                                         new listing requests (ENG-10, ENG-33); exits 1
+                                         when it pages (docs/ops-vps.md)
 
 `sync` and `harvest` also take `--env NAME` after the command, as `pixi run
 harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
@@ -56,9 +57,13 @@ from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
 from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
+    check_sites,
+    count_requests,
     read_status,
+    requests_window,
     run_checks,
     safe_invocation_id,
+    site_client,
     summary,
 )
 from camsocs_pipeline.pipeline.coverage import (
@@ -542,16 +547,19 @@ def clean_events(ctx: click.Context, apply: bool, titles: bool) -> None:
     metavar="PATH",
     help=(
         "Read the previous run's verdict from PATH and write this one there (the Slack "
-        "alert reads it); a check already paged for reminds only every 6 h."
+        "alert reads it); a check already paged for reminds only every 6 h, and new "
+        "listing requests are counted from where the previous run stopped."
     ),
 )
 @_env_option
 @click.pass_context
 def monitor(ctx: click.Context, status_json: Path | None) -> None:
-    """Production checks against PostHog (monitor.py): an error spike, a stale
-    harvest, a high zero-result search rate, no pageviews. Exits 1 when a
-    check fails; a query PostHog cannot answer is `unknown` and never fails
-    the run. Prints counts and thresholds only."""
+    """Production checks (monitor.py): against PostHog an error spike, a stale
+    harvest, a high zero-result search rate, no pageviews; camsocs.uk's home
+    and societies pages answering 200; and new listing requests by kind.
+    Exits 1 when it pages: a check fails, a site check recovers, or a request
+    arrived. A query PostHog cannot answer is `unknown` and never fails the
+    run. Prints counts, status codes and thresholds only."""
     settings = _settings(ctx)
     if not settings.posthog_query_configured:
         click.echo(
@@ -562,9 +570,14 @@ def monitor(ctx: click.Context, status_json: Path | None) -> None:
         client = PostHogQueryClient.from_settings(settings)
     except ConfigError as error:
         raise click.ClickException(str(error)) from error
+    previous = read_status(status_json)
+    now = datetime.now(UTC)
     with client:
         results = run_checks(client)
-    verdict = assess(results, read_status(status_json), now=datetime.now(UTC))
+        requests = count_requests(client, *requests_window(previous, now=now))
+    with site_client() as site:
+        results += check_sites(site)
+    verdict = assess(results, previous, now=now, requests=requests)
     for line in summary(verdict):
         click.echo(f"monitor: {line}")
     if verdict.unknown:
@@ -576,7 +589,7 @@ def monitor(ctx: click.Context, status_json: Path | None) -> None:
     invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
     _write_summary(status_json, verdict.status_payload(invocation))
     if verdict.page:
-        raise click.ClickException(f"check failed: {', '.join(verdict.failed)}")
+        raise click.ClickException("; ".join(verdict.reasons()))
 
 
 @cli.command()

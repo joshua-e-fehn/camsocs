@@ -1,6 +1,8 @@
-"""`camsocs monitor` (ENG-10): four production checks against PostHog's query
-API, each `ok`, `failed` or `unknown`; only a failure that was not already
-paged for exits non-zero, and a PostHog outage never does.
+"""`camsocs monitor` (ENG-10, ENG-33): four production checks against
+PostHog's query API and two status checks of the site, each `ok`, `failed`
+or `unknown`, and a count of new listing requests. Only a failure that was
+not already paged for, a site check's recovery or a new request exits
+non-zero, and a PostHog outage never does.
 
 A fake query client stands in for PostHog in the check tests; the HTTP client
 and the command are tested against respx routes (never the network).
@@ -11,6 +13,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -19,19 +22,34 @@ import pytest
 import respx
 from click.testing import CliRunner
 
+from camsocs_pipeline import monitor
 from camsocs_pipeline.cli import cli
 from camsocs_pipeline.config import ConfigError
+from camsocs_pipeline.models.vocab import LISTING_REQUEST_KINDS
 from camsocs_pipeline.monitor import (
     CHECK_NAMES,
     ERROR_SPIKE_MAX,
     NOT_INTERNAL,
     REALERT_AFTER,
+    REQUESTS_FIRST_WINDOW,
+    REQUESTS_LAG,
+    REQUESTS_MAX_WINDOW,
+    SITE_ATTEMPTS,
+    SITE_CHECK_NAMES,
+    SITE_CHECKS,
     ZERO_RESULT_MIN_SEARCHES,
     CheckResult,
     PostHogQueryClient,
     QueryFailed,
+    RequestCount,
     assess,
+    check_site,
+    check_sites,
+    count_requests,
+    requests_query,
+    requests_window,
     run_checks,
+    site_client,
 )
 
 HOST = "https://eu.posthog.test"
@@ -48,6 +66,8 @@ HEALTHY: dict[str, list[list[Any]]] = {
     "stale_harvest": [[1, 120]],
     "zero_result_rate": [[40, 4]],
     "pageview_heartbeat": [[120]],
+    # Total, then claim, correct, remove, object, add: none new.
+    "listing_requests": [[0, 0, 0, 0, 0, 0]],
 }
 
 
@@ -258,6 +278,236 @@ def test_a_status_file_that_makes_no_sense_pages(previous: dict) -> None:
     assert assess(failing("error_spike"), previous, now=NOW).page
 
 
+# --- new listing requests (ENG-33) -------------------------------------------------------
+
+
+def requests_row(total: int, **kinds: int) -> list[list[Any]]:
+    return [[total, *(kinds.get(kind, 0) for kind in LISTING_REQUEST_KINDS)]]
+
+
+def test_the_requests_query_counts_production_requests_by_kind_between_two_instants() -> None:
+    query = requests_query(NOW - timedelta(hours=1), NOW)
+    assert query.startswith("SELECT count(), countIf(properties.kind = 'claim')")
+    assert query.count("countIf(") == len(LISTING_REQUEST_KINDS)
+    assert "event LIKE 'listing_request_received'" in query
+    assert "properties.environment = 'production'" in query
+    assert "timestamp > toDateTime('2026-11-01T11:00:00Z')" in query
+    assert "timestamp <= toDateTime('2026-11-01T12:00:00Z')" in query
+    # Counts only: no property is selected, so none can be printed.
+    assert "SELECT properties" not in query and "GROUP BY" not in query
+
+
+def test_requests_are_counted_by_kind_and_a_kind_the_vocabulary_lacks_as_other() -> None:
+    client = FakeQueryClient({"listing_requests": requests_row(4, claim=1, remove=2)})
+    found = count_requests(client, NOW - timedelta(hours=1), NOW)
+    assert found.status == "ok" and found.total == 4
+    assert dict(found.by_kind) == {"claim": 1, "remove": 2, "other": 1}
+    assert found.counted_until == NOW
+    assert found.line() == (
+        "listing_requests: 4 new (claim 1, remove 2, other 1), "
+        "2026-11-01T11:00:00Z to 2026-11-01T12:00:00Z"
+    )
+    assert found.to_json()["byKind"] == {"claim": 1, "remove": 2, "other": 1}
+
+
+@pytest.mark.parametrize(
+    "answer, reason",
+    [
+        (QueryFailed("HTTP 503"), "HTTP 503"),
+        ([], "malformed answer"),
+        ([[1, 1]], "malformed answer"),
+        ([["1", 0, 0, 0, 0, 0]], "malformed answer"),
+    ],
+)
+def test_requests_posthog_cannot_count_are_left_for_the_next_run(answer: Any, reason: str) -> None:
+    since = NOW - timedelta(hours=1)
+    found = count_requests(FakeQueryClient({"listing_requests": answer}), since, NOW)
+    assert found.status == "unknown" and found.reason == reason
+    assert found.counted_until == since, "the cursor stays where it was"
+    assert found.to_json()["total"] is None
+
+
+def test_an_empty_window_asks_posthog_nothing() -> None:
+    client = FakeQueryClient({})
+    found = count_requests(client, NOW, NOW)
+    assert found.status == "ok" and found.total == 0 and not client.queries
+
+
+def cursor(at: datetime) -> dict[str, Any]:
+    return {"requestsCountedUntil": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+
+def test_without_a_cursor_the_window_is_the_last_hour_before_the_lag() -> None:
+    for previous in ({}, {"requestsCountedUntil": "yesterday"}, {"requestsCountedUntil": 3}):
+        assert requests_window(previous, now=NOW) == (
+            NOW - REQUESTS_LAG - REQUESTS_FIRST_WINDOW,
+            NOW - REQUESTS_LAG,
+        )
+
+
+def test_a_window_starts_where_the_last_one_ended_and_never_reaches_back_a_month() -> None:
+    last = NOW - timedelta(minutes=83)
+    assert requests_window(cursor(last), now=NOW) == (last, NOW - REQUESTS_LAG)
+    long_ago = NOW - timedelta(days=90)
+    since, until = requests_window(cursor(long_ago), now=NOW)
+    assert until - since == REQUESTS_MAX_WINDOW
+
+
+def test_a_cursor_after_the_window_counts_nothing_twice() -> None:
+    ahead = NOW + timedelta(hours=1)
+    since, until = requests_window(cursor(ahead), now=NOW)
+    assert since == until == ahead
+    found = count_requests(FakeQueryClient({}), since, until)
+    assert found.counted_until == ahead
+
+
+def test_consecutive_runs_count_every_instant_exactly_once() -> None:
+    """Runs 45 to 75 minutes apart (the timer's random delay), one of them
+    without an answer from PostHog: the counted windows meet end to end."""
+    previous: dict[str, Any] = {}
+    counted: list[tuple[datetime, datetime]] = []
+    at = NOW
+    runs = [(0, None), (45, None), (75, QueryFailed("HTTP 503")), (60, None), (52, None)]
+    for gap, answer in runs:
+        at += timedelta(minutes=gap)
+        client = FakeQueryClient({"listing_requests": answer} if answer else {})
+        found = count_requests(client, *requests_window(previous, now=at))
+        verdict = assess(run_checks(client), previous, now=at, requests=found)
+        if found.status == "ok":
+            counted.append((found.since, found.until))
+        previous = verdict.status_payload()
+    for (_start, end), (start, _end) in pairwise(counted):
+        assert start == end
+    assert counted[-1][1] == at - REQUESTS_LAG
+
+
+def test_a_new_request_pages_with_its_counts_and_none_does_not() -> None:
+    found = RequestCount("ok", NOW - timedelta(hours=1), NOW, {"remove": 1})
+    verdict = assess(run_checks(FakeQueryClient({})), {}, now=NOW, requests=found)
+    assert verdict.page and not verdict.checks_page and verdict.result == "ok"
+    assert verdict.reasons() == ["new listing requests: 1"]
+    payload = verdict.status_payload()
+    assert payload["paged"] is True and payload["checksPaged"] is False
+    assert payload["requests"]["total"] == 1 and payload["requests"]["byKind"] == {"remove": 1}
+    assert payload["requestsCountedUntil"] == "2026-11-01T12:00:00Z"
+    quiet = RequestCount("ok", NOW - timedelta(hours=1), NOW)
+    assert not assess(run_checks(FakeQueryClient({})), {}, now=NOW, requests=quiet).page
+
+
+def test_requests_posthog_did_not_count_never_page_but_are_reported_unknown() -> None:
+    since = NOW - timedelta(hours=1)
+    found = RequestCount("unknown", since, NOW, {}, "HTTP 503")
+    verdict = assess(run_checks(FakeQueryClient({})), {}, now=NOW, requests=found)
+    assert not verdict.page and verdict.unknown == ["listing_requests"]
+    assert verdict.status_payload()["requestsCountedUntil"] == "2026-11-01T11:00:00Z"
+
+
+def test_a_request_does_not_repeat_the_page_of_a_check_still_failing() -> None:
+    previous = paged_for("stale_harvest", at=NOW - timedelta(hours=2))
+    found = RequestCount("ok", NOW - timedelta(hours=1), NOW, {"claim": 2})
+    verdict = assess(failing("stale_harvest"), previous, now=NOW, requests=found)
+    assert verdict.page and not verdict.checks_page
+    assert verdict.alerted == ["stale_harvest"]
+    assert verdict.last_alert_at == NOW - timedelta(hours=2), "the reminder clock is unchanged"
+    assert "still failing: stale_harvest" in "\n".join(monitor.summary(verdict))
+
+
+# --- the site checks (ENG-33) -------------------------------------------------------------
+
+
+HOME, SOCIETIES = (url for _name, url in SITE_CHECKS)
+
+
+def no_pause(_seconds: float) -> None:
+    pass
+
+
+def site(net: respx.MockRouter, *answers: Any, url: str = HOME) -> CheckResult:
+    route = net.head(url).mock(side_effect=list(answers))
+    with site_client() as client:
+        found = check_site(client, "site_home", url, pause=no_pause)
+    assert route.call_count == len(answers)
+    return found
+
+
+def test_the_site_checks_ask_the_home_and_a_listing_page() -> None:
+    assert SITE_CHECKS == (
+        ("site_home", "https://camsocs.uk/"),
+        ("site_societies", "https://camsocs.uk/societies"),
+    )
+    assert SITE_CHECK_NAMES == ("site_home", "site_societies")
+
+
+def test_a_page_that_answers_200_passes_with_one_head_request(net: respx.MockRouter) -> None:
+    found = site(net, httpx.Response(200))
+    assert found.status == "ok" and found.value == 200 and found.detail == {"attempts": 1}
+    request = net.calls.last.request
+    assert request.method == "HEAD", "a HEAD has no body: no page text ever arrives"
+    assert request.headers["User-Agent"].startswith("camsocs-monitor/")
+    assert found.line() == "site_home: ok, 200 (fails when != 200), attempts 1"
+
+
+def test_one_failure_is_asked_again_once(net: respx.MockRouter) -> None:
+    paused: list[float] = []
+    route = net.head(HOME).mock(side_effect=[httpx.ConnectTimeout("slow"), httpx.Response(200)])
+    with site_client() as client:
+        found = check_site(client, "site_home", HOME, pause=paused.append)
+    assert found.status == "ok" and found.detail == {"attempts": 2}
+    assert route.call_count == SITE_ATTEMPTS and paused == [monitor.SITE_RETRY_PAUSE]
+
+
+@pytest.mark.parametrize(
+    "answer, value, reason",
+    [
+        (httpx.Response(503, text="<h1>talk titles</h1>"), 503, "HTTP 503"),
+        (httpx.Response(308, headers={"Location": "https://elsewhere.example/"}), 308, "HTTP 308"),
+        (httpx.ConnectError("no route to host"), 0, "ConnectError"),
+        (httpx.ReadTimeout("slow"), 0, "ReadTimeout"),
+    ],
+)
+def test_a_page_that_fails_twice_fails_by_status_or_class_only(
+    net: respx.MockRouter, answer: Any, value: int, reason: str
+) -> None:
+    found = site(net, answer, answer)
+    assert found.status == "failed" and found.value == value and found.reason == reason
+    assert found.announce_recovery
+    line = found.line()
+    assert line == f"site_home: failed, {value} (fails when != 200), attempts 2; {reason}"
+    assert "talk" not in line and "elsewhere" not in line
+    assert found.to_json()["windowHours"] is None
+
+
+def site_results(**down: bool) -> list[CheckResult]:
+    def answer(name: str) -> CheckResult:
+        ok = not down.get(name)
+        return CheckResult(
+            name, "ok" if ok else "failed", 200 if ok else 503, 200, "ne", None,
+            {"attempts": 1 if ok else 2}, None if ok else "HTTP 503", announce_recovery=True,
+        )  # fmt: skip
+
+    return [*run_checks(FakeQueryClient({})), *(answer(name) for name in SITE_CHECK_NAMES)]
+
+
+def test_a_site_outage_pages_once_then_its_recovery_pages_once() -> None:
+    hour = timedelta(hours=1)
+    down = assess(site_results(site_home=True), {}, now=NOW)
+    assert down.page and down.alerted == ["site_home"] and down.recovered == []
+    still = assess(site_results(site_home=True), down.status_payload(), now=NOW + hour)
+    assert not still.page
+    back = assess(site_results(), still.status_payload(), now=NOW + 2 * hour)
+    assert back.page and back.recovered == ["site_home"] and not back.checks_page
+    assert back.alerted == [] and back.reasons() == ["recovered: site_home"]
+    assert back.status_payload()["recoveredChecks"] == ["site_home"]
+    again = assess(site_results(), back.status_payload(), now=NOW + 3 * hour)
+    assert not again.page and again.recovered == []
+
+
+def test_only_a_site_check_announces_its_recovery() -> None:
+    previous = paged_for("error_spike", "site_societies", at=NOW - timedelta(minutes=30))
+    verdict = assess(site_results(), previous, now=NOW)
+    assert verdict.recovered == ["site_societies"]
+
+
 # --- the HTTP client --------------------------------------------------------------------------
 
 
@@ -324,7 +574,11 @@ def invoke(settings, *args: str):
 
 
 @pytest.fixture
-def configured(make_settings):
+def configured(make_settings, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch):
+    """Settings with the key; the site answers 200 unless a test says otherwise."""
+    monkeypatch.setattr(monitor, "SITE_RETRY_PAUSE", 0)
+    for _name, url in SITE_CHECKS:
+        net.head(url).respond(200)
     return make_settings(
         posthog_personal_api_key=KEY, posthog_project_id=PROJECT, posthog_app_host=HOST
     )
@@ -352,7 +606,10 @@ def test_all_checks_passing_exit_zero_and_write_the_status(
     assert "monitor: error_spike: ok, 3" in result.output
     written = json.loads(status.read_text())
     assert written["result"] == "ok" and written["invocationId"] == "a" * 32
-    assert [c["name"] for c in written["checks"]] == list(CHECK_NAMES)
+    assert [c["name"] for c in written["checks"]] == [*CHECK_NAMES, *SITE_CHECK_NAMES]
+    assert "monitor: site_home: ok, 200" in result.output
+    assert "monitor: listing_requests: none new" in result.output
+    assert written["requests"]["status"] == "ok" and written["requestsCountedUntil"]
     assert KEY not in result.output and KEY not in status.read_text()
 
 
@@ -392,3 +649,58 @@ def test_status_shows_the_personal_key_only_as_set(configured) -> None:
     assert result.exit_code == 0, result.output
     assert "PostHog personal key:" in result.output and "set (monitor)" in result.output
     assert KEY not in result.output
+
+
+def test_new_requests_exit_one_and_the_next_run_counts_from_where_this_one_stopped(
+    configured, net: respx.MockRouter, tmp_path: Path
+) -> None:
+    route = net.post(QUERY_URL).mock(
+        side_effect=answer_by_name({"listing_requests": requests_row(2, claim=1, object=1)})
+    )
+    status = tmp_path / "status-monitor.json"
+
+    first = invoke(configured, "--status-json", str(status))
+    assert first.exit_code == 1
+    assert "new listing requests: 2" in first.output
+    assert "listing_requests: 2 new (claim 1, object 1)" in first.output
+    written = json.loads(status.read_text())
+    assert written["result"] == "ok" and written["paged"] is True
+    assert written["checksPaged"] is False
+
+    invoke(configured, "--status-json", str(status))
+    windows = [
+        json.loads(call.request.content)["query"]["query"]
+        for call in route.calls
+        if json.loads(call.request.content)["name"] == "camsocs monitor listing_requests"
+    ]
+    assert len(windows) == 2
+    first_until = written["requestsCountedUntil"]
+    assert f"timestamp <= toDateTime('{first_until}')" in windows[0]
+    assert f"timestamp > toDateTime('{first_until}')" in windows[1]
+
+
+def test_the_site_down_pages_and_its_recovery_pages_once(
+    configured, net: respx.MockRouter, tmp_path: Path
+) -> None:
+    net.post(QUERY_URL).mock(side_effect=answer_by_name({}))
+    status = tmp_path / "status-monitor.json"
+    net.head(SOCIETIES).mock(side_effect=[httpx.Response(502)] * 4 + [httpx.Response(200)] * 2)
+
+    down = invoke(configured, "--status-json", str(status))
+    assert down.exit_code == 1 and "check failed: site_societies" in down.output
+    assert "site_societies: failed, 502" in down.output
+    assert invoke(configured, "--status-json", str(status)).exit_code == 0, "still down"
+
+    back = invoke(configured, "--status-json", str(status))
+    assert back.exit_code == 1 and "recovered: site_societies" in back.output
+    assert json.loads(status.read_text())["recoveredChecks"] == ["site_societies"]
+    assert invoke(configured, "--status-json", str(status)).exit_code == 0
+
+
+def test_the_site_checks_run_in_order(net: respx.MockRouter) -> None:
+    for _name, url in SITE_CHECKS:
+        net.head(url).respond(200)
+    with site_client() as client:
+        found = check_sites(client, pause=no_pause)
+    assert [r.name for r in found] == list(SITE_CHECK_NAMES)
+    assert [str(call.request.url) for call in net.calls] == [HOME, SOCIETIES]
