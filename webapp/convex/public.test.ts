@@ -248,7 +248,14 @@ describe("events.list / events.get", () => {
     expect(camEvents[1].sourceUrl).toBeUndefined()
 
     // Lists carry no description or provenance; the details come from events.get.
-    expect(Object.keys(anonymous[0])).not.toContain("meta")
+    // Of `meta`, only how the start time was read (whether the event's page has
+    // an Event node: lib/events.ts eventHasStructuredData) — no source or quote.
+    for (const event of anonymous) {
+      if (event.meta === undefined) continue
+      expect(Object.keys(event.meta)).toEqual(["startsAt"])
+      expect(Object.keys(event.meta.startsAt)).toEqual(["status"])
+    }
+    expect(anonymous[0].meta?.startsAt.status).toBe("found")
     expect(Object.keys(anonymous[0])).not.toContain("description")
     const details = await t.query(api.events.get, { key: anonymous[0].key })
     expect(details?.meta.title?.status).toBe("found")
@@ -754,6 +761,65 @@ describe("listingRequests.submit", () => {
       })
     }
     await expect(t.mutation(api.listingRequests.submit, request)).rejects.toThrow(/Too many/)
+  })
+})
+
+describe("listingRequests.submit — from an event page (event-correction-link)", () => {
+  const request = {
+    kind: "correct" as const,
+    orgKey: "org-chess",
+    submitterEmail: "member@example.org",
+    message: "The blitz night starts at eight, not seven.",
+  }
+  test("keeps the event the request is about", async () => {
+    const t = newTest()
+    const { open: eventKey } = await seed(t)
+    const { key } = await t.mutation(api.listingRequests.submit, { ...request, eventKey })
+    const row = await t.run(async (ctx) => await ctx.db.query("listingRequests").first())
+    expect(row).toMatchObject({ key, eventKey })
+  })
+
+  test("a correction about an event may name no listing; other kinds still must", async () => {
+    // A University listing has no host, so its event page links here with
+    // no listing (ENG-24; event-correction-no-org).
+    const t = newTest()
+    const keys = await seed(t)
+    const { orgKey: _, ...noListing } = request
+    const { key } = await t.mutation(api.listingRequests.submit, {
+      ...noListing,
+      eventKey: keys.open,
+    })
+    const row = await t.run(async (ctx) => await ctx.db.query("listingRequests").first())
+    expect(row).toMatchObject({ key, kind: "correct", eventKey: keys.open })
+    expect(row?.orgKey).toBeUndefined()
+    for (const kind of ["claim", "remove", "object"] as const) {
+      await expect(
+        t.mutation(api.listingRequests.submit, { ...noListing, kind, eventKey: keys.open }),
+      ).rejects.toThrow(/Which listing/)
+    }
+  })
+
+  test("refuses what is not an event key, an unknown event, and an event on a new listing", async () => {
+    const t = newTest()
+    const { open: eventKey } = await seed(t)
+    await expect(
+      t.mutation(api.listingRequests.submit, { ...request, eventKey: "evt-nope" }),
+    ).rejects.toThrow(/Not an event key/)
+    await expect(
+      t.mutation(api.listingRequests.submit, {
+        ...request,
+        eventKey: `evt-${"c".repeat(40)}`,
+      }),
+    ).rejects.toThrow(/event was not found/)
+    await expect(
+      t.mutation(api.listingRequests.submit, {
+        kind: "add",
+        submitterEmail: "member@example.org",
+        message: "Please add the Go Society.",
+        fields: { name: "CU Go Society" },
+        eventKey,
+      }),
+    ).rejects.toThrow(/no events/)
   })
 })
 

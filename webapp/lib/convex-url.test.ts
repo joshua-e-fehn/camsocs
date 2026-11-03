@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { deploymentName, isSameDeployment, requireConvexUrls } from "./convex-url"
+import { readFileSync } from "node:fs"
+import path from "node:path"
+import {
+  deploymentName,
+  isPlaceholderDeployment,
+  isSameDeployment,
+  PLACEHOLDER_DEPLOYMENT,
+  requireConvexUrls,
+} from "./convex-url"
 
 /**
  * Regression tests for a build compiled against the wrong Convex deployment.
@@ -161,5 +169,23 @@ describe("region-qualified deployments", () => {
 
   test("still rejects deeper nesting", () => {
     expect(deploymentName("https://a.b.c.convex.cloud")).toBeNull()
+  })
+})
+
+describe("the build-check placeholder", () => {
+  test("is the deployment scripts/build-env-defaults.sh substitutes", () => {
+    const script = readFileSync(
+      path.join(import.meta.dir, "..", "scripts", "build-env-defaults.sh"),
+      "utf8",
+    )
+    expect(script).toContain(`PLACEHOLDER_DEPLOYMENT="${PLACEHOLDER_DEPLOYMENT}"`)
+  })
+
+  test("is recognised in either origin, and nothing else is", () => {
+    expect(isPlaceholderDeployment(`https://${PLACEHOLDER_DEPLOYMENT}.convex.cloud`)).toBe(true)
+    expect(isPlaceholderDeployment(`https://${PLACEHOLDER_DEPLOYMENT}.convex.site`)).toBe(true)
+    expect(isPlaceholderDeployment("https://happy-otter-123.convex.cloud")).toBe(false)
+    expect(isPlaceholderDeployment(undefined)).toBe(false)
+    expect(isPlaceholderDeployment(`https://${PLACEHOLDER_DEPLOYMENT}.example.com`)).toBe(false)
   })
 })

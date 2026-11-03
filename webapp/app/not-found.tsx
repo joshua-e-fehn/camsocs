@@ -1,34 +1,33 @@
-import { headers } from "next/headers"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { MISSING_LISTING_HEADER, missingListingKind } from "@/lib/missing-listing"
+import type { Metadata } from "next"
 import SiteNotFound from "./(site)/not-found"
 import { SiteFrame } from "./(site)/site-frame"
 import TalkNotFound from "./(site)/talks/[key]/not-found"
+import { NotFoundVariant } from "./not-found-variant"
+
+/** Its own title, not the home page's (SEO audit 2026-11-02,
+ * not-found-template). Next adds `noindex` to every 404 itself. */
+export const metadata: Metadata = {
+  title: "Page not found",
+  description: "There is no page at this address on camsocs.",
+}
 
 /**
- * Any URL no route matches, with status 404 and rendered on the server.
+ * Any URL no route matches, with status 404 and rendered on the server,
+ * always inside the public site's frame, so a mistyped or stale link still
+ * leads somewhere: the header, the directory and the footer.
  *
  * proxy.ts rewrites an unknown society, event or talk URL here (ENG-20,
- * lib/missing-listing.ts) and names the kind of listing in a request header:
- * those get the public site's frame and the not-found page their segment
- * would show — the talks one for a talk, the site's own for the rest.
+ * lib/missing-listing.ts). A talk gets the talks pillar's not-found page once
+ * hydrated, everything else the site's (`NotFoundVariant`).
+ *
+ * ⚠ Static: no `headers()`, `cookies()` or other request read. Next renders
+ * this component into every route's payload, so one such read would make
+ * every page of the site dynamic and uncacheable (docs/webapp.md "Caching").
  */
-export default async function NotFound() {
-  const kind = missingListingKind((await headers()).get(MISSING_LISTING_HEADER))
-  if (kind) {
-    return <SiteFrame>{kind === "talk" ? <TalkNotFound /> : <SiteNotFound />}</SiteFrame>
-  }
+export default function NotFound() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center p-6 font-sans">
-      <div className="flex items-center gap-5">
-        <h1 className="text-2xl font-medium">404</h1>
-        <div className="h-12 w-px bg-border" />
-        <p className="text-sm">This page could not be found.</p>
-      </div>
-      <Button variant="outline" className="mt-6" asChild>
-        <Link href="/">Back to home</Link>
-      </Button>
-    </div>
+    <SiteFrame>
+      <NotFoundVariant site={<SiteNotFound />} talk={<TalkNotFound />} />
+    </SiteFrame>
   )
 }

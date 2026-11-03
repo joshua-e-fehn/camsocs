@@ -3,6 +3,7 @@ import Link from "next/link"
 import { CookieSettingsButton } from "@/components/molecules/cookie-settings-button"
 import { Crest } from "@/components/molecules/crest"
 import { formatDayShort } from "@/lib/calendar"
+import { requestLinkRel } from "@/lib/request-link"
 import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 
@@ -14,12 +15,14 @@ const COLUMNS = [
       { href: "/talks", label: "Talks" },
       { href: "/societies", label: "Societies and clubs" },
       { href: "/talks/departments", label: "Departments" },
+      { href: "/term-dates", label: "Term dates" },
     ],
   },
   {
     title: "For societies",
     links: [
-      { href: "/request?kind=claim", label: "Claim or correct a listing" },
+      // The bare form opens on "claim": the one /request URL to crawl.
+      { href: "/request", label: "Claim or correct a listing" },
       { href: "/request?kind=add", label: "Add a missing society" },
       { href: "/request?kind=remove", label: "Ask for removal" },
       { href: "/request?kind=object", label: "Object or complain" },
@@ -77,7 +80,14 @@ export function SiteFooter({
               {column.title}
             </h2>
             {column.links.map((link) => (
-              <Link key={link.href} href={link.href} className={LINK}>
+              <Link
+                key={link.href}
+                href={link.href}
+                // A preset form (`?kind=`) is the same page as /request (its
+                // canonical): not worth a crawler's fetch (request-param-urls).
+                rel={requestLinkRel(link.href)}
+                className={LINK}
+              >
                 {link.label}
               </Link>
             ))}

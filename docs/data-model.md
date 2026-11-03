@@ -405,6 +405,7 @@ These are never returned by public queries.
   | role | string? |
   | message | string |
   | fields | Record? |
+  | eventKey | string? — the event it is about, when sent from an event page's "Report or correct this event" link (`?event=`); never with `add` |
   | status | `open \| accepted \| rejected \| done` |
   | createdAt | number |
   | resolvedAt | number? |

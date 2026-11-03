@@ -11,10 +11,11 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
  * Convex client + Better Auth session for the whole tree.
  *
  * One provider rather than two because they are not independent: the Convex
- * client attaches the auth token to queries, and `initialToken` (read by
- * `getToken()` in the root layout) is how the server-rendered pass hands it
- * over so the first paint is not signed-out. A null token is normal — most
- * visitors to the public directory are signed out.
+ * client attaches the auth token to queries. The root layout passes no
+ * `initialToken`: reading it on the server would make every page dynamic
+ * (app/layout.tsx), so the client fetches the session after hydration, and
+ * queries that depend on it rerun once it is there (docs/webapp.md
+ * "Caching"). Most visitors to the public directory are signed out.
  */
 export function ConvexClientProvider({
   children,

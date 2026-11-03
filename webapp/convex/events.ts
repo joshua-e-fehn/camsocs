@@ -1,5 +1,6 @@
 import { type Infer, v } from "convex/values"
 import { addDays, isoDateMs, londonMidnight, startOfWeek } from "../lib/calendar"
+import { isTalksDerivedEvent } from "../lib/talks-boundary"
 import { CATEGORIES, EVENT_TYPES, type EventVisibility } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
@@ -30,7 +31,22 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
  * viewer or the broker; `members_only` never. An event whose every organiser
  * and co-host is hidden (a remove / object request) is not shown either, nor
  * a future event its listing no longer shows (lib/derived.ts `isWithdrawn`).
+ *
+ * The talks boundary (owner decision G1, lib/talks-boundary.ts): a
+ * talks.cam-derived society event is left out of `list` unless the caller
+ * asks with `talksCam`. Server renders outside /talks never ask, so no such
+ * title reaches their HTML or RSC payload; the calendar adds them in the
+ * browser after hydration, and their pages live under /talks (`locate`).
  */
+
+/** Whether `list` leaves talks.cam-derived events out (the default), returns
+ * only them, or returns everything. */
+const talksCamMode = v.union(v.literal("exclude"), v.literal("only"), v.literal("include"))
+
+/** The talks boundary's rule over a stored event (every field it reads). */
+export function isTalksDerived(event: Doc<"events">): boolean {
+  return isTalksDerivedEvent(event)
+}
 
 /** The widest window one call may ask for — a month view plus margins is ~6 weeks. */
 export const MAX_WINDOW_MS = 186 * DAY_MS
@@ -54,6 +70,9 @@ const listArgs = {
   /** `false` leaves out events societies only take part in (`hosting:
    * takes_part`, decision D6); they are included by default. */
   includeTakingPart: v.optional(v.boolean()),
+  /** talks.cam-derived events (G1): `exclude` by default — never anything
+   * else in a server render outside /talks. */
+  talksCam: v.optional(talksCamMode),
   /** The University's own listings (ENG-24, lib/derived.ts
    * `isUniversityListing`): `hide` leaves them out, `only` lists nothing
    * else; both kinds by default. */
@@ -75,7 +94,7 @@ function overlaps(event: Doc<"events">, from: number, to: number): boolean {
  * setHidden` after a remove / object request; a hidden organisation has no
  * card). An event nobody is credited with stays.
  */
-async function hostsListed(
+export async function hostsListed(
   event: Doc<"events">,
   lookup: ReturnType<typeof orgRefCache>,
 ): Promise<boolean> {
@@ -151,10 +170,12 @@ async function matchingEvents(
   // window's events however many older ones share the words.
   const words = (args.q ?? "").trim().slice(0, 200).toLowerCase().split(/\s+/).filter(Boolean)
   const types = args.eventTypes?.length ? new Set<string>(args.eventTypes) : null
+  const talksCam = args.talksCam ?? "exclude"
   let events = [...byKey.values()].filter(
     (event) =>
       overlaps(event, args.from, args.to) &&
       tiers.includes(event.visibility) &&
+      (talksCam === "include" || isTalksDerived(event) === (talksCam === "only")) &&
       (args.includeTakingPart !== false || event.hosting !== "takes_part") &&
       (!types || types.has(event.eventType)) &&
       (!args.university || (args.university === "only") === isUniversityListing(event)) &&
@@ -243,7 +264,11 @@ export const restrictedCount = query({
     const window = weekWindow(args.from, args.to, args.orgKey ? 4 : 1)
     const hidden = await matchingEvents(
       ctx,
-      { ...window, orgKey: args.orgKey },
+      // A count only, so talks.cam-derived events may count (G1 is about
+      // text): the calendar shows them after hydration, so it counts them
+      // (the default); a society profile never lists them, so it asks
+      // `exclude` and its hint counts only what signing in would show there.
+      { ...window, orgKey: args.orgKey, talksCam: args.talksCam ?? "include" },
       ["cam_only"],
       orgRefCache(ctx),
     )
@@ -289,6 +314,32 @@ export const get = query({
 })
 
 /**
+ * The title the request form shows for the event a request is about
+ * (`/request?event=…`, event-correction-link): what `get` shows this viewer,
+ * or null when it would show nothing, and null for a talks.cam-derived event,
+ * named by its key alone outside /talks (owner decision G1,
+ * lib/talks-boundary.ts). The form reads this rather than `get`, so no
+ * talks.cam text reaches a page outside /talks even in the browser (review of
+ * 2026-11-03, g1-client-fetch).
+ */
+export const requestLabel = query({
+  args: { key: v.string() },
+  returns: v.object({ title: v.union(v.null(), v.string()) }),
+  handler: async (ctx, args) => {
+    const tiers = visibleEventTiers(await getViewer(ctx))
+    const lookup = orgRefCache(ctx)
+    const event = await shownEvent(ctx, args.key, tiers, lookup)
+    if (!event || isTalksDerived(event)) return { title: null }
+    const shown = scrubAddresses(
+      await eventPublic(ctx, event, lookup),
+      await loadContactHashes(ctx),
+      await loadNameHashes(ctx),
+    )
+    return { title: shown.talksDerived ? null : shown.title }
+  },
+})
+
+/**
  * Whether `/events/<key>` has an event to show to someone (ENG-20): the
  * request-time gate in `proxy.ts` answers anything else with a real 404
  * before the page streams. True for an event a verified @cam.ac.uk viewer
@@ -302,4 +353,21 @@ export const exists = query({
   returns: v.boolean(),
   handler: async (ctx, args) =>
     (await shownEvent(ctx, args.key, ["public", "cam_only"], orgRefCache(ctx))) !== null,
+})
+
+/**
+ * Where `/events/<key>` should answer, for the request-time gate in
+ * `proxy.ts` (ENG-20, owner decision G1): `missing` (a real 404, as
+ * `exists` is false), `talks` (a talks.cam-derived event, whose page is
+ * `/talks/events/<key>`: a 308 there), else `event`. Viewer-independent, as
+ * `exists`.
+ */
+export const locate = query({
+  args: { key: v.string() },
+  returns: v.union(v.literal("missing"), v.literal("event"), v.literal("talks")),
+  handler: async (ctx, args) => {
+    const event = await shownEvent(ctx, args.key, ["public", "cam_only"], orgRefCache(ctx))
+    if (!event) return "missing" as const
+    return isTalksDerived(event) ? ("talks" as const) : ("event" as const)
+  },
 })

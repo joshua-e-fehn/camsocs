@@ -11,3 +11,20 @@ export const list = query({
     return venues.map(venuePublic).sort((a, b) => a.name.localeCompare(b.name))
   },
 })
+
+/**
+ * One venue by key, or null — for an event's page, which needs one venue's
+ * name, address and coordinates (its JSON-LD `Place`), not the whole list
+ * (SEO audit "event-location-thin").
+ */
+export const get = query({
+  args: { key: v.string() },
+  returns: v.union(v.null(), venuePublicValidator),
+  handler: async (ctx, args) => {
+    const venue = await ctx.db
+      .query("venues")
+      .withIndex("by_key", (i) => i.eq("key", args.key))
+      .unique()
+    return venue ? venuePublic(venue) : null
+  },
+})

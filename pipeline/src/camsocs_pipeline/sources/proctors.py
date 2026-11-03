@@ -15,6 +15,13 @@ Each entry becomes one ``proctors_register`` observation:
   Society"); the name as published is the claim's ``value_raw`` and the
   identity's ``proctors_name``. Acronyms in trailing brackets ("(CU, CUAILS)")
   become identity aliases for the resolver;
+- ``aliases`` — the society's registered full name, when the register's
+  qualifiers changed it ("Cambridge University Chess Club"), and those
+  acronyms ("CUAILS"). The SU's shorter name usually wins ``name``; without
+  this the full name and the acronym, which searchers and answer engines
+  match on, were lost from the public listing (SEO audit 2026-11-02,
+  entity-aliases-missing). It is the society's own published name, never a
+  generated "University of Cambridge …" label;
 - the link, classified by shape (`classify_link`): a website (own domain,
   SRCF, a cam.ac.uk page), a social (Instagram, Facebook, LinkedIn, Linktree,
   WeChat, X), or an SU profile, which is identity only (the SU harvester
@@ -186,6 +193,16 @@ def register_observation(entry: RegisterEntry, page: FetchResult) -> Observation
             value_raw=entry.raw_name if entry.raw_name != entry.name else None,
         ),
     ]
+    published = published_aliases(entry)
+    if published:
+        fields.append(
+            parser_field(
+                "aliases",
+                published,
+                extractor="proctors_register.aliases",
+                evidence="secondary",
+            )
+        )
     internal: dict[str, str] = {"proctors_name": entry.raw_name}
     hints: dict[str, str] = {}
     kind = entry.link_kind
@@ -232,6 +249,19 @@ def register_observation(entry: RegisterEntry, page: FetchResult) -> Observation
     )
 
 
+def published_aliases(entry: RegisterEntry) -> list[str]:
+    """The public ``aliases`` an entry claims: its full name when that names
+    Cambridge ("Chess Club (CU)" → "Cambridge University Chess Club", or a
+    name printed that way), which is what tells it apart from every other
+    university's Chess Club when the SU's shorter name wins ``name``; then the
+    acronyms it gives in brackets. Not the sorted form, "CU …" or a name that
+    only gained "The", which are the register's spellings, not other names.
+    The webapp drops an alias equal to the resolved name."""
+    names = [entry.name] if "Cambridge" in entry.name else []
+    names += [alias for alias in entry.aliases if _ACRONYM.match(alias)]
+    return list(dict.fromkeys(names))
+
+
 def _source_key(raw_name: str) -> str:
     try:
         return slugify(raw_name)
@@ -244,6 +274,7 @@ __all__ = [
     "RegisterEntry",
     "classify_link",
     "parse_register",
+    "published_aliases",
     "register_name",
     "register_observation",
     "su_reference",
