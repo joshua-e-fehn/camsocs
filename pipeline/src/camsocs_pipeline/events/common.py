@@ -6,7 +6,9 @@ stores them as epoch milliseconds (UTC instants, data-model §0 rule 6). A time 
 source gives without a zone is Cambridge time (`LONDON`). All-day events start
 at 00:00 London on their first day and end at 00:00 London after their last
 (exclusive), so `termWeekLabel` (derived on the server from `startsAt`) lands on
-the right day.
+the right day. A timed span that covers whole London days — 00:00 to 23:59, or
+to the next midnight — is all-day too (`whole_days`): a site's "all day" event
+in schema.org data reads 00:00–23:59 (ENG-36), which is no time of day.
 
 **The window** (`EventWindow`): from 7 days ago to 70 days ahead, London
 midnights. Every stage keeps only events that overlap it, and expands
@@ -96,6 +98,24 @@ _ROLE_RANK = {"organiser": 0, "co_host": 1, "sponsor": 2}
 
 def london_midnight(day: date) -> datetime:
     return datetime.combine(day, time(0, 0), tzinfo=LONDON)
+
+
+def whole_days(starts_at: datetime, ends_at: datetime | None) -> datetime | None:
+    """The exclusive end (00:00 London after the last day) of a timed span
+    that covers whole London days: from midnight to 23:59 (or 23:59:59) or to
+    a later midnight. None for any other span."""
+    if ends_at is None:
+        return None
+    start, end = starts_at.astimezone(LONDON), ends_at.astimezone(LONDON)
+    if start.time() != time(0):
+        return None
+    if end.time() == time(0):
+        last = end.date()
+    elif (end.hour, end.minute) == (23, 59):
+        last = end.date() + timedelta(days=1)
+    else:
+        return None
+    return london_midnight(last) if last > start.date() else None
 
 
 def london_today(now: datetime | None = None) -> date:
@@ -468,10 +488,13 @@ def build_event_observation(
     def scrub(text: str | None) -> str | None:
         return withhold_personal_contacts(text, own)
 
+    all_day, ends_at = draft.all_day, draft.ends_at
+    if not all_day and (whole := whole_days(draft.starts_at, ends_at)) is not None:
+        all_day, ends_at = True, whole
     put("title", single_line(scrub(draft.title), max_length=TITLE_MAX))
     put("startsAt", epoch_ms(draft.starts_at))
-    put("endsAt", epoch_ms(draft.ends_at) if draft.ends_at is not None else None)
-    put("allDay", draft.all_day)
+    put("endsAt", epoch_ms(ends_at) if ends_at is not None else None)
+    put("allDay", all_day)
     put(
         "description",
         clean_text(scrub(draft.description), max_length=DESCRIPTION_MAX),
@@ -617,6 +640,7 @@ __all__ = [
     "polite_client",
     "redact_personal_emails",
     "single_line",
+    "whole_days",
     "withhold_personal_contacts",
     "write_staging",
 ]

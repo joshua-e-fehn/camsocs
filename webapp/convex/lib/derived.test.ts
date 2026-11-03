@@ -11,6 +11,7 @@ import {
   londonOffsetMs,
   nextHandoverDate,
   orgSearchText,
+  sweepGroupOf,
   type TermDates,
   termWeekLabel,
 } from "./derived"
@@ -138,6 +139,38 @@ describe("deriveOrgStatus (data-model §6)", () => {
 
   test("no signal at all is unknown", () => {
     expect(deriveOrgStatus({}, now)).toBe("unknown")
+  })
+})
+
+describe("sweepGroupOf", () => {
+  test("whole-source listings, per-URL listings and one-off readings", () => {
+    expect(sweepGroupOf("camdram", "https://www.camdram.net/shows/x.json", "show:1")).toBe(
+      "camdram",
+    )
+    expect(sweepGroupOf("ics", "https://Example.org/cal.ics/", "uid-1")).toBe(
+      "ics:example.org/cal.ics",
+    )
+    expect(sweepGroupOf("mailing_list", "inbound:<m1>", "org-q:2026-11-10:quiz")).toBeUndefined()
+  })
+
+  test("a society's pages and cards are one listing per society (ENG-36)", () => {
+    const calendar = "https://german-society.example/calendars/"
+    const events = "https://german-society.example/our-events/"
+    expect(sweepGroupOf("website", calendar, "org-german-society:2026-11-07:med")).toBe(
+      "own:org-german-society",
+    )
+    expect(sweepGroupOf("termcard", events, "org-german-society:2026-11-07:med")).toBe(
+      "own:org-german-society",
+    )
+    // Another society on the same host is its own listing.
+    expect(sweepGroupOf("website", calendar, "org-french-society:2026-11-07:x")).toBe(
+      "own:org-french-society",
+    )
+    // An external id without an organisation keeps its listing URL.
+    expect(sweepGroupOf("termcard", events, "list:x:2026-11-07:med")).toBe(
+      "termcard:german-society.example/our-events",
+    )
+    expect(sweepGroupOf("website", calendar)).toBe("website:german-society.example/calendars")
   })
 })
 

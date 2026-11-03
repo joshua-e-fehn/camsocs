@@ -226,7 +226,11 @@ function derive(
       .filter((value): value is number => value !== undefined)
     return {
       spanEndsAt: spanEndOf(row.startsAt as number, row.endsAt as number | undefined),
-      sweepGroup: sweepGroupOf(row.source as string, meta.externalId?.sourceUrl),
+      sweepGroup: sweepGroupOf(
+        row.source as string,
+        meta.externalId?.sourceUrl,
+        row.externalId as string | undefined,
+      ),
       termWeekLabel: termWeekLabel(row.startsAt as number, context.terms),
       confidence: confidences.length > 0 ? Math.min(...confidences) : 0.5,
       lastSeenAt: seen.length > 0 ? Math.max(...seen) : context.now,

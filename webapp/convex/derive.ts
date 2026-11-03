@@ -60,7 +60,11 @@ export const recomputeEvents = internalMutation({
     for (const event of page.page) {
       const label = termWeekLabel(event.startsAt, terms)
       const spanEndsAt = spanEndOf(event.startsAt, event.endsAt)
-      const sweepGroup = sweepGroupOf(event.source, event.meta.externalId?.sourceUrl)
+      const sweepGroup = sweepGroupOf(
+        event.source,
+        event.meta.externalId?.sourceUrl,
+        event.externalId,
+      )
       // Also fills in the organiser rows' copy of `hosting` for rows written
       // before it was copied (it patches only rows that differ).
       await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })

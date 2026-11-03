@@ -638,6 +638,37 @@ describe("withdrawn events", () => {
     )
     expect(titles).toEqual(["Pub quiz", "Social", "Talk 2"])
   })
+
+  test("a card's events fall behind the society's site once its pages list them (ENG-36)", async () => {
+    const t = newTest()
+    // The term card on one page was read before the calendar page listed the
+    // same evenings; the site now gives every reading from its calendar page
+    // (the card's rows are left out as already listed), so nothing re-sights
+    // the card's own listing.
+    const events = "https://cugerman.example/our-events/"
+    const calendar = "https://cugerman.example/calendars/"
+    const old = NOW - 18 * DAY
+    await listed(t, "termcard", "org-g:2026-11-07:med", "Med Night", NOW + 4 * DAY, old, events)
+    await listed(t, "termcard", "org-g:2026-11-10:pub", "Pub Night", NOW + 7 * DAY, old, events)
+    await listed(t, "website", "org-g:2026-11-07:med-2", "Med Night", NOW + 4 * DAY, NOW, calendar)
+    await listed(t, "website", "org-g:2026-11-10:pub-2", "Pub Night", NOW + 7 * DAY, NOW, calendar)
+    // Another society whose site has gone quiet keeps its events.
+    await listed(
+      t,
+      "termcard",
+      "org-h:2026-11-12:quiz",
+      "Quiz",
+      NOW + 9 * DAY,
+      old,
+      "https://cuh.example/events/",
+    )
+    const rows = await t.query(api.events.list, { from: NOW, to: NOW + 20 * DAY })
+    expect(rows.map((e) => [e.title, e.source])).toEqual([
+      ["Med Night", "website"],
+      ["Pub Night", "website"],
+      ["Quiz", "termcard"],
+    ])
+  })
 })
 
 describe("public meta", () => {

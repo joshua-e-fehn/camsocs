@@ -86,10 +86,25 @@ export function termWeekLabel(ms: number, terms: readonly TermDates[]): string |
  * dropped — even though nobody says so. A society's events page and a
  * termcard are re-read (from the reply cache) on every run, and their events'
  * keys come from the model's wording and the date, so a renamed or moved
- * event is a new key and the old one must fall behind its page (review
- * 2026-10-10). Mail, posts and manual entries are one-off readings: never.
+ * event is a new key and the old one must fall behind its society's site
+ * (review 2026-10-10; `OWN_SITE_SOURCES`). Mail, posts and manual entries are
+ * one-off readings: never.
  */
 const WHOLE_SOURCE_LISTINGS = new Set(["camdram", "cucbc", "su_whatson"])
+/**
+ * A society's own publications — its site's pages and the term cards and
+ * posters they show or it links (`website`, `termcard`) — are one listing per
+ * society, keyed by the organisation in the external id (`<org key>:<London
+ * date>:<slug>`), not one per page or card (ENG-36). The website stage reads
+ * the whole site each run and leaves out a card's event the site's own text
+ * already lists, on any of its pages; a card event posted before the site's
+ * text listed it would otherwise keep a listing of its own that nothing
+ * sights any more, which withdraws nothing, and show beside the page's event
+ * (the German Society's term card and its calendar page, 2026-11-02). An
+ * external id without an organisation falls back to its listing URL.
+ */
+const OWN_SITE_SOURCES = new Set(["website", "termcard"])
+const ORG_SCOPED_ID = /^(org-[a-z0-9-]+):/
 const PER_URL_LISTINGS = new Set([
   "talks_cam",
   "ics",
@@ -110,10 +125,18 @@ export const WITHDRAWN_AFTER_MS = 3 * DAY_MS
  * a one-off source. Its newest sighting is what the event's own `lastSeenAt`
  * is compared with: a listing that is read again re-sights everything it
  * still shows, so an event it dropped falls behind — and a pipeline that
- * stops running stops every sighting at once, which hides nothing.
+ * stops running stops every sighting at once, which hides nothing. A
+ * society's own site and cards are one listing (`OWN_SITE_SOURCES`):
+ * `own:<org key>`.
  */
-export function sweepGroupOf(source: string, listingUrl: string | undefined): string | undefined {
+export function sweepGroupOf(
+  source: string,
+  listingUrl: string | undefined,
+  externalId?: string,
+): string | undefined {
   if (WHOLE_SOURCE_LISTINGS.has(source)) return source
+  const owner = OWN_SITE_SOURCES.has(source) ? externalId?.match(ORG_SCOPED_ID)?.[1] : undefined
+  if (owner) return `own:${owner}`
   if (PER_URL_LISTINGS.has(source) && listingUrl) return `${source}:${normaliseUrl(listingUrl)}`
   return undefined
 }

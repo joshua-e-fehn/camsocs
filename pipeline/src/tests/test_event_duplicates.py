@@ -333,3 +333,65 @@ def test_a_university_event_merges_with_its_societys_page_but_never_with_talks_c
         "talks_cam", "900001", "Puddles and Ponds", ms(2026, 10, 30, 19, 0), organisers=()
     )
     assert find_duplicates([talk, university]).primary_of == {}
+
+
+def test_a_term_cards_rows_fold_into_the_sites_own_calendar() -> None:
+    """ENG-36: the German Society's term card (read off its events page) and
+    its calendar page list the same evenings; one batch is one event each,
+    the page's reading primary. (The rows a card posted before the page
+    listed them are withdrawn by the server's sweep of the society's site,
+    `webapp/convex/lib/derived.ts` `sweepGroupOf`.)"""
+    org = ("org-german-society",)
+    page = "https://german-society.example/calendars/"
+
+    def card(slug: str, title: str, starts_at: int, *, all_day: bool) -> EventObservation:
+        return reading(
+            "termcard",
+            f"org-german-society:{slug}",
+            title,
+            starts_at,
+            all_day=all_day,
+            organisers=org,
+            llm=True,
+            url=f"https://german-society.example/uploads/{slug}.png",
+        )
+
+    def listed(slug: str, title: str, starts_at: int, *, all_day: bool) -> EventObservation:
+        return reading(
+            "website",
+            f"org-german-society:{slug}",
+            title,
+            starts_at,
+            all_day=all_day,
+            organisers=org,
+            url=page,
+        )
+
+    cards = [
+        card(
+            "2026-11-03:panel",
+            "Panel discussion “German Politics Under Pressure? Populism, the AfD”",
+            ms(2026, 11, 3, 18),
+            all_day=False,
+        ),
+        card("2026-11-07:med", "Med Club Night with French Soc", ms(2026, 11, 7), all_day=True),
+        card("2026-11-10:pub", "Pub Night with Czech & Slovak Soc", ms(2026, 11, 10), all_day=True),
+    ]
+    pages = [
+        listed(
+            "2026-11-03:panel-discussion",
+            "Panel Discussion: German Politics Under Pressure? Populism, the AfD",
+            ms(2026, 11, 3, 18),
+            all_day=False,
+        ),
+        # 00:00–23:59 on the page is all day (`events.common.whole_days`).
+        listed("2026-11-07:med", "Med Club Night with French Soc", ms(2026, 11, 7), all_day=True),
+        listed(
+            "2026-11-10:pub", "Pub Night with Czech & Slovak Soc", ms(2026, 11, 10), all_day=True
+        ),
+    ]
+    duplicates = find_duplicates([*cards, *pages])
+    assert duplicates.primary_of == {
+        (c.event_source, c.external_id): (p.event_source, p.external_id)
+        for c, p in zip(cards, pages, strict=True)
+    }
