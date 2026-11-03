@@ -1,20 +1,25 @@
-import { fetchQuery } from "convex/nextjs"
 import { CircleDashedIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
+import { unstable_rethrow } from "next/navigation"
 import { InlineCode } from "@/components/molecules/inline-code"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { StatusChip } from "@/components/molecules/source-line"
 import { api } from "@/convex/_generated/api"
 import { formatInstantDate, londonTime } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
+import { publicQuery } from "@/lib/public-data"
 import { BOT_USER_AGENT, CONTACT_EMAIL, CONTROLLER_NAME, DISCLAIMER } from "@/lib/site"
+import { aboutPageJsonLd } from "@/lib/site-jsonld"
 import { type KnownStatus, MISSING_DETAILS, STATUS_DETAILS } from "@/lib/source-line"
+import { jsonLdScript } from "@/lib/structured-data"
+
+const DESCRIPTION =
+  "Who runs camsocs and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, every fact sourced."
 
 export const metadata: Metadata = pageMetadata({
   title: "About",
-  description:
-    "What camsocs is, who runs it, and how it collects data: public sources only, polite crawling, no Instagram scraping, names replaced by roles, talks read by parsers alone, every fact sourced.",
+  description: DESCRIPTION,
   path: "/about",
 })
 
@@ -46,8 +51,9 @@ const SOURCES = [
 /** When the pipeline last finished a harvest, or null when unknown. */
 async function lastHarvest(): Promise<number | null> {
   try {
-    return (await fetchQuery(api.runs.lastHarvest, {}))?.finishedAt ?? null
-  } catch {
+    return (await publicQuery(api.runs.lastHarvest, {}))?.finishedAt ?? null
+  } catch (error) {
+    unstable_rethrow(error)
     return null
   }
 }
@@ -57,6 +63,11 @@ export default async function AboutPage() {
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-12 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_18rem]">
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD, escaped by jsonLdScript
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(aboutPageJsonLd(DESCRIPTION)) }}
+      />
       <div className="flex max-w-3xl flex-col gap-10">
         <header className="flex flex-col gap-3">
           <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
@@ -191,7 +202,11 @@ export default async function AboutPage() {
               </>
             ) : (
               <>
-                use the <Link href="/request?kind=object">request form</Link> with the talk’s link
+                use the{" "}
+                <Link href="/request?kind=object" rel="nofollow">
+                  request form
+                </Link>{" "}
+                with the talk’s link
               </>
             )}
             . The organiser’s own listing is the place to change it for good: what it says is what

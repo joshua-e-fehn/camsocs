@@ -529,7 +529,13 @@ describe("public queries", () => {
     ])
     expect(result.page[0]).not.toHaveProperty("abstract")
     expect(result.page[0].departments).toEqual([
-      { key: CST.key, slug: CST.slug, shortName: CST.shortName, school: "technology" },
+      {
+        key: CST.key,
+        slug: CST.slug,
+        shortName: CST.shortName,
+        name: CST.name,
+        school: "technology",
+      },
     ])
     expect(result.page.find((row) => row.key === talks.loose.key)?.departments).toEqual([])
   })

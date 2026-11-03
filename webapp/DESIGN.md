@@ -282,7 +282,8 @@ Never show a blank area. Provide:
 ## Landing page
 
 In this order (`app/(site)/page.tsx`, `organisms/home-overview.tsx`): the sky-band hero (date and
-term, "What's on in Cambridge today" with an apricot underline, a greeting with today's counts,
+term, "What's on in Cambridge today" with an apricot underline, one plain sentence on what the
+site is (an unofficial, independent directory, `SITE_INTRO`) then today's counts,
 one search box that opens the palette, "Try" links, the large crest) → Today / This week:
 Events · Talks · Societies in three columns, five rows each (three on phones) → "The week
 ahead", seven days that switch the columns above to that day → "Find your people", the

@@ -718,6 +718,9 @@ class ConvexLoader:
                 plan.claims, self, media
             )
         report.claims = self.post_claims(plan.claims, run_key=run_key)
+        # What reached the claims route, after suppression, noise and
+        # redaction: the IndexNow ping works out the changed pages from it.
+        report.posted = plan.claims
         if self.file_cache is not None:
             report.files_reused = self.file_cache.reused - reused_before
             if any(
@@ -783,6 +786,8 @@ class LoadReport:
     relationships: BatchResult = field(default_factory=lambda: BatchResult("relationships"))
     event_organisers: BatchResult = field(default_factory=lambda: BatchResult("event organisers"))
     broker: BatchResult = field(default_factory=lambda: BatchResult("broker rows"))
+    #: The claims posted (`indexnow.ping_changed` reads which pages changed).
+    posted: list[ClaimInput] = field(default_factory=list)
 
     def results(self) -> list[BatchResult]:
         return [

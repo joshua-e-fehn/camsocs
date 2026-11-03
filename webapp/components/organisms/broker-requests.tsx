@@ -142,7 +142,9 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
               {request.org.name}
             </Link>
           ) : (
-            <span>{request.orgKey ?? "New listing"}</span>
+            // A correction about a University event may name no listing
+            // (event-correction-no-org).
+            <span>{request.orgKey ?? (request.kind === "add" ? "New listing" : "No listing")}</span>
           )}
           {request.org?.hidden && (
             <Badge variant="outline">
@@ -184,6 +186,19 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm whitespace-pre-wrap">{request.message}</p>
+        {request.eventKey && (
+          // Sent from the event's page (event-correction-link); /events/<key>
+          // forwards a talks.cam-derived one to /talks/events/<key>.
+          <p className="text-sm text-muted-foreground">
+            About the event{" "}
+            <Link
+              href={`/events/${request.eventKey}`}
+              className="font-mono text-xs text-foreground underline-offset-4 hover:underline"
+            >
+              {request.eventKey}
+            </Link>
+          </p>
+        )}
         {fields.length > 0 && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border bg-muted/30 p-3 text-sm">
             {fields.map(([name, value]) => (

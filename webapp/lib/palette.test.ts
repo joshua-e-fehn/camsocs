@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { firstPaletteValue, isForgetKey, matchesWords, recentOf, recentValue } from "./palette"
+import {
+  firstPaletteValue,
+  isForgetKey,
+  isPaletteShortcut,
+  matchesWords,
+  recentOf,
+  recentValue,
+} from "./palette"
 
 describe("the palette's first row", () => {
   test("is the first row of the first group with one, whatever the scope", () => {
@@ -38,5 +45,32 @@ describe("local matches", () => {
     expect(matchesWords("Gonville & Caius College", "caius gon")).toBe(true)
     expect(matchesWords("Café Society", "cafe")).toBe(true)
     expect(matchesWords("Trinity Hall", "trinity college")).toBe(false)
+  })
+})
+
+describe("the palette's shortcuts", () => {
+  const key = (key: string, extra: Partial<KeyboardEvent> = {}) => ({
+    defaultPrevented: false,
+    isComposing: false,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    target: document.body,
+    key,
+    ...extra,
+  })
+
+  test("⌘K and Ctrl+K open it anywhere, / outside a text field", () => {
+    expect(isPaletteShortcut(key("k", { metaKey: true }))).toBe(true)
+    expect(isPaletteShortcut(key("K", { ctrlKey: true }))).toBe(true)
+    expect(isPaletteShortcut(key("/"))).toBe(true)
+    expect(isPaletteShortcut(key("/", { target: document.createElement("input") }))).toBe(false)
+  })
+
+  test("nothing else does", () => {
+    expect(isPaletteShortcut(key("k"))).toBe(false)
+    expect(isPaletteShortcut(key("k", { metaKey: true, altKey: true }))).toBe(false)
+    expect(isPaletteShortcut(key("/", { defaultPrevented: true }))).toBe(false)
+    expect(isPaletteShortcut(key("/", { isComposing: true }))).toBe(false)
   })
 })

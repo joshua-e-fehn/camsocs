@@ -3,7 +3,9 @@ import type { api } from "@/convex/_generated/api"
 import { formatDayShort, londonIsoDate, londonTime } from "./calendar"
 import { joinNames } from "./format"
 import { utcStamp } from "./ics"
-import type { TalkKind, TalkSchool } from "./vocab"
+import { MAX_TITLE_LENGTH, TITLE_SUFFIX } from "./site"
+import { breadcrumbList, pageId, talkId, WEBSITE_ID } from "./structured-data"
+import { TALK_KIND_LABELS, type TalkKind, type TalkSchool } from "./vocab"
 import { relativeDay } from "./week-strip"
 
 /**
@@ -298,6 +300,51 @@ export function outlookCalendarUrl(
   return `https://${host}/calendar/0/action/compose?${params.toString()}`
 }
 
+// --- the agenda's title --------------------------------------------------------------------
+
+/** The talks pillar's document title (SEO audit "hub-page-titles-weak"):
+ * what a search for Cambridge seminars should find. */
+export const TALKS_TITLE = "Public talks & seminars in Cambridge"
+
+const TITLE_MAX = MAX_TITLE_LENGTH
+
+/**
+ * The agenda's title for its filters, the same on the server (metadata) and
+ * in the browser (after a filter change): the pillar's own, "Computer
+ * Science talks & seminars in Cambridge" for a department or a School (SEO
+ * audit "talks-department-hubs"), or the kind and scope for other slices.
+ * Within 60 characters, the " · camsocs" suffix dropped first (`absolute`).
+ */
+export function talksPageTitle(
+  filters: { school?: TalkSchool; kind?: TalkKind },
+  departmentName?: string,
+): { title: string; absolute: boolean } {
+  const scope = departmentName ?? (filters.school ? TALK_SCHOOL_SHORT[filters.school] : undefined)
+  const kind = filters.kind ? `${TALK_KIND_LABELS[filters.kind]}s` : undefined
+  const candidates = !scope
+    ? [kind ? `${kind} in Cambridge` : TALKS_TITLE]
+    : kind
+      ? [`${kind} · ${scope} talks`]
+      : [
+          /\bcambridge\b/i.test(scope) ? undefined : `${scope} talks & seminars in Cambridge`,
+          `${scope} talks & seminars`,
+          `${scope} talks`,
+        ]
+  for (const title of candidates) {
+    if (title && title.length + TITLE_SUFFIX.length <= TITLE_MAX) return { title, absolute: false }
+  }
+  for (const title of candidates) {
+    if (title && title.length <= TITLE_MAX) return { title, absolute: true }
+  }
+  const last = candidates[candidates.length - 1] ?? TALKS_TITLE
+  return { title: `${last.slice(0, TITLE_MAX - 1).trimEnd()}…`, absolute: true }
+}
+
+/** The title as the browser shows it: with the suffix unless `absolute`. */
+export function documentTitle({ title, absolute }: { title: string; absolute: boolean }): string {
+  return absolute ? title : `${title}${TITLE_SUFFIX}`
+}
+
 // --- the detail page -----------------------------------------------------------------------
 
 /** The page's meta description: who, when, where (no abstract: it is the
@@ -314,8 +361,15 @@ export function talkMetaDescription(talk: TalkListItem): string {
   return lead ? `${lead}: ${text}` : text
 }
 
-/** schema.org `Event` for a talk's page (a JSON-LD script). The abstract is
- * left out: it stays on the source's page and ours. */
+/**
+ * schema.org `Event` for a talk's page, as a node of the site's graph (owner
+ * decision G8: talk markup stays; only its errors are fixed, SEO audit
+ * "talk-jsonld-details"). The abstract is left out: it stays on the source's
+ * page and ours. An online talk's VirtualLocation stays the source listing,
+ * where the joining link is (a page of ours is not where anyone attends; G8
+ * keeps that as it was, review of 2026-11-02); the organizer is the
+ * department by its full name.
+ */
 export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, unknown> {
   const room = physicalVenue(talk.venue)
   const mode = talk.online
@@ -333,9 +387,10 @@ export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, un
   const virtual = talk.online ? { "@type": "VirtualLocation", url: talk.url } : null
   const location = [place, virtual].filter(Boolean)
   const day = londonIsoDate(talk.startsAt)
+  const department = talk.departments[0]
   return {
-    "@context": "https://schema.org",
     "@type": "Event",
+    "@id": talkId(talk.key),
     name: talk.title,
     url: pageUrl,
     sameAs: talk.url,
@@ -363,18 +418,49 @@ export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, un
           })),
         }
       : {}),
-    ...(talk.departments.length > 0
-      ? { organizer: { "@type": "Organization", name: talk.departments[0].shortName } }
+    ...(department
+      ? { organizer: { "@type": "Organization", name: department.name ?? department.shortName } }
       : {}),
     ...(talk.series ? { superEvent: { "@type": "EventSeries", name: talk.series } } : {}),
   }
 }
 
-/** JSON for a `<script type="application/ld+json">`: `<` escaped so no text
- * in it can close the script. */
-export function jsonLdScript(data: Record<string, unknown>): string {
-  return JSON.stringify(data).replace(/</g, "\\u003c")
+/**
+ * A talk page's JSON-LD graph (SEO audit "jsonld-graph-breadcrumbs"): its
+ * WebPage, part of the site's WebSite by `@id`, whose main entity is the
+ * talk's Event, and the BreadcrumbList of the visible trail (Talks › the
+ * department › the talk).
+ */
+export function talkStructuredData(talk: TalkPublic): Record<string, unknown> {
+  const path = `/talks/${talk.key}`
+  const pageUrl = pageId(path)
+  const department = talk.departments[0]
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": pageUrl,
+        url: pageUrl,
+        name: talk.title,
+        isPartOf: { "@id": WEBSITE_ID },
+        mainEntity: { "@id": talkId(talk.key) },
+        breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
+      },
+      talkJsonLd(talk, pageUrl),
+      breadcrumbList(path, [
+        { name: "Talks", path: "/talks" },
+        ...(department
+          ? [{ name: department.shortName, path: `/talks?dept=${department.slug}` }]
+          : []),
+        { name: talk.title, path },
+      ]),
+    ],
+  }
 }
+
+/** JSON for a `<script type="application/ld+json">` (lib/structured-data.ts). */
+export { jsonLdScript } from "./structured-data"
 
 // --- the Subscribe sentence ----------------------------------------------------------------
 

@@ -51,7 +51,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/convex/_generated/api"
 import { useEvent, useVenues } from "@/hooks/convex"
-import { useEventWindow, useRestrictedCount } from "@/hooks/convex/events"
+import { useEventWindow, useRestrictedCount, useTalksSideEvents } from "@/hooks/convex/events"
 import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import {
   addDays,
@@ -67,6 +67,7 @@ import { eventsByDay, lastDayOf, splitOngoing } from "@/lib/event-runs"
 import {
   dayCounts,
   matchesEventQuery,
+  mergeByStart,
   nextDayWithEvents,
   spokenTitle,
   stripPages,
@@ -75,9 +76,11 @@ import {
 import type { EventListItem, OrgRef } from "@/lib/public-api"
 import { camSignInHref, SITE_URL } from "@/lib/site"
 import { dayHeading } from "@/lib/talks"
+import { eventPath } from "@/lib/talks-boundary"
 import type { TermDatesRow } from "@/lib/term-week"
 import {
   activeEventFilterCount,
+  defaultWeeks,
   type EventsState,
   eventListArgs,
   eventRestrictedArgs,
@@ -126,6 +129,19 @@ function searchParamsObject(params: URLSearchParams): SearchParams {
     out[key] = all.length > 1 ? all : all[0]
   }
   return out
+}
+
+/** A link's plain click handled in place (`run`); a modified click (new
+ * tab, new window) follows the link as usual. */
+function inPlace(run: () => void) {
+  return (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return
+    }
+    event.preventDefault()
+    if (event.currentTarget.getAttribute("aria-disabled") === "true") return
+    run()
+  }
 }
 
 function plural(n: number, one: string, many: string) {
@@ -329,7 +345,7 @@ export function EventsCalendar({
     if (openedHere.current) window.history.back()
     else window.history.replaceState(null, "", eventsHref(base))
   }
-  const eventHref = (event: EventListItem) => `/events/${event.key}`
+  const eventHref = (event: EventListItem) => eventPath(event)
   const dayHref = (day: string) =>
     eventsHref({
       ...base,
@@ -351,7 +367,12 @@ export function EventsCalendar({
     preloadedRestricted ?? undefined,
   )
   const camOnly = universityView ? undefined : restricted
-  const all = loaded.data ?? []
+  // Talks.cam-derived society events join after hydration (G1).
+  const talksSide = useTalksSideEvents(args)
+  const all = useMemo(
+    () => mergeByStart(loaded.data ?? [], talksSide ?? []),
+    [loaded.data, talksSide],
+  )
   const matching = useMemo(
     () => all.filter((event) => matchesEventQuery(event, state.q)),
     [all, state.q],
@@ -578,7 +599,10 @@ export function EventsCalendar({
   const universityOnly = state.university === "only"
   const pickOrg = (next: OrgRef | null, from: EventsState) => {
     if (next) setKnownOrgs((known) => ({ ...known, [next.slug]: next }))
-    return { ...from, org: next?.slug }
+    // A society's calendar opens on its four weeks, the whole site's on one,
+    // unless the reader has already loaded more.
+    const weeks = from.weeks === defaultWeeks(from.org) ? defaultWeeks(next?.slug) : from.weeks
+    return { ...from, org: next?.slug, weeks }
   }
 
   // The phone's filter sheet keeps a draft and applies it on "Show N events".
@@ -586,7 +610,10 @@ export function EventsCalendar({
   const [draft, setDraft] = useState<EventsState>(base)
   const draftRows = useQuery(
     api.events.list,
-    sheetOpen ? eventListArgs(draft, eventsWindow(draft, today, termEnd)) : "skip",
+    // Browser only, so it may count talks.cam-derived events too (G1).
+    sheetOpen
+      ? { ...eventListArgs(draft, eventsWindow(draft, today, termEnd)), talksCam: "include" }
+      : "skip",
   )
   const draftCount = draftRows
     ? (() => {
@@ -805,6 +832,10 @@ export function EventsCalendar({
               <p className="flex items-center gap-2 font-mono text-[0.6875rem] font-medium tracking-[0.14em] text-events uppercase">
                 <span aria-hidden className="h-px w-6 bg-events" />
                 What’s on
+                <span aria-hidden className="opacity-50">
+                  ·
+                </span>
+                <span>{termWeekTag(today, terms) ?? formatDayShort(today)}</span>
               </p>
               <h1
                 className={cn(
@@ -822,7 +853,7 @@ export function EventsCalendar({
                   </>
                 ) : (
                   <>
-                    Events<span className="text-events">.</span>
+                    Cambridge student events<span className="text-events">.</span>
                   </>
                 )}
               </h1>
@@ -1258,29 +1289,42 @@ export function EventsCalendar({
                       <ArrowRightIcon data-icon="inline-end" />
                     </Button>
                   ) : state.weeks < MAX_LIST_WEEKS ? (
+                    // A real link (crawlers follow it to the next week; those
+                    // URLs are noindex, follow), handled in place on a click.
                     <Button
+                      asChild
                       variant="outline"
-                      className="h-11 rounded-full border-events/50 px-6 hover:border-events hover:bg-events-tint/60"
-                      disabled={stale}
-                      onClick={extendWeek}
+                      className="h-11 rounded-full border-events/50 px-6 hover:border-events hover:bg-events-tint/60 aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >
-                      {stale && <Spinner data-icon="inline-start" />}
-                      Show next week
-                      <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                        {formatDayShort(nextWeekFirst)} –{" "}
-                        {formatDayShort(addDays(nextWeekFirst, 6))}
-                      </span>
+                      <a
+                        href={eventsHref({
+                          ...base,
+                          preset: undefined,
+                          date: state.preset ? undefined : state.date,
+                          weeks: state.weeks + 1,
+                        })}
+                        aria-disabled={stale || undefined}
+                        onClick={inPlace(extendWeek)}
+                      >
+                        {stale && <Spinner data-icon="inline-start" />}
+                        Show next week
+                        <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                          {formatDayShort(nextWeekFirst)} –{" "}
+                          {formatDayShort(addDays(nextWeekFirst, 6))}
+                        </span>
+                      </a>
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      className="h-11 rounded-full px-6"
-                      onClick={() =>
-                        apply({ ...base, date: nextWeekFirst, weeks: 1 }, { scroll: true })
-                      }
-                    >
-                      From {formatDayShort(nextWeekFirst)}
-                      <ArrowRightIcon data-icon="inline-end" />
+                    <Button asChild variant="outline" className="h-11 rounded-full px-6">
+                      <a
+                        href={eventsHref({ ...base, date: nextWeekFirst, weeks: 1 })}
+                        onClick={inPlace(() =>
+                          apply({ ...base, date: nextWeekFirst, weeks: 1 }, { scroll: true }),
+                        )}
+                      >
+                        From {formatDayShort(nextWeekFirst)}
+                        <ArrowRightIcon data-icon="inline-end" />
+                      </a>
                     </Button>
                   )}
                 </div>
@@ -1358,11 +1402,11 @@ export function EventsCalendar({
                 <EventDetails
                   event={openData}
                   venueName={openVenue}
-                  pageUrl={`${SITE_URL}/events/${openData.key}`}
+                  pageUrl={`${SITE_URL}${eventPath(openData)}`}
                   termWeek={termWeekTag(londonIsoDate(openData.startsAt), terms)}
                 />
                 <Link
-                  href={`/events/${openData.key}`}
+                  href={eventPath(openData)}
                   className="mt-6 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-events underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   Open the event’s own page

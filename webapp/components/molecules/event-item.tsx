@@ -145,6 +145,41 @@ export function organiserLine(
 }
 
 /**
+ * The row's "who" line with each society linked to its profile (SEO audit
+ * "events-hub-hosts-unlinked": the calendar lists the week's events but
+ * linked none of their societies). The links sit above the row's stretched
+ * link (`relative z-10`), so they take their own clicks. Same words as
+ * `organiserLine`.
+ */
+function OrganiserLinks({
+  event,
+}: {
+  event: Pick<EventListItem, "organisers" | "hosting"> &
+    Partial<Pick<EventListItem, "fromUniversity">>
+}) {
+  // The University's own listing (ENG-24) has no profile here to link.
+  if (event.fromUniversity) return <>{UNIVERSITY_NAME}</>
+  const hosts = event.organisers.filter((o) => o.role !== "sponsor")
+  const links = hosts.map((organiser, index) => (
+    <span key={`${organiser.key}-${organiser.role}`}>
+      {index > 0 && (index === hosts.length - 1 && event.hosting === "takes_part" ? " and " : ", ")}
+      <Link
+        href={`/societies/${organiser.slug}`}
+        className="relative z-10 rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        {organiser.name}
+      </Link>
+    </span>
+  ))
+  if (event.hosting !== "takes_part") return <>{links}</>
+  return (
+    <>
+      {links} {hosts.length === 1 ? "takes" : "take"} part
+    </>
+  )
+}
+
+/**
  * One event in the day-grouped agenda (talks-redesign-spec §6 "/events"):
  * the day is the sticky header above it, so the row carries no date — a
  * time column (start over end, or "All day"), the title in the serif,
@@ -220,7 +255,11 @@ export function EventRow({
         </Heading>
         {(organisers || event.venueText) && (
           <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
-            {organisers && <span className="truncate">{organisers}</span>}
+            {organisers && (
+              <span className="truncate">
+                <OrganiserLinks event={event} />
+              </span>
+            )}
             {organisers && event.venueText && (
               <span aria-hidden className="shrink-0">
                 ·

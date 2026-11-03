@@ -109,7 +109,8 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - Names are written in sorted form: "African Caribbean Society (CU)", "Building Bridges … Society (The)", "AI in Law Society (CU, CUAILS)". The harvester (`sources/proctors.py`, stage `proctors_register`):
   - moves the qualifiers to the front ("Cambridge University African Caribbean Society");
   - keeps the name as published as `value_raw` and `proctors_name`;
-  - passes acronyms to the resolver as aliases.
+  - passes acronyms to the resolver as aliases;
+  - claims the full name when it names Cambridge, and those acronyms, as public `aliases` (secondary): the SU's shorter name usually wins `name`, and the webapp's titles and JSON-LD `alternateName` use the full name (SEO audit 2026-11-02, decision G2).
 - Links on 2026-10-07:
 
   | Kind | Entries |

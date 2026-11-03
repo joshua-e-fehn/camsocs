@@ -28,6 +28,7 @@ import {
 import { formatEventPrice } from "@/lib/format"
 import type { EventPublic } from "@/lib/public-api"
 import { displayHost, hasValue, sourceLine } from "@/lib/source-line"
+import { eventIcsPath } from "@/lib/talks-boundary"
 import { cn } from "@/lib/utils"
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS } from "@/lib/vocab"
 
@@ -54,7 +55,8 @@ function longDay(iso: string): string {
   return `${LONG_WEEKDAYS[(date.getUTCDay() + 6) % 7]} ${date.getUTCDate()} ${LONG_MONTHS[date.getUTCMonth()]}`
 }
 
-/** The calendar links for one event (its `.ics` is `/events/<key>/ics`).
+/** The calendar links for one event (its `.ics` is beside its page:
+ * `/events/<key>/ics`, or under /talks for a talks.cam-derived one, G1).
  * A venue known only by its key (`venueName`) is still the location. */
 export function eventCalendarLinks(
   event: EventPublic,
@@ -64,7 +66,7 @@ export function eventCalendarLinks(
   const located = { ...event, venueText: event.venueText ?? venueName }
   return {
     google: eventGoogleCalendarUrl(located, pageUrl),
-    ics: `/events/${event.key}/ics`,
+    ics: eventIcsPath(event),
     outlook: eventOutlookCalendarUrl(located, pageUrl),
     office365: eventOutlookCalendarUrl(located, pageUrl, "outlook.office.com"),
   }
@@ -298,12 +300,17 @@ export function EventDetails({
       {event.imageUrl && (
         <Image
           src={event.imageUrl}
-          alt=""
+          // A poster carries the event's words; name it (SEO audit "image-alt-text").
+          alt={`Poster for ${spokenTitle(event.title)}`}
           width={640}
           height={360}
           sizes="(min-width: 640px) 32rem, 100vw"
           // In a sheet that just opened: load now, not when scrolled to.
           loading="eager"
+          // On the event's own page it sits under the title, above the fold:
+          // the likely LCP element, fetched first (SEO audit 2026-11-02,
+          // mobile-lcp-js-weight). Not in a sheet, behind the calendar.
+          fetchPriority={showTitle ? "high" : undefined}
           className="aspect-video w-full rounded-xl border bg-muted object-cover"
         />
       )}

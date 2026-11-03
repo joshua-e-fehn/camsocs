@@ -316,18 +316,10 @@ function fileSlug(title: string, fallback: string): string {
   return slug || fallback
 }
 
-/**
- * One event as a downloadable `.ics` (`/events/<key>/ics`, "Add to calendar"
- * for Apple Calendar and desktop Outlook): UID `<key>@camsocs.uk`, the page
- * here as its URL, who runs it — or who takes part (D6), or for one of the
- * University's own listings the programme and its page there (ENG-24) — in
- * the description, and no feed name, so the calendar app asks where to put it.
- */
-export function eventIcsFile(
-  event: IcsEvent,
-  pageUrl: string,
-  now: number,
-): { body: string; filename: string } {
+/** An event's VEVENT: UID `<key>@camsocs.uk`, the page here as its URL, who
+ * runs it — or who takes part (D6), or for one of the University's own
+ * listings the programme and its page there (ENG-24) — in the description. */
+function eventEntry(event: IcsEvent, pageUrl: string): IcsEntry {
   const lines: string[] = []
   if (event.cancelled) lines.push("This event is cancelled.")
   const names = event.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name)
@@ -341,7 +333,7 @@ export function eventIcsFile(
     )
   }
   lines.push(`Details: ${pageUrl}`)
-  const entry: IcsEntry = {
+  return {
     uid: `${event.key}@${ICS_UID_DOMAIN}`,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
@@ -352,17 +344,56 @@ export function eventIcsFile(
     description: lines.join("\n"),
     cancelled: event.cancelled,
   }
+}
+
+/**
+ * One event as a downloadable `.ics` (`/events/<key>/ics`, "Add to
+ * calendar" for Apple Calendar and desktop Outlook), with no feed name, so
+ * the calendar app asks where to put it.
+ */
+export function eventIcsFile(
+  event: IcsEvent,
+  pageUrl: string,
+  now: number,
+): { body: string; filename: string } {
   const body = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//camsocs//Events//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    ...entryLines(entry, utcStamp(now)),
+    ...entryLines(eventEntry(event, pageUrl), utcStamp(now)),
     "END:VCALENDAR",
   ]
   return {
     body: body.map(foldLine).join(CRLF) + CRLF,
     filename: `${fileSlug(event.title, "event")}.ics`,
   }
+}
+
+/**
+ * A feed of events (`/events.ics`: societies' and the University's own
+ * listings, or one society's; SEO audit "calendar-feeds-discovery"): named,
+ * refreshed every six hours like the talks feed, each event's page here as
+ * its URL (`pageUrl`).
+ */
+export function eventsCalendar(
+  events: readonly IcsEvent[],
+  options: { name: string; now: number; pageUrl: (key: string) => string },
+): string {
+  const stamp = utcStamp(options.now)
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//camsocs//Events//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeText(options.name)}`,
+    "X-WR-TIMEZONE:Europe/London",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
+    "X-PUBLISHED-TTL:PT6H",
+    ...events.flatMap((event) => entryLines(eventEntry(event, options.pageUrl(event.key)), stamp)),
+    "END:VCALENDAR",
+  ]
+  return lines.map(foldLine).join(CRLF) + CRLF
 }

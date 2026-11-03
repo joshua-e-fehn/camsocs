@@ -10,6 +10,7 @@ import {
   talksCountArgs,
   talksDayCountArgs,
   talksFeedQuery,
+  talksIndexing,
   talksListArgs,
   talksSearchArgs,
   talksWindow,
@@ -165,5 +166,34 @@ describe("Convex arguments", () => {
     const { args, capped } = talksCountArgs({}, long)
     expect(capped).toBe(true)
     expect(args.to).toBe(londonMidnight("2026-12-02"))
+  })
+})
+
+describe("talksIndexing", () => {
+  test("the agenda, one department's and one School's are canonical and indexable", () => {
+    expect(talksIndexing({})).toEqual({ canonical: "/talks", index: true })
+    expect(talksIndexing(parseTalksParams({ dept: "engineering" }))).toEqual({
+      canonical: "/talks?dept=engineering",
+      index: true,
+    })
+    expect(talksIndexing(parseTalksParams({ school: "technology" }))).toEqual({
+      canonical: "/talks?school=technology",
+      index: true,
+    })
+  })
+
+  test("every other slice is noindex with the canonical of what it slices", () => {
+    expect(talksIndexing(parseTalksParams({ dept: "engineering", kind: "lecture" }))).toEqual({
+      canonical: "/talks?dept=engineering",
+      index: false,
+    })
+    for (const params of [
+      { q: "ageing" },
+      { preset: "week" },
+      { from: "2026-11-09" },
+      { kind: "seminar" },
+    ]) {
+      expect(talksIndexing(parseTalksParams(params))).toEqual({ canonical: "/talks", index: false })
+    }
   })
 })

@@ -50,6 +50,8 @@
  * deployments from it, and Better Auth reads it to record the session IP.
  */
 
+import { hasNonAnalyticsCookie } from "./consent"
+
 /**
  * The headers a proxied hop must not assert to Convex's edge router.
  *
@@ -160,6 +162,31 @@ async function proxyToConvexAuth(request: Request, siteUrl: string): Promise<Res
   return fetch(target, init)
 }
 
+/**
+ * Whether a request is the session read (`GET /api/auth/get-session`) of a
+ * browser that cannot have a session: no cookie but analytics ones (Better
+ * Auth's session lives in a cookie; `lib/consent.ts` `hasNonAnalyticsCookie`,
+ * the same test `getToken` makes) and no `Authorization` header. Every page
+ * view of a signed-out reader makes this read (SEO audit 2026-11-02,
+ * extra-invocations-per-view); its answer is known without asking Convex.
+ */
+export function isAnonymousSessionRead(request: Request): boolean {
+  if (request.method !== "GET") return false
+  if (!new URL(request.url).pathname.endsWith("/get-session")) return false
+  if (request.headers.has("authorization")) return false
+  return !hasNonAnalyticsCookie(request.headers.get("cookie"))
+}
+
+/** What Better Auth's get-session answers without a session cookie: `null`,
+ * status 200. Never stored by a shared cache: the URL is the same for every
+ * reader, signed in or not. */
+function noSession(): Response {
+  return new Response("null", {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "private, no-store" },
+  })
+}
+
 /** The `{ GET, POST }` shape a Next route module exports. */
 export type RouteHandlers = {
   GET: (request: Request) => Promise<Response>
@@ -175,7 +202,8 @@ export type RouteHandlers = {
  */
 export function convexAuthRouteHandlers(siteUrl: string): RouteHandlers {
   return {
-    GET: (request: Request) => proxyToConvexAuth(request, siteUrl),
+    GET: async (request: Request) =>
+      isAnonymousSessionRead(request) ? noSession() : proxyToConvexAuth(request, siteUrl),
     POST: (request: Request) => proxyToConvexAuth(request, siteUrl),
   }
 }

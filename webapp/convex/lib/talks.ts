@@ -138,6 +138,10 @@ export const talkDepartmentRefValidator = v.object({
   key: v.string(),
   slug: v.string(),
   shortName: v.string(),
+  /** The registry's full name ("Department of Computer Science and
+   * Technology"), for a talk page's JSON-LD organizer (SEO audit
+   * "talk-jsonld-details"). Optional only for rows built before it. */
+  name: v.optional(v.string()),
   school: literalUnion(TALK_SCHOOLS),
 })
 
@@ -171,7 +175,13 @@ export const talkPublicValidator = v.object({
   lastSeenAt: v.number(),
 })
 
-export type TalkDepartmentRef = { key: string; slug: string; shortName: string; school: TalkSchool }
+export type TalkDepartmentRef = {
+  key: string
+  slug: string
+  shortName: string
+  name?: string
+  school: TalkSchool
+}
 export type TalkListItem = {
   key: string
   title: string
@@ -217,6 +227,7 @@ export async function talkListItem(
         key: department.key,
         slug: department.slug,
         shortName: department.shortName,
+        name: department.name,
         school: department.school,
       })
     }

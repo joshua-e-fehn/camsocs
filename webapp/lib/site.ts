@@ -9,10 +9,36 @@
 
 export const SITE_NAME = "camsocs"
 
+/** What the root layout's title template appends to a page's title
+ * (app/layout.tsx). */
+export const TITLE_SUFFIX = ` · ${SITE_NAME}`
+
+/** The longest `<title>` a result shows in full (owner decision G2): every
+ * page's title, suffix included, fits it, the suffix dropped first. One
+ * limit for the directory, events, talks and the site's own pages. */
+export const MAX_TITLE_LENGTH = 60
+
 export const SITE_TAGLINE = "Cambridge societies, events and talks, sourced"
 
+/** The home page's and the site's meta description: at most 155 characters,
+ * so no result cuts it short (SEO audit 2026-11-02, meta-description-quality;
+ * a test holds the limit). */
 export const SITE_DESCRIPTION =
-  "Cambridge student societies and sports clubs, their events, and the public academic talks across the University's departments, in one place. Every fact links to the page it came from. Unofficial and independent."
+  "Cambridge student societies, sports clubs and their events, plus public academic talks, in one place. Every fact links to its source. Unofficial."
+
+/** The home hero's first sentence: what the site is, said plainly for a
+ * searcher and an AI answer that quotes the page (SEO audit 2026-11-02,
+ * home-metadata). Unofficial and independent, never the University's: no
+ * claim of affiliation (DISCLAIMER). The talks are public academic ones
+ * (talks.cam), not the societies' own, as SITE_DESCRIPTION says (review of
+ * 2026-11-03, site-intro-talks). */
+export const SITE_INTRO =
+  "camsocs is an unofficial, independent directory of Cambridge student societies and clubs, their events, and public academic talks."
+
+/** The light theme's paper, the one colour the browser's chrome takes
+ * (DESIGN.md "Light only"; app/globals.css `--background`): the viewport's
+ * theme-color and the web manifest. */
+export const THEME_COLOR = "#FFFFFF"
 
 /** The public origin, for absolute URLs in the sitemap and Open Graph tags. */
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.uk").replace(
@@ -47,8 +73,9 @@ export function camSignInHref(next: string): string {
   return `${CAM_SIGN_IN_HREF}&next=${encodeURIComponent(next)}`
 }
 
-/** What the share image shows, for its alt text (app/opengraph-image.tsx). */
-export const SHARE_IMAGE_ALT = `${SITE_NAME} — ${SITE_TAGLINE}`
+/** What the generic share image shows, for its alt text
+ * (app/opengraph-image.tsx draws exactly this). */
+export const SHARE_IMAGE_ALT = `${SITE_NAME}: Everything on in Cambridge, in one place. Events, talks and societies. Unofficial.`
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
 export const DISCLAIMER =
