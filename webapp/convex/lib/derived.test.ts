@@ -140,6 +140,27 @@ describe("deriveOrgStatus (data-model §6)", () => {
   test("no signal at all is unknown", () => {
     expect(deriveOrgStatus({}, now)).toBe("unknown")
   })
+
+  test("a Camdram listing alone is no current registration (ENG-36)", () => {
+    // Camdram keeps every society that ever put on a show.
+    const seen = { status: "found" as const, retrievedAt: now - DAY_MS }
+    const listed = {
+      registrations: { camdram: { registered: true } },
+      meta: { "registrations.camdram": seen },
+    }
+    expect(deriveOrgStatus(listed, now)).toBe("unknown")
+    expect(deriveOrgStatus({ ...listed, lastActiveAt: now - 400 * DAY_MS }, now)).toBe("dormant")
+    // A show this term counts as activity, like any event.
+    expect(deriveOrgStatus({ ...listed, lastActiveAt: now - 20 * DAY_MS }, now)).toBe("active")
+    // The registers that list only this year's groups still count.
+    const both = {
+      registrations: { camdram: { registered: true }, su: { registered: true, year: "2026-27" } },
+      meta: { "registrations.camdram": seen },
+    }
+    expect(deriveOrgStatus(both, now)).toBe("active")
+    const rowing = { registrations: { cucbc: { registered: true, year: "2026-27" } } }
+    expect(deriveOrgStatus(rowing, now)).toBe("active")
+  })
 })
 
 describe("sweepGroupOf", () => {

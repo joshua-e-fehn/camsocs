@@ -182,10 +182,20 @@ export function isUniversityListing(event: {
 type RegistrationLike = { registered: boolean; year?: string }
 
 /**
+ * The registers that list only the current year's groups (the SU directory,
+ * the Proctors' register, the Sports Service, CUCBC). Camdram is a directory
+ * that keeps every society that ever put on a show (ENG-36: "Sketch Club"
+ * listed since 2017, and 0 of 801 groups dormant), so a Camdram listing is
+ * not a current registration; a theatre group's shows count through its
+ * events (`lastActiveAt`), like any group's.
+ */
+export const CURRENT_YEAR_REGISTERS = REGISTRATION_BODIES.filter((body) => body !== "camdram")
+
+/**
  * `active` if dated activity falls within 180 days or the organisation is on
- * a register for the current academic year; `dormant` if its last activity is
- * older and it is on no current register; `archived` if marked defunct;
- * otherwise `unknown` (data-model §6).
+ * a register for the current academic year (`CURRENT_YEAR_REGISTERS`);
+ * `dormant` if its last activity is older and it is on no current register;
+ * `archived` if marked defunct; otherwise `unknown` (data-model §6).
  *
  * A registration without a `year` counts as current when the claim that
  * reported it was retrieved in the current academic year — the registers list
@@ -202,7 +212,7 @@ export function deriveOrgStatus(
 ): OrgStatus {
   if (org.defunct === true) return "archived"
   const currentYear = academicYearOf(now)
-  const registeredNow = REGISTRATION_BODIES.some((body) => {
+  const registeredNow = CURRENT_YEAR_REGISTERS.some((body) => {
     const registration = org.registrations?.[body]
     if (!registration?.registered) return false
     if (registration.year !== undefined) return registration.year === currentYear
