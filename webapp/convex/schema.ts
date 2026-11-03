@@ -861,8 +861,6 @@ export const coverageSnapshotFields = {
   computedAt: v.number(),
 }
 
-/** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
- * log: the address is stored only as a sha256, and rows are pruned after a day. */
 /**
  * One accepted listing request, stamped for the form's rate limits
  * (convex/listingRequests.ts): which budget it used and the listing it was
@@ -877,6 +875,8 @@ export const listingRequestSubmitFields = {
   submittedAt: v.number(),
 }
 
+/** One `@cam.ac.uk` sign-in link sent (convex/authEmail.ts) — a throttle, not a
+ * log: the address is stored only as a sha256, and rows are pruned after a day. */
 export const signInLinkSendFields = {
   emailHash: v.string(),
   /** sha256 of the caller's IP, for the per-client limit (convex/authEmail.ts). */

@@ -28,9 +28,14 @@ import { literalUnion } from "./lib/validators"
  *     `GLOBAL_PER_HOUR` / `GLOBAL_PER_DAY`; removals and objections, the
  *     GDPR route, have their own `REMOVAL_PER_HOUR` / `REMOVAL_PER_DAY`, so
  *     a flood of the others never shuts them out. A listing's first
- *     `LISTING_RESERVE_PER_DAY` requests of a budget in a day skip this
- *     check: a flood spread over the site still leaves every listing it did
- *     not reach open to its own society.
+ *     `LISTING_RESERVE_PER_DAY` requests of a budget in a day may go past
+ *     the budget's cap, by up to `RESERVE_PER_HOUR` an hour and
+ *     `RESERVE_PER_DAY` a day in all: a flood spread over the site still
+ *     leaves the listings it did not reach open to their own societies, up
+ *     to that ceiling, and a flood of every listing's reserved requests
+ *     stops there too, so the hourly total never passes the caps plus the
+ *     reserve (without it, some 1,800 listings at 2 each could take 7,000
+ *     requests in one hour).
  *
  * Counts read `listingRequestSubmits`, a stamp per accepted request with no
  * address or text (pruned after a day), never the requests themselves: a
@@ -55,6 +60,8 @@ export const PER_EMAIL_PER_DAY = 20
 export const PER_LISTING_PER_HOUR = 10
 export const PER_LISTING_PER_DAY = 20
 export const LISTING_RESERVE_PER_DAY = 2
+export const RESERVE_PER_HOUR = 100
+export const RESERVE_PER_DAY = 300
 export const GLOBAL_PER_HOUR = 200
 export const GLOBAL_PER_DAY = 600
 export const REMOVAL_PER_HOUR = 300
@@ -141,10 +148,13 @@ async function checkLimits(
     }
     reserved = onListing.length < LISTING_RESERVE_PER_DAY
   }
-  if (reserved) return
 
-  const [perHour, perDay] =
+  const [capHour, capDay] =
     budget === "removal" ? [REMOVAL_PER_HOUR, REMOVAL_PER_DAY] : [GLOBAL_PER_HOUR, GLOBAL_PER_DAY]
+  // A reserved request may use the headroom above the cap, never more.
+  const [perHour, perDay] = reserved
+    ? [capHour + RESERVE_PER_HOUR, capDay + RESERVE_PER_DAY]
+    : [capHour, capDay]
   const overall = await stampsSince(ctx, budget, now - DAY_MS, perDay)
   if (!hasRoom(overall, now, perHour, perDay)) {
     throw new ConvexError(`The form is busy; please try again later${OR_WRITE}`)

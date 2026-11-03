@@ -585,7 +585,7 @@ the sheet reads the rest with `events.get`.
 | `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, or a full budget: per address, per listing, or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day skip the overall one; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string> }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing, or a full budget: per address, per listing, or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).

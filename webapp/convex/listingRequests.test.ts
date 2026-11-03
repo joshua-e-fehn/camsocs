@@ -11,6 +11,7 @@ import {
   PER_LISTING_PER_DAY,
   PER_LISTING_PER_HOUR,
   REMOVAL_PER_HOUR,
+  RESERVE_PER_HOUR,
 } from "./listingRequests"
 
 /**
@@ -197,6 +198,35 @@ describe("listingRequests.submit — a flood spread over the site", () => {
     // Removals are on their own budget throughout.
     const { key } = await t.mutation(api.listingRequests.submit, junk("remove", "org-soc-1"))
     expect(key).toMatch(/^lr-/)
+  })
+
+  test("a flood of every listing's reserved requests stops at the reserve ceiling", async () => {
+    const t = newTest()
+    const ceiling = GLOBAL_PER_HOUR + RESERVE_PER_HOUR
+    const listings = ceiling / LISTING_RESERVE_PER_DAY
+    await seed(t, listings + 1)
+    setSystemTime(START)
+    // Only each listing's reserved requests, on more listings than the cap
+    // alone would allow: they pass the cap, then stop at the ceiling.
+    let n = 0
+    await fill(t, ceiling, () =>
+      junk("correct", `org-soc-${Math.floor(n++ / LISTING_RESERVE_PER_DAY)}`),
+    )
+    const accepted = await t.run(
+      async (ctx) => (await ctx.db.query("listingRequestSubmits").collect()).length,
+    )
+    expect(accepted).toBe(ceiling)
+    await expect(
+      t.mutation(api.listingRequests.submit, junk("claim", `org-soc-${listings}`)),
+    ).rejects.toThrow(/The form is busy/)
+    await expect(t.mutation(api.listingRequests.submit, junk("add"))).rejects.toThrow(/busy/)
+    // Removals keep their own budget.
+    const { key } = await t.mutation(api.listingRequests.submit, junk("remove", "org-soc-0"))
+    expect(key).toMatch(/^lr-/)
+    // An hour on, the hourly ceiling has passed.
+    setSystemTime(START + HOUR + 1)
+    const later = await t.mutation(api.listingRequests.submit, junk("claim", `org-soc-${listings}`))
+    expect(later.key).toMatch(/^lr-/)
   })
 
   test("the overall daily cap holds after the hourly one resets", async () => {
