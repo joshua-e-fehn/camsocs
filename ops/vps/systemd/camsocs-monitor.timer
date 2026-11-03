@@ -5,8 +5,13 @@ Documentation=file:/opt/camsocs/docs/ops-vps.md
 
 [Timer]
 OnCalendar=hourly
-# Spread the four queries over the hour rather than on the dot.
+# Off the top of the hour, by one offset per host that stays put
+# (FixedRandomDelay), so runs are exactly an hour apart and a new listing
+# request is announced within about 62 minutes (ENG-33). AccuracySec keeps
+# systemd from moving a run by up to its default minute.
 RandomizedDelaySec=15min
+FixedRandomDelay=yes
+AccuracySec=1s
 # A missed hour is not caught up: the next one checks the same windows.
 Persistent=false
 Unit=camsocs-monitor.service
