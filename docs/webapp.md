@@ -268,13 +268,19 @@ read. What makes that work, and what keeps it working:
   `dynamicPrefetch`, which also sets a crawler trap's `rel="nofollow"`); links to cached pages
   keep Next's default.
 - **Dynamic segments build nothing** (`generateStaticParams` returns `[]` on `/societies/[slug]`,
-  `/events/[key]`, `/categories/[category]`, `/talks/[key]`, `/talks/events/[key]`): each page is
-  rendered on its first request, so `next build` never reads Convex for them. Pages without a
-  segment (`/`, `/about`, `/privacy`, `/categories`, `/term-dates`) are prerendered by a real
-  build from its own deployment, as any static page is. A build against
+  `/events/[key]`, `/talks/[key]`, `/talks/events/[key]`): each page is rendered on its first
+  request, so `next build` never reads Convex for them. Pages without a segment (`/`, `/about`,
+  `/privacy`, `/categories`, `/term-dates`) are prerendered by a real build from its own
+  deployment, as any static page is. The 16 category hubs (`/categories/[category]`) are the
+  exception: a fixed vocabulary, listed by `generateStaticParams` with `dynamicParams = false`, so
+  a real build prerenders them like `/categories` and any other slug is an unmatched URL that gets
+  `app/not-found.tsx`'s static 404 (x-matched-path /404, edge-cached; re-check 2026-11-03
+  not-found-template). In a placeholder or failed-read build the route is `ƒ` and the page's own
+  `notFound()` answers unknown slugs as before. A build against
   `scripts/build-env-defaults.sh`'s placeholder must not contact Convex, so there every cached read
   calls `connection()` first and those pages become dynamic in that build only (`lib/convex-url.ts`
-  `isPlaceholderDeployment`). The build's route table therefore shows them as `ƒ` in CI; build
+  `isPlaceholderDeployment`). The build's route table therefore shows them (and the category
+  hubs) as `ƒ` in CI; build
   with real `NEXT_PUBLIC_CONVEX_*` URLs to see `○ … 5m`. A real build whose deployment fails a read
   (a preview's dev deployment unreachable, or behind the branch's functions) does not fail either:
   during `next build` only (`NEXT_PHASE === "phase-production-build"`), a failed cached read logs
@@ -409,6 +415,10 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   enforced in Convex**: every `convex/broker/*` function calls `requireBrokerUser`, which admits
   only verified emails listed in the Convex env var `BROKER_EMAILS` (comma-separated); unset or
   empty means nobody.
+  `AuthGuard` sits in the root layout, so a public page's cached HTML depends on `isPublicPath`
+  classifying the server's pathname: on Vercel an ISR re-render of "/" reports "/index", which
+  `routePathname` (`lib/auth-routes.ts`) folds into "/" (SEO re-check 2026-11-03,
+  home-ssr-spinner).
 - OAuth callback (Google console): `<SITE_URL>/api/auth/callback/google`, dev and prod.
 - Never re-export the library's `handler`/`getToken` from `lib/auth-server.ts`, and never add a
   `next.config` rewrite for `/api/auth/*` (see next.config.ts).
@@ -712,7 +722,11 @@ to both kinds together.
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the
-canonical of the page it slices. Both carry a CollectionPage / ItemList of the event pages on
+canonical of the page it slices. A society's calendar is indexable only while its four weeks
+list an event and its profile is not thin (G3); an empty one is noindex, follow and keeps its own
+canonical (the metadata reads the page's own cached `events.list`), and the profile's calendar
+links are nofollow while it shows "Nothing coming up" (SEO re-check 2026-11-03,
+events-param-urls). Both indexable pages carry a CollectionPage / ItemList of the event pages on
 screen. "Show next week", "From <day>", the week and month arrows, "Today" and the day cells are
 real links for readers (handled in place on a click), but every slice of the calendar is a
 robots.txt trap since the bot policy of 2026-11-03: robots.txt disallows it and the links carry
@@ -730,7 +744,7 @@ in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,
 status, source, sourceUrl?, hosting, externalUrl?, talksDerived, fromUniversity, meta?` — no description, speakers, price,
-image or full `meta`: `meta` holds only `startsAt: { status }`, which decides (with the fields above)
+image or full `meta`: `meta` holds only `startsAt: { status, method?, sourceType? }`, which decides (with the fields above)
 whether the event's page has an Event node (`eventHasStructuredData`), so a profile's JSON-LD links
 only events whose `@id` exists. A month of events
 was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);

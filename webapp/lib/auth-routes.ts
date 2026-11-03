@@ -16,6 +16,7 @@
  *
  * Matching: an entry matches itself and everything beneath it, except "/",
  * which matches only itself (`startsWith("//")` never fires for a pathname).
+ * "/index" counts as "/" (see `routePathname`).
  */
 
 /** Routes a signed-out visitor may see. "/api" keeps Better Auth's callbacks
@@ -42,10 +43,24 @@ function matches(path: string, pathname: string): boolean {
   return pathname === path || pathname.startsWith(`${path}/`)
 }
 
+/**
+ * The route a pathname names. On Vercel an ISR re-render of the home page
+ * arrives as "/index", and Next 16 seeds `usePathname()` from that raw URL
+ * (it normalises only its own resolved pathname), so the server would
+ * classify "/" as unlisted and AuthGuard would cache its spinner as the home
+ * page (SEO re-check 2026-11-03, home-ssr-spinner). No page is called
+ * "index" (`app/index/` must never exist).
+ */
+export function routePathname(pathname: string): string {
+  return pathname === "/index" ? "/" : pathname
+}
+
 export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((path) => matches(path, pathname))
+  const route = routePathname(pathname)
+  return PUBLIC_PATHS.some((path) => matches(path, route))
 }
 
 export function isPrivatePath(pathname: string): boolean {
-  return PRIVATE_PATHS.some((path) => matches(path, pathname))
+  const route = routePathname(pathname)
+  return PRIVATE_PATHS.some((path) => matches(path, route))
 }

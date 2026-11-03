@@ -412,8 +412,8 @@ const CAMBRIDGE_PLACE = {
 
 /** The upcoming events a profile's JSON-LD links to by `@id`: exactly those
  * whose own page has the Event node (`eventHasStructuredData`: public,
- * confirmed, a start time read rather than inferred, no "TBC" in the title,
- * never talks.cam-derived), so no reference dangles (review of the SEO
+ * confirmed, a start the source states, no "TBC" in the title, never
+ * talks.cam-derived), so no reference dangles (review of the SEO
  * audit, profile-jsonld-dangling-event-ids). getBySlug leaves talks.cam-
  * derived events out already; this is the second pass. */
 export function jsonLdEvents(events: readonly EventListItem[], limit = 20): string[] {

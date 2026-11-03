@@ -23,11 +23,13 @@ import {
   nextDayWithEvents,
   orgEventsTitle,
   placeIsInCambridge,
+  repeatsThatDay,
   splitEmoji,
   spokenTitle,
   stripPages,
   stripRangeLabel,
   termWeekGutter,
+  titleSearchWords,
   weekRowGutter,
 } from "./events"
 import type { TermDatesRow } from "./term-week"
@@ -99,6 +101,12 @@ describe("emoji in titles", () => {
     expect(spokenTitle("🚩 HAM-DEFCON 🚩")).toBe("HAM-DEFCON")
     expect(spokenTitle("Bop ❤️ night")).toBe("Bop night")
     expect(spokenTitle("🎉")).toBe("🎉")
+  })
+
+  test("a title's search words part where an emoji joined them", () => {
+    expect(titleSearchWords("Film🎬Night")).toBe("Film Night")
+    expect(titleSearchWords("🚩 HAM-DEFCON 🚩")).toBe("HAM-DEFCON")
+    expect(titleSearchWords("🎉")).toBe("")
   })
 })
 
@@ -302,18 +310,146 @@ describe("the event's page", () => {
     expect(long.title.endsWith("…, Tue 3 Nov")).toBe(true)
   })
 
+  test("title: with the start time when the name repeats that day (duplicate-event-titles)", () => {
+    expect(
+      eventPageTitle(
+        { ...PAGE, title: "Open mic", organisers: [{ name: "Jazz Soc", role: "organiser" }] },
+        true,
+      ),
+    ).toEqual({ title: "Open mic – Jazz Soc, Tue 3 Nov, 19:30", absolute: false })
+    // The weekday goes before the name is cut.
+    expect(
+      eventPageTitle(
+        { ...PAGE, title: "Invented Revue Pantomime 2026: Puss in Boots", hosting: "takes_part" },
+        true,
+      ),
+    ).toEqual({
+      title: "Invented Revue Pantomime 2026: Puss in Boots, 3 Nov, 19:30",
+      absolute: true,
+    })
+    // A very long name is cut, never the time.
+    const long = eventPageTitle({ ...PAGE, title: "A very long title ".repeat(6).trim() }, true)
+    expect(long.absolute).toBe(true)
+    expect(long.title.length).toBeLessThanOrEqual(60)
+    expect(long.title.endsWith("…, 3 Nov, 19:30")).toBe(true)
+    // London time, in summer too.
+    expect(
+      eventPageTitle(
+        {
+          ...PAGE,
+          startsAt: at("2026-06-13T13:30:00Z"),
+          endsAt: undefined,
+          title: "Matinee",
+          hosting: "takes_part",
+        },
+        true,
+      ).title,
+    ).toBe("Matinee, Sat 13 Jun, 14:30")
+    // An all-day event has no time to add.
+    expect(eventPageTitle({ ...PAGE, allDay: true }, true)).toEqual(
+      eventPageTitle({ ...PAGE, allDay: true }),
+    )
+  })
+
+  describe("repeatsThatDay", () => {
+    const SHOW = {
+      key: "evt-a",
+      title: "Invented Panto",
+      startsAt: at("2026-11-28T19:45:00Z"),
+      allDay: false,
+    }
+    const other = (fields: Partial<typeof SHOW>) => ({ ...SHOW, key: "evt-b", ...fields })
+
+    test("a matinee and an evening of one name", () => {
+      expect(repeatsThatDay(SHOW, [SHOW, other({ startsAt: at("2026-11-28T14:30:00Z") })])).toBe(
+        true,
+      )
+      const matinee = at("2026-11-28T14:30:00Z")
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, title: "🎭 Invented Panto" })])).toBe(
+        true,
+      )
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, title: "INVENTED panto" })])).toBe(
+        true,
+      )
+    })
+
+    test("not a double record, itself, another name or another day", () => {
+      // The same minute: a time cannot tell them apart.
+      expect(repeatsThatDay(SHOW, [SHOW, other({})])).toBe(false)
+      expect(repeatsThatDay(SHOW, [SHOW])).toBe(false)
+      expect(
+        repeatsThatDay(SHOW, [other({ startsAt: at("2026-11-28T14:30:00Z"), title: "Panto" })]),
+      ).toBe(false)
+      expect(repeatsThatDay(SHOW, [other({ startsAt: at("2026-11-29T14:30:00Z") })])).toBe(false)
+      // 23:30Z on 13 Jun is 14 Jun in London.
+      const june = { ...SHOW, startsAt: at("2026-06-13T19:30:00Z") }
+      expect(repeatsThatDay(june, [other({ startsAt: at("2026-06-13T23:30:00Z") })])).toBe(false)
+    })
+
+    test("never for an all-day event", () => {
+      const matinee = at("2026-11-28T14:30:00Z")
+      expect(repeatsThatDay(SHOW, [other({ startsAt: matinee, allDay: true })])).toBe(false)
+      expect(repeatsThatDay({ ...SHOW, allDay: true }, [other({ startsAt: matinee })])).toBe(false)
+    })
+  })
+
   test("structured data only for a public, confirmed event with a read start time", () => {
     expect(eventHasStructuredData(PAGE)).toBe(true)
     expect(eventHasStructuredData({ ...PAGE, visibility: "cam_only" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, status: "tbc" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Bandi Chhor Formal ( DATE TBC)" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Garden party (date TBA)" })).toBe(false)
+    // An inferred start with no method, or one a parser put together (the
+    // source never gave it), stays out.
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "inferred" } } })).toBe(
       false,
     )
+    expect(
+      eventHasStructuredData({
+        ...PAGE,
+        meta: { startsAt: { status: "inferred", method: "parser" } },
+      }),
+    ).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "found" } } })).toBe(true)
+    // A model's start is the source's own dated words (event-jsonld-coverage)
+    // where the pipeline kept it only with a dated quote (a society's page, a
+    // term card): no time stated (all day), or a yearless date's year, is
+    // still its date.
+    const modelStart = {
+      startsAt: { status: "inferred", method: "llm", sourceType: "society_website" },
+    }
+    const allDay = { ...PAGE, allDay: true, meta: modelStart }
+    expect(eventHasStructuredData(allDay)).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, meta: modelStart })).toBe(true)
+    const cardStart = { startsAt: { status: "inferred", method: "llm", sourceType: "termcard" } }
+    expect(eventHasStructuredData({ ...PAGE, meta: cardStart })).toBe(true)
+    // An Instagram caption's model date has no dated-quote check: an inferred
+    // one may be a date read off the poster, or none at all.
+    for (const sourceType of ["instagram_api", undefined]) {
+      const unchecked = { startsAt: { status: "inferred", method: "llm", sourceType } }
+      expect(eventHasStructuredData({ ...PAGE, meta: unchecked })).toBe(false)
+      expect(eventHasStructuredData({ ...allDay, meta: unchecked })).toBe(false)
+    }
+    // A start with no provenance record counts, as it always has.
+    expect(eventHasStructuredData({ ...PAGE, meta: undefined })).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, meta: {} })).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, status: "tbc", meta: modelStart })).toBe(false)
+    expect(eventHasStructuredData({ ...PAGE, title: "Formal (date TBC)", meta: modelStart })).toBe(
+      false,
+    )
     // Convex's verdict decides (lib/talks-boundary.ts), never a re-run here.
     expect(eventHasStructuredData({ ...PAGE, talksDerived: true })).toBe(false)
+  })
+
+  test("JSON-LD: a model's all-day start is the date alone", () => {
+    const graph = eventStructuredData({
+      ...PAGE,
+      allDay: true,
+      endsAt: undefined,
+      meta: { startsAt: { status: "inferred", method: "llm", sourceType: "termcard" } },
+    })
+    const nodes = graph?.["@graph"] as Record<string, unknown>[]
+    expect(nodes.find((node) => node["@type"] === "Event")?.startDate).toBe("2026-11-03")
   })
 
   test("JSON-LD: one graph of WebPage, Event and BreadcrumbList", () => {
@@ -486,6 +622,36 @@ describe("the event's page", () => {
       eventJsonLd({ ...PAGE, venueText: "Zoom", bookingUrl: "https://example.org/join" }, page)
         .location,
     ).toEqual({ "@type": "VirtualLocation", url: "https://example.org/join" })
+    // Else the event's own listing (`eventSameAs`), such as the University's
+    // per-event page (event-jsonld-coverage); never a feed or our own page.
+    const listing =
+      "https://www.admin.cam.ac.uk/whatson/detail.shtml?uid=00000000-0000-0000-0000-000000000000"
+    const uni = {
+      ...PAGE,
+      venueText: "Online via Zoom",
+      source: "uni_events_api",
+      sourceUrl: listing,
+      fromUniversity: true,
+    }
+    expect(eventJsonLd(uni, page).location).toEqual({ "@type": "VirtualLocation", url: listing })
+    expect(eventJsonLd(uni, page).eventAttendanceMode).toBe(
+      "https://schema.org/OnlineEventAttendanceMode",
+    )
+    expect(eventJsonLd({ ...uni, bookingUrl: "https://example.org/join" }, page).location).toEqual({
+      "@type": "VirtualLocation",
+      url: "https://example.org/join",
+    })
+    expect(
+      eventJsonLd({ ...PAGE, venueText: "Zoom", externalUrl: "https://example.org/the-talk" }, page)
+        .location,
+    ).toEqual({ "@type": "VirtualLocation", url: "https://example.org/the-talk" })
+    expect(
+      eventJsonLd(
+        { ...PAGE, venueText: "Zoom", source: "luma", sourceUrl: "https://example.org/feed.ics" },
+        page,
+      ).location,
+    ).toBeUndefined()
+    expect(JSON.stringify(eventJsonLd(uni, page).location)).not.toContain("camsocs.uk")
   })
 
   test("JSON-LD location: the town only when it is known to be Cambridge", () => {

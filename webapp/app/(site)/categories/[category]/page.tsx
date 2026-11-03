@@ -9,6 +9,7 @@ import {
   categoryFromSlug,
   categoryHubIntro,
   categoryHubPath,
+  categorySlug,
   collectionJsonLd,
 } from "@/lib/directory-hubs"
 import { categoryHubTitle } from "@/lib/directory-title"
@@ -16,16 +17,28 @@ import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
 import { summary } from "@/lib/rich-text"
 import { jsonLdScript } from "@/lib/structured-data"
-import { CATEGORY_LABELS } from "@/lib/vocab"
+import { CATEGORIES, CATEGORY_LABELS } from "@/lib/vocab"
 
 type Props = { params: Promise<{ category: string }> }
 
-/** No hub is built with the site: each is rendered on its first request and
- * then served from the edge, revalidated as the (site) layout says
- * (docs/webapp.md "Caching"). */
+/** Every hub is built with the site: the 16 slugs are a fixed vocabulary
+ * (lib/vocab.ts), unlike the other dynamic segments' keys. Each is then served
+ * from the edge, revalidated as the (site) layout says (docs/webapp.md
+ * "Caching"). */
 export function generateStaticParams(): { category: string }[] {
-  return []
+  return CATEGORIES.map((category) => ({ category: categorySlug(category) }))
 }
+
+/**
+ * Any other slug never reaches this page (re-check 2026-11-03,
+ * not-found-template): Next answers it as an unmatched URL, with
+ * app/not-found.tsx's static 404 in the site frame, served from the edge.
+ * A `notFound()` here instead sends the empty error shell
+ * (lib/missing-listing.ts). Where the hubs were not built (a placeholder or
+ * failed-read build, `next dev` before a first request) the page still
+ * answers an unknown slug with `notFound()` below.
+ */
+export const dynamicParams = false
 
 /** The hub's data, once per render for the metadata and the page. An
  * unknown slug is null (no Convex call); the 16 slugs are fixed. */

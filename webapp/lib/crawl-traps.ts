@@ -156,13 +156,19 @@ export function dynamicPrefetch(href: string): false | undefined {
 }
 
 /** A next/link's `href` with its `rel` and `prefetch`
- * (`<Link {...linkProps(href)}>`; a plain `<a>` takes `crawlerTrapRel`). */
-export function linkProps(href: string): {
+ * (`<Link {...linkProps(href)}>`; a plain `<a>` takes `crawlerTrapRel`).
+ * `nofollow` adds the rel to a site link robots.txt allows but that has
+ * nothing to index now (an empty society calendar, lib/url-state.ts
+ * `eventsIndexing`). */
+export function linkProps(
+  href: string,
+  { nofollow = false }: { nofollow?: boolean } = {},
+): {
   href: string
   rel?: "nofollow"
   prefetch?: false
 } {
-  const rel = crawlerTrapRel(href)
+  const rel = nofollow && href.startsWith("/") ? "nofollow" : crawlerTrapRel(href)
   const prefetch = dynamicPrefetch(href)
   return {
     href,

@@ -43,12 +43,23 @@ describe("route classification", () => {
     const all = [...PUBLIC_PATHS, ...PRIVATE_PATHS]
     expect(new Set(all).size).toBe(all.length)
   })
+
+  test("no page is called 'index' (`isPublicPath` reads '/index' as '/')", () => {
+    expect(pageRoutes()).not.toContain("/index")
+  })
 })
 
 describe("isPublicPath", () => {
   test("'/' matches only itself", () => {
     expect(isPublicPath("/")).toBe(true)
     expect(isPublicPath("/dashboard")).toBe(false)
+  })
+
+  test("the root's '/index' alias (an ISR re-render on Vercel) is the home page", () => {
+    expect(isPublicPath("/index")).toBe(true)
+    expect(isPrivatePath("/index")).toBe(false)
+    // Only the exact alias: a deeper path is not the home page.
+    expect(isPublicPath("/index/x")).toBe(false)
   })
 
   test("auth callbacks stay public", () => {

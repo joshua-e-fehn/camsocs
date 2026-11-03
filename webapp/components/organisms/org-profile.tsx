@@ -459,9 +459,13 @@ export function OrgProfile({
     (field): field is OrganisationField => field in ORGANISATION_FIELD_LABELS,
   )
   const correctHref = requestHref(org, "correct")
-  // The society's own calendar page: four weeks, canonical and indexable
-  // (lib/url-state.ts `eventsIndexing`).
+  // The society's own calendar page: four weeks, canonical, and indexable
+  // while it lists an event (lib/url-state.ts `eventsIndexing`). With nothing
+  // coming up it is noindex: the links stay for readers (its feed, a
+  // signed-in reader's Cambridge-only events) but are nofollow (SEO re-check
+  // 2026-11-03, events-param-urls).
   const calendarHref = `/events?org=${org.slug}`
+  const calendarLink = linkProps(calendarHref, { nofollow: events.length === 0 })
   const runs = groupRuns(events)
   const firstCategory = org.categories[0]
   const otherNames =
@@ -818,7 +822,12 @@ export function OrgProfile({
                 />
               )}
               {email && <QuickAction href={`mailto:${email}`} icon={MailIcon} label="Email" />}
-              <QuickAction href={calendarHref} icon={CalendarDaysIcon} label="Calendar" />
+              <QuickAction
+                href={calendarHref}
+                rel={calendarLink.rel}
+                icon={CalendarDaysIcon}
+                label="Calendar"
+              />
               <ShareAction title={org.name} path={`/societies/${org.slug}`} />
             </div>
             <SourcedChip
@@ -980,7 +989,7 @@ export function OrgProfile({
               className="scroll-mt-[calc(var(--site-header-height,4rem)+4rem)]"
               action={
                 <Link
-                  {...linkProps(calendarHref)}
+                  {...calendarLink}
                   className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-8"
                 >
                   In the calendar
@@ -1004,7 +1013,7 @@ export function OrgProfile({
               )}
               {runs.length > UPCOMING_RUNS_SHOWN && (
                 <Link
-                  {...linkProps(calendarHref)}
+                  {...calendarLink}
                   className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline-offset-4 hover:underline"
                 >
                   All {events.length} upcoming events in the calendar

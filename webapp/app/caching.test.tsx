@@ -92,12 +92,20 @@ describe("public pages", () => {
   })
 
   // A dynamic segment without `generateStaticParams` is rendered per request;
-  // one that lists params reads Convex at build time.
+  // one that lists params reads Convex at build time. The segments build
+  // nothing, except the category hubs.
   const segments = pages.filter((file) => /\[[^\]]+\][/\\]page\.tsx$/.test(file))
   test("the scan sees every dynamic segment", () => {
     expect(segments.length).toBe(5)
   })
-  for (const file of segments) {
+  // The category hubs are the exception: a fixed list of 16, built with the
+  // site, so that any other slug gets the site's static 404 (re-check
+  // 2026-11-03, not-found-template; app/(site)/categories/[category]/page.tsx).
+  const CATEGORY_HUB = path.join(SITE, "categories", "[category]", "page.tsx")
+  test("the exception is a dynamic segment", () => {
+    expect(segments).toContain(CATEGORY_HUB)
+  })
+  for (const file of segments.filter((file) => file !== CATEGORY_HUB)) {
     test(`${file} builds no page and renders each on demand`, () => {
       expect(read(file)).toMatch(
         /export function generateStaticParams\(\)[^\n]*\{\n\s*return \[\]\n\}/,
@@ -105,6 +113,9 @@ describe("public pages", () => {
       expect(read(file)).not.toMatch(/export const dynamicParams\s*=\s*false/)
     })
   }
+  test(`${CATEGORY_HUB} builds every hub and no other slug`, () => {
+    expect(read(CATEGORY_HUB)).toMatch(/^export const dynamicParams = false$/m)
+  })
 })
 
 describe("what a signed-out reader's cached page holds", () => {

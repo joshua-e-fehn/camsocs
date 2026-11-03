@@ -67,7 +67,8 @@ const cachedPreload = unstable_cache(
  * page dynamic instead (it is then not prerendered in that build only). A
  * real build is unaffected: its static pages are prerendered from its own
  * deployment, as any ISR page is. Dynamic segments are never prerendered
- * (`generateStaticParams` returns none), with or without a backend.
+ * (`generateStaticParams` returns none), with or without a backend, except
+ * the category hubs, which are prerendered like a static page.
  */
 async function deferWithoutBackend(): Promise<void> {
   if (isPlaceholderDeployment(process.env.NEXT_PUBLIC_CONVEX_URL)) await connection()
@@ -78,10 +79,10 @@ async function deferWithoutBackend(): Promise<void> {
  * failing the build (review of the SEO audit 2026-11-02, build-coupling): a
  * preview build against a dev deployment that is unreachable, or behind the
  * branch's functions, would otherwise fail on the static pages (/, /about,
- * /categories, /term-dates). Each failed read warns, naming the function, then
- * `connection()` makes that page dynamic in that build only, as
- * `deferWithoutBackend` does for the placeholder; the page renders on its
- * first request. Outside the build the error propagates unchanged, and
+ * /categories, the category hubs, /term-dates). Each failed read warns,
+ * naming the function, then `connection()` makes that page dynamic in that
+ * build only, as `deferWithoutBackend` does for the placeholder; the page
+ * renders on its first request. Outside the build the error propagates unchanged, and
  * Next's own control flow (a bail-out to dynamic, `notFound()`, a redirect)
  * is rethrown first, never mistaken for a backend failure.
  *

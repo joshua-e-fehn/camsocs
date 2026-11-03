@@ -87,6 +87,18 @@ describe("crawlerTrapRel", () => {
     expect(linkProps("/sign-in")).toEqual({ href: "/sign-in", rel: "nofollow", prefetch: false })
   })
 
+  test("linkProps's nofollow: a followable page with nothing to index now", () => {
+    expect(linkProps("/events?org=chess")).toEqual({ href: "/events?org=chess", prefetch: false })
+    expect(linkProps("/events?org=chess", { nofollow: true })).toEqual({
+      href: "/events?org=chess",
+      rel: "nofollow",
+      prefetch: false,
+    })
+    expect(linkProps("https://example.org/", { nofollow: true })).toEqual({
+      href: "https://example.org/",
+    })
+  })
+
   test("dynamicPrefetch: off for the per-request pages and their views only", () => {
     for (const href of ["/events", "/events?org=chess", "/societies?page=2", "/talks#x"]) {
       expect(dynamicPrefetch(href)).toBe(false)

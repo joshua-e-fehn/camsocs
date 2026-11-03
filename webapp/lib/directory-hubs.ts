@@ -23,14 +23,19 @@ import { CATEGORIES, CATEGORY_LABELS, type Category, type OrgType } from "./voca
 
 export const CATEGORIES_PATH = "/categories"
 
+/** A category's hub slug: its vocabulary key with hyphens. */
+export function categorySlug(category: Category): string {
+  return category.replaceAll("_", "-")
+}
+
 /** `/categories/<slug>` for a category. */
 export function categoryHubPath(category: Category): string {
-  return `${CATEGORIES_PATH}/${category.replaceAll("_", "-")}`
+  return `${CATEGORIES_PATH}/${categorySlug(category)}`
 }
 
 /** The category a hub slug names, or undefined for anything else. */
 export function categoryFromSlug(slug: string): Category | undefined {
-  return CATEGORIES.find((category) => category.replaceAll("_", "-") === slug)
+  return CATEGORIES.find((category) => categorySlug(category) === slug)
 }
 
 /** Every category hub's path, in vocabulary order (for the sitemap). */
