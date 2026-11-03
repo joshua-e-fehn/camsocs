@@ -21,7 +21,6 @@ from camsocs_pipeline.events.common import (
     finalise,
     infer_event_type,
     merge_drafts,
-    whole_days,
 )
 from camsocs_pipeline.keys import event_key
 from camsocs_pipeline.media import CachedImages, sniff_raster
@@ -116,43 +115,6 @@ class TestBuilder:
         assert "speakers" not in fields  # not covered: omitted, never null
         assert all(f.value is not None or f.status for f in observation.fields)
         assert observation.content_sha256 is None
-
-    def test_a_span_of_whole_london_days_is_all_day(self) -> None:
-        # A site's schema.org "all day" event: 00:00–23:59 (ENG-36, the
-        # German Society's calendar page).
-        d = draft(
-            starts_at=datetime(2026, 11, 7, 0, 0, tzinfo=LONDON),
-            ends_at=datetime(2026, 11, 7, 23, 59, 59, tzinfo=LONDON),
-        )
-        fields = fields_of(
-            build_event_observation(
-                d,
-                source_type="society_website",
-                source_url="https://example.org/calendars/",
-                retrieved_at=AT,
-                evidence="primary",
-            )
-        )
-        assert fields["allDay"].value is True
-        assert fields["startsAt"].value == int(d.starts_at.timestamp() * 1000)
-        nov_8 = datetime(2026, 11, 8, tzinfo=LONDON)
-        assert fields["endsAt"].value == int(nov_8.timestamp() * 1000)
-
-    def test_whole_days_are_midnight_to_23_59_or_to_a_later_midnight(self) -> None:
-        day = datetime(2026, 10, 24, 0, 0, tzinfo=LONDON)  # the day BST ends
-        assert whole_days(day, day.replace(hour=23, minute=59)) == datetime(
-            2026, 10, 25, tzinfo=LONDON
-        )
-        three_days = datetime(2026, 10, 27, tzinfo=LONDON)
-        assert whole_days(day, three_days) == three_days
-        assert whole_days(day, day.replace(hour=23, minute=59) + timedelta(days=2)) == (
-            datetime(2026, 10, 27, tzinfo=LONDON)
-        )
-        # A time of day, an open end or an empty span is not all day.
-        assert whole_days(day, day.replace(hour=22)) is None
-        assert whole_days(day.replace(hour=9), day.replace(hour=23, minute=59)) is None
-        assert whole_days(day, None) is None
-        assert whole_days(day, day) is None
 
     def test_link_in_bio_records_the_booking_link_as_not_published(self) -> None:
         d = draft(link_in_bio=True)

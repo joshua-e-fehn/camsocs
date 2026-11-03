@@ -384,7 +384,6 @@ def test_a_term_cards_rows_fold_into_the_sites_own_calendar() -> None:
             ms(2026, 11, 3, 18),
             all_day=False,
         ),
-        # 00:00–23:59 on the page is all day (`events.common.whole_days`).
         listed("2026-11-07:med", "Med Club Night with French Soc", ms(2026, 11, 7), all_day=True),
         listed(
             "2026-11-10:pub", "Pub Night with Czech & Slovak Soc", ms(2026, 11, 10), all_day=True

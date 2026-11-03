@@ -192,7 +192,7 @@ Regular activities: trainings, weekly meetings, services. Created by claims for 
 | startsAt | number | |
 | endsAt | number? | |
 | spanEndsAt | number? | Derived: `endsAt` of a multi-day event (longer than 25 h), so a run that began before a view still shows in it |
-| allDay | boolean | Default false. A parser's span of whole London days (00:00 to 23:59, or to a later midnight: a site's schema.org "all day" event) is posted all-day, ending at the next midnight (`pipeline/.../events/common.py` `whole_days`, ENG-36) |
+| allDay | boolean | Default false |
 | termWeekLabel | string? | e.g. "MT26 Wk 3" (derived from `termDates`, §6) |
 | venueKey / venueText | string? | |
 | organiserKeys, coHostKeys, sponsorKeys | string[] | Organisation keys, set only by `eventOrganisers` (not claimable). Sponsors and co-hosts also create `relationships` edges. |
