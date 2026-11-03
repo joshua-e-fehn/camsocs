@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { ConvexProvider, ConvexReactClient } from "convex/react"
 import { renderToString } from "react-dom/server"
 import { EventPage } from "@/components/organisms/event-page"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { eventStructuredData } from "@/lib/events"
 import type { EventPublic } from "@/lib/public-api"
 
@@ -56,10 +57,9 @@ function visibleCrumbs(html: string): { name: string; href: string }[] {
 describe("the event page's breadcrumb (event-breadcrumb-mismatch)", () => {
   test("the JSON-LD BreadcrumbList is the visible trail, then the event", () => {
     const crumbs = visibleCrumbs(render(EVENT))
-    expect(crumbs).toEqual([
-      { name: "Events", href: "/events" },
-      { name: "Mon 2 Nov", href: "/events?date=2026-11-02" },
-    ])
+    // No day crumb: `/events?date=` is a robots.txt trap (bot policy 2026-11-03).
+    expect(crumbs).toEqual([{ name: "Events", href: "/events" }])
+    for (const crumb of crumbs) expect(crawlerTrapRel(crumb.href)).toBeUndefined()
     const graph = eventStructuredData(EVENT)?.["@graph"] as Record<string, unknown>[]
     const list = graph.find((node) => node["@type"] === "BreadcrumbList") as {
       itemListElement: { name: string; item: string }[]
@@ -83,6 +83,31 @@ describe("the event page's correction link", () => {
       `/request?kind=correct&org=invented-society&event=${EVENT.key}`,
     )
     expect(tag?.[0]).toMatch(/rel="nofollow"/)
+  })
+})
+
+describe("the event page's society calendar link (bot policy 2026-11-03)", () => {
+  test("is the society calendar's canonical, followed and crawlable", () => {
+    const html = render(EVENT)
+    const tags = [...html.matchAll(/<a [^>]*href="(\/events\?[^"]*)"[^>]*>/g)]
+    expect(tags.length).toBeGreaterThan(0)
+    for (const [tag, href] of tags) {
+      expect(href.replaceAll("&amp;", "&")).toBe("/events?org=invented-society")
+      expect(crawlerTrapRel(href)).toBeUndefined()
+      expect(tag).not.toMatch(/rel="nofollow"/)
+    }
+  })
+
+  test("is the same link once the event has ended", () => {
+    const html = render({
+      ...EVENT,
+      startsAt: NOW - 86_400_000,
+      endsAt: NOW - 82_800_000,
+    } as EventPublic)
+    expect(html).toContain("This event has ended.")
+    const hrefs = [...html.matchAll(/<a [^>]*href="(\/events\?[^"]*)"/g)].map((m) => m[1])
+    expect(hrefs.length).toBeGreaterThanOrEqual(2)
+    for (const href of hrefs) expect(href).toBe("/events?org=invented-society")
   })
 })
 

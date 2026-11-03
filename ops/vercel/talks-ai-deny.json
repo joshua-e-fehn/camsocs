@@ -1,0 +1,58 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"name": "Deny AI agents on /talks",
+		"description": "Bot policy 2026-11-03, owner decision G1: deny the AI agents of webapp/lib/crawlers.ts AI_CRAWLERS (T1-T3) on path prefix /talks (with /talks.ics) before compute. Browsers, Googlebot and Bingbot stay allowed; proxy.ts refuses them too.",
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "pre",
+						"value": "/talks"
+					},
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Oo][Aa][Ii]-[Ss][Ee][Aa][Rr][Cc][Hh][Bb][Oo][Tt]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Ss][Ee][Aa][Rr][Cc][Hh][Bb][Oo][Tt]|[Pp][Ee][Rr][Pp][Ll][Ee][Xx][Ii][Tt][Yy][Bb][Oo][Tt]|[Mm][Ee][Tt][Aa]-[Ww][Ee][Bb][Ii][Nn][Dd][Ee][Xx][Ee][Rr]|[Aa][Mm][Zz][Nn]-[Ss][Ee][Aa][Rr][Cc][Hh][Bb][Oo][Tt]|[Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Ii][Nn][Dd][Ee][Xx]|[Dd][Uu][Cc][Kk][Aa][Ss][Ss][Ii][Ss][Tt][Bb][Oo][Tt]|[Yy][Oo][Uu][Bb][Oo][Tt]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Uu][Ss][Ee][Rr]|[Pp][Ee][Rr][Pp][Ll][Ee][Xx][Ii][Tt][Yy]-[Uu][Ss][Ee][Rr]|[Aa][Mm][Zz][Nn]-[Uu][Ss][Ee][Rr])"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "pre",
+						"value": "/talks"
+					},
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Uu][Ss][Ee][Rr]|[Mm][Ee][Tt][Aa]-[Ee][Xx][Tt][Ee][Rr][Nn][Aa][Ll][Ff][Ee][Tt][Cc][Hh][Ee][Rr]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]|[Gg][Oo][Oo][Gg][Ll][Ee]-[Cc][Ll][Oo][Uu][Dd][Vv][Ee][Rr][Tt][Ee][Xx][Bb][Oo][Tt]|[Gg][Pp][Tt][Bb][Oo][Tt]|[Cc][Ll][Aa][Uu][Dd][Ee][Bb][Oo][Tt]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Ww][Ee][Bb]|[Cc][Cc][Bb][Oo][Tt]|[Gg][Oo][Oo][Gg][Ll][Ee]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Pp][Pp][Ll][Ee][Bb][Oo][Tt]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Mm][Aa][Zz][Oo][Nn][Bb][Oo][Tt])"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "pre",
+						"value": "/talks"
+					},
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Mm][Ee][Tt][Aa]-[Ee][Xx][Tt][Ee][Rr][Nn][Aa][Ll][Aa][Gg][Ee][Nn][Tt]|[Ff][Aa][Cc][Ee][Bb][Oo][Oo][Kk][Bb][Oo][Tt]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]-[Dd][Aa][Tt][Aa]-[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]|[Aa][Ii]2[Bb][Oo][Tt]|[Aa][Ii]2[Bb][Oo][Tt]-[Dd][Oo][Ll][Mm][Aa]|[Tt][Ii][Mm][Pp][Ii][Bb][Oo][Tt]|[Oo][Mm][Gg][Ii][Ll][Ii]|[Oo][Mm][Gg][Ii][Ll][Ii][Bb][Oo][Tt])"
+					}
+				]
+			}
+		],
+		"action": {
+			"mitigate": {
+				"action": "deny"
+			}
+		}
+	}
+}

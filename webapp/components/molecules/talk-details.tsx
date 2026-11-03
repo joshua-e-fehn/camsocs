@@ -7,6 +7,7 @@ import { SourcedChip } from "@/components/molecules/sourced-chip"
 import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { formatInstantDate, londonIsoDate } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { displayHost } from "@/lib/source-line"
 import {
   googleCalendarUrl,
@@ -284,7 +285,7 @@ export function TalkDetails({
           {talk.departments.map((department) => (
             <Link
               key={department.key}
-              href={talksHref({ dept: department.slug })}
+              {...linkProps(talksHref({ dept: department.slug }))}
               className={cn(
                 "inline-flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium sm:min-h-8 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 SCHOOL_TONE[department.school].chip,

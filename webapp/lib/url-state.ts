@@ -248,7 +248,8 @@ export const MAX_LIST_WEEKS = 8
 /** One society's calendar loads four weeks at first (its events are
  * sparser than the whole site's): `/events?org=<slug>`, the URL its profile
  * and event pages link, is that view and the one search engines index (SEO
- * audit "events-param-urls"). */
+ * audit "events-param-urls"). Keep it free of other parameters: robots.txt
+ * allows `/events?org=` alone (lib/crawl-traps.ts). */
 export const ORG_WEEKS = 4
 
 /** The weeks a list loads when the URL does not say. */
@@ -368,11 +369,13 @@ export function eventsHref(state: EventsState): string {
  * calendar (`/events?org=<slug>`) are pages of their own, canonical and
  * indexable; every other combination — a date, more weeks, a view, a
  * preset, a search, a filter, an open event — is the same calendar sliced
- * differently, so it is noindex, follow (its links still count) with the
- * canonical of the page it slices. Never robots-disallowed: that would stop
- * the link-following. A society the directory does not list (`orgListed`
- * false: an unknown, hidden or unreadable slug) has no calendar of its own
- * to index, so `?org=<that slug>` is noindex too.
+ * differently, so it is noindex, follow with the canonical of the page it
+ * slices. Since the bot policy of 2026-11-03 those slices are also
+ * robots-disallowed and linked rel=nofollow (lib/crawl-traps.ts): they are
+ * an unbounded crawl space, and the event pages they list are found through
+ * the sitemap and the society profiles instead. A society the directory does
+ * not list (`orgListed` false: an unknown, hidden or unreadable slug) has no
+ * calendar of its own to index, so `?org=<that slug>` is noindex too.
  */
 export function eventsIndexing(
   state: EventsState,

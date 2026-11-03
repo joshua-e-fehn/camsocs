@@ -62,6 +62,7 @@ import {
   londonIsoDate,
   shiftAnchor,
 } from "@/lib/calendar"
+import { crawlerTrapRel, linkProps } from "@/lib/crawl-traps"
 import { availablePresets, currentTermEnd, type DatePreset } from "@/lib/date-presets"
 import { eventsByDay, lastDayOf, splitOngoing } from "@/lib/event-runs"
 import {
@@ -794,6 +795,15 @@ export function EventsCalendar({
           : "Socials, shows, matches and formals from Cambridge societies and clubs, a week or a month at a glance."
   const anchor = state.date ?? today
   const nextWeekFirst = addDays(window_.shown.last, 1)
+  // "Show next week" and "From <day>": real links for readers, robots.txt
+  // traps for crawlers (lib/crawl-traps.ts).
+  const nextWeekHref = eventsHref({
+    ...base,
+    preset: undefined,
+    date: state.preset ? undefined : state.date,
+    weeks: state.weeks + 1,
+  })
+  const fromNextWeekHref = eventsHref({ ...base, date: nextWeekFirst, weeks: 1 })
   const showsTalks = state.eventTypes.includes("talk")
 
   const viewSwitch = (
@@ -873,7 +883,7 @@ export function EventsCalendar({
               />
             </div>
             <Link
-              href="/talks"
+              {...linkProps("/talks")}
               className="group flex max-w-sm items-center gap-3 self-start rounded-full border border-talks/40 bg-talks-tint/60 py-1.5 pr-4 pl-1.5 text-sm transition-colors duration-150 hover:border-talks focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:rounded-2xl sm:py-3 sm:pl-4 lg:self-end"
             >
               <span
@@ -1044,7 +1054,7 @@ export function EventsCalendar({
                     Cambridge-only {camOnly === 1 ? "event is" : "events are"} listed around these
                     dates.{" "}
                     <Link
-                      href={camSignInHref(eventsHref(base))}
+                      {...linkProps(camSignInHref(eventsHref(base)))}
                       className="font-medium text-foreground underline underline-offset-4"
                     >
                       Sign in with your @cam.ac.uk email
@@ -1081,7 +1091,9 @@ export function EventsCalendar({
               ) : (
                 <div className="flex items-center gap-1">
                   <Link
-                    href={eventsHref({ ...base, date: shiftAnchor(state.view, anchor, -1) })}
+                    {...linkProps(
+                      eventsHref({ ...base, date: shiftAnchor(state.view, anchor, -1) }),
+                    )}
                     scroll={false}
                     aria-label={state.view === "week" ? "Previous week" : "Previous month"}
                     className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:size-9"
@@ -1089,14 +1101,16 @@ export function EventsCalendar({
                     <ChevronLeftIcon aria-hidden className="size-4" />
                   </Link>
                   <Link
-                    href={eventsHref({ ...base, date: undefined })}
+                    {...linkProps(eventsHref({ ...base, date: undefined }))}
                     scroll={false}
                     className="inline-flex h-11 items-center rounded-full border bg-card px-3.5 text-[13px] font-medium hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-ring sm:h-8"
                   >
                     Today
                   </Link>
                   <Link
-                    href={eventsHref({ ...base, date: shiftAnchor(state.view, anchor, 1) })}
+                    {...linkProps(
+                      eventsHref({ ...base, date: shiftAnchor(state.view, anchor, 1) }),
+                    )}
                     scroll={false}
                     aria-label={state.view === "week" ? "Next week" : "Next month"}
                     className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:size-9"
@@ -1127,7 +1141,7 @@ export function EventsCalendar({
                   programme. For department seminars and lectures across Cambridge, by School and
                   department, see{" "}
                   <Link
-                    href="/talks"
+                    {...linkProps("/talks")}
                     className="font-medium text-talks underline underline-offset-4"
                   >
                     Talks
@@ -1144,7 +1158,7 @@ export function EventsCalendar({
                   {plural(camOnly, "Cambridge-only event", "Cambridge-only events")} around these
                   dates —{" "}
                   <Link
-                    href={camSignInHref(eventsHref(base))}
+                    {...linkProps(camSignInHref(eventsHref(base)))}
                     className="font-medium text-foreground underline underline-offset-4"
                   >
                     sign in with your @cam.ac.uk email
@@ -1292,20 +1306,18 @@ export function EventsCalendar({
                       <ArrowRightIcon data-icon="inline-end" />
                     </Button>
                   ) : state.weeks < MAX_LIST_WEEKS ? (
-                    // A real link (crawlers follow it to the next week; those
-                    // URLs are noindex, follow), handled in place on a click.
+                    // A real link for readers, handled in place on a click;
+                    // rel=nofollow and robots-disallowed for crawlers, a trap
+                    // (bot policy 2026-11-03: event pages are found through
+                    // the sitemap and the society profiles instead).
                     <Button
                       asChild
                       variant="outline"
                       className="h-11 rounded-full border-events/50 px-6 hover:border-events hover:bg-events-tint/60 aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >
                       <a
-                        href={eventsHref({
-                          ...base,
-                          preset: undefined,
-                          date: state.preset ? undefined : state.date,
-                          weeks: state.weeks + 1,
-                        })}
+                        href={nextWeekHref}
+                        rel={crawlerTrapRel(nextWeekHref)}
                         aria-disabled={stale || undefined}
                         onClick={inPlace(extendWeek)}
                       >
@@ -1320,7 +1332,8 @@ export function EventsCalendar({
                   ) : (
                     <Button asChild variant="outline" className="h-11 rounded-full px-6">
                       <a
-                        href={eventsHref({ ...base, date: nextWeekFirst, weeks: 1 })}
+                        href={fromNextWeekHref}
+                        rel={crawlerTrapRel(fromNextWeekHref)}
                         onClick={inPlace(() =>
                           apply({ ...base, date: nextWeekFirst, weeks: 1 }, { scroll: true }),
                         )}
@@ -1427,7 +1440,7 @@ export function EventsCalendar({
                   <>
                     It may have been taken down, or it is a Cambridge-only event:{" "}
                     <Link
-                      href={camSignInHref(eventsHref({ ...base, event: openKey }))}
+                      {...linkProps(camSignInHref(eventsHref({ ...base, event: openKey })))}
                       className="underline underline-offset-4"
                     >
                       sign in with your @cam.ac.uk email

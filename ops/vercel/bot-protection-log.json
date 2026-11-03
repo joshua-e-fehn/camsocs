@@ -1,0 +1,8 @@
+{
+	"action": "managedRules.update",
+	"id": "bot_protection",
+	"value": {
+		"active": true,
+		"action": "log"
+	}
+}

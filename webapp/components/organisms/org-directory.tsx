@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button"
 import { api } from "@/convex/_generated/api"
 import { useStickyQuery } from "@/hooks/convex/use-sticky-query"
 import { useTrackSearch } from "@/hooks/use-analytics"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 import { categoryHubPath, collegeHubPath } from "@/lib/directory-hubs"
 import { ORG_SORT_LABELS, type OrgSort } from "@/lib/directory-sort"
 import { directoryTitle, fitTitle, titleText } from "@/lib/directory-title"
@@ -567,6 +568,7 @@ export function OrgDirectory({
                       >
                         <a
                           href={hrefFor({ ...state, page })}
+                          rel={crawlerTrapRel(hrefFor({ ...state, page }))}
                           onClick={(event) => follow(hrefFor({ ...state, page }), event)}
                           aria-current={page === state.page ? "page" : undefined}
                           aria-label={`Page ${page}`}
@@ -624,7 +626,7 @@ function PageLink({
   const href = hrefFor({ ...state, page })
   return (
     <Button variant="outline" className="h-11 sm:h-9" asChild>
-      <a href={href} onClick={(event) => onNavigate(href, event)}>
+      <a href={href} rel={crawlerTrapRel(href)} onClick={(event) => onNavigate(href, event)}>
         {children}
       </a>
     </Button>

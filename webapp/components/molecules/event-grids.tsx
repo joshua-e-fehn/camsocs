@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { EventChip, TONE_DOT } from "@/components/molecules/event-item"
 import { formatDayShort, WEEKDAYS } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { EVENT_TYPE_TONE, weekRowGutter } from "@/lib/events"
 import type { EventListItem } from "@/lib/public-api"
 import type { TermDatesRow } from "@/lib/term-week"
@@ -17,7 +18,8 @@ type GridProps = {
   /** The event's link (its page; a plain click opens the sheet). */
   eventHref: (event: EventListItem) => string
   onSelect: (event: EventListItem, target: HTMLElement) => void
-  /** The list view of one day ("+3 more", a phone's tap on a day). */
+  /** The list view of one day ("+3 more", a phone's tap on a day): a
+   * robots.txt trap, linked rel=nofollow (lib/crawl-traps.ts). */
   dayHref: (day: string) => string
 }
 
@@ -46,7 +48,7 @@ export function EventWeekGrid({ days, byDay, today, eventHref, onSelect, dayHref
           >
             <h3 className="flex items-baseline justify-between gap-2 px-0.5 md:flex-col md:items-start md:gap-0">
               <Link
-                href={dayHref(day)}
+                {...linkProps(dayHref(day))}
                 className="flex min-h-11 items-baseline gap-1.5 rounded-md underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring md:min-h-0"
               >
                 <span className="font-mono text-[0.6875rem] tracking-wider text-muted-foreground uppercase md:hidden">
@@ -217,7 +219,7 @@ function MonthCell({
     >
       {/* Phones: the whole cell is the day and opens it in the list. */}
       <Link
-        href={dayHref}
+        {...linkProps(dayHref)}
         aria-label={label}
         className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden"
       >
@@ -232,7 +234,7 @@ function MonthCell({
         </span>
       </Link>
       <Link
-        href={dayHref}
+        {...linkProps(dayHref)}
         aria-label={label}
         className="hidden self-start rounded-full hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:block"
       >
@@ -252,7 +254,7 @@ function MonthCell({
           {events.length > MONTH_CELL_CHIPS && (
             <li>
               <Link
-                href={dayHref}
+                {...linkProps(dayHref)}
                 className="inline-flex px-1.5 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               >
                 +{events.length - MONTH_CELL_CHIPS} more

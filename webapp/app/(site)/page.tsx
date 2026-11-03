@@ -20,6 +20,7 @@ import {
   londonTime,
   weekdayShort,
 } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { categoryHubPath } from "@/lib/directory-hubs"
 import { type EventRun, groupRuns, splitOngoing } from "@/lib/event-runs"
 import { pageMetadata } from "@/lib/page-metadata"
@@ -347,7 +348,9 @@ export default async function HomePage() {
               {TRY.filter((link) => hasTalks || link.href !== "/talks").map((link, index) => (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  // A search or filter view is a robots.txt trap (bot policy
+                  // 2026-11-03), so rel=nofollow; the hub and /talks are not.
+                  {...linkProps(link.href)}
                   className={
                     "inline-flex min-h-11 items-center font-medium text-brand-text underline decoration-sky-line decoration-1 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9" +
                     (index >= 3 ? " max-sm:hidden" : "")
@@ -448,7 +451,7 @@ export default async function HomePage() {
               .map((column) => (
                 <li key={column.school} className="flex min-w-0">
                   <Link
-                    href={`/talks?school=${column.school}`}
+                    {...linkProps(`/talks?school=${column.school}`)}
                     className="group flex min-h-12 min-w-0 flex-1 flex-col justify-center border-b py-3 focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     <span className="flex items-baseline justify-between gap-2.5">

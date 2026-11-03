@@ -1,7 +1,7 @@
 import { ArrowRightIcon } from "lucide-react"
 import Link from "next/link"
 import { HubList, type HubListCard } from "@/components/molecules/hub-list"
-import { requestLinkRel } from "@/lib/request-link"
+import { crawlerTrapRel } from "@/lib/crawl-traps"
 
 export type HubSection = { id: string; title: string; cards: HubListCard[] }
 
@@ -96,7 +96,7 @@ export function DirectoryHub({
           </span>
           <Link
             href={missingHref}
-            rel={requestLinkRel(missingHref)}
+            rel={crawlerTrapRel(missingHref)}
             className="inline-flex min-h-11 items-center gap-1 font-medium underline underline-offset-4 sm:min-h-0"
           >
             Add it

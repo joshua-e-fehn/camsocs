@@ -1,52 +1,130 @@
 {
-	"action": "rules.insert",
-	"id": null,
+	"action": "rules.update",
+	"id": "rule_block_gpt_bot_and_claude_bot_training_crawlers_ctjYse",
 	"value": {
-		"action": {
-			"mitigate": {
-				"action": "deny"
-			}
-		},
+		"name": "Training crawlers: cached public pages only",
+		"description": "Bot policy 2026-11-03, step 2 (was: GPTBot/ClaudeBot blocked site-wide since 1 Nov): webapp/lib/crawlers.ts AI_TRAINING_CRAWLERS may read edge-cached pages; denied per-request pages, /talks, .ics, share images and query strings. /robots.txt never.",
 		"active": true,
 		"conditionGroup": [
 			{
 				"conditions": [
 					{
-						"op": "sub",
 						"type": "user_agent",
-						"value": "GPTBot"
+						"op": "re",
+						"value": "([Gg][Pp][Tt][Bb][Oo][Tt]|[Cc][Ll][Aa][Uu][Dd][Ee][Bb][Oo][Tt]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Ww][Ee][Bb]|[Cc][Cc][Bb][Oo][Tt]|[Gg][Oo][Oo][Gg][Ll][Ee]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Pp][Pp][Ll][Ee][Bb][Oo][Tt]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Mm][Aa][Zz][Oo][Nn][Bb][Oo][Tt]|[Mm][Ee][Tt][Aa]-[Ee][Xx][Tt][Ee][Rr][Nn][Aa][Ll][Aa][Gg][Ee][Nn][Tt]|[Ff][Aa][Cc][Ee][Bb][Oo][Oo][Kk][Bb][Oo][Tt]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]-[Dd][Aa][Tt][Aa]-[Cc][Rr][Aa][Ww][Ll][Ee][Rr])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "path",
+						"op": "re",
+						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
 					}
 				]
 			},
 			{
 				"conditions": [
 					{
-						"op": "sub",
 						"type": "user_agent",
-						"value": "ClaudeBot"
+						"op": "re",
+						"value": "([Gg][Pp][Tt][Bb][Oo][Tt]|[Cc][Ll][Aa][Uu][Dd][Ee][Bb][Oo][Tt]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Ww][Ee][Bb]|[Cc][Cc][Bb][Oo][Tt]|[Gg][Oo][Oo][Gg][Ll][Ee]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Pp][Pp][Ll][Ee][Bb][Oo][Tt]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Mm][Aa][Zz][Oo][Nn][Bb][Oo][Tt]|[Mm][Ee][Tt][Aa]-[Ee][Xx][Tt][Ee][Rr][Nn][Aa][Ll][Aa][Gg][Ee][Nn][Tt]|[Ff][Aa][Cc][Ee][Bb][Oo][Oo][Kk][Bb][Oo][Tt]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]-[Dd][Aa][Tt][Aa]-[Cc][Rr][Aa][Ww][Ll][Ee][Rr])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "raw_path",
+						"op": "re",
+						"value": "\\?"
 					}
 				]
 			},
 			{
 				"conditions": [
 					{
-						"op": "sub",
 						"type": "user_agent",
-						"value": "gptbot"
+						"op": "re",
+						"value": "([Gg][Pp][Tt][Bb][Oo][Tt]|[Cc][Ll][Aa][Uu][Dd][Ee][Bb][Oo][Tt]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Ll][Aa][Uu][Dd][Ee]-[Ww][Ee][Bb]|[Cc][Cc][Bb][Oo][Tt]|[Gg][Oo][Oo][Gg][Ll][Ee]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Pp][Pp][Ll][Ee][Bb][Oo][Tt]-[Ee][Xx][Tt][Ee][Nn][Dd][Ee][Dd]|[Aa][Mm][Aa][Zz][Oo][Nn][Bb][Oo][Tt]|[Mm][Ee][Tt][Aa]-[Ee][Xx][Tt][Ee][Rr][Nn][Aa][Ll][Aa][Gg][Ee][Nn][Tt]|[Ff][Aa][Cc][Ee][Bb][Oo][Oo][Kk][Bb][Oo][Tt]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]-[Dd][Aa][Tt][Aa]-[Cc][Rr][Aa][Ww][Ll][Ee][Rr])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "query",
+						"op": "ex",
+						"key": "_rsc"
 					}
 				]
 			},
 			{
 				"conditions": [
 					{
-						"op": "sub",
 						"type": "user_agent",
-						"value": "claudebot"
+						"op": "re",
+						"value": "([Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]|[Aa][Ii]2[Bb][Oo][Tt]|[Aa][Ii]2[Bb][Oo][Tt]-[Dd][Oo][Ll][Mm][Aa]|[Tt][Ii][Mm][Pp][Ii][Bb][Oo][Tt]|[Oo][Mm][Gg][Ii][Ll][Ii]|[Oo][Mm][Gg][Ii][Ll][Ii][Bb][Oo][Tt])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "path",
+						"op": "re",
+						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]|[Aa][Ii]2[Bb][Oo][Tt]|[Aa][Ii]2[Bb][Oo][Tt]-[Dd][Oo][Ll][Mm][Aa]|[Tt][Ii][Mm][Pp][Ii][Bb][Oo][Tt]|[Oo][Mm][Gg][Ii][Ll][Ii]|[Oo][Mm][Gg][Ii][Ll][Ii][Bb][Oo][Tt])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "raw_path",
+						"op": "re",
+						"value": "\\?"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "user_agent",
+						"op": "re",
+						"value": "([Mm][Ii][Ss][Tt][Rr][Aa][Ll][Aa][Ii]-[Tt][Rr][Aa][Ii][Nn][Ii][Nn][Gg]|[Aa][Ii]2[Bb][Oo][Tt]|[Aa][Ii]2[Bb][Oo][Tt]-[Dd][Oo][Ll][Mm][Aa]|[Tt][Ii][Mm][Pp][Ii][Bb][Oo][Tt]|[Oo][Mm][Gg][Ii][Ll][Ii]|[Oo][Mm][Gg][Ii][Ll][Ii][Bb][Oo][Tt])"
+					},
+					{
+						"type": "path",
+						"op": "neq",
+						"value": "/robots.txt"
+					},
+					{
+						"type": "query",
+						"op": "ex",
+						"key": "_rsc"
 					}
 				]
 			}
 		],
-		"description": "Keep ordinary users, Googlebot, Bingbot and search crawlers allowed. Block the two requested training crawler identities before compute.",
-		"name": "Block GPTBot and ClaudeBot training crawlers"
+		"action": {
+			"mitigate": {
+				"action": "deny"
+			}
+		}
 	}
 }

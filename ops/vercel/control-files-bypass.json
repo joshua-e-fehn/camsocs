@@ -1,0 +1,34 @@
+{
+	"action": "rules.insert",
+	"id": null,
+	"value": {
+		"name": "Crawler control files: always reachable",
+		"description": "Bot policy 2026-11-03, T0: /robots.txt and /llms.txt bypass every later rule, so any agent (one denied elsewhere included) can read what it is asked to do. Keep this rule first.",
+		"active": true,
+		"conditionGroup": [
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "eq",
+						"value": "/robots.txt"
+					}
+				]
+			},
+			{
+				"conditions": [
+					{
+						"type": "path",
+						"op": "eq",
+						"value": "/llms.txt"
+					}
+				]
+			}
+		],
+		"action": {
+			"mitigate": {
+				"action": "bypass"
+			}
+		}
+	}
+}

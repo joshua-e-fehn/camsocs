@@ -118,7 +118,7 @@ The variables above are provisioned (2026-11-01). One PostHog project, `camsocs`
 
 ⚠ `ics_feed_fetched` counts are **lower bounds**: `/talks.ics`, `/events.ics`, a talk's file and a public event's file are cached at Vercel's edge for an hour per URL (`s-maxage=3600`, then `stale-while-revalidate`), and a cache hit never reaches the function. A calendar app polling a subscribed feed is counted at most once an hour per distinct feed URL across all subscribers. Read them as trends and as "at least", never as subscribers or downloads. (A Cambridge-only event's file is `private, no-store`, so each of its downloads is counted.)
 
-The relay is not blocked or cached by the CPU protection below: the firewall rule denies only the GPTBot and ClaudeBot user agents, the anonymous Data Cache covers only public pages' Convex reads (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
+The relay is not blocked or cached by the CPU protection below: no firewall rule names `/relay` (its rate limit and the training-crawler rule leave it out; only T4 scrapers and probe paths are denied site-wide, and robots.txt disallows it for every crawler), the anonymous Data Cache covers only public pages' Convex reads (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
 
 **Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item (the VPS monitor uses the same key) — read into the environment without echoing it:
 
@@ -242,31 +242,171 @@ The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles 
 
 ## CPU protection: training crawlers and anonymous data (2026-11-01)
 
-The project firewall has one active deny rule for GPTBot and ClaudeBot
-(user-agent substring matches, including lowercase). Googlebot, Bingbot and
-OAI-SearchBot are not blocked. The rule runs before application compute on
-both camsocs.uk and camsocs.vercel.app. `ops/vercel/training-crawlers.json`
-is the reviewed PATCH body for `/v1/security/firewall/config?projectId=…`.
-Read the current config first and update the existing named rule; do not
-blindly insert duplicates. This project-level setting survives deployments.
-`robots.txt` also asks just those two training crawlers not to fetch the site.
-User agents can be spoofed; this is not an authentication mechanism.
+On 1 Nov GPTBot and ClaudeBot hammered `/events`, whose calendar parameter URLs
+(every date, week count, view, preset and filter) are an unbounded crawl space,
+and used most of the Fluid CPU allowance. The project firewall then got one
+deny rule for those two user agents site-wide, and robots.txt asked them to
+stay off the site. The bot policy below (2026-11-03) replaces both. User agents
+can be spoofed; none of this is an authentication mechanism.
 
-The talks pillar (`/talks`, `/talks/*`, `/talks.ics`) is closed to every AI agent
-in `webapp/lib/crawlers.ts` `AI_CRAWLERS` (owner decisions G1, G6): robots.txt asks
-them to stay out, and `proxy.ts` answers them 403 (it runs before the edge cache,
-so a cached `/talks.ics` is refused too). `ops/vercel/talks-ai-crawlers.json` is
-the reviewed body of a matching firewall rule (path prefix `/talks` and a
-user-agent regex of the same tokens, kept equal to the list by
-`lib/crawlers.test.ts`), so they are refused before compute. It is not applied
-by anything in the repo: the operator adds it as a separate named rule, read
-the current config first as above.
+### Bot policy (2026-11-03, owner-approved steps 1 and 2)
 
-That rule is a backstop only. Its user-agent regex is case-sensitive and lists
-a fixed set of spellings (for example `meta-externalfetcher` as Meta writes
-it), so an agent that changes the case of its token can pass the firewall. The
-proxy still refuses it, because `isAiCrawler` matches without regard to case.
-Do not loosen the proxy check on the assumption that the WAF rule covers it.
+Vercel Pro: a request the firewall denies or rate-limits is free (no CDN
+request, no data transfer, no function). The rate-limit rule itself is not
+free on Pro: every request it evaluates and lets through (in log mode, all of
+them) is billed as WAF Rate Limiting, $0.50-0.80 per million allowed requests
+(regional pricing, vercel.com/docs/pricing/regional-pricing); custom rules
+and the Bot Protection ruleset are free. Public pages without search
+parameters are edge-cached (below); the dynamic paths are `/events`,
+`/societies`, `/talks`, `/talks/departments`, `/request`, `/sign-in` (any
+variant), `/dashboard`, the
+`.ics` feeds, share images, sitemaps (`s-maxage` cached), `/relay` and `/api`.
+The tiers (`webapp/lib/crawlers.ts`):
+
+- **T0 crawler control files** (`/robots.txt`, `/llms.txt`): always reachable.
+- **T1 AI search and index crawlers** (OAI-SearchBot, Claude-SearchBot,
+  PerplexityBot, meta-webindexer, Amzn-SearchBot, MistralAI-Index,
+  DuckAssistBot, YouBot) and **T2 user-triggered agents** (ChatGPT-User,
+  Claude-User, Perplexity-User, Amzn-User, MistralAI-User,
+  meta-externalfetcher, cohere-ai, Google-CloudVertexBot): every canonical
+  public page; never `/talks` (G1).
+- **T3 training crawlers** (GPTBot, ClaudeBot, CCBot, meta-externalagent,
+  Amazonbot, MistralAI-Training, the Google-Extended and Applebot-Extended
+  tokens, …): step 2 lets them back in, on the edge-cached public pages
+  only; never `/talks`, the traps or any per-request path (`/relay` and the
+  `s-maxage`-cached sitemaps excepted). robots.txt gives them their own group
+  that disallows what the firewall denies them (`lib/crawl-traps.ts`
+  `TRAINING_DISALLOWS`, held to `UNCACHED_PATHS` by a parity test), so a
+  compliant crawler is never told "allowed" and then answered 403.
+- **T4 SEO-tool and commercial scrapers** (AhrefsBot, SemrushBot, DotBot,
+  MJ12bot, DataForSeoBot, Dataprovider.com, BLEXBot, Barkrowler, PetalBot,
+  ImagesiftBot, Diffbot, Bytespider): robots.txt `Disallow: /` and a
+  firewall deny.
+- **T5 unknown or abusive**: a firewall deny on vulnerability probe paths;
+  Vercel's Bot Protection managed ruleset and a per-IP rate limit on the
+  dynamic paths, both in **log** mode (measure first).
+- Googlebot and Bingbot keep their access, `/talks` included (an open owner
+  question; do not change it here).
+
+In the app: robots.txt (`app/robots.ts`) disallows the parameter traps for
+every group (`lib/crawl-traps.ts`; the canonical `/events?org=<slug>`,
+`/societies?page=N`, `/talks?dept=` and `/talks?school=` stay allowed, except
+for T3, which may read no URL with a query), links
+to a trap are `rel="nofollow"`, and no always-rendered link prefetches a
+dynamic page (docs/webapp.md "Caching"). The talks pillar (`/talks`,
+`/talks/*`, `/talks.ics`) is closed to every T1-T3 agent (owner decisions G1,
+G6): robots.txt asks them to stay out, and `proxy.ts` answers them (and T4
+scrapers) 403; it runs before the edge cache, so a cached `/talks.ics` is
+refused too. Do not loosen the proxy check on the assumption that the
+firewall covers it.
+
+**Firewall rule files.** `ops/vercel/*.json` are the reviewed PATCH bodies of
+`/v1/security/firewall/config`, generated from the crawler lists by
+`cd webapp && bun run firewall:rules` (`lib/firewall-rules.ts`;
+`lib/firewall-rules.test.ts` fails when a file drifts, or when a rule's
+`description` passes the API's 256 characters or its `name` 160). Vercel
+documents its operators as case-insensitive and `re` as PCRE; the user-agent
+regexes still spell each token's letters as classes of both cases
+(`[Gg][Pp][Tt]…`), so they stay correct even if that changes. A long list is
+split over several condition groups. Nothing in the repo applies them, and this
+project-level config survives deployments. The operator applies them after
+the webapp change is deployed (so robots.txt already names the traps when
+GPTBot and ClaudeBot are let back in), in this order:
+
+```bash
+P='projectId=prj_capNnDOwrpJa4jvuxUo69cdtSBF2&teamId=team_BPZRUyOixqP7I7QyKQ5LoKG5'
+# Before anything: no unpublished dashboard draft may ride along with these changes.
+(cd webapp && vercel firewall diff)   # must list no unpublished changes; if it does, review them first
+# 0. Read and keep the current config; look for rules these files would duplicate.
+mkdir -p var && vercel api "/v1/security/firewall/config/active?$P" > var/firewall-before-$(date +%F).json
+# 1. T0: control files bypass every later rule (moved to the top in 5b).
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/control-files-bypass.json
+# 2. T4 / T5: probe paths and scrapers.
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/probes-and-scrapers-deny.json
+# 3. G1: AI agents off /talks. Not live as of 2026-11-03 (the active config holds only the
+#    training rule); if a rule with that name exists by then, send this body as
+#    "rules.update" with its id.
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/talks-ai-deny.json
+# 4. T3, step 2: narrows the live GPTBot/ClaudeBot rule in place (rules.update, same id).
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/training-crawlers.json
+# 5. T5: per-IP rate limit on the dynamic paths, log only.
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/dynamic-rate-limit-log.json
+# 5b. Put the T0 bypass first, with its id from the config (neither the docs nor the API say
+#     where rules.insert puts a rule, so the reorder comes after the last insert):
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input - <<<'{"action":"rules.priority","id":"<bypass rule id>","value":0}'
+vercel api "/v1/security/firewall/config/active?$P" | jq -r '.rules[].name'
+#     its first line must be "Crawler control files: always reachable"
+# 6. T5: Bot Protection managed ruleset, log only (managedRules.update).
+vercel api "/v1/security/firewall/config?$P" --method PATCH --input ops/vercel/bot-protection-log.json
+# 7. Confirm it is live, not a draft: no unpublished changes, five rules in the order above
+#    (bypass, probes and scrapers, talks, training, rate limit), bot = {active: true, action: "log"}.
+(cd webapp && vercel firewall diff)   # if it lists changes, review them and run vercel firewall publish
+vercel api "/v1/security/firewall/config/active?$P" \
+  | jq '{rules: [.rules[] | {name, id, action: .action.mitigate.action}], bot: .managedRules.bot_protection}'
+```
+
+The rules:
+
+| File | Matches | Action |
+| --- | --- | --- |
+| `control-files-bypass.json` | path `/robots.txt` or `/llms.txt` | bypass (keep first) |
+| `probes-and-scrapers-deny.json` | path `^/(\.env\|\.git\|wp-\|wordpress\|xmlrpc\|phpmyadmin\|\.aws\|\.DS_Store\|.*\.php$)`, or a T4 user agent | deny |
+| `talks-ai-deny.json` | path prefix `/talks` and a T1-T3 user agent | deny |
+| `training-crawlers.json` (`rule_block_gpt_bot_and_claude_bot_training_crawlers_ctjYse`, renamed "Training crawlers: cached public pages only") | a T3 user agent, path not `/robots.txt`, and an uncached path (`^/((events\|societies\|request\|sign-in)(\.rsc)?$\|talks\|api/\|dashboard)\|[/.]ics$\|opengraph-image`), a query string, or Next's `_rsc` | deny |
+| `dynamic-rate-limit-log.json` | path `^/(events\|societies\|request\|sign-in)(\.rsc)?$`, prefix `/talks` or prefix `/api/` | rate limit, fixed 60 s window, 120 per IP, log |
+| `bot-protection-log.json` | Vercel's Bot Protection ruleset | log |
+
+**Check after applying** (status codes only; never print a `/talks` body, it
+is talks.cam-derived):
+
+```bash
+code() { curl -s -o /dev/null -w "%{http_code} $2 $1\n" -A "$2" "https://camsocs.uk$1"; }
+code /robots.txt 'GPTBot/1.2'                  # 200
+code / 'Mozilla/5.0 (compatible; GPTBot/1.2)'  # 200 (cached page)
+code /events 'GPTBot/1.2'                      # 403
+code '/about?x=1' 'GPTBot/1.2'                 # 403 only if raw_path carries the query (assumption A)
+code /talks 'OAI-SearchBot/1.3'                # 403
+code /events 'OAI-SearchBot/1.3'               # 200
+code / 'AhrefsBot/7.0'                         # 403
+code /robots.txt 'AhrefsBot/7.0'               # 200 (bypass)
+code /wp-login.php 'Mozilla/5.0'               # 403
+code /talks 'Googlebot/2.1'                    # 200
+code /talks 'GPTBot/1.2'                       # 403 (G1 for T3)
+code /sign-in 'GPTBot/1.2'                     # 403 (per-request path)
+code /llms.txt 'AhrefsBot/7.0'                 # 200 (bypass)
+code /events 'Mozilla/5.0 (compatible; Googlebot/2.1)'  # 200
+code /talks 'Mozilla/5.0 (Macintosh)'          # 200 (browser)
+```
+
+One assumption to confirm live, then record here:
+
+- **A.** `raw_path` includes the query string, so `raw_path re \?` matches any URL
+  with one. If `/about?x=1` above answers 200, it does not. The fallback is
+  safe: every route that reads search parameters is in `UNCACHED_PATHS`, so a
+  missing `raw_path` query only lets T3 read cached pages with an ignored
+  query, and the `_rsc` group still covers Next's RSC fetches; drop the
+  `raw_path` groups or replace them.
+
+Settled by Vercel's documentation and schema:
+
+- **B.** A `query` condition with `op: "ex"` and a `key` needs no `value`: the
+  PATCH schema's condition requires only `type` and `op`, its `op` enum has
+  `ex`/`nex`, and `value` is optional (openapi.vercel.sh).
+- **C.** `bypass` also skips the Bot Protection ruleset: custom rules run
+  first, then the managed rulesets, and a custom-rule bypass is the documented
+  way past a managed ruleset (vercel.com/docs/vercel-firewall/vercel-waf/
+  managed-rulesets, "Rules execution order", "Bypassing rulesets").
+- **D.** `re` is a PCRE match (unanchored unless the pattern anchors it), and
+  "All operators are case insensitive"
+  (vercel.com/docs/vercel-firewall/vercel-waf/rule-configuration).
+
+Read the Firewall tab's logs for a week before moving the rate limit
+(`rateLimit.action`) or Bot Protection (`value.action`) from `log` to a
+refusing action; that is a later owner decision. Before switching the rate
+limit to deny, check whether the top IPs are shared University NAT addresses
+(eduroam/UniOfCam), where many readers share one IP.
+
+### Edge caching and anonymous data (SEO audit 2026-11-02)
 
 Since the SEO audit of 2026-11-02 (no-cdn-cache) public pages are cached at
 Vercel's edge and regenerated at most every 5 minutes (docs/webapp.md

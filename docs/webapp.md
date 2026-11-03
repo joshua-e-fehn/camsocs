@@ -62,7 +62,13 @@ app/                         Next.js App Router pages
                              lib/sitemap-societies.ts, convex/sitemap.ts, orgs.sitemap): lastmod, edge-cached
                              an hour, 503 on a backend failure; category hubs and college pages listed; thin
                              profiles (G3), ended and talks.cam-derived events (G1) left out
-  robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay; AI agents off /talks
+  robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay and the parameter traps
+                             (/events?, /societies?, /talks?, /request?, /talks/departments?, /events/*/ics;
+                             canonical ?org= / ?page= / ?dept= / ?school= views allowed); AI agents
+                             (lib/crawlers.ts T1-T3) off /talks; training crawlers (T3) also off the
+                             per-request pages and any query, as the firewall denies them
+                             (crawl-traps.ts TRAINING_DISALLOWS); SEO tools and scrapers (T4) off the
+                             site (bot policy 2026-11-03)
   opengraph-image.tsx        Generic share image: wordmark and headline only (no University branding),
                              drawn by _og/card.tsx; a society's and an event's segment draw their own
                              (`opengraph-image.tsx`: name, kinds, logo / when, title, host, venue;
@@ -184,6 +190,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
   convex-url.ts              Build-time check that both Convex URLs name one deployment
 scripts/
   check-codegen.ts           Committed api.d.ts lists every convex module
+  firewall-rules.ts          Writes ops/vercel/*.json, the Vercel firewall bodies of the bot policy
+                             (lib/firewall-rules.ts; `bun run firewall:rules`; applying: docs/deploy.md)
   measure-public-api.ts      Response size and time of the public queries against .env.local's deployment
   build-env-defaults.sh      Placeholder Convex URLs only for builds going nowhere (+ .test.ts)
   convex-deploy-if-key.sh    Deploys only on Vercel; refuses a stray exported CONVEX_DEPLOY_KEY
@@ -251,6 +259,14 @@ read. What makes that work, and what keeps it working:
   dynamic (`/societies`, `/events`, `/talks`, `/talks/departments`, `/request`), with their reads
   cached. A cached page can be up to twice that behind the database; the interactive pages' live
   queries catch up once hydrated.
+- **No prefetch of a dynamic page from a link on every page** (bot policy 2026-11-03). A
+  next/link prefetches what comes into view, and a prefetch of one of the pages above is a server
+  render. The header's sections, the footer, the home page's overview and "Try" links, the event
+  and talk pages' breadcrumbs and department chips, a profile's calendar and filter links and the
+  Cambridge-only sign-in hints (`/sign-in` reads its parameters too) are `prefetch={false}` for
+  them (the header by its `NAV` list, the rest through `lib/crawl-traps.ts` `linkProps` /
+  `dynamicPrefetch`, which also sets a crawler trap's `rel="nofollow"`); links to cached pages
+  keep Next's default.
 - **Dynamic segments build nothing** (`generateStaticParams` returns `[]` on `/societies/[slug]`,
   `/events/[key]`, `/categories/[category]`, `/talks/[key]`, `/talks/events/[key]`): each page is
   rendered on its first request, so `next build` never reads Convex for them. Pages without a
@@ -697,8 +713,18 @@ For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the
 canonical of the page it slices. Both carry a CollectionPage / ItemList of the event pages on
-screen. "Show next week" is a real link (handled in place on a click), so crawlers reach later
-weeks; event rows link their societies' profiles. Neither `/events` nor `/events/[key]` has a
+screen. "Show next week", "From <day>", the week and month arrows, "Today" and the day cells are
+real links for readers (handled in place on a click), but every slice of the calendar is a
+robots.txt trap since the bot policy of 2026-11-03: robots.txt disallows it and the links carry
+`rel="nofollow"` (`lib/crawl-traps.ts` `crawlerTrapRel`, the one list app/robots.ts reads). So do
+the directory's filter, facet and search links, the home page's "Try" and day links and the talks
+department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?dept=` and
+`/talks?school=` alone stay followed. An event page's "All its events" link is its lead
+society's canonical calendar, `/events?org=<slug>` (`eventsIndexing(...).canonical`), never a
+slice. Event pages are found through the sitemap
+(`sitemaps/events.xml`), the canonical calendars and the society profiles, whose rows link them;
+an event page's breadcrumb is "Events" alone (no day crumb, which would point at a trap), the same
+in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `loading.tsx`: their H1, text and JSON-LD are in the first HTML chunk.
 
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,

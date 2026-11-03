@@ -13,6 +13,7 @@
     "check": "biome check --write .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p convex",
     "check:codegen": "bun run scripts/check-codegen.ts",
+    "firewall:rules": "bun run scripts/firewall-rules.ts",
     "test": "bun test",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",

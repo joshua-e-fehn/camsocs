@@ -26,6 +26,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useSignInOptions, useViewerTier } from "@/hooks/convex"
 import { authClient } from "@/lib/auth-client"
+import { linkProps } from "@/lib/crawl-traps"
 import { openPalette } from "@/lib/palette"
 import { cn } from "@/lib/utils"
 
@@ -282,7 +283,7 @@ function AccountMenu({ access, onSignOut }: { access: Access; onSignOut: () => v
           </>
         ) : (
           <DropdownMenuItem asChild>
-            <Link href="/sign-in" className="flex-col items-start! gap-0.5">
+            <Link {...linkProps("/sign-in")} className="flex-col items-start! gap-0.5">
               <span className="flex items-center gap-2 font-medium">
                 <LogInIcon aria-hidden className="size-4" />
                 Sign in
@@ -338,7 +339,7 @@ function AccountLinks({
       ) : (
         <>
           <Button className="h-11 justify-start" asChild>
-            <Link href="/sign-in" onClick={onNavigate}>
+            <Link {...linkProps("/sign-in")} onClick={onNavigate}>
               <LogInIcon data-icon="inline-start" />
               Sign in
             </Link>

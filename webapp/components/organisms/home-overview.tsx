@@ -4,6 +4,7 @@ import { ArrowRightIcon } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useHomeTalks } from "@/hooks/convex/talks"
+import { linkProps } from "@/lib/crawl-traps"
 import { homeTalkArgs, homeTalkRows } from "@/lib/talk-display"
 import { cn } from "@/lib/utils"
 
@@ -291,7 +292,7 @@ function ColumnHead({ title, href, count }: { title: string; href: string; count
     <div className="flex items-baseline justify-between gap-3">
       <h3 className="min-w-0 font-serif text-2xl leading-snug sm:text-[1.6875rem]">
         <Link
-          href={href}
+          {...linkProps(href)}
           className="group inline-flex min-h-11 items-center gap-2.5 hover:text-brand-text focus-visible:outline-2 focus-visible:outline-ring"
         >
           {title}
@@ -355,7 +356,7 @@ function Column({
             // Phones stack the columns, so each shows three rows.
             <li key={item.key} className={cn(index >= 3 && "max-md:hidden")}>
               <Link
-                href={item.href}
+                {...linkProps(item.href)}
                 className="group grid grid-cols-[50px_minmax(0,1fr)] gap-3 border-b py-[13px] focus-visible:outline-2 focus-visible:outline-ring sm:grid-cols-[54px_minmax(0,1fr)] sm:gap-3.5 sm:py-[15px] [li:first-child>&]:border-t"
               >
                 <span className="font-mono text-sm leading-[1.45] tabular-nums">
@@ -445,7 +446,7 @@ export function MoreLink({
 }) {
   return (
     <Link
-      href={href}
+      {...linkProps(href)}
       className={cn(
         "group inline-flex min-h-11 items-center gap-2 self-start text-[0.9375rem] font-semibold text-brand-text focus-visible:outline-2 focus-visible:outline-ring",
         className,
