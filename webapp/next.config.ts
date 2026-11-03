@@ -24,6 +24,8 @@ import type { NextConfig } from "next"
  * over from the route handler again.
  */
 const nextConfig: NextConfig = {
+  // No `x-powered-by: Next.js`: it tells a scanner nothing we want it to know.
+  poweredByHeader: false,
   // Pin the workspace root to this directory. Without it Next walks up looking
   // for lockfiles and can adopt an unrelated one above the repo (it picked
   // ~/package-lock.json on the scaffold machine), which changes file tracing.
@@ -52,6 +54,123 @@ const nextConfig: NextConfig = {
       { source: "/:path((?!relay(?:/|$)).+)/", destination: "/:path", permanent: true },
     ]
   },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders() }]
+  },
+}
+
+/**
+ * The browser protections every response carries (ENG-35, launch audit
+ * 2026-11-02). HSTS is not among them: Vercel already sends
+ * `strict-transport-security: max-age=63072000` on camsocs.uk, and a second
+ * copy here could only disagree with it.
+ *
+ * The Content-Security-Policy is report-only: a browser reports what it
+ * would block in its console and blocks nothing, so a source this list
+ * forgot cannot break a page. Enforce it (rename the header) once the pages
+ * show no reports. Scripts and styles keep 'unsafe-inline' because the App
+ * Router inlines its flight data and framer-motion writes style attributes;
+ * a nonce would need the proxy on every page, which was removed for CPU
+ * (docs/deploy.md "CPU protection").
+ */
+export function securityHeaders(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { key: string; value: string }[] {
+  return [
+    { key: "X-Content-Type-Options", value: "nosniff" },
+    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+    { key: "X-Frame-Options", value: "DENY" },
+    {
+      key: "Permissions-Policy",
+      value: [
+        "camera=()",
+        "microphone=()",
+        "geolocation=()",
+        "payment=()",
+        "usb=()",
+        "serial=()",
+        "hid=()",
+        "bluetooth=()",
+        "midi=()",
+        "magnetometer=()",
+        "gyroscope=()",
+        "accelerometer=()",
+        "display-capture=()",
+        "browsing-topics=()",
+      ].join(", "),
+    },
+    { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy(env) },
+  ]
+}
+
+/** A Convex origin from `url` (`https://name.convex.cloud`), or `fallback`
+ * when it is unset or not one (`next dev` before `.env.local`, tests). */
+function convexOrigin(url: string | undefined, fallback: string): string {
+  const origin = url?.trim().replace(/\/+$/, "")
+  return origin && /^https:\/\/[a-z0-9.-]+\.convex\.(cloud|site)$/.test(origin) ? origin : fallback
+}
+
+/**
+ * Every origin a page loads from, by reading the code (ENG-35):
+ *
+ *  - **self**: pages, scripts, styles, `next/font` files (self-hosted), logos
+ *    and event images through `/_next/image`, Better Auth (`/api/auth/*`, the
+ *    route handler forwards it) and PostHog (`/relay/*`, with external script
+ *    loading switched off in lib/analytics-client.ts);
+ *  - **the Convex deployment**: the client's WebSocket and HTTP calls
+ *    (`NEXT_PUBLIC_CONVEX_URL`), the site URL beside it, and stored images on
+ *    `*.convex.cloud` (the same hosts `images.remotePatterns` allows);
+ *  - **Vercel's toolbar** (`vercel.live`), on preview deployments only.
+ *
+ * Google sign-in and the map and calendar links are navigations, which a CSP
+ * does not restrict. `next dev` also needs `eval` for its refresh runtime.
+ */
+export function contentSecurityPolicy(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  const cloud = convexOrigin(env.NEXT_PUBLIC_CONVEX_URL, "https://*.convex.cloud")
+  const site = convexOrigin(env.NEXT_PUBLIC_CONVEX_SITE_URL, "https://*.convex.site")
+  const socket = cloud.replace(/^https:/, "wss:")
+  const preview = env.VERCEL_ENV === "preview"
+  const toolbar = preview ? ["https://vercel.live"] : []
+  const directives: Record<string, string[]> = {
+    "default-src": ["'self'"],
+    "script-src": [
+      "'self'",
+      "'unsafe-inline'",
+      ...(env.NODE_ENV === "development" ? ["'unsafe-eval'"] : []),
+      ...toolbar,
+    ],
+    "style-src": ["'self'", "'unsafe-inline'", ...toolbar],
+    "img-src": [
+      "'self'",
+      "data:",
+      "blob:",
+      "https://*.convex.cloud",
+      ...(preview ? ["https://vercel.live", "https://vercel.com"] : []),
+    ],
+    "font-src": [
+      "'self'",
+      ...(preview ? ["https://vercel.live", "https://assets.vercel.com"] : []),
+    ],
+    "connect-src": [
+      "'self'",
+      cloud,
+      socket,
+      site,
+      ...(preview ? ["https://vercel.live", "wss://ws-us3.pusher.com"] : []),
+    ],
+    "frame-src": preview ? ["https://vercel.live"] : ["'none'"],
+    "worker-src": ["'self'", "blob:"],
+    "manifest-src": ["'self'"],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
+  }
+  return Object.entries(directives)
+    .map(([name, sources]) => `${name} ${sources.join(" ")}`)
+    .join("; ")
 }
 
 /**
