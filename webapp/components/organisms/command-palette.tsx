@@ -80,6 +80,7 @@ const PAGES = [
   { href: "/request?kind=add", label: "Add a missing society", hint: "Request" },
   { href: "/request?kind=claim", label: "Claim or correct a listing", hint: "Request" },
   { href: "/privacy", label: "Privacy notice", hint: "Your data" },
+  { href: "/terms", label: "Terms of use", hint: "Using the site" },
 ] as const
 
 const SUGGESTIONS = ["Rowing", "Chess", "Jazz", "Debating", "Climbing", "Film"] as const
