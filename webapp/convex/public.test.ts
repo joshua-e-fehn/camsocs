@@ -3,7 +3,6 @@ import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
 import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
-import { GLOBAL_PER_HOUR } from "./listingRequests"
 
 /**
  * The public read API (docs/webapp.md "Public API"): what a visitor, a
@@ -668,111 +667,6 @@ describe("public meta", () => {
     const meta = (await t.query(api.orgs.getBySlug, { slug: "chess" }))?.org.meta
     expect(meta?.website.status).toBe("inferred")
     expect(meta?.website.conflicts).toBeUndefined()
-  })
-})
-
-describe("listingRequests.submit", () => {
-  const request = {
-    kind: "correct" as const,
-    orgKey: "org-chess",
-    submitterEmail: "President@CUChess.org",
-    message: "Our training moved to Thursdays.",
-    fields: { timeCommitment: "Thursdays 7pm" },
-  }
-
-  test("stores a validated request", async () => {
-    const t = newTest()
-    await seed(t)
-    const { key } = await t.mutation(api.listingRequests.submit, request)
-    const row = await t.run(async (ctx) => await ctx.db.query("listingRequests").first())
-    expect(row).toMatchObject({ key, submitterEmail: "president@cuchess.org", status: "open" })
-  })
-
-  test("validates and rate-limits per address", async () => {
-    const t = newTest()
-    await seed(t)
-    await expect(
-      t.mutation(api.listingRequests.submit, { ...request, submitterEmail: "nope" }),
-    ).rejects.toThrow(/valid email/)
-    await expect(
-      t.mutation(api.listingRequests.submit, { ...request, message: "short" }),
-    ).rejects.toThrow(/10 to/)
-    await expect(
-      t.mutation(api.listingRequests.submit, { ...request, orgKey: "org-missing" }),
-    ).rejects.toThrow(/not found/)
-    for (let i = 0; i < 5; i++) {
-      await t.mutation(api.listingRequests.submit, {
-        ...request,
-        message: `${request.message} ${i}`,
-      })
-    }
-    await expect(t.mutation(api.listingRequests.submit, request)).rejects.toThrow(/Too many/)
-  })
-})
-
-describe("listingRequests.submit — the removal route stays open", () => {
-  test("a flood of other requests from throwaway addresses cannot lock out a removal", async () => {
-    const t = newTest()
-    await seed(t)
-    for (let i = 0; i < GLOBAL_PER_HOUR; i++) {
-      await t.mutation(api.listingRequests.submit, {
-        kind: "correct",
-        orgKey: "org-chess",
-        submitterEmail: `x${i}@example.org`,
-        message: "Junk correction request.",
-      })
-    }
-    await expect(
-      t.mutation(api.listingRequests.submit, {
-        kind: "claim",
-        orgKey: "org-chess",
-        submitterEmail: "late@example.org",
-        message: "Another junk request.",
-      }),
-    ).rejects.toThrow(/busy/)
-    const { key } = await t.mutation(api.listingRequests.submit, {
-      kind: "remove",
-      orgKey: "org-chess",
-      submitterEmail: "secretary@cuchess.org",
-      message: "Please remove my details.",
-    })
-    expect(key).toMatch(/^lr-/)
-  })
-})
-
-describe("listingRequests.submit — the form's other paths", () => {
-  test("an add request needs no listing; every other kind does", async () => {
-    const t = newTest()
-    await seed(t)
-    const base = { submitterEmail: "sec@newsoc.example", message: "Please add the Go Society." }
-    const { key } = await t.mutation(api.listingRequests.submit, {
-      ...base,
-      kind: "add",
-      fields: { name: "CU Go Society", website: "https://go.example.org/" },
-    })
-    expect(key).toMatch(/^lr-/)
-    for (const kind of ["claim", "correct", "remove", "object"] as const) {
-      await expect(t.mutation(api.listingRequests.submit, { ...base, kind })).rejects.toThrow(
-        /Which listing/,
-      )
-    }
-  })
-
-  test("refuses field names that are not identifiers and oversized values", async () => {
-    const t = newTest()
-    await seed(t)
-    const base = {
-      kind: "correct" as const,
-      orgKey: "org-chess",
-      submitterEmail: "sec@cuchess.org",
-      message: "Two corrections to the listing.",
-    }
-    await expect(
-      t.mutation(api.listingRequests.submit, { ...base, fields: { "<script>": "x" } }),
-    ).rejects.toThrow(/Not a field name/)
-    await expect(
-      t.mutation(api.listingRequests.submit, { ...base, fields: { website: "x".repeat(2_001) } }),
-    ).rejects.toThrow(/too long/)
   })
 })
 

@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values"
 import { sha1Hex } from "../lib/hash"
+import { CONTACT_EMAIL } from "../lib/site"
 import { LISTING_REQUEST_KINDS } from "../lib/vocab"
 import { internal } from "./_generated/api"
 import { type MutationCtx, mutation } from "./_generated/server"
@@ -14,14 +15,30 @@ import { literalUnion } from "./lib/validators"
  * admin area (T12), where an accepted correction becomes a `fieldClaims` row
  * with `method: "owner_submitted"` — never a direct edit.
  *
- * Abuse limits: every string is length-limited; one address may submit at
- * most `PER_EMAIL_PER_HOUR` requests an hour. Claims, corrections and
- * additions share a budget of `GLOBAL_PER_HOUR` an hour; removals and
- * objections — the GDPR route while there is no contact address — have their
- * own, larger `REMOVAL_PER_HOUR`, so a flood of other requests can never shut
- * them out. The submitter's address is not verified (the broker inbox says
- * so): nothing here acts on a request; the broker replies to the address
- * before hiding a listing.
+ * Abuse limits (ENG-35). `submit` is a public mutation, so a script can call
+ * it directly and skip the form's honeypot; the limits are what stop a flood.
+ * Every string is length-limited, and an accepted request must fit, in order:
+ *
+ *  1. **its address**: `PER_EMAIL_PER_HOUR` an hour, `PER_EMAIL_PER_DAY` a
+ *     day. The address is unverified, so this only slows one sender down;
+ *  2. **its listing**: `PER_LISTING_PER_HOUR` an hour and
+ *     `PER_LISTING_PER_DAY` a day, per budget, so a flood aimed at one
+ *     listing stays on that listing and cannot use up everyone's budget;
+ *  3. **its budget overall**: claims, corrections and additions share
+ *     `GLOBAL_PER_HOUR` / `GLOBAL_PER_DAY`; removals and objections, the
+ *     GDPR route, have their own `REMOVAL_PER_HOUR` / `REMOVAL_PER_DAY`, so
+ *     a flood of the others never shuts them out. A listing's first
+ *     `LISTING_RESERVE_PER_DAY` requests of a budget in a day skip this
+ *     check: a flood spread over the site still leaves every listing it did
+ *     not reach open to its own society.
+ *
+ * Counts read `listingRequestSubmits`, a stamp per accepted request with no
+ * address or text (pruned after a day), never the requests themselves: a
+ * request can hold 60 KB of proposed fields, and a count over a thousand of
+ * them would pass Convex's read limit and fail every submission. A refused
+ * request is never stamped, as it is never stored. The submitter's address
+ * is not verified (the broker inbox says so): nothing here acts on a
+ * request; the broker replies to the address before hiding a listing.
  *
  * Refusals are `ConvexError`s carrying the user-readable message as `data`:
  * a production deployment replaces a plain `Error`'s message with "Server
@@ -34,32 +51,104 @@ import { literalUnion } from "./lib/validators"
  */
 
 export const PER_EMAIL_PER_HOUR = 5
+export const PER_EMAIL_PER_DAY = 20
+export const PER_LISTING_PER_HOUR = 10
+export const PER_LISTING_PER_DAY = 20
+export const LISTING_RESERVE_PER_DAY = 2
 export const GLOBAL_PER_HOUR = 200
-export const REMOVAL_PER_HOUR = 1_000
+export const GLOBAL_PER_DAY = 600
+export const REMOVAL_PER_HOUR = 300
+export const REMOVAL_PER_DAY = 1_000
 const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+const PRUNE_BATCH = 50
 
 /** Requests that ask for a listing to come down: their own budget. */
-const REMOVAL_KINDS = ["remove", "object"] as const
-const OTHER_KINDS = ["claim", "correct", "add"] as const
+const REMOVAL_KINDS: readonly Kind[] = ["remove", "object"]
 type Kind = (typeof LISTING_REQUEST_KINDS)[number]
+type Budget = "removal" | "other"
 
-/** Requests of `kinds` made since `since`, counted up to `cap`. */
-async function recentOfKinds(
+/** Where the form's refusals point instead: the address beside it (D4). */
+const OR_WRITE = CONTACT_EMAIL ? `, or write to ${CONTACT_EMAIL}` : ""
+
+/** Whether `times` (stamps from the last day, at most `perDay` of them) leave
+ * room for one more under both caps. */
+function hasRoom(times: number[], now: number, perHour: number, perDay: number): boolean {
+  if (times.length >= perDay) return false
+  return times.filter((at) => at > now - HOUR_MS).length < perHour
+}
+
+/** When this budget was used in the last day, on `orgKey` if given, counted
+ * up to `cap`. */
+async function stampsSince(
   ctx: MutationCtx,
-  kinds: readonly Kind[],
+  budget: Budget,
   since: number,
   cap: number,
-): Promise<number> {
-  let count = 0
-  for (const kind of kinds) {
-    if (count >= cap) break
-    const rows = await ctx.db
-      .query("listingRequests")
-      .withIndex("by_kind_createdAt", (q) => q.eq("kind", kind).gt("createdAt", since))
-      .take(cap - count)
-    count += rows.length
+  orgKey?: string,
+): Promise<number[]> {
+  const rows =
+    orgKey === undefined
+      ? await ctx.db
+          .query("listingRequestSubmits")
+          .withIndex("by_budget_submittedAt", (q) =>
+            q.eq("budget", budget).gt("submittedAt", since),
+          )
+          .take(cap)
+      : await ctx.db
+          .query("listingRequestSubmits")
+          .withIndex("by_orgKey_budget_submittedAt", (q) =>
+            q.eq("orgKey", orgKey).eq("budget", budget).gt("submittedAt", since),
+          )
+          .take(cap)
+  return rows.map((row) => row.submittedAt)
+}
+
+/** Refuses the request with a message the form shows, or returns when it
+ * fits every limit (the order is the module docstring's). */
+async function checkLimits(
+  ctx: MutationCtx,
+  { email, orgKey, budget, now }: { email: string; orgKey?: string; budget: Budget; now: number },
+) {
+  const fromEmail = await ctx.db
+    .query("listingRequests")
+    .withIndex("by_submitter_createdAt", (q) =>
+      q.eq("submitterEmail", email).gt("createdAt", now - DAY_MS),
+    )
+    .take(PER_EMAIL_PER_DAY)
+  if (
+    !hasRoom(
+      fromEmail.map((row) => row.createdAt),
+      now,
+      PER_EMAIL_PER_HOUR,
+      PER_EMAIL_PER_DAY,
+    )
+  ) {
+    throw new ConvexError(
+      fromEmail.length >= PER_EMAIL_PER_DAY
+        ? "Too many requests from this address today; please try again tomorrow"
+        : "Too many requests from this address; please try again in an hour",
+    )
   }
-  return count
+
+  let reserved = false
+  if (orgKey !== undefined) {
+    const onListing = await stampsSince(ctx, budget, now - DAY_MS, PER_LISTING_PER_DAY, orgKey)
+    if (!hasRoom(onListing, now, PER_LISTING_PER_HOUR, PER_LISTING_PER_DAY)) {
+      throw new ConvexError(
+        `This listing has had a lot of requests recently; please try again later${OR_WRITE}`,
+      )
+    }
+    reserved = onListing.length < LISTING_RESERVE_PER_DAY
+  }
+  if (reserved) return
+
+  const [perHour, perDay] =
+    budget === "removal" ? [REMOVAL_PER_HOUR, REMOVAL_PER_DAY] : [GLOBAL_PER_HOUR, GLOBAL_PER_DAY]
+  const overall = await stampsSince(ctx, budget, now - DAY_MS, perDay)
+  if (!hasRoom(overall, now, perHour, perDay)) {
+    throw new ConvexError(`The form is busy; please try again later${OR_WRITE}`)
+  }
 }
 
 const LIMITS = {
@@ -119,26 +208,8 @@ export const submit = mutation({
     }
 
     const now = Date.now()
-    const recentFromEmail = await ctx.db
-      .query("listingRequests")
-      .withIndex("by_submitter_createdAt", (q) =>
-        q.eq("submitterEmail", email).gt("createdAt", now - HOUR_MS),
-      )
-      .take(PER_EMAIL_PER_HOUR)
-    if (recentFromEmail.length >= PER_EMAIL_PER_HOUR) {
-      throw new ConvexError("Too many requests from this address; please try again in an hour")
-    }
-    const removal = (REMOVAL_KINDS as readonly Kind[]).includes(args.kind)
-    const budget = removal ? REMOVAL_PER_HOUR : GLOBAL_PER_HOUR
-    const recent = await recentOfKinds(
-      ctx,
-      removal ? REMOVAL_KINDS : OTHER_KINDS,
-      now - HOUR_MS,
-      budget,
-    )
-    if (recent >= budget) {
-      throw new ConvexError("The form is busy; please try again later")
-    }
+    const budget: Budget = REMOVAL_KINDS.includes(args.kind) ? "removal" : "other"
+    await checkLimits(ctx, { email, orgKey: args.orgKey, budget, now })
 
     const key = `lr-${sha1Hex(`${email}:${now}:${message}`).slice(0, 20)}`
     await ctx.db.insert("listingRequests", {
@@ -152,6 +223,12 @@ export const submit = mutation({
       status: "open",
       createdAt: now,
     })
+    await ctx.db.insert("listingRequestSubmits", { budget, orgKey: args.orgKey, submittedAt: now })
+    const expired = await ctx.db
+      .query("listingRequestSubmits")
+      .withIndex("by_submittedAt", (q) => q.lt("submittedAt", now - DAY_MS))
+      .take(PRUNE_BATCH)
+    for (const row of expired) await ctx.db.delete("listingRequestSubmits", row._id)
     await ctx.scheduler.runAfter(0, internal.analytics.captureListingRequest, { kind: args.kind })
     return { key }
   },
