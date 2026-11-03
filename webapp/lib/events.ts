@@ -334,7 +334,7 @@ export type PageEvent = Omit<CalendarEvent, "organisers"> & {
   imageUrl?: string
   price?: { free: boolean; minPence?: number; maxPence?: number; text?: string }
   speakers?: readonly { name: string; affiliation?: string }[]
-  meta?: Record<string, { status?: string } | undefined>
+  meta?: Record<string, { status?: string; method?: string } | undefined>
   /** Convex's talks-boundary verdict (lib/talks-boundary.ts). */
   talksDerived: boolean
 }
@@ -592,14 +592,28 @@ export type StructuredDataFacts = {
   title: string
   visibility?: string
   status?: string
-  meta?: { startsAt?: { status?: string } }
+  meta?: { startsAt?: { status?: string; method?: string } }
   talksDerived: boolean
+}
+
+/** Whether an event's start can be its Event's `startDate`: read off the
+ * source, or put together by the model from the source's own dated words.
+ * A model's start is `inferred` whenever no verbatim quote holds the stored
+ * value: no time stated (an all-day event, whose `startDate` is then the
+ * date alone), a yearless date's year or a term week's term passed by
+ * `extract.dating`'s second signal, a card read off an image. Its day is
+ * still the source's (every model reading needs a dated quote). A parser's
+ * `inferred` start is one the source never gave (a long run's stable start,
+ * a vague University timing, an SU listing date) and stays out, as does a
+ * start with no provenance (SEO re-check 2026-11-03, event-jsonld-coverage). */
+function startIsStated(start: { status?: string; method?: string } | undefined): boolean {
+  return start?.status !== "inferred" || start.method === "llm"
 }
 
 /**
  * Whether an event's page carries schema.org JSON-LD (SEO audit
  * "event-tbc-marked-scheduled"): only a public, confirmed event with a start
- * time that was read, not inferred, and whose title does not say "TBC" —
+ * the source states (`startIsStated`) and whose title does not say "TBC" —
  * an Event rich result with a guessed date would mislead. Never a
  * talks.cam-derived event (owner decision G1). Over a list item too, so a
  * profile links by `@id` only the Event nodes that exist
@@ -609,7 +623,7 @@ export function eventHasStructuredData(event: StructuredDataFacts): boolean {
   return (
     event.visibility === "public" &&
     (event.status ?? "confirmed") === "confirmed" &&
-    event.meta?.startsAt?.status !== "inferred" &&
+    startIsStated(event.meta?.startsAt) &&
     !TBC_TITLE.test(event.title) &&
     !event.talksDerived
   )
@@ -619,11 +633,15 @@ export function eventHasStructuredData(event: StructuredDataFacts): boolean {
  * names (with its address and coordinates) before the source's venue text,
  * and nothing for a text that names no place ("Home Game", "TBC"). The town
  * only when it is known to be Cambridge (`placeIsInCambridge`); an online
- * event's VirtualLocation only where one joins it (its booking link) — our
- * own page is not where anyone attends (review of 2026-11-02). */
+ * event's VirtualLocation is where one joins it: its booking link, else the
+ * event's own listing (`eventSameAs`: its own page or a per-event source
+ * page such as the University's listing; never a feed, a file or talks.cam;
+ * SEO re-check 2026-11-03, event-jsonld-coverage). It is never our own
+ * page, which is not where anyone attends (review of 2026-11-02). */
 function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
   if (!venue && isOnlineOnly(event.venueText)) {
-    return event.bookingUrl ? { "@type": "VirtualLocation", url: event.bookingUrl } : undefined
+    const joinAt = event.bookingUrl ?? eventSameAs(event)
+    return joinAt ? { "@type": "VirtualLocation", url: joinAt } : undefined
   }
   const name = venue?.name ?? usableVenueText(event.venueText)
   if (!name) return undefined

@@ -378,8 +378,14 @@ describe("societyJsonLd (org-jsonld-thin, jsonld-graph-breadcrumbs)", () => {
       listed("evt-tbc-status", { status: "tbc" }),
       // A day-long event read from its source has an Event node (a date).
       listed("evt-all-day", { allDay: true }),
+      // A model's start is the source's dated words; a parser's guess is not.
+      listed("evt-model-day", {
+        allDay: true,
+        meta: { startsAt: { status: "inferred", method: "llm" } },
+      }),
+      listed("evt-parser-guess", { meta: { startsAt: { status: "inferred", method: "parser" } } }),
     ]
-    expect(jsonLdEvents(candidates)).toEqual(["evt-read", "evt-all-day"])
+    expect(jsonLdEvents(candidates)).toEqual(["evt-read", "evt-all-day", "evt-model-day"])
     // The same predicate as the event page's, so the two can never disagree.
     for (const event of candidates) {
       expect(jsonLdEvents([event]).length === 1).toBe(eventHasStructuredData(event))

@@ -392,12 +392,41 @@ describe("the event's page", () => {
     expect(eventHasStructuredData({ ...PAGE, status: "tbc" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Bandi Chhor Formal ( DATE TBC)" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Garden party (date TBA)" })).toBe(false)
+    // An inferred start with no provenance, or one a parser put together
+    // (the source never gave it), stays out.
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "inferred" } } })).toBe(
       false,
     )
+    expect(
+      eventHasStructuredData({
+        ...PAGE,
+        meta: { startsAt: { status: "inferred", method: "parser" } },
+      }),
+    ).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "found" } } })).toBe(true)
+    // A model's start is the source's own dated words (event-jsonld-coverage):
+    // no time stated (all day), or a yearless date's year, is still its date.
+    const modelStart = { startsAt: { status: "inferred", method: "llm" } }
+    const allDay = { ...PAGE, allDay: true, meta: modelStart }
+    expect(eventHasStructuredData(allDay)).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, meta: modelStart })).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, status: "tbc", meta: modelStart })).toBe(false)
+    expect(eventHasStructuredData({ ...PAGE, title: "Formal (date TBC)", meta: modelStart })).toBe(
+      false,
+    )
     // Convex's verdict decides (lib/talks-boundary.ts), never a re-run here.
     expect(eventHasStructuredData({ ...PAGE, talksDerived: true })).toBe(false)
+  })
+
+  test("JSON-LD: a model's all-day start is the date alone", () => {
+    const graph = eventStructuredData({
+      ...PAGE,
+      allDay: true,
+      endsAt: undefined,
+      meta: { startsAt: { status: "inferred", method: "llm" } },
+    })
+    const nodes = graph?.["@graph"] as Record<string, unknown>[]
+    expect(nodes.find((node) => node["@type"] === "Event")?.startDate).toBe("2026-11-03")
   })
 
   test("JSON-LD: one graph of WebPage, Event and BreadcrumbList", () => {
@@ -570,6 +599,36 @@ describe("the event's page", () => {
       eventJsonLd({ ...PAGE, venueText: "Zoom", bookingUrl: "https://example.org/join" }, page)
         .location,
     ).toEqual({ "@type": "VirtualLocation", url: "https://example.org/join" })
+    // Else the event's own listing (`eventSameAs`), such as the University's
+    // per-event page (event-jsonld-coverage); never a feed or our own page.
+    const listing =
+      "https://www.admin.cam.ac.uk/whatson/detail.shtml?uid=00000000-0000-0000-0000-000000000000"
+    const uni = {
+      ...PAGE,
+      venueText: "Online via Zoom",
+      source: "uni_events_api",
+      sourceUrl: listing,
+      fromUniversity: true,
+    }
+    expect(eventJsonLd(uni, page).location).toEqual({ "@type": "VirtualLocation", url: listing })
+    expect(eventJsonLd(uni, page).eventAttendanceMode).toBe(
+      "https://schema.org/OnlineEventAttendanceMode",
+    )
+    expect(eventJsonLd({ ...uni, bookingUrl: "https://example.org/join" }, page).location).toEqual({
+      "@type": "VirtualLocation",
+      url: "https://example.org/join",
+    })
+    expect(
+      eventJsonLd({ ...PAGE, venueText: "Zoom", externalUrl: "https://example.org/the-talk" }, page)
+        .location,
+    ).toEqual({ "@type": "VirtualLocation", url: "https://example.org/the-talk" })
+    expect(
+      eventJsonLd(
+        { ...PAGE, venueText: "Zoom", source: "luma", sourceUrl: "https://example.org/feed.ics" },
+        page,
+      ).location,
+    ).toBeUndefined()
+    expect(JSON.stringify(eventJsonLd(uni, page).location)).not.toContain("camsocs.uk")
   })
 
   test("JSON-LD location: the town only when it is known to be Cambridge", () => {

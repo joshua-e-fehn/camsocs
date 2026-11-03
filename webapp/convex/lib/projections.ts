@@ -490,12 +490,20 @@ export const eventListItemValidator = v.object({
    * page under /talks and keeps it out of every list, feed and JSON-LD
    * outside it. Read this; never re-run the rule on a projection. */
   talksDerived: v.boolean(),
-  /** How the start time was read, alone of the event's provenance: whether
-   * its page carries JSON-LD depends on it (lib/events.ts
-   * `eventHasStructuredData`), and a profile links only events whose page
-   * does (review of the SEO audit, profile-jsonld-dangling-event-ids).
-   * Absent when the start has no provenance. */
-  meta: v.optional(v.object({ startsAt: v.object({ status: literalUnion(FIELD_STATUSES) }) })),
+  /** How the start time was read (its status and method), alone of the
+   * event's provenance: whether its page carries JSON-LD depends on it
+   * (lib/events.ts `eventHasStructuredData`), and a profile links only events
+   * whose page does (review of the SEO audit,
+   * profile-jsonld-dangling-event-ids). Absent when the start has no
+   * provenance. */
+  meta: v.optional(
+    v.object({
+      startsAt: v.object({
+        status: literalUnion(FIELD_STATUSES),
+        method: v.optional(literalUnion(CLAIM_METHODS)),
+      }),
+    }),
+  ),
   /** The University's own listing (ENG-24, lib/derived.ts `isUniversityListing`):
    * shown as "University of Cambridge", never as a society's event. */
   fromUniversity: v.boolean(),
@@ -616,7 +624,16 @@ export async function eventListItem(
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
     talksDerived: isTalksDerivedEvent(event),
-    ...(event.meta.startsAt ? { meta: { startsAt: { status: event.meta.startsAt.status } } } : {}),
+    ...(event.meta.startsAt
+      ? {
+          meta: {
+            startsAt: {
+              status: event.meta.startsAt.status,
+              ...(event.meta.startsAt.method ? { method: event.meta.startsAt.method } : {}),
+            },
+          },
+        }
+      : {}),
     fromUniversity: isUniversityListing(event),
   }
 }

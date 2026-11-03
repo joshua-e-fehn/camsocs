@@ -247,12 +247,15 @@ describe("events.list / events.get", () => {
     expect(camEvents[1].sourceUrl).toBeUndefined()
 
     // Lists carry no description or provenance; the details come from events.get.
-    // Of `meta`, only how the start time was read (whether the event's page has
-    // an Event node: lib/events.ts eventHasStructuredData) — no source or quote.
+    // Of `meta`, only how the start time was read, its status and method
+    // (whether the event's page has an Event node: lib/events.ts
+    // eventHasStructuredData) — no source or quote.
     for (const event of anonymous) {
       if (event.meta === undefined) continue
       expect(Object.keys(event.meta)).toEqual(["startsAt"])
-      expect(Object.keys(event.meta.startsAt)).toEqual(["status"])
+      expect(Object.keys(event.meta.startsAt).sort()).toEqual(
+        event.meta.startsAt.method === undefined ? ["status"] : ["method", "status"],
+      )
     }
     expect(anonymous[0].meta?.startsAt.status).toBe("found")
     expect(Object.keys(anonymous[0])).not.toContain("description")
