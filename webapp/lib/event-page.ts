@@ -10,6 +10,7 @@ import {
   eventPageTitle,
   repeatsThatDay,
   spokenTitle,
+  titleSearchWords,
 } from "./events"
 import { pageMetadata } from "./page-metadata"
 import type { EventPublic } from "./public-api"
@@ -50,19 +51,21 @@ export const loadVenue = cache(async (venueKey: string | undefined) => {
 
 /** Whether the event's title needs its start time (`repeatsThatDay`): one
  * anonymous, cached `events.list` read of its London day, by the title's
- * words, narrowed to its first organiser (a show's nights share it) when it
- * has one. Decoration: a failed read says no. An all-day event never needs
- * it; a talks.cam-derived one is not looked up, since `list` here leaves its
+ * words (`titleSearchWords`: an emoji between two words parts them),
+ * narrowed to its first organiser (a show's nights share it) when it has
+ * one. Decoration: a failed read says no. An all-day event never needs it;
+ * a talks.cam-derived one is not looked up, since `list` here leaves its
  * twins out (G1). */
 export async function loadRepeatsThatDay(event: EventPublic): Promise<boolean> {
   if (event.allDay || event.talksDerived) return false
   const day = londonIsoDate(event.startsAt)
   const orgKey = event.organisers[0]?.key
+  const q = titleSearchWords(event.title)
   try {
     const listed = await publicQuery(api.events.list, {
       from: londonMidnight(day),
       to: londonMidnight(addDays(day, 1)),
-      q: spokenTitle(event.title),
+      ...(q ? { q } : {}),
       ...(orgKey ? { orgKey } : {}),
     })
     return repeatsThatDay(event, listed)

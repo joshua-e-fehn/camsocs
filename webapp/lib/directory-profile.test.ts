@@ -378,10 +378,15 @@ describe("societyJsonLd (org-jsonld-thin, jsonld-graph-breadcrumbs)", () => {
       listed("evt-tbc-status", { status: "tbc" }),
       // A day-long event read from its source has an Event node (a date).
       listed("evt-all-day", { allDay: true }),
-      // A model's start is the source's dated words; a parser's guess is not.
+      // A model's start is the source's dated words where the pipeline asked
+      // for a dated quote; an Instagram caption's or a parser's guess is not.
       listed("evt-model-day", {
         allDay: true,
-        meta: { startsAt: { status: "inferred", method: "llm" } },
+        meta: { startsAt: { status: "inferred", method: "llm", sourceType: "society_website" } },
+      }),
+      listed("evt-caption-guess", {
+        allDay: true,
+        meta: { startsAt: { status: "inferred", method: "llm", sourceType: "instagram_api" } },
       }),
       listed("evt-parser-guess", { meta: { startsAt: { status: "inferred", method: "parser" } } }),
     ]

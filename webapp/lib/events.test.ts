@@ -29,6 +29,7 @@ import {
   stripPages,
   stripRangeLabel,
   termWeekGutter,
+  titleSearchWords,
   weekRowGutter,
 } from "./events"
 import type { TermDatesRow } from "./term-week"
@@ -100,6 +101,12 @@ describe("emoji in titles", () => {
     expect(spokenTitle("🚩 HAM-DEFCON 🚩")).toBe("HAM-DEFCON")
     expect(spokenTitle("Bop ❤️ night")).toBe("Bop night")
     expect(spokenTitle("🎉")).toBe("🎉")
+  })
+
+  test("a title's search words part where an emoji joined them", () => {
+    expect(titleSearchWords("Film🎬Night")).toBe("Film Night")
+    expect(titleSearchWords("🚩 HAM-DEFCON 🚩")).toBe("HAM-DEFCON")
+    expect(titleSearchWords("🎉")).toBe("")
   })
 })
 
@@ -392,8 +399,8 @@ describe("the event's page", () => {
     expect(eventHasStructuredData({ ...PAGE, status: "tbc" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Bandi Chhor Formal ( DATE TBC)" })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Garden party (date TBA)" })).toBe(false)
-    // An inferred start with no provenance, or one a parser put together
-    // (the source never gave it), stays out.
+    // An inferred start with no method, or one a parser put together (the
+    // source never gave it), stays out.
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "inferred" } } })).toBe(
       false,
     )
@@ -404,12 +411,28 @@ describe("the event's page", () => {
       }),
     ).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, meta: { startsAt: { status: "found" } } })).toBe(true)
-    // A model's start is the source's own dated words (event-jsonld-coverage):
-    // no time stated (all day), or a yearless date's year, is still its date.
-    const modelStart = { startsAt: { status: "inferred", method: "llm" } }
+    // A model's start is the source's own dated words (event-jsonld-coverage)
+    // where the pipeline kept it only with a dated quote (a society's page, a
+    // term card): no time stated (all day), or a yearless date's year, is
+    // still its date.
+    const modelStart = {
+      startsAt: { status: "inferred", method: "llm", sourceType: "society_website" },
+    }
     const allDay = { ...PAGE, allDay: true, meta: modelStart }
     expect(eventHasStructuredData(allDay)).toBe(true)
     expect(eventHasStructuredData({ ...PAGE, meta: modelStart })).toBe(true)
+    const cardStart = { startsAt: { status: "inferred", method: "llm", sourceType: "termcard" } }
+    expect(eventHasStructuredData({ ...PAGE, meta: cardStart })).toBe(true)
+    // An Instagram caption's model date has no dated-quote check: an inferred
+    // one may be a date read off the poster, or none at all.
+    for (const sourceType of ["instagram_api", undefined]) {
+      const unchecked = { startsAt: { status: "inferred", method: "llm", sourceType } }
+      expect(eventHasStructuredData({ ...PAGE, meta: unchecked })).toBe(false)
+      expect(eventHasStructuredData({ ...allDay, meta: unchecked })).toBe(false)
+    }
+    // A start with no provenance record counts, as it always has.
+    expect(eventHasStructuredData({ ...PAGE, meta: undefined })).toBe(true)
+    expect(eventHasStructuredData({ ...PAGE, meta: {} })).toBe(true)
     expect(eventHasStructuredData({ ...PAGE, status: "tbc", meta: modelStart })).toBe(false)
     expect(eventHasStructuredData({ ...PAGE, title: "Formal (date TBC)", meta: modelStart })).toBe(
       false,
@@ -423,7 +446,7 @@ describe("the event's page", () => {
       ...PAGE,
       allDay: true,
       endsAt: undefined,
-      meta: { startsAt: { status: "inferred", method: "llm" } },
+      meta: { startsAt: { status: "inferred", method: "llm", sourceType: "termcard" } },
     })
     const nodes = graph?.["@graph"] as Record<string, unknown>[]
     expect(nodes.find((node) => node["@type"] === "Event")?.startDate).toBe("2026-11-03")

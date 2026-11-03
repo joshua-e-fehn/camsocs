@@ -103,6 +103,18 @@ export function spokenTitle(title: string): string {
   return text || title.trim()
 }
 
+/** A title's words for a search (`events.list`'s `q`, which keeps a title
+ * holding every word): its emoji become gaps, so "Film🎬Night" asks for
+ * "Film" and "Night", both in the stored title, where `spokenTitle`'s
+ * "FilmNight" is in none. Empty for a title of nothing but emoji. */
+export function titleSearchWords(title: string): string {
+  return splitEmoji(title)
+    .map((part) => (part.emoji ? " " : part.text))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 // --- the agenda ---------------------------------------------------------------------------
 
 type Timed = { startsAt: number; endsAt?: number; allDay: boolean }
@@ -334,7 +346,7 @@ export type PageEvent = Omit<CalendarEvent, "organisers"> & {
   imageUrl?: string
   price?: { free: boolean; minPence?: number; maxPence?: number; text?: string }
   speakers?: readonly { name: string; affiliation?: string }[]
-  meta?: Record<string, { status?: string; method?: string } | undefined>
+  meta?: Record<string, { status?: string; method?: string; sourceType?: string } | undefined>
   /** Convex's talks-boundary verdict (lib/talks-boundary.ts). */
   talksDerived: boolean
 }
@@ -592,9 +604,16 @@ export type StructuredDataFacts = {
   title: string
   visibility?: string
   status?: string
-  meta?: { startsAt?: { status?: string; method?: string } }
+  meta?: { startsAt?: { status?: string; method?: string; sourceType?: string } }
   talksDerived: boolean
 }
+
+/** The source types whose every model-read date the pipeline keeps only
+ * with a dated quote: a society's events page (`dated_quote`, the quote
+ * found on the page) and a term card (`card_dated_quote`). An Instagram
+ * caption has no such check (a poster may be all it read), and a mailing
+ * list is never public. */
+const DATED_QUOTE_SOURCE_TYPES: ReadonlySet<string> = new Set(["society_website", "termcard"])
 
 /** Whether an event's start can be its Event's `startDate`: read off the
  * source, or put together by the model from the source's own dated words.
@@ -602,12 +621,17 @@ export type StructuredDataFacts = {
  * value: no time stated (an all-day event, whose `startDate` is then the
  * date alone), a yearless date's year or a term week's term passed by
  * `extract.dating`'s second signal, a card read off an image. Its day is
- * still the source's (every model reading needs a dated quote). A parser's
- * `inferred` start is one the source never gave (a long run's stable start,
- * a vague University timing, an SU listing date) and stays out, as does a
- * start with no provenance (SEO re-check 2026-11-03, event-jsonld-coverage). */
-function startIsStated(start: { status?: string; method?: string } | undefined): boolean {
-  return start?.status !== "inferred" || start.method === "llm"
+ * still the source's only where the pipeline required a dated quote for it
+ * (`DATED_QUOTE_SOURCE_TYPES`); elsewhere an `inferred` model start may be a
+ * date no quote confirms and stays out, as does a parser's `inferred` start,
+ * one the source never gave (a long run's stable start, a vague University
+ * timing, an SU listing date). A start with no provenance record counts, as
+ * it always has (SEO re-check 2026-11-03, event-jsonld-coverage). */
+function startIsStated(
+  start: { status?: string; method?: string; sourceType?: string } | undefined,
+): boolean {
+  if (start?.status !== "inferred") return true
+  return start.method === "llm" && DATED_QUOTE_SOURCE_TYPES.has(start.sourceType ?? "")
 }
 
 /**

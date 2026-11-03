@@ -744,7 +744,7 @@ in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `EventListItem` (`events.list`, a profile's upcoming events): `key, title, startsAt, endsAt?,
 allDay, termWeekLabel?, venueKey?, venueText?, organisers, visibility, eventType, cancelled,
 status, source, sourceUrl?, hosting, externalUrl?, talksDerived, fromUniversity, meta?` — no description, speakers, price,
-image or full `meta`: `meta` holds only `startsAt: { status, method? }`, which decides (with the fields above)
+image or full `meta`: `meta` holds only `startsAt: { status, method?, sourceType? }`, which decides (with the fields above)
 whether the event's page has an Event node (`eventHasStructuredData`), so a profile's JSON-LD links
 only events whose `@id` exists. A month of events
 was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);

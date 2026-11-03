@@ -490,10 +490,10 @@ export const eventListItemValidator = v.object({
    * page under /talks and keeps it out of every list, feed and JSON-LD
    * outside it. Read this; never re-run the rule on a projection. */
   talksDerived: v.boolean(),
-  /** How the start time was read (its status and method), alone of the
-   * event's provenance: whether its page carries JSON-LD depends on it
-   * (lib/events.ts `eventHasStructuredData`), and a profile links only events
-   * whose page does (review of the SEO audit,
+  /** How the start time was read (its status, method and source type),
+   * alone of the event's provenance: whether its page carries JSON-LD depends
+   * on it (lib/events.ts `eventHasStructuredData`), and a profile links only
+   * events whose page does (review of the SEO audit,
    * profile-jsonld-dangling-event-ids). Absent when the start has no
    * provenance. */
   meta: v.optional(
@@ -501,6 +501,7 @@ export const eventListItemValidator = v.object({
       startsAt: v.object({
         status: literalUnion(FIELD_STATUSES),
         method: v.optional(literalUnion(CLAIM_METHODS)),
+        sourceType: v.optional(literalUnion(SOURCE_TYPES)),
       }),
     }),
   ),
@@ -630,6 +631,9 @@ export async function eventListItem(
             startsAt: {
               status: event.meta.startsAt.status,
               ...(event.meta.startsAt.method ? { method: event.meta.startsAt.method } : {}),
+              ...(event.meta.startsAt.sourceType
+                ? { sourceType: event.meta.startsAt.sourceType }
+                : {}),
             },
           },
         }

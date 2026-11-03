@@ -247,17 +247,21 @@ describe("events.list / events.get", () => {
     expect(camEvents[1].sourceUrl).toBeUndefined()
 
     // Lists carry no description or provenance; the details come from events.get.
-    // Of `meta`, only how the start time was read, its status and method
-    // (whether the event's page has an Event node: lib/events.ts
-    // eventHasStructuredData) — no source or quote.
+    // Of `meta`, only how the start time was read, its status, method and
+    // source type (whether the event's page has an Event node: lib/events.ts
+    // eventHasStructuredData) — no source URL or quote.
     for (const event of anonymous) {
       if (event.meta === undefined) continue
       expect(Object.keys(event.meta)).toEqual(["startsAt"])
-      expect(Object.keys(event.meta.startsAt).sort()).toEqual(
-        event.meta.startsAt.method === undefined ? ["status"] : ["method", "status"],
-      )
+      for (const key of Object.keys(event.meta.startsAt)) {
+        expect(["method", "sourceType", "status"]).toContain(key)
+      }
     }
-    expect(anonymous[0].meta?.startsAt.status).toBe("found")
+    expect(anonymous[0].meta?.startsAt).toEqual({
+      status: "found",
+      method: "parser",
+      sourceType: "society_website",
+    })
     expect(Object.keys(anonymous[0])).not.toContain("description")
     const details = await t.query(api.events.get, { key: anonymous[0].key })
     expect(details?.meta.title?.status).toBe("found")
