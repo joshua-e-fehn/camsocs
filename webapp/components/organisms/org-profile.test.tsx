@@ -183,6 +183,35 @@ describe("a society profile's server HTML", () => {
   })
 })
 
+/** Every link to the society's own calendar and whether it is nofollow. */
+function calendarLinks(html: string): { href: string; nofollow: boolean }[] {
+  return [...html.matchAll(/<a [^>]*href="(\/events\?org=[^"]*)"[^>]*>/g)].map(([tag, href]) => ({
+    href,
+    nofollow: /rel="[^"]*nofollow/.test(tag),
+  }))
+}
+
+describe("the profile's calendar links (events-param-urls)", () => {
+  test("followed while it lists an event coming up", () => {
+    const links = calendarLinks(renderProfile(page()))
+    expect(links.length).toBeGreaterThanOrEqual(2)
+    for (const link of links) {
+      expect(link).toEqual({ href: "/events?org=chess-club", nofollow: false })
+    }
+  })
+
+  test("nofollow when nothing is coming up: the calendar is then noindex", () => {
+    const html = renderProfile({ ...page(), events: [] })
+    expect(html).toContain("Nothing coming up")
+    const links = calendarLinks(html)
+    // The Calendar quick action and "In the calendar".
+    expect(links.length).toBeGreaterThanOrEqual(2)
+    for (const link of links) {
+      expect(link).toEqual({ href: "/events?org=chess-club", nofollow: true })
+    }
+  })
+})
+
 describe("molecules", () => {
   test("a list tile's logo stays decorative", () => {
     const html = renderToString(

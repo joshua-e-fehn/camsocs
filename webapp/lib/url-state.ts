@@ -248,8 +248,9 @@ export const MAX_LIST_WEEKS = 8
 /** One society's calendar loads four weeks at first (its events are
  * sparser than the whole site's): `/events?org=<slug>`, the URL its profile
  * and event pages link, is that view and the one search engines index (SEO
- * audit "events-param-urls"). Keep it free of other parameters: robots.txt
- * allows `/events?org=` alone (lib/crawl-traps.ts). */
+ * audit "events-param-urls"), while it lists an event (`eventsIndexing`).
+ * Keep it free of other parameters: robots.txt allows `/events?org=` alone
+ * (lib/crawl-traps.ts). */
 export const ORG_WEEKS = 4
 
 /** The weeks a list loads when the URL does not say. */
@@ -374,18 +375,26 @@ export function eventsHref(state: EventsState): string {
  * robots-disallowed and linked rel=nofollow (lib/crawl-traps.ts): they are
  * an unbounded crawl space, and the event pages they list are found through
  * the sitemap and the society profiles instead. A society the directory does
- * not list (`orgListed` false: an unknown, hidden or unreadable slug) has no
- * calendar of its own to index, so `?org=<that slug>` is noindex too.
+ * not list (`listed` false: an unknown, hidden or unreadable slug, or a thin
+ * profile, owner decision G3) has no calendar of its own to index, so
+ * `?org=<that slug>` is noindex too. Nor has one whose four weeks list no
+ * event (`hasEvents` false; SEO re-check 2026-11-03 "events-param-urls"
+ * found 41 of 48 sampled calendars empty yet indexable). An empty one is
+ * noindex, follow and keeps its own canonical, not the profile's: noindex
+ * with a canonical elsewhere is a conflicting signal that can carry the
+ * noindex to the profile, and the calendar is no duplicate of it; when an
+ * event arrives only the robots tag changes. `hasEvents` says nothing of
+ * the whole calendar, `/events`.
  */
 export function eventsIndexing(
   state: EventsState,
-  orgListed = true,
+  { listed = true, hasEvents = true }: { listed?: boolean; hasEvents?: boolean } = {},
 ): { canonical: string; index: boolean } {
   const canonical = state.org
     ? eventsHref({ ...EMPTY_EVENTS, org: state.org, weeks: ORG_WEEKS })
     : "/events"
   const plain = eventsHref({ ...state, q: state.q?.trim() || undefined }) === canonical
-  return { canonical, index: plain && (!state.org || orgListed) }
+  return { canonical, index: plain && (!state.org || (listed && hasEvents)) }
 }
 
 /** How many filters (not the text query, the dates or the open event) are on.

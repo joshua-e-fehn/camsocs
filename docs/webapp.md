@@ -716,7 +716,11 @@ to both kinds together.
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the
-canonical of the page it slices. Both carry a CollectionPage / ItemList of the event pages on
+canonical of the page it slices. A society's calendar is indexable only while its four weeks
+list an event and its profile is not thin (G3); an empty one is noindex, follow and keeps its own
+canonical (the metadata reads the page's own cached `events.list`), and the profile's calendar
+links are nofollow while it shows "Nothing coming up" (SEO re-check 2026-11-03,
+events-param-urls). Both indexable pages carry a CollectionPage / ItemList of the event pages on
 screen. "Show next week", "From <day>", the week and month arrows, "Today" and the day cells are
 real links for readers (handled in place on a click), but every slice of the calendar is a
 robots.txt trap since the bot policy of 2026-11-03: robots.txt disallows it and the links carry

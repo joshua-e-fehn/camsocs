@@ -6,6 +6,7 @@ import { EventsCalendar } from "@/components/organisms/events-calendar"
 import { api } from "@/convex/_generated/api"
 import { londonIsoDate } from "@/lib/calendar"
 import { currentTermEnd } from "@/lib/date-presets"
+import { isThinListing } from "@/lib/directory-indexing"
 import { EVENTS_TITLE, eventsListStructuredData, orgEventsTitle } from "@/lib/events"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicPreload, publicQuery } from "@/lib/public-data"
@@ -13,6 +14,7 @@ import { jsonLdScript } from "@/lib/structured-data"
 import { fetchTermDates } from "@/lib/term-dates"
 import type { TermDatesRow } from "@/lib/term-week"
 import {
+  type EventListArgs,
   type EventsState,
   eventListArgs,
   eventRestrictedArgs,
@@ -28,15 +30,49 @@ const DESCRIPTION =
   "Socials, shows, matches and formals from Cambridge societies and clubs, and the University’s public events, day by day."
 
 /** The `?org=` society, shared by the metadata and the page: its name heads
- * the page and its title. Null when there is none or it cannot be read. */
+ * the page and its title, and whether its profile is thin says whether its
+ * calendar may be indexed. Null when there is none or it cannot be read. */
 const loadOrg = cache(async (slug: string | undefined) => {
   if (!slug) return null
   const page = await publicQuery(api.orgs.getBySlug, { slug }).catch((error) => {
     unstable_rethrow(error)
     return null
   })
-  return page ? { key: page.org.key, slug: page.org.slug, name: page.org.name } : null
+  return page
+    ? {
+        key: page.org.key,
+        slug: page.org.slug,
+        name: page.org.name,
+        // The profile's own G3 test (app/(site)/societies/[slug]/page.tsx);
+        // read anonymously, so `page.events` holds public events only.
+        thin: isThinListing(page.org, page.hasPublicEvents ?? page.events.length > 0),
+      }
+    : null
 })
+
+/** The view's `events.list` read, shared by the metadata and the page:
+ * React's cache compares arguments by identity, so it is keyed by their JSON
+ * (as lib/public-data.ts caches them). */
+const loadEvents = cache((argsJson: string) =>
+  publicPreload(api.events.list, JSON.parse(argsJson) as EventListArgs),
+)
+
+/** Today (London), the term dates and the `events.list` arguments for a
+ * view: the metadata and the page build them alike, so they share a read. */
+async function viewArgs(state: EventsState) {
+  const today = londonIsoDate(Date.now())
+  const terms = await loadTerms()
+  const window = eventsWindow(state, today, currentTermEnd(today, terms))
+  return { today, terms, args: eventListArgs(state, window) }
+}
+
+/** What `eventsIndexing` needs to know of a society's calendar. */
+function calendarFacts(
+  org: { thin: boolean } | null,
+  events: readonly unknown[],
+): { listed: boolean; hasEvents: boolean } {
+  return { listed: org !== null && !org.thin, hasEvents: events.length > 0 }
+}
 
 /** The calendar's title and description, for the page it is (the whole
  * calendar or one society's). */
@@ -55,8 +91,8 @@ function heading(org: { name: string } | null): {
 
 /**
  * The calendar is two pages for search engines (SEO audit
- * "events-param-urls"): `/events` and one society's `/events?org=<slug>`,
- * each canonical with its own title. Every other combination of the URL's
+ * "events-param-urls"): `/events` and one society's `/events?org=<slug>`
+ * while it lists an event, each canonical with its own title. Every other combination of the URL's
  * filters is noindex, follow, with the canonical of the page it slices
  * (lib/url-state.ts `eventsIndexing`). Both advertise their `.ics` feed
  * (SEO audit "calendar-feeds-discovery").
@@ -64,7 +100,15 @@ function heading(org: { name: string } | null): {
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const state = parseEventsParams(await searchParams)
   const org = await loadOrg(state.org)
-  const { canonical, index } = eventsIndexing(state, org !== null)
+  const listed = org !== null && !org.thin
+  // Only a listed society's canonical calendar needs its events read: every
+  // other view is noindex whatever it lists, and /events is indexed as is.
+  let hasEvents = true
+  if (state.org && eventsIndexing(state, { listed }).index) {
+    const { args } = await viewArgs(state)
+    hasEvents = preloadedQueryResult(await loadEvents(JSON.stringify(args))).length > 0
+  }
+  const { canonical, index } = eventsIndexing(state, { listed, hasEvents })
   const { title, absolute, description } = heading(org)
   const base = pageMetadata({ title, description, path: canonical })
   const feed = state.org && org ? `/events.ics?org=${org.slug}` : "/events.ics"
@@ -104,13 +148,10 @@ async function loadTerms(): Promise<TermDatesRow[]> {
  */
 export default async function EventsPage({ searchParams }: Props) {
   const state = parseEventsParams(await searchParams)
-  const today = londonIsoDate(Date.now())
-  const terms = await loadTerms()
-  const window = eventsWindow(state, today, currentTermEnd(today, terms))
-  const args = eventListArgs(state, window)
+  const { today, terms, args } = await viewArgs(state)
 
   const [preloadedEvents, preloadedColleges, preloadedRestricted, org] = await Promise.all([
-    publicPreload(api.events.list, args),
+    loadEvents(JSON.stringify(args)),
     publicPreload(api.orgs.colleges, {}),
     // A hint, not the page: if the count cannot be had, the calendar still renders.
     publicPreload(api.events.restrictedCount, eventRestrictedArgs(args)).catch((error) => {
@@ -122,7 +163,12 @@ export default async function EventsPage({ searchParams }: Props) {
 
   return (
     <>
-      <ListJsonLd state={state} org={org} events={preloadedQueryResult(preloadedEvents)} />
+      <ListJsonLd
+        state={state}
+        org={org}
+        facts={calendarFacts(org, preloadedQueryResult(preloadedEvents))}
+        events={preloadedQueryResult(preloadedEvents)}
+      />
       <EventsCalendar
         today={today}
         terms={terms}
@@ -140,13 +186,15 @@ export default async function EventsPage({ searchParams }: Props) {
 function ListJsonLd({
   state,
   org,
+  facts,
   events,
 }: {
   state: EventsState
   org: { name: string } | null
+  facts: { listed: boolean; hasEvents: boolean }
   events: Parameters<typeof eventsListStructuredData>[0]["events"]
 }) {
-  const { canonical, index } = eventsIndexing(state, org !== null)
+  const { canonical, index } = eventsIndexing(state, facts)
   if (!index) return null
   const data = eventsListStructuredData({ path: canonical, name: heading(org).title, events })
   return (

@@ -32,6 +32,7 @@ export function QuickAction({
   label,
   external = false,
   primary = false,
+  rel,
   outbound,
 }: {
   href: string
@@ -39,6 +40,8 @@ export function QuickAction({
   label: string
   external?: boolean
   primary?: boolean
+  /** For a site link crawlers should not follow (`linkProps(href).rel`). */
+  rel?: "nofollow"
   /** For `outbound_link_clicked` (ENG-5): the link's kind, never its address. */
   outbound?: OutboundLink
 }) {
@@ -46,7 +49,11 @@ export function QuickAction({
     <a
       href={href}
       className={quickActionClass(primary)}
-      {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}
+      {...(external
+        ? { target: "_blank", rel: "noopener noreferrer nofollow" }
+        : rel
+          ? { rel }
+          : {})}
       {...(outbound ? analyticsAttrs("outbound_link_clicked", outbound) : {})}
     >
       <span className={quickActionIconClass(primary)}>

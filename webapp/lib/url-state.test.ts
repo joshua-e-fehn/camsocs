@@ -280,12 +280,27 @@ describe("events: one society's calendar and indexing", () => {
       canonical: "/events?org=cu-jazz",
       index: true,
     })
-    // A slug the directory does not list has no calendar to index.
-    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz" }), false)).toEqual({
+    // A slug the directory does not list (or a thin profile) has no calendar to index.
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz" }), { listed: false })).toEqual({
       canonical: "/events?org=cu-jazz",
       index: false,
     })
-    expect(eventsIndexing(parseEventsParams({}), false).index).toBe(true)
+    expect(eventsIndexing(parseEventsParams({}), { listed: false, hasEvents: false }).index).toBe(
+      true,
+    )
+    // An empty society calendar is noindex but keeps its own canonical, not
+    // its profile's (SEO re-check 2026-11-03, events-param-urls).
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz" }), { hasEvents: false })).toEqual({
+      canonical: "/events?org=cu-jazz",
+      index: false,
+    })
+    expect(
+      eventsIndexing(parseEventsParams({ org: "cu-jazz" }), { listed: true, hasEvents: true }),
+    ).toEqual({ canonical: "/events?org=cu-jazz", index: true })
+    // A slice stays noindex, events or not.
+    expect(
+      eventsIndexing(parseEventsParams({ org: "cu-jazz", weeks: "8" }), { hasEvents: true }),
+    ).toEqual({ canonical: "/events?org=cu-jazz", index: false })
     for (const params of [
       { date: "2026-10-12" },
       { weeks: "2" },
