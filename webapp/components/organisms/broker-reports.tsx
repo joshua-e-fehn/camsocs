@@ -1,8 +1,8 @@
 "use client"
 
-import { CopyIcon, DownloadIcon, FileTextIcon } from "lucide-react"
+import { CopyIcon, DownloadIcon, FileTextIcon, UploadIcon } from "lucide-react"
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import { StatTile } from "@/components/molecules/stat-tile"
@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
   TableBody,
@@ -25,9 +26,21 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { type BrokerOrgRow, useAllBrokerOrgRows } from "@/hooks/convex/broker"
+import {
+  type BrokerOrgRow,
+  errorMessage,
+  useAllBrokerOrgRows,
+  useBrokerInteractionMutations,
+} from "@/hooks/convex/broker"
 import { humanize, todayIso } from "@/lib/broker/format"
-import { fieldLabel, isOutreachCandidate, outreachCsv, outreachNotice } from "@/lib/broker/outreach"
+import {
+  fieldLabel,
+  isOutreachCandidate,
+  outreachCsv,
+  outreachNotice,
+  parseSendLog,
+  SEND_LOG_BATCH,
+} from "@/lib/broker/outreach"
 
 type Scope = "address" | "no_address" | "complete"
 
@@ -39,8 +52,11 @@ const siteUrl = () => (typeof window === "undefined" ? "" : window.location.orig
 /**
  * The missing-data report and the phase-2 outreach export (PLAN §2.4). The
  * CSV holds one row per listed, non-suppressed organisation with a published
- * non-personal address: what is missing, and a personalised notice that is
- * also the Art 14 notice. Export only — nothing is sent from here.
+ * role address (never a personal, mailing-list or webmail one): what is
+ * missing, and a personalised notice that is also the Art 14 notice. Export
+ * only — nothing is sent from here. Once sent, the filled-in CSV comes back
+ * through "Import send log", which records each send as an interaction
+ * (docs/webapp.md "Sending the Art 14 notice").
  */
 export function BrokerReports() {
   const { rows, complete } = useAllBrokerOrgRows()
@@ -89,6 +105,7 @@ export function BrokerReports() {
         title="Missing data"
         description="What each listing lacks, and the phase-2 outreach export (also the Art 14 notice). Send by about 13 Nov 2026."
       >
+        <SendLogImport />
         <Button onClick={download} disabled={!complete}>
           <DownloadIcon />
           {complete ? "Download outreach CSV" : "Loading…"}
@@ -107,7 +124,7 @@ export function BrokerReports() {
             <StatTile
               label="Missing data, no address"
               value={groups.no_address.length}
-              hint="Need another route (form, socials)"
+              hint="No usable role address (lists and webmail are left out)"
             />
             <StatTile label="Complete listings" value={groups.complete.length} />
             <StatTile
@@ -220,6 +237,78 @@ export function BrokerReports() {
           {preview && <NoticePreview row={preview} />}
         </DialogContent>
       </Dialog>
+    </>
+  )
+}
+
+/**
+ * Reads a filled-in send log (the export with `sent_on`, and `bounced` where
+ * one bounced) and records it in chunks. A file with any bad row records
+ * nothing; importing the same log again records nothing new.
+ */
+function SendLogImport() {
+  const { recordSendLog } = useBrokerInteractionMutations()
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+
+  const importFile = async (file: File) => {
+    const { entries, notSent, errors } = parseSendLog(await file.text())
+    if (errors.length > 0) {
+      const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : ""
+      toast.error(`${errors[0]}${more}. Nothing was recorded.`)
+      return
+    }
+    if (entries.length === 0) {
+      toast.error("No row has a sent_on date, so there is nothing to record")
+      return
+    }
+    setBusy(true)
+    const total = { recorded: 0, bounced: 0, unchanged: 0, unknown: 0, offListing: 0 }
+    try {
+      for (let i = 0; i < entries.length; i += SEND_LOG_BATCH) {
+        const result = await recordSendLog({ entries: entries.slice(i, i + SEND_LOG_BATCH) })
+        total.recorded += result.recorded
+        total.bounced += result.bounced
+        total.unchanged += result.unchanged
+        total.unknown += result.unknownOrgs.length
+        total.offListing += result.offListing.length
+      }
+      const notes = [
+        total.bounced > 0 && `${total.bounced} bounced (follow-ups added)`,
+        total.unchanged > 0 && `${total.unchanged} already recorded`,
+        notSent > 0 && `${notSent} rows not sent`,
+        total.unknown > 0 && `${total.unknown} unknown organisations skipped`,
+        total.offListing > 0 && `${total.offListing} to an address the listing no longer shows`,
+      ].filter(Boolean)
+      toast.success(
+        `Recorded ${total.recorded} sends${notes.length > 0 ? `; ${notes.join(", ")}` : ""}`,
+      )
+    } catch (error) {
+      toast.error(`${errorMessage(error)}. ${total.recorded} sends were recorded before it.`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept=".csv,text/csv"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ""
+          if (file) void importFile(file)
+        }}
+      />
+      <Button variant="outline" disabled={busy} onClick={() => input.current?.click()}>
+        {busy ? <Spinner /> : <UploadIcon />}
+        Import send log
+      </Button>
     </>
   )
 }
