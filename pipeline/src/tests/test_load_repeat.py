@@ -180,3 +180,15 @@ class TestStoredFileCache:
         assert report.files_reused == 1
         assert report.files_stale == 1
         assert cache.entries == {}
+
+
+def test_the_report_carries_the_claims_posted_for_indexnow(net: respx.MockRouter) -> None:
+    """`indexnow.ping_changed` works out the changed pages from what reached
+    the claims route (after suppression and redaction), so the report has it."""
+    net.post(f"{SITE}/api/pipeline/suppressions").respond(200, json={})
+    net.post(f"{SITE}/api/pipeline/sources").respond(200, json={"inserted": 1})
+    net.post(f"{SITE}/api/pipeline/claims").respond(200, json={"inserted": 1})
+    report = ConvexLoader(SITE, "k").post_observations([org("https://chess.example/", {})])
+    assert [(c.entity_key, c.field, c.value) for c in report.posted] == [
+        ("org-chess", "name", "CU Chess Club")
+    ]

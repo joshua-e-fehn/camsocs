@@ -14,7 +14,7 @@ import { isPublicPath } from "@/lib/auth-routes"
  * expiring while the app is open.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { data: session, isPending } = authClient.useSession()
+  const { data: session, isPending, refetch } = authClient.useSession()
   const router = useRouter()
   const pathname = usePathname()
   // A route that does not exist has nothing to protect: Next reports its
@@ -36,6 +36,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace("/sign-in")
     }
   }, [isPublic, isPending, session, router])
+
+  // On a private route only, the session is read again when the tab comes
+  // back into view, so one that expired meanwhile sends the reader to
+  // /sign-in. The auth client does not do this itself any more
+  // (lib/auth-client.ts `refetchOnWindowFocus: false`): it would cost every
+  // public page view a read.
+  useEffect(() => {
+    if (isPublic) return
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refetch()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [isPublic, refetch])
 
   if (isPublic) {
     return <>{children}</>

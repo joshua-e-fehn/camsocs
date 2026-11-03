@@ -26,11 +26,11 @@ import { Button } from "@/components/ui/button"
 import { api } from "@/convex/_generated/api"
 import { useStickyQuery } from "@/hooks/convex/use-sticky-query"
 import { useTrackSearch } from "@/hooks/use-analytics"
+import { categoryHubPath, collegeHubPath } from "@/lib/directory-hubs"
 import { ORG_SORT_LABELS, type OrgSort } from "@/lib/directory-sort"
-import { directoryTitle } from "@/lib/directory-title"
+import { directoryTitle, fitTitle, titleText } from "@/lib/directory-title"
 import { pageNumbers } from "@/lib/pagination"
 import type { OrgBusy, OrgFacets } from "@/lib/public-api"
-import { SITE_NAME } from "@/lib/site"
 import {
   activeDirectoryFilterCount,
   DIRECTORY_PAGE_SIZE,
@@ -287,7 +287,7 @@ export function OrgDirectory({
   )
 
   useEffect(() => {
-    document.title = `${directoryTitle(state)} · ${SITE_NAME}`
+    document.title = titleText(fitTitle(directoryTitle(state)))
   }, [state])
 
   const hrefFor = (next: DirectoryState) => `/societies${serializeDirectoryState(next)}`
@@ -491,16 +491,19 @@ export function OrgDirectory({
               {busy && (
                 <BusyShelf label={busy.label} orgs={busy.orgs} collegeNames={collegeNames} />
               )}
-              <CategoryTiles
-                counts={counts.categories}
-                hrefFor={(category) => hrefFor({ ...EMPTY_DIRECTORY, categories: [category] })}
-                onNavigate={follow}
-              />
+              {/* The shelves link the hubs, which list every member on one
+                  indexable page (owner decision G13): a client navigation to
+                  another page (next/link), not an in-place filter. */}
+              <CategoryTiles counts={counts.categories} hrefFor={categoryHubPath} />
               <CollegeGrid
                 colleges={colleges}
                 counts={counts.collegeKeys}
-                hrefFor={(key) => hrefFor({ ...EMPTY_DIRECTORY, collegeKeys: [key] })}
-                onNavigate={follow}
+                hrefFor={(key) => {
+                  const college = colleges.find((item) => item.key === key)
+                  return college
+                    ? collegeHubPath(college)
+                    : hrefFor({ ...EMPTY_DIRECTORY, collegeKeys: [key] })
+                }}
               />
             </div>
           )}
@@ -543,7 +546,7 @@ export function OrgDirectory({
                 <ChevronLeftIcon data-icon="inline-start" />
                 Previous
               </PageLink>
-              <ol className="hidden items-center gap-1 sm:flex">
+              <ol className="hidden min-w-0 flex-1 flex-wrap items-center justify-center gap-1 sm:flex">
                 {pageNumbers(state.page, pages).map((page, index) =>
                   page === "gap" ? (
                     <li
@@ -700,6 +703,7 @@ function EmptyResults({
         Can’t find your society?{" "}
         <Link
           href="/request?kind=add"
+          rel="nofollow"
           className="font-medium text-primary underline underline-offset-4"
         >
           Tell us

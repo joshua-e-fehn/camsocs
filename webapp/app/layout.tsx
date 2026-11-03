@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Figtree, JetBrains_Mono, Young_Serif } from "next/font/google"
 
 import "./globals.css"
@@ -7,8 +7,8 @@ import { AuthGuard } from "@/components/providers/auth-guard"
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider"
 import { SignInTracker } from "@/components/providers/sign-in-tracker"
 import { Toaster } from "@/components/ui/sonner"
-import { getToken } from "@/lib/auth-server"
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
+import { siteVerification } from "@/lib/page-metadata"
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL, THEME_COLOR } from "@/lib/site"
 import { cn } from "@/lib/utils"
 
 // DESIGN.md "Typography": Figtree for text and UI, JetBrains Mono for times
@@ -48,29 +48,28 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
   },
   twitter: { card: "summary_large_image" },
+  // Search Console / Bing Webmaster tags, only when their variables are set.
+  verification: siteVerification(),
 }
 
-export default async function RootLayout({
+/** The browser's chrome takes the page's paper (light only, DESIGN.md). */
+export const viewport: Viewport = { themeColor: THEME_COLOR }
+
+/**
+ * ⚠ No session read here (no `getToken()`, no cookies): it would make every
+ * route dynamic and `no-store` (UI audit 2026-10-31 §9; SEO audit 2026-11-02,
+ * no-cdn-cache). The public pages are one anonymous render, cached at the
+ * edge (app/(site)/layout.tsx, docs/webapp.md "Caching"); what a signed-in
+ * reader may see beyond it (a `cam_only` event) is added in the browser once
+ * the Convex client has the session, which the client asks for itself, so
+ * the provider gets no `initialToken`. The broker's dashboard waits for that
+ * session (AuthGuard, BrokerGate).
+ */
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Null for the signed-out majority — expected, not a failure.
-  //
-  // ⚠ This read (cookies) makes every route dynamic and `no-store` (UI audit
-  // 2026-10-31 §9). It stays, for now, on purpose:
-  //  - `initialToken` is what lets the first client queries run signed in.
-  //    Without it a verified @cam.ac.uk reader's `cam_only` events on /events
-  //    and a profile drop out on hydration and come back once the session
-  //    resolves, and the broker's dashboard starts signed out.
-  //  - Public pages would then prerender at build time, and CI builds against
-  //    a placeholder deployment (scripts/build-env-defaults.sh promises it is
-  //    never contacted), so `fetchQuery` in a static page fails the build.
-  // Moving it needs both solved together: a route-scoped provider (or Cache
-  // Components with the token read inside a Suspense boundary) plus
-  // `connection()` / ISR for the pages that query Convex.
-  const token = await getToken()
-
   return (
     <html
       lang="en-GB"
@@ -84,7 +83,7 @@ export default async function RootLayout({
       )}
     >
       <body>
-        <ConvexClientProvider initialToken={token}>
+        <ConvexClientProvider>
           <AuthGuard>{children}</AuthGuard>
           {/* Counts a finished Cambridge sign-in (method only, with consent). */}
           <SignInTracker />

@@ -1,4 +1,5 @@
 import { SearchXIcon } from "lucide-react"
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,6 +10,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+
+/** A missing listing's own title, not the home page's (not-found-template). */
+export const metadata: Metadata = { title: "Not found" }
 
 /** A missing page or listing, inside the site frame. */
 export default function SiteNotFound() {
@@ -32,7 +36,9 @@ export default function SiteNotFound() {
             <Link href="/societies">Browse societies</Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/request?kind=add">Add a missing society</Link>
+            <Link href="/request?kind=add" rel="nofollow">
+              Add a missing society
+            </Link>
           </Button>
         </EmptyContent>
       </Empty>

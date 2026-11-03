@@ -49,9 +49,24 @@ not already cached (`media.IMAGE_CACHE_TTL`).
 **Organisers** (decision 2026-11-02: every public University event is
 listed). An event whose title — or its iCalendar ``ORGANIZER`` name, where a
 festival programme gives one — names exactly one known student group
-(`match_society`: the full name or a multi-word alias of at least
-`MIN_NAME_LENGTH` characters, whole words, of a `STUDENT_GROUP_TYPES`
-organisation in staging) is that society's, ``secondary`` evidence. Every
+(`match_society`, whole words, of a `STUDENT_GROUP_TYPES` organisation in
+staging) is that society's, ``secondary`` evidence. A group is named by its
+name of several words and at least `MIN_NAME_LENGTH` characters, by an alias
+of `MIN_ALIAS_WORDS` words or more (never an acronym: "German Soc" or "CUMS"
+is too easily something else), or — for a name or alias that starts "CU",
+"Cambridge University" or "University of Cambridge" — by its own words after
+any of the three ("CU Jazz Orchestra" names the Cambridge University Jazz
+Orchestra, ENG-36). The University names its own departments, faculties,
+museums and libraries the same way, so those words never count when a word
+the University names its institutions with follows them (`_INSTITUTION`:
+"Cambridge University Engineering Department"), and one word after the
+University's name ("CU Music", "CU History") counts only after the group's
+own prefix as it writes it, and not before "of" or a possessive
+("University of Cambridge History of Art", "Cambridge University Women's
+Boat Club"); the University's name alone, or with only a word every group shares
+("Society"), names no group. A name inside another group's matched name
+("CU Chess Club" in "CU Chess Club Juniors") does not count; two groups named
+side by side are no single organiser. Every
 other event has no organiser at all (``organisers=[]``) and ``primary``
 evidence: the University lists its own event, and the site shows it as the
 University's. No department, museum or college organisation is created.
@@ -480,34 +495,108 @@ class _Named(Protocol):
 class _Name:
     key: str
     pattern: re.Pattern[str]
-    length: int
+
+
+#: How a University-wide group's name may start (module docstring, "Organisers").
+_UNIVERSITY = r"(?:CU|Cambridge\s+University|University\s+of\s+Cambridge)"
+_UNIVERSITY_PREFIX = re.compile(rf"^{_UNIVERSITY}(?:\s+|$)", re.I)
+#: Words left after the University's name that name no group in particular.
+_GENERIC_CORES = frozenset(
+    {"society", "soc", "club", "students", "student", "union", "association", "group", "team"}
+)
+#: The shortest group words after the University's name ("CU Jazz").
+MIN_CORE_LENGTH = 4
+#: What the University's own departments, faculties, museums and libraries
+#: are named with after "Cambridge University" or "University of Cambridge"
+#: and their subject: a group's words followed by one of these are the
+#: institution's, not the group's ("Cambridge University Engineering
+#: Department", "University of Cambridge Music Faculty").
+_INSTITUTION = (
+    r"(?:Department|Departments|Faculty|Faculties|Library|Libraries|Press|Museum|Museums"
+    r"|Hospital|Hospitals|Botanic|Institute|Centre|Center|School|College|Council|Office"
+    r"|Archives?|Collections?|Students['’]?\s+Union)"
+)
+#: An alias without the University's name needs this many words to be
+#: distinctive ("Cambridge Union Society", not "Chess Club").
+MIN_ALIAS_WORDS = 3
+
+
+def _words(text: str) -> str:
+    """`text` as a pattern: its words, any run of spaces between them."""
+    return r"\s+".join(re.escape(word) for word in text.split())
+
+
+def name_pattern(name: str, *, alias: bool = False) -> re.Pattern[str] | None:
+    """The whole-word pattern a group's name (or `alias`) is found by, or
+    None when it names no group in particular (module docstring,
+    "Organisers")."""
+    cleaned = " ".join(name.split())
+    prefix = _UNIVERSITY_PREFIX.match(cleaned)
+    if prefix is not None:
+        core = cleaned[prefix.end() :]
+        if len(core) < MIN_CORE_LENGTH or core.lower() in _GENERIC_CORES:
+            return None
+        not_institution = rf"(?!\s+{_INSTITUTION}(?!\w))"
+        if " " in core:
+            return re.compile(
+                rf"(?<!\w){_UNIVERSITY}\s+{_words(core)}(?!\w){not_institution}", re.I
+            )
+        # One word ("CU Music", "CU History") is also how the University
+        # names a subject's department, faculty or collection: only the
+        # group's own prefix, never followed by "of" or a possessive
+        # ("University of Cambridge History of Art", "Cambridge University
+        # Women's Boat Club").
+        own = _words(cleaned[: prefix.end()])
+        return re.compile(
+            rf"(?<!\w){own}\s+{re.escape(core)}(?!\w)(?!['’]s(?!\w)|\s+of(?!\w)){not_institution}",
+            re.I,
+        )
+    if len(cleaned) < MIN_NAME_LENGTH or " " not in cleaned:
+        return None
+    if alias and len(cleaned.split()) < MIN_ALIAS_WORDS:
+        return None
+    return re.compile(rf"(?<!\w){_words(cleaned)}(?!\w)", re.I)
 
 
 def society_names(index: OrgLookup) -> list[_Name]:
+    """Every name and alias a student group in staging is found by (never an
+    acronym: a short name like "CUMS" is too easily someone else's)."""
     names: list[_Name] = []
-    for key, name in index.organisations().items():
-        if index.org_type(key) not in STUDENT_GROUP_TYPES:
+    for key in index.organisations():
+        org = index.get(key)
+        if org is None or index.org_type(key) not in STUDENT_GROUP_TYPES:
             continue
-        cleaned = " ".join(name.split())
-        if len(cleaned) < MIN_NAME_LENGTH or " " not in cleaned:
-            continue
-        names.append(
-            _Name(key, re.compile(rf"(?<!\w){re.escape(cleaned)}(?!\w)", re.I), len(cleaned))
-        )
+        seen: set[str] = set()
+        for name in org.names:
+            if name in org.short_names or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+            pattern = name_pattern(name, alias=name != org.display_name)
+            if pattern is not None:
+                names.append(_Name(key, pattern))
     return names
 
 
 def match_society(event: _Named, names: list[_Name]) -> str | None:
-    """The one student group the event names (organiser first, then title)."""
+    """The one student group the event names (organiser first, then title):
+    a match inside another's span does not count, and two groups named
+    outside each other — or one name two groups share — are none."""
     for text in (event.organizer_name, event.title):
         if not text:
             continue
-        hits = {name.key: name.length for name in names if name.pattern.search(text)}
+        hits = [
+            (found.start(), found.end(), name.key)
+            for name in names
+            for found in name.pattern.finditer(text)
+        ]
         if not hits:
             continue
-        longest = max(hits.values())
-        winners = [key for key, length in hits.items() if length == longest]
-        return winners[0] if len(winners) == 1 else None
+        outer = {
+            key
+            for start, end, key in hits
+            if not any((s, e) != (start, end) and s <= start and end <= e for s, e, _ in hits)
+        }
+        return next(iter(outer)) if len(outer) == 1 else None
     return None
 
 
@@ -845,6 +934,7 @@ __all__ = [
     "folded_before",
     "image_url",
     "match_society",
+    "name_pattern",
     "on_demand_only",
     "price_from",
     "read_calendar",

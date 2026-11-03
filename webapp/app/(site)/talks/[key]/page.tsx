@@ -1,4 +1,3 @@
-import { fetchQuery } from "convex/nextjs"
 import { ArrowLeftIcon, CalendarSyncIcon, ChevronRightIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
@@ -10,8 +9,10 @@ import { api } from "@/convex/_generated/api"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { londonIsoDate } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
-import { SITE_NAME, SITE_URL } from "@/lib/site"
-import { jsonLdScript, SCHOOL_TONE, talkJsonLd, talkMetaDescription } from "@/lib/talks"
+import { publicQuery } from "@/lib/public-data"
+import { SITE_URL } from "@/lib/site"
+import { jsonLdScript } from "@/lib/structured-data"
+import { SCHOOL_TONE, talkMetaDescription, talkStructuredData } from "@/lib/talks"
 import { isTalkKey, talksFeedQuery, talksHref } from "@/lib/talks-url-state"
 import { fetchTermDates } from "@/lib/term-dates"
 import type { TermDatesRow } from "@/lib/term-week"
@@ -20,10 +21,18 @@ import { termWeekTag } from "@/lib/week-strip"
 
 type Props = { params: Promise<{ key: string }> }
 
-/** One fetch per request, shared by the metadata and the page. */
+/** No talk page is built with the site: each is rendered on its first
+ * request and then served from the edge, revalidated as the (site) layout
+ * says (docs/webapp.md "Caching"). proxy.ts answers AI agents with a 403
+ * before that cache, and an unknown key with a 404. */
+export function generateStaticParams(): { key: string }[] {
+  return []
+}
+
+/** One read per render, shared by the metadata and the page. */
 const loadTalk = cache(async (key: string) => {
   if (!isTalkKey(key)) return null
-  return await fetchQuery(api.talks.get, { key })
+  return await publicQuery(api.talks.get, { key })
 })
 
 async function loadTerms(): Promise<TermDatesRow[]> {
@@ -47,7 +56,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /**
  * A talk's own, shareable page (talks-redesign-spec §6): the details the
- * /talks sheet shows, as an article with schema.org `Event` JSON-LD and a
+ * /talks sheet shows, as an article with its schema.org graph (WebPage,
+ * Event, BreadcrumbList; lib/talks.ts `talkStructuredData`) and a
  * canonical URL; on a phone a sticky bar carries Add to calendar, the
  * source and Share. The talk's listing on its source stays the authority —
  * "Read at source" links it.
@@ -66,12 +76,7 @@ export default async function TalkPage({ params }: Props) {
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD; `<` is escaped (jsonLdScript)
-        dangerouslySetInnerHTML={{
-          __html: jsonLdScript({
-            ...talkJsonLd(talk, pageUrl),
-            isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_URL },
-          }),
-        }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(talkStructuredData(talk)) }}
       />
       <div className="border-b bg-card/40">
         <nav

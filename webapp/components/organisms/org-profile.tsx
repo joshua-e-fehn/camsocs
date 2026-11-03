@@ -5,7 +5,6 @@ import {
   GlobeIcon,
   InfoIcon,
   LandmarkIcon,
-  LockIcon,
   MailIcon,
   TagIcon,
   TrophyIcon,
@@ -14,34 +13,29 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { ClampedText } from "@/components/molecules/clamped-text"
-import { EventFlags } from "@/components/molecules/event-item"
 import { ExternalLink } from "@/components/molecules/external-link"
 import { Fact } from "@/components/molecules/fact"
+import { ListingLinkSnippet } from "@/components/molecules/listing-link-snippet"
 import { OrgStatusLabel } from "@/components/molecules/org-card"
 import { OrgMonogram } from "@/components/molecules/org-monogram"
+import { CamOnlyHint, ProfileEventRow } from "@/components/molecules/profile-event-row"
+import { ProfileSources } from "@/components/molecules/profile-sources"
 import { QuickAction } from "@/components/molecules/quick-actions"
 import { RelatedOrgs } from "@/components/molecules/related-orgs"
 import { RichText } from "@/components/molecules/rich-text"
 import { SectionTabs } from "@/components/molecules/section-tabs"
 import { ShareAction } from "@/components/molecules/share-action"
 import { SourcedChip, type SourcedFact } from "@/components/molecules/sourced-chip"
-import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { UnknownFacts } from "@/components/molecules/unknown-facts"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { analyticsContext } from "@/lib/analytics-events"
-import {
-  dayName,
-  formatDateOrText,
-  formatEventTime,
-  formatInstantDate,
-  londonIsoDate,
-  weekdayShort,
-} from "@/lib/calendar"
-import { type EventRun, groupRuns, runSummary } from "@/lib/event-runs"
+import { dayName, formatDateOrText, formatInstantDate } from "@/lib/calendar"
+import { categoryHubPath } from "@/lib/directory-hubs"
+import { descriptionAttribution, type ProfileSource } from "@/lib/directory-profile"
+import { groupRuns } from "@/lib/event-runs"
 import { formatPence, languageName } from "@/lib/format"
 import type {
-  EventListItem,
   OrgPage,
   OrgPublic,
   OrgRelated,
@@ -49,7 +43,6 @@ import type {
   SessionPublic,
 } from "@/lib/public-api"
 import { plainLine } from "@/lib/rich-text"
-import { camSignInHref } from "@/lib/site"
 import { hasValue, type PublicFieldMeta } from "@/lib/source-line"
 import { cn } from "@/lib/utils"
 import {
@@ -158,6 +151,8 @@ function yesNo(value: boolean | undefined) {
   return value === undefined ? null : value ? "Yes" : "No"
 }
 
+/** A preset form for this listing: linked `rel="nofollow"`, as it is
+ * /request under its canonical (lib/request-link.ts). */
 function requestHref(org: OrgPublic, kind: "claim" | "correct" | "remove" | "object") {
   return `/request?kind=${kind}&org=${org.slug}`
 }
@@ -415,59 +410,43 @@ function joinNodes(nodes: React.ReactNode[]): React.ReactNode[] {
   return nodes.flatMap((node, index) => (index === 0 ? [node] : [", ", node]))
 }
 
-/** One upcoming event (or a run of a show) as a row with its term-week date block. */
-function EventRow({ run, href }: { run: EventRun<EventListItem>; href: string }) {
-  const event = run.events[0]
-  const day = londonIsoDate(event.startsAt)
-  const when = run.events.length > 1 ? runSummary(run) : formatEventTime(event)
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "group flex items-start gap-4 rounded-xl border bg-card p-3 transition-colors duration-150 hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        event.hosting === "takes_part" && "border-dashed",
-      )}
-    >
-      <TermDateBlock
-        startsAt={event.startsAt}
-        termWeekLabel={event.termWeekLabel}
-        label={`${weekdayShort(day)} ${formatInstantDate(event.startsAt)}${event.termWeekLabel ? `, ${event.termWeekLabel}` : ""}`}
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
-        <h3
-          className={cn(
-            "leading-snug font-semibold text-pretty group-hover:underline group-hover:underline-offset-4",
-            event.cancelled && "line-through decoration-muted-foreground",
-          )}
-        >
-          {event.title}
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          <span className="font-mono text-xs tabular-nums">{when}</span>
-          {event.venueText && <span> · {event.venueText}</span>}
-        </p>
-        <div className="flex flex-wrap gap-1 empty:hidden">
-          <EventFlags event={event} />
-        </div>
-      </div>
-    </Link>
-  )
-}
-
 export function OrgProfile({
   page,
   collegeNames,
+  collegeSlugs = {},
   hiddenEvents,
+  camOnly,
   related,
+  lead,
+  alternate,
+  sources = [],
 }: {
   page: OrgPage
   collegeNames: Record<string, string>
-  /** Cambridge-only upcoming events this viewer cannot see (null: unknown). */
+  /** College key → slug: a college's name links to its own page, which is
+   * its hub (owner decision G13), not to a filtered directory view. */
+  collegeSlugs?: Record<string, string>
+  /** Cambridge-only upcoming events a signed-out reader cannot see (null:
+   * unknown). */
   hiddenEvents: number | null
+  /** What stands in the hint's place: the page passes the browser top-up
+   * (`ProfileCamOnlyEvents`), which shows a signed-in @cam.ac.uk reader those
+   * events and everyone else this same hint. Without it, the hint. */
+  camOnly?: React.ReactNode
   /** Related listings (`orgs.related`); empty when there are none. */
   related: OrgRelated
+  /** The lead sentence built from the listing's facts
+   * (lib/directory-profile.ts `profileLead`). */
+  lead?: string
+  /** Its other names, each once, never the name itself (`alternateNames`). */
+  alternate?: string[]
+  /** The public pages its facts came from (`profileSources`). */
+  sources?: ProfileSource[]
 }) {
-  const { org, teams, sessions, events, relationships } = page
+  // `orgs.getBySlug` leaves talks.cam-derived events out (owner decision G1,
+  // lib/talks-boundary.ts): the rule needs the stored event's every field,
+  // which only Convex has. The calendar shows them after hydration.
+  const { org, teams, sessions, relationships, events } = page
   const meta = org.meta
   const hasSport = SPORT_FIELDS.some(
     (field) => meta[field] && meta[field].status !== "not_applicable",
@@ -477,9 +456,27 @@ export function OrgProfile({
     (field): field is OrganisationField => field in ORGANISATION_FIELD_LABELS,
   )
   const correctHref = requestHref(org, "correct")
-  const calendarHref = `/events?weeks=4&org=${org.slug}`
+  // The society's own calendar page: four weeks, canonical and indexable
+  // (lib/url-state.ts `eventsIndexing`).
+  const calendarHref = `/events?org=${org.slug}`
   const runs = groupRuns(events)
   const firstCategory = org.categories[0]
+  const otherNames =
+    alternate ??
+    [org.shortName, ...org.aliases].filter(
+      (name, index, all): name is string =>
+        Boolean(name) && name !== org.name && all.indexOf(name) === index,
+    )
+  // A college's own page is its hub; without its slug, the filtered view.
+  const collegeHref = (key: string) =>
+    collegeSlugs[key] ? `/societies/${collegeSlugs[key]}` : `/societies?college=${key}`
+  // The About text: the long description, else the short one, with where
+  // it came from said in the HTML (unique-lead-text).
+  const aboutField = org.description ? "description" : "shortDescription"
+  const aboutText = org.description ?? org.shortDescription
+  const aboutSource = descriptionAttribution(
+    meta[aboutField] ? { description: meta[aboutField] } : {},
+  )
 
   const instagram = org.socials.find((social) => social.platform === "instagram")
   const email =
@@ -694,7 +691,7 @@ export function OrgProfile({
                 <li className="flex items-center gap-2">
                   <span aria-hidden>/</span>
                   <Link
-                    href={`/societies?cat=${firstCategory}`}
+                    href={categoryHubPath(firstCategory)}
                     className={cn("hover:text-foreground", PHONE_TARGET)}
                   >
                     {CATEGORY_LABELS[firstCategory]}
@@ -713,17 +710,15 @@ export function OrgProfile({
               college={org.collegeKeys.length > 0}
               size={88}
               className="max-sm:size-16!"
+              alt={`${org.name} logo`}
             />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <h1 className="font-serif text-3xl leading-[1.1] font-medium tracking-tight text-balance sm:text-5xl">
                 {org.name}
               </h1>
-              {(org.shortName || org.aliases.length > 0) && (
+              {otherNames.length > 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Also known as{" "}
-                  {[org.shortName, ...org.aliases]
-                    .filter((name, index, all) => name && all.indexOf(name) === index)
-                    .join(", ")}
+                  Also known as {otherNames.join(", ")}
                 </p>
               )}
             </div>
@@ -733,7 +728,7 @@ export function OrgProfile({
             {firstCategory && (
               <li className="flex items-center gap-1.5">
                 <TagIcon aria-hidden className="size-4 text-muted-foreground" />
-                <DirectoryLink href={`/societies?cat=${firstCategory}`} className={PHONE_TARGET}>
+                <DirectoryLink href={categoryHubPath(firstCategory)} className={PHONE_TARGET}>
                   {CATEGORY_LABELS[firstCategory]}
                 </DirectoryLink>
               </li>
@@ -744,11 +739,7 @@ export function OrgProfile({
                 <span>
                   {joinNodes(
                     org.collegeKeys.map((key) => (
-                      <DirectoryLink
-                        key={key}
-                        href={`/societies?college=${key}`}
-                        className={PHONE_TARGET}
-                      >
+                      <DirectoryLink key={key} href={collegeHref(key)} className={PHONE_TARGET}>
                         {collegeNames[key] ?? key}
                       </DirectoryLink>
                     )),
@@ -779,10 +770,14 @@ export function OrgProfile({
             </li>
           </ul>
 
-          {org.shortDescription && (
-            <p className="max-w-3xl text-lg leading-relaxed text-pretty">
-              {plainLine(org.shortDescription)}
-            </p>
+          {lead ? (
+            <p className="max-w-3xl text-lg leading-relaxed text-pretty">{lead}</p>
+          ) : (
+            org.shortDescription && (
+              <p className="max-w-3xl text-lg leading-relaxed text-pretty">
+                {plainLine(org.shortDescription)}
+              </p>
+            )
           )}
 
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -848,7 +843,10 @@ export function OrgProfile({
                   <AlertTitle>Marked as no longer active</AlertTitle>
                   <AlertDescription>
                     A source lists this group as defunct. If it is running again,{" "}
-                    <Link href={correctHref}>tell us</Link>.
+                    <Link href={correctHref} rel="nofollow">
+                      tell us
+                    </Link>
+                    .
                   </AlertDescription>
                 </Alert>
               )}
@@ -868,14 +866,33 @@ export function OrgProfile({
                 action={
                   <SourcedChip
                     section="About"
-                    facts={[{ label: "Description", meta: meta.description }]}
+                    facts={[
+                      { label: "Description", meta: meta.description },
+                      { label: "Short description", meta: meta.shortDescription },
+                    ]}
                   />
                 }
               >
-                {org.description ? (
-                  <ClampedText lines={6}>
-                    <RichText text={org.description} className="text-base" />
-                  </ClampedText>
+                {aboutText && (lead || org.description) ? (
+                  <div className="flex flex-col gap-2">
+                    <ClampedText lines={6}>
+                      <RichText text={aboutText} className="text-base" />
+                    </ClampedText>
+                    {aboutSource && (
+                      <p className="text-xs text-muted-foreground">
+                        {aboutSource.own ? "In their words, from" : "From"}{" "}
+                        <ExternalLink
+                          href={aboutSource.url}
+                          icon={false}
+                          className="underline"
+                          outbound={{ kind: "source" }}
+                        >
+                          {aboutSource.label}
+                        </ExternalLink>
+                        {aboutSource.retrievedOn && `, read ${aboutSource.retrievedOn}`}.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <UnknownFacts
                     facts={[{ label: "Description", meta: meta.description }]}
@@ -969,7 +986,7 @@ export function OrgProfile({
                 <ul className="flex flex-col gap-2">
                   {runs.slice(0, UPCOMING_RUNS_SHOWN).map((run) => (
                     <li key={run.key} className="min-w-0">
-                      <EventRow run={run} href={`${calendarHref}&event=${run.key}`} />
+                      <ProfileEventRow run={run} href={`/events/${run.key}`} />
                     </li>
                   ))}
                 </ul>
@@ -988,20 +1005,7 @@ export function OrgProfile({
                   <ArrowRightIcon aria-hidden className="size-3.5" />
                 </Link>
               )}
-              {hiddenEvents !== null && hiddenEvents > 0 && (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <LockIcon aria-hidden className="size-4" />
-                  <span>
-                    {hiddenEvents} more Cambridge-only {hiddenEvents === 1 ? "event" : "events"} —{" "}
-                    <Link
-                      href={camSignInHref(`/societies/${org.slug}`)}
-                      className="underline underline-offset-4"
-                    >
-                      sign in with your @cam.ac.uk email
-                    </Link>
-                  </span>
-                </p>
-              )}
+              {camOnly ?? <CamOnlyHint count={hiddenEvents} path={`/societies/${org.slug}`} />}
             </Section>
 
             {related.length > 0 && (
@@ -1011,7 +1015,7 @@ export function OrgProfile({
                 action={
                   firstCategory && (
                     <Link
-                      href={`/societies?cat=${firstCategory}`}
+                      href={categoryHubPath(firstCategory)}
                       className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-8"
                     >
                       More in {CATEGORY_LABELS[firstCategory]}
@@ -1050,6 +1054,18 @@ export function OrgProfile({
                 </ul>
               </Section>
             )}
+
+            {sources.length > 0 && (
+              <Section id="sources" title="Sources">
+                <p className="-mt-2 text-sm text-muted-foreground">
+                  Every fact on this page is read from these public pages.{" "}
+                  <Link href="/about#data" className="underline underline-offset-4">
+                    How we collect data
+                  </Link>
+                </p>
+                <ProfileSources sources={sources} />
+              </Section>
+            )}
           </div>
 
           <aside
@@ -1081,7 +1097,7 @@ export function OrgProfile({
                     <Glance label={org.collegeKeys.length === 1 ? "College" : "Colleges"}>
                       {joinNodes(
                         org.collegeKeys.map((key) => (
-                          <DirectoryLink key={key} href={`/societies?college=${key}`}>
+                          <DirectoryLink key={key} href={collegeHref(key)}>
                             {collegeNames[key] ?? key}
                           </DirectoryLink>
                         )),
@@ -1092,7 +1108,7 @@ export function OrgProfile({
                     <Glance label="Categories">
                       {joinNodes(
                         org.categories.map((category) => (
-                          <DirectoryLink key={category} href={`/societies?cat=${category}`}>
+                          <DirectoryLink key={category} href={categoryHubPath(category)}>
                             {CATEGORY_LABELS[category]}
                           </DirectoryLink>
                         )),
@@ -1183,18 +1199,21 @@ export function OrgProfile({
                 <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1 max-sm:gap-y-0">
                   <Link
                     href={requestHref(org, "claim")}
+                    rel="nofollow"
                     className={cn("font-medium underline underline-offset-4", PHONE_TARGET)}
                   >
                     Claim it
                   </Link>
                   <Link
                     href={correctHref}
+                    rel="nofollow"
                     className={cn("underline underline-offset-4", PHONE_TARGET)}
                   >
                     {missing.length > 0 ? "Correct or complete" : "Correct something"}
                   </Link>
                   <Link
                     href={requestHref(org, "remove")}
+                    rel="nofollow"
                     className={cn(
                       "text-muted-foreground underline underline-offset-4",
                       PHONE_TARGET,
@@ -1203,12 +1222,15 @@ export function OrgProfile({
                     Ask for removal
                   </Link>
                 </p>
+                <ListingLinkSnippet slug={org.slug} />
               </section>
 
               <p className="px-1 text-xs text-muted-foreground">
                 Listing updated{" "}
-                <span className="font-mono">{formatInstantDate(org.updatedAt)}</span>, from public
-                sources.{" "}
+                <time dateTime={new Date(org.updatedAt).toISOString()} className="font-mono">
+                  {formatInstantDate(org.updatedAt)}
+                </time>
+                , from public sources.{" "}
                 <Link href="/about#data" className="underline underline-offset-4">
                   How we collect data
                 </Link>

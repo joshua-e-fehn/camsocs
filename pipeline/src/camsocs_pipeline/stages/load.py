@@ -30,6 +30,10 @@ A dry run uses cached replies and the deterministic rule only.
 Event readings another source already lists are merged into that source's
 event (`events.duplicates`); the notes say how many, from which sources.
 
+After a successful post, the public pages whose claims changed and that the
+site's sitemaps list are pinged to IndexNow (`camsocs_pipeline.indexnow`,
+production only, never fatal).
+
 Calendar noise is sifted out first (decision D6: the rules in `events.noise`,
 the model and the claims in `extract.event_noise`): readings that are no
 events — a prayer room closed, a deadline, a placeholder — are not posted,
@@ -45,6 +49,7 @@ from __future__ import annotations
 
 from itertools import islice
 
+from camsocs_pipeline import indexnow
 from camsocs_pipeline.extract.event_noise import classifier_for
 from camsocs_pipeline.extract.redact import redactor_for
 from camsocs_pipeline.media import CachedImages
@@ -162,6 +167,18 @@ def run(ctx: StageContext) -> None:
         ctx.report.notes.append(f"{len(rejected)} refused by the server:")
         for item in rejected[:MAX_REJECTION_NOTES]:
             ctx.report.notes.append(f"  {_describe(item)}")
+    # The pages that changed, to IndexNow (G15): never a /talks URL, never
+    # fatal, and nothing at all unless INDEXNOW_SITE_URL is set (production).
+    ping = indexnow.ping_changed(
+        report.posted,
+        site_url=ctx.settings.indexnow_site_url,
+        state_path=indexnow.state_path_for(ctx.settings.state_path),
+        user_agent=ctx.settings.user_agent,
+        dry_run=ctx.dry_run,
+    )
+    ctx.report.notes.append(ping.note)
+    if ping.sent:
+        ctx.report.metrics["indexNowPinged"] = ping.sent
 
 
 def _describe(item: object) -> str:

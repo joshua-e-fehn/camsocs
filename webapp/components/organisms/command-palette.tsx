@@ -95,7 +95,13 @@ const SCOPE_LABELS: Record<PaletteScope, string> = {
 
 const SCOPES = Object.keys(SCOPE_LABELS) as PaletteScope[]
 
-export function CommandPalette() {
+export function CommandPalette({
+  initialRequest,
+}: {
+  /** Open at once with this request: the one that loaded the palette
+   * (components/organisms/public-header.tsx loads it on first use). */
+  initialRequest?: PaletteRequest
+} = {}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
@@ -129,6 +135,13 @@ export function CommandPalette() {
     setRecent(readRecent())
     setOpen(true)
   }, [])
+
+  // The request that loaded the palette, once, on mount.
+  const initial = useRef(initialRequest)
+  useEffect(() => {
+    if (initial.current) openWith(initial.current)
+    initial.current = undefined
+  }, [openWith])
 
   // ⌘K / Ctrl+K toggles; `/` opens when the reader is not typing somewhere.
   useEffect(() => {

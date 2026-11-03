@@ -95,3 +95,20 @@ export function requireConvexUrls(env: {
 
   return { cloudUrl, siteUrl }
 }
+
+/**
+ * The deployment `scripts/build-env-defaults.sh` substitutes for a build that
+ * is going nowhere (CI, a clean checkout). Not a Convex deployment name
+ * (Convex mints `adjective-animal-NNN`), and refused for any deploying build.
+ * `lib/convex-url.test.ts` holds the script to the same value.
+ */
+export const PLACEHOLDER_DEPLOYMENT = "placeholder-build-check-000"
+
+/**
+ * Whether `url` names the build-check placeholder: a build with no backend,
+ * which must never contact Convex. `lib/public-data.ts` uses it to keep such
+ * a build from prerendering a page that reads Convex.
+ */
+export function isPlaceholderDeployment(url: string | undefined): boolean {
+  return url !== undefined && deploymentName(url) === PLACEHOLDER_DEPLOYMENT
+}

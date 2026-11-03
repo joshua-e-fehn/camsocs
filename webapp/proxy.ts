@@ -1,11 +1,12 @@
 import { fetchQuery } from "convex/nextjs"
 import { type NextRequest, NextResponse } from "next/server"
 import { api } from "@/convex/_generated/api"
+import { refusesAiAgent } from "@/lib/crawlers"
 import {
-  type ListingExists,
-  MISSING_LISTING_HEADER,
+  FOUND_TTL_MS,
+  type ListingLookup,
+  listingGate,
   MISSING_LISTING_PATH,
-  missingListing,
   rememberFound,
   withTimeout,
 } from "@/lib/missing-listing"
@@ -14,7 +15,12 @@ import {
  * Next.js middleware (named `proxy` since Next 16), on listing pages only:
  * an unknown society, event or talk URL is answered with a real 404 and the
  * site's not-found page rendered on the server (ENG-20; why it cannot happen
- * in the page: lib/missing-listing.ts).
+ * in the page: lib/missing-listing.ts), and a talks.cam-derived society event
+ * is sent to its page under /talks with a 308 (owner decision G1,
+ * lib/talks-boundary.ts) before anything of it is rendered outside /talks.
+ * On the talks pillar it also refuses AI agents with a 403 (lib/crawlers.ts
+ * `refusesAiAgent`): robots.txt asks them to stay out, and not every
+ * user-triggered fetcher reads it.
  *
  * It decides nothing about access: Convex functions enforce that, and the
  * existence queries are public and viewer-independent. Everything else
@@ -22,32 +28,53 @@ import {
  * for CPU (docs/deploy.md "CPU protection").
  */
 export async function proxy(request: NextRequest) {
-  // Only this proxy may name a missing listing to app/not-found.tsx; a
-  // visitor's own copy of the header is dropped (the last matcher entry).
-  const headers = new Headers(request.headers)
-  headers.delete(MISSING_LISTING_HEADER)
-  const kind = await missingListing(
-    { pathname: request.nextUrl.pathname, method: request.method, headers },
-    listingExists,
+  if (refusesAiAgent(request.nextUrl.pathname, request.headers.get("user-agent"))) {
+    return new NextResponse("AI agents may not read the talks pages (see /robots.txt).", {
+      status: 403,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    })
+  }
+  const gate = await listingGate(
+    { pathname: request.nextUrl.pathname, method: request.method, headers: request.headers },
+    listingLookup,
   )
-  if (!kind) return NextResponse.next({ request: { headers } })
-  headers.set(MISSING_LISTING_HEADER, kind)
-  return NextResponse.rewrite(new URL(MISSING_LISTING_PATH, request.url), { request: { headers } })
+  if (gate.action === "redirect") return boundaryRedirect(request.nextUrl, gate.path)
+  if (gate.action === "next") return NextResponse.next()
+  return NextResponse.rewrite(new URL(MISSING_LISTING_PATH, request.url))
 }
 
-/** One indexed Convex query, anonymous: whether the listing exists at all is
- * the same for every viewer. A slow answer counts as a failed one (the page
- * answers), and a found listing is remembered for a minute per instance. */
-const listingExists: ListingExists = rememberFound(
+/**
+ * The talks boundary's 308 (lib/missing-listing.ts `listingGate`), on the
+ * request's own host. Permanent in meaning (a search engine moves the URL)
+ * but never stored: an event's verdict can change with a later harvest, and
+ * no browser may keep a redirect the data no longer backs (review of the SEO
+ * audit, talks-boundary-redirect-loop).
+ */
+export function boundaryRedirect(from: { href: string }, path: string): NextResponse {
+  const to = new URL(from.href)
+  to.pathname = path
+  const response = NextResponse.redirect(to, 308)
+  response.headers.set("Cache-Control", "no-store")
+  return response
+}
+
+/** One indexed Convex query, anonymous: whether the listing exists at all
+ * (and, for an event, which side of the talks boundary it lives on) is the
+ * same for every viewer. A slow answer counts as a failed one (the page
+ * answers), and a found listing is remembered per instance for as long as
+ * its page is cached at the edge (`FOUND_TTL_MS`). */
+const listingLookup: ListingLookup = rememberFound(
   withTimeout(async ({ kind, key }) => {
     try {
       switch (kind) {
         case "society":
-          return await fetchQuery(api.orgs.exists, { slug: key })
-        case "event":
-          return await fetchQuery(api.events.exists, { key })
+          return (await fetchQuery(api.orgs.exists, { slug: key })) ? "found" : "missing"
+        case "event": {
+          const where = await fetchQuery(api.events.locate, { key })
+          return where === "event" ? "found" : where
+        }
         case "talk":
-          return await fetchQuery(api.talks.exists, { key })
+          return (await fetchQuery(api.talks.exists, { key })) ? "found" : "missing"
       }
     } catch (error) {
       // The kind only: the key is a visitor's URL.
@@ -55,7 +82,7 @@ const listingExists: ListingExists = rememberFound(
       throw error
     }
   }, 800),
-  { ttlMs: 60_000, max: 5_000 },
+  { ttlMs: FOUND_TTL_MS, max: 5_000 },
 )
 
 /** Prefetches skip the proxy here, in the matcher: Next strips
@@ -63,9 +90,9 @@ const listingExists: ListingExists = rememberFound(
  * sees them (proxy.md "RSC requests and rewrites"). The values must be
  * literals for Next's static analysis. */
 export const config = {
-  // One segment after each section; `/events/<key>/ics` and the like are
-  // not matched. Static siblings such as /talks/departments are let through
-  // by lib/missing-listing.ts.
+  // One segment after /societies and /events; `/events/<key>/ics` is not
+  // matched. Static siblings such as /talks/departments are let through by
+  // lib/missing-listing.ts.
   matcher: [
     {
       source: "/societies/:key",
@@ -83,16 +110,14 @@ export const config = {
         { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
       ],
     },
-    {
-      source: "/talks/:key",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
-      ],
-    },
-    // Any request that brings its own x-camsocs-missing-listing header, so
-    // the proxy can drop it; no ordinary request carries one.
-    { source: "/:path*", has: [{ type: "header", key: "x-camsocs-missing-listing" }] },
+    // The whole talks pillar, for the AI-agent 403 (and the listing check
+    // on /talks/<key> and /talks/events/<key>); `/talks/:path*` includes
+    // /talks itself. Prefetches too: an agent that sends `Purpose: prefetch`
+    // must not walk past the 403 (review of 2026-11-02). A browser's
+    // speculative prefetch is then let through unchecked by the gate
+    // (`isPrefetch`); a router prefetch of a talk costs one remembered
+    // existence lookup, as its navigation would.
+    { source: "/talks/:path*" },
+    { source: "/talks.ics" },
   ],
 }

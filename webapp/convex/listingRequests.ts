@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values"
 import { sha1Hex } from "../lib/hash"
-import { LISTING_REQUEST_KINDS } from "../lib/vocab"
+import { LISTING_REQUEST_KINDS, requestNeedsListing } from "../lib/vocab"
 import { internal } from "./_generated/api"
 import { type MutationCtx, mutation } from "./_generated/server"
 import { isEmail } from "./lib/fields"
@@ -62,6 +62,9 @@ async function recentOfKinds(
   return count
 }
 
+/** An event's key (lib/keys.ts `eventKey`). */
+const EVENT_KEY = /^evt-[0-9a-f]{40}$/
+
 const LIMITS = {
   email: 254,
   role: 100,
@@ -74,7 +77,8 @@ const LIMITS = {
 export const submit = mutation({
   args: {
     kind: literalUnion(LISTING_REQUEST_KINDS),
-    /** The listing concerned; omit for `add`. */
+    /** The listing concerned; omit for `add`, optional for a correction
+     * about an event (`requestNeedsListing`). */
     orgKey: v.optional(v.string()),
     submitterEmail: v.string(),
     /** e.g. "President". */
@@ -82,6 +86,11 @@ export const submit = mutation({
     message: v.string(),
     /** Proposed corrections: field name → proposed value. */
     fields: v.optional(v.record(v.string(), v.string())),
+    /** The event concerned (`evt-…`), from an event page's correction link;
+     * never with `add`, which has no events yet. A University listing has no
+     * host, so a correction of it may name no listing (event-correction-link,
+     * event-correction-no-org). It must be a stored event's. */
+    eventKey: v.optional(v.string()),
   },
   returns: v.object({ key: v.string() }),
   handler: async (ctx, args) => {
@@ -106,8 +115,23 @@ export const submit = mutation({
       if (value.length > LIMITS.fieldValue)
         throw new ConvexError(`The value for ${name} is too long`)
     }
-    if (args.kind !== "add" && args.orgKey === undefined) {
+    if (requestNeedsListing(args.kind, args.eventKey !== undefined) && args.orgKey === undefined) {
       throw new ConvexError("Which listing is this about?")
+    }
+    if (args.eventKey !== undefined) {
+      if (args.kind === "add") throw new ConvexError("A new listing has no events yet")
+      if (!EVENT_KEY.test(args.eventKey)) throw new ConvexError("Not an event key")
+      // An unknown key would show the broker a link that 404s, and a
+      // correction of it may name no listing to fall back on. Whether the
+      // event is the listing's is not checked: the visitor may choose another
+      // (a co-host, or the right one when the lead is wrong). Review of
+      // 2026-11-03, event-key-unverified.
+      const eventKey = args.eventKey
+      const event = await ctx.db
+        .query("events")
+        .withIndex("by_key", (q) => q.eq("key", eventKey))
+        .unique()
+      if (!event) throw new ConvexError("That event was not found")
     }
     if (args.orgKey !== undefined) {
       const orgKey = args.orgKey
@@ -149,6 +173,7 @@ export const submit = mutation({
       role: role || undefined,
       message,
       fields: entries.length > 0 ? fields : undefined,
+      eventKey: args.eventKey,
       status: "open",
       createdAt: now,
     })

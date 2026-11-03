@@ -101,12 +101,24 @@ export function ConsentBanner() {
             Analytics cookies
           </h2>
           <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
-            With your permission, camsocs uses PostHog (EU Cloud, Frankfurt) to collect aggregate
-            usage statistics that help us improve the site. PostHog then keeps first-party cookies
-            and browser storage entries named <span className="font-mono">ph_*</span> on this device
-            for {CONSENT_MAX_AGE_DAYS} days. Nothing is collected unless you accept. We remember
-            your choice for {CONSENT_MAX_AGE_DAYS} days; change it any time under Cookie settings in
-            the footer.{" "}
+            {/* Phones get the same facts in two lines (who, what, how long,
+                off unless accepted; the rest behind the link): the full
+                paragraph filled a phone's first screen and, rendered after
+                hydration, was its largest paint (SEO audit 2026-11-02,
+                mobile-lcp-js-weight). */}
+            <span className="md:hidden">
+              With your permission, PostHog (EU Cloud) collects aggregate usage statistics, with{" "}
+              <span className="font-mono">ph_*</span> cookies kept for {CONSENT_MAX_AGE_DAYS} days.
+              Nothing is collected unless you accept.
+            </span>
+            <span className="max-md:hidden">
+              With your permission, camsocs uses PostHog (EU Cloud, Frankfurt) to collect aggregate
+              usage statistics that help us improve the site. PostHog then keeps first-party cookies
+              and browser storage entries named <span className="font-mono">ph_*</span> on this
+              device for {CONSENT_MAX_AGE_DAYS} days. Nothing is collected unless you accept. We
+              remember your choice for {CONSENT_MAX_AGE_DAYS} days; change it any time under Cookie
+              settings in the footer.
+            </span>{" "}
             <Link
               href="/privacy#cookies"
               className="font-medium text-brand-text underline underline-offset-4 hover:text-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"

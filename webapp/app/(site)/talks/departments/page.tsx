@@ -1,4 +1,3 @@
-import { fetchQuery } from "convex/nextjs"
 import { ArrowLeftIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
@@ -6,6 +5,7 @@ import { unstable_rethrow } from "next/navigation"
 import { api } from "@/convex/_generated/api"
 import { formatDayShort, londonIsoDate } from "@/lib/calendar"
 import { pageMetadata } from "@/lib/page-metadata"
+import { publicQuery } from "@/lib/public-data"
 import { SCHOOL_TONE, type TalkDepartment } from "@/lib/talks"
 import { talksHref } from "@/lib/talks-url-state"
 import { firstParam, type SearchParams } from "@/lib/url-state"
@@ -101,7 +101,7 @@ export default async function TalkDepartmentsPage({ searchParams }: Props) {
   const view = firstParam(await searchParams, "view") === "az" ? "az" : "school"
   let departments: TalkDepartment[] = []
   try {
-    departments = await fetchQuery(api.talks.departments, {})
+    departments = await publicQuery(api.talks.departments, {})
   } catch (error) {
     unstable_rethrow(error)
     departments = []

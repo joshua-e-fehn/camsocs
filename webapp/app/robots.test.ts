@@ -32,7 +32,16 @@ describe("robots.txt", () => {
   })
 
   test("AI crawlers may not read talks or their feeds, but may read the rest", () => {
-    for (const agent of ["anthropic-ai", "CCBot", "PerplexityBot"]) {
+    for (const agent of [
+      "anthropic-ai",
+      "CCBot",
+      "PerplexityBot",
+      "DuckAssistBot",
+      "MistralAI-User",
+      "meta-externalfetcher",
+      "YouBot",
+      "Ai2Bot-Dolma",
+    ]) {
       expect(AI_CRAWLERS).toContain(agent)
       for (const path of [
         "/talks",
@@ -40,11 +49,13 @@ describe("robots.txt", () => {
         "/talks/talk-05f9cb992668bbf0c8dc",
         "/talks/talk-05f9cb992668bbf0c8dc/ics",
         "/talks/departments",
+        "/talks/events/evt-0",
         "/talks.ics",
       ]) {
         expect(allowed(agent, path)).toBe(false)
       }
       expect(allowed(agent, "/societies")).toBe(true)
+      expect(allowed(agent, "/events")).toBe(true)
       // Their group repeats the private paths.
       expect(allowed(agent, "/dashboard")).toBe(false)
     }
@@ -60,7 +71,14 @@ describe("robots.txt", () => {
     expect(allowed("Googlebot", "/societies")).toBe(true)
   })
 
-  test("GPTBot and ClaudeBot may read nothing", () => {
+  test("every AI crawler but the two site-blocked ones has the talks group", () => {
+    for (const agent of AI_CRAWLERS) {
+      expect(allowed(agent, "/talks")).toBe(false)
+      expect(allowed(agent, "/societies")).toBe(["GPTBot", "ClaudeBot"].includes(agent) === false)
+    }
+  })
+
+  test("GPTBot and ClaudeBot may read nothing (G5: unchanged)", () => {
     for (const agent of ["GPTBot", "ClaudeBot"]) {
       for (const path of ["/", "/events", "/societies", "/talks"]) {
         expect(allowed(agent, path)).toBe(false)

@@ -1,12 +1,12 @@
-import { fetchQuery } from "convex/nextjs"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { RequestForm } from "@/components/organisms/request-form"
 import { api } from "@/convex/_generated/api"
 import { isRequestKind } from "@/lib/listing-request"
 import { pageMetadata } from "@/lib/page-metadata"
+import { publicQuery } from "@/lib/public-data"
 import { CONTACT_EMAIL } from "@/lib/site"
-import { firstParam, isOrgSlug, type SearchParams } from "@/lib/url-state"
+import { firstParam, isEventKey, isOrgSlug, type SearchParams } from "@/lib/url-state"
 
 type Props = { searchParams: Promise<SearchParams> }
 
@@ -21,8 +21,13 @@ export default async function RequestPage({ searchParams }: Props) {
   const params = await searchParams
   const kindParam = firstParam(params, "kind")
   const slug = firstParam(params, "org")
-  const page = slug && isOrgSlug(slug) ? await fetchQuery(api.orgs.getBySlug, { slug }) : null
+  const page = slug && isOrgSlug(slug) ? await publicQuery(api.orgs.getBySlug, { slug }) : null
   const org = page ? { key: page.org.key, slug: page.org.slug, name: page.org.name } : null
+  // An event page's correction link (event-correction-link): only the key's
+  // shape is checked here. The form names the event in the browser, so this
+  // page's HTML never holds an event's title (nor a talks.cam one's, G1).
+  const eventParam = firstParam(params, "event")
+  const eventKey = eventParam && isEventKey(eventParam) ? eventParam : null
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_20rem]">
@@ -39,6 +44,7 @@ export default async function RequestPage({ searchParams }: Props) {
         <RequestForm
           initialKind={isRequestKind(kindParam) ? kindParam : "claim"}
           initialOrg={org}
+          initialEventKey={eventKey}
         />
       </div>
 

@@ -25,7 +25,7 @@ import { isEventKey } from "@/lib/url-state"
 
 export const ICS_FEED_FETCHED = "ics_feed_fetched"
 
-export type IcsFeed = "talks" | "event" | "talk"
+export type IcsFeed = "talks" | "events" | "event" | "talk"
 
 /** The event's properties: the feed, plus the key when it is a valid key of
  * that feed's kind (the `talks` feed never has one). */

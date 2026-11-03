@@ -11,9 +11,11 @@ import {
   effectiveDirectorySort,
   eventListArgs,
   eventsHref,
+  eventsIndexing,
   eventsWindow,
   isEventKey,
   MAX_LIST_WEEKS,
+  ORG_WEEKS,
   parseDirectoryParams,
   parseEventsParams,
   serializeDirectoryState,
@@ -254,6 +256,55 @@ describe("events URL state", () => {
       university: "only",
     })
     expect(activeEventFilterCount(only)).toBe(2)
+  })
+})
+
+describe("events: one society's calendar and indexing", () => {
+  test("a society's calendar loads four weeks unless the URL says otherwise", () => {
+    const org = parseEventsParams({ org: "cu-jazz" })
+    expect(org.weeks).toBe(ORG_WEEKS)
+    expect(eventsHref(org)).toBe("/events?org=cu-jazz")
+    expect(parseEventsParams({ org: "cu-jazz", weeks: "2" }).weeks).toBe(2)
+    expect(eventsHref({ ...org, weeks: 1 })).toBe("/events?weeks=1&org=cu-jazz")
+    // An invalid slug is no society, so the whole calendar's one week.
+    expect(parseEventsParams({ org: "Bad Slug" }).weeks).toBe(1)
+  })
+
+  test("/events and /events?org= are canonical and indexable; every slice is noindex", () => {
+    expect(eventsIndexing(parseEventsParams({}))).toEqual({ canonical: "/events", index: true })
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz" }))).toEqual({
+      canonical: "/events?org=cu-jazz",
+      index: true,
+    })
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz", weeks: "4" }))).toEqual({
+      canonical: "/events?org=cu-jazz",
+      index: true,
+    })
+    // A slug the directory does not list has no calendar to index.
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz" }), false)).toEqual({
+      canonical: "/events?org=cu-jazz",
+      index: false,
+    })
+    expect(eventsIndexing(parseEventsParams({}), false).index).toBe(true)
+    for (const params of [
+      { date: "2026-10-12" },
+      { weeks: "2" },
+      { view: "month" },
+      { preset: "weekend" },
+      { q: "jazz" },
+      { cat: "music" },
+      { external: "show" },
+      { event: `evt-${"a".repeat(40)}` },
+    ]) {
+      expect(eventsIndexing(parseEventsParams(params))).toEqual({
+        canonical: "/events",
+        index: false,
+      })
+    }
+    expect(eventsIndexing(parseEventsParams({ org: "cu-jazz", date: "2026-10-12" }))).toEqual({
+      canonical: "/events?org=cu-jazz",
+      index: false,
+    })
   })
 })
 

@@ -9,6 +9,8 @@ import {
   activityWindow,
   countRuns,
   countsAsActivity,
+  nameTokens,
+  pairHash,
   relatedCards,
   relatedScore,
   runIdOf,
@@ -217,7 +219,7 @@ describe("related listings", () => {
     ).toBe(0)
   })
 
-  test("the same college first, then shared categories, then by name", () => {
+  test("the same college first, then shared categories; ties in a fixed spread order", () => {
     const cards = [
       card("b-go", { categories: ["hobbies_games"] }),
       card("a-go", { categories: ["hobbies_games"] }),
@@ -230,11 +232,53 @@ describe("related listings", () => {
       }),
       card("rowing", { categories: ["sport"] }),
     ]
-    expect(relatedCards(base, cards, 4).map((c) => c.key)).toEqual([
-      "selwyn-games",
-      "selwyn-choir",
-      "a-go",
-      "b-go",
-    ])
+    const picked = relatedCards(base, cards, 4).map((c) => c.key)
+    expect(picked.slice(0, 2)).toEqual(["selwyn-games", "selwyn-choir"])
+    // a-go and b-go tie: their order is the pair hash's, not the alphabet's,
+    // and the same on every render.
+    expect(new Set(picked.slice(2))).toEqual(new Set(["a-go", "b-go"]))
+    expect(relatedCards(base, cards, 4).map((c) => c.key)).toEqual(picked)
+    const [first] = picked.slice(2)
+    expect(first).toBe(pairHash("chess", "a-go") < pairHash("chess", "b-go") ? "a-go" : "b-go")
+  })
+
+  test("a rowing club's related list is rowing first (related-links-alphabetical)", () => {
+    const sport = (key: string, name: string, overrides: Partial<Doc<"orgCards">> = {}) =>
+      card(key, { nameSort: name.toLowerCase(), categories: ["sport"], ...overrides })
+    const cubc = sport("cubc", "Cambridge University Boat Club", {
+      orgType: "sports_club",
+      sport: { sport: "Rowing", genderCategories: [] },
+    })
+    const cards = [
+      sport("aikido", "Aikido Club", {
+        orgType: "sports_club",
+        sport: { sport: "Aikido", genderCategories: [] },
+      }),
+      sport("netball", "Addenbrooke's Netball Team", { orgType: "sports_club" }),
+      sport("boxing", "Amateur Boxing Club", { orgType: "sports_club" }),
+      sport("trinity-bc", "First and Third Trinity Boat Club", {
+        orgType: "college_boat_club",
+        level: "college",
+        collegeKeys: ["org-trinity"],
+        sport: { sport: "rowing", genderCategories: [] },
+      }),
+      sport("lightweights", "Lightweight Rowing Club", {
+        orgType: "sports_club",
+        sport: { sport: "Rowing", genderCategories: [] },
+      }),
+    ]
+    const top = relatedCards(cubc, cards, 2).map((c) => c.key)
+    expect(new Set(top)).toEqual(new Set(["lightweights", "trinity-bc"]))
+  })
+
+  test("a shared telling word in the name relates two listings across categories", () => {
+    expect(nameTokens("cambridge university chess club")).toEqual(new Set(["chess"]))
+    const chess = card("chess-club", { nameSort: "chess club", categories: ["hobbies_games"] })
+    const variants = card("chess-variants", {
+      nameSort: "chess variants society",
+      categories: ["academic"],
+    })
+    expect(relatedScore(chess, variants)).toBeGreaterThan(0)
+    expect(relatedScore(chess, card("go", { nameSort: "go club", categories: ["music"] }))).toBe(0)
   })
 })

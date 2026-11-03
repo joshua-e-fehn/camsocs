@@ -6,8 +6,8 @@ A personal data breach is a breach of security that leads to personal data being
 
 ## Security contact
 
-- **camsocs@joshua-fehn.de** (`SECURITY_CONTACT_EMAIL`, `webapp/lib/site.ts`; the same alias as the privacy contact). Published on `/about#security`, in `/privacy` ("Who is responsible") and in `/.well-known/security.txt` (RFC 9116, `webapp/lib/security-txt.ts`).
-- ⚠ `security.txt` carries `Expires` (`SECURITY_TXT_EXPIRES`, now 2027-11-01). Renew it in the July review, before it lapses.
+- **camsocs@joshua-fehn.de** (`SECURITY_CONTACT_EMAIL`, `webapp/lib/site.ts`; the same alias as the privacy contact). Published on `/about#security`, in `/privacy` ("Who is responsible") and in `/.well-known/security.txt` (RFC 9116: the static `webapp/public/.well-known/security.txt`, held equal to `webapp/lib/security-txt.ts` by its test).
+- ⚠ `security.txt` carries `Expires` (`SECURITY_TXT_EXPIRES`, now 2027-09-01). Renew it in the July review, before it lapses.
 - A report that arrives through the request form, a GitHub issue or a Slack message counts the same: the clock below starts when Joshua knows.
 
 ## What counts here
