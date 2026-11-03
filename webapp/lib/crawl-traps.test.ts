@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { crawlerTrapRel, dynamicPrefetch, linkProps, robotsPatternMatches } from "./crawl-traps"
+import { camSignInHref } from "./site"
 import { EMPTY_DIRECTORY, EMPTY_EVENTS, eventsHref, serializeDirectoryState } from "./url-state"
 
 /** The links robots.txt disallows get rel=nofollow; canonical views do not
@@ -73,14 +74,24 @@ describe("crawlerTrapRel", () => {
     })
     expect(linkProps("/events/evt-0")).toEqual({ href: "/events/evt-0" })
     expect(linkProps("/about")).toEqual({ href: "/about" })
-    expect(linkProps("/sign-in?cam=1")).toEqual({ href: "/sign-in?cam=1", rel: "nofollow" })
+    expect(linkProps("/sign-in?cam=1")).toEqual({
+      href: "/sign-in?cam=1",
+      rel: "nofollow",
+      prefetch: false,
+    })
+    expect(linkProps(camSignInHref("/events"))).toEqual({
+      href: camSignInHref("/events"),
+      rel: "nofollow",
+      prefetch: false,
+    })
+    expect(linkProps("/sign-in")).toEqual({ href: "/sign-in", rel: "nofollow", prefetch: false })
   })
 
   test("dynamicPrefetch: off for the per-request pages and their views only", () => {
     for (const href of ["/events", "/events?org=chess", "/societies?page=2", "/talks#x"]) {
       expect(dynamicPrefetch(href)).toBe(false)
     }
-    for (const href of ["/talks/departments", "/request?kind=add"]) {
+    for (const href of ["/talks/departments", "/request?kind=add", "/sign-in?cam=1"]) {
       expect(dynamicPrefetch(href)).toBe(false)
     }
     for (const href of ["/", "/societies/chess", "/talks/talk-0", "/categories", "https://x.org"]) {

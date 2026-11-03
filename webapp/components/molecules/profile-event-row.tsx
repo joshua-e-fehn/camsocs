@@ -3,6 +3,7 @@ import Link from "next/link"
 import { EventFlags } from "@/components/molecules/event-item"
 import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { formatEventTime, formatInstantDate, londonIsoDate, weekdayShort } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { type EventRun, runSummary } from "@/lib/event-runs"
 import type { EventListItem } from "@/lib/public-api"
 import { camSignInHref } from "@/lib/site"
@@ -63,7 +64,7 @@ export function CamOnlyHint({ count, path }: { count: number | null; path: strin
       <LockIcon aria-hidden className="size-4" />
       <span>
         {count} more Cambridge-only {count === 1 ? "event" : "events"} —{" "}
-        <Link href={camSignInHref(path)} className="underline underline-offset-4">
+        <Link {...linkProps(camSignInHref(path))} className="underline underline-offset-4">
           sign in with your @cam.ac.uk email
         </Link>
       </span>

@@ -883,7 +883,7 @@ export function EventsCalendar({
               />
             </div>
             <Link
-              href="/talks"
+              {...linkProps("/talks")}
               className="group flex max-w-sm items-center gap-3 self-start rounded-full border border-talks/40 bg-talks-tint/60 py-1.5 pr-4 pl-1.5 text-sm transition-colors duration-150 hover:border-talks focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:rounded-2xl sm:py-3 sm:pl-4 lg:self-end"
             >
               <span
@@ -1141,7 +1141,7 @@ export function EventsCalendar({
                   programme. For department seminars and lectures across Cambridge, by School and
                   department, see{" "}
                   <Link
-                    href="/talks"
+                    {...linkProps("/talks")}
                     className="font-medium text-talks underline underline-offset-4"
                   >
                     Talks

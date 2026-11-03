@@ -102,13 +102,16 @@ export function crawlerTrapRel(href: string): "nofollow" | undefined {
 }
 
 /** The pages rendered per request (they read their URL's parameters; docs/
- * webapp.md "Caching"): a prefetch of one is a server render. */
+ * webapp.md "Caching"): a prefetch of one is a server render. The sign-in
+ * page is one too (it reads `?cam=` and `?next=`), linked from cam-only
+ * hints on edge-cached profiles and event pages (bot policy 2026-11-03). */
 const DYNAMIC_PAGES: readonly string[] = [
   "/events",
   "/societies",
   "/talks",
   "/talks/departments",
   "/request",
+  "/sign-in",
 ]
 
 /**

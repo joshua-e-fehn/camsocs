@@ -56,6 +56,7 @@ import {
 } from "@/hooks/convex/talks"
 import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import { addDays, DAY_MS, formatDayShort, londonIsoDate, startOfWeek } from "@/lib/calendar"
+import { linkProps } from "@/lib/crawl-traps"
 import { availablePresets, currentTermEnd } from "@/lib/date-presets"
 import { SITE_URL } from "@/lib/site"
 import {
@@ -577,7 +578,7 @@ export function TalksBrowser({
             <div className="flex flex-wrap items-center gap-2">
               {subscribe()}
               <Link
-                href="/talks/departments"
+                {...linkProps("/talks/departments")}
                 className="inline-flex h-11 items-center gap-2 rounded-full border bg-card px-4 text-sm font-medium transition-colors duration-150 hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
               >
                 <LibraryIcon aria-hidden className="size-4" />

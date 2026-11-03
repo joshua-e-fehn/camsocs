@@ -260,7 +260,8 @@ read. What makes that work, and what keeps it working:
 - **No prefetch of a dynamic page from a link on every page** (bot policy 2026-11-03). A
   next/link prefetches what comes into view, and a prefetch of one of the pages above is a server
   render. The header's sections, the footer, the home page's overview and "Try" links, the event
-  and talk pages' breadcrumbs and a profile's calendar and filter links are `prefetch={false}` for
+  and talk pages' breadcrumbs and department chips, a profile's calendar and filter links and the
+  Cambridge-only sign-in hints (`/sign-in` reads its parameters too) are `prefetch={false}` for
   them (the header by its `NAV` list, the rest through `lib/crawl-traps.ts` `linkProps` /
   `dynamicPrefetch`, which also sets a crawler trap's `rel="nofollow"`); links to cached pages
   keep Next's default.
@@ -716,7 +717,9 @@ robots.txt trap since the bot policy of 2026-11-03: robots.txt disallows it and 
 `rel="nofollow"` (`lib/crawl-traps.ts` `crawlerTrapRel`, the one list app/robots.ts reads). So do
 the directory's filter, facet and search links, the home page's "Try" and day links and the talks
 department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?dept=` and
-`/talks?school=` alone stay followed. Event pages are found through the sitemap
+`/talks?school=` alone stay followed. An event page's "All its events" link is its lead
+society's canonical calendar, `/events?org=<slug>` (`eventsIndexing(...).canonical`), never a
+slice. Event pages are found through the sitemap
 (`sitemaps/events.xml`), the canonical calendars and the society profiles, whose rows link them;
 an event page's breadcrumb is "Events" alone (no day crumb, which would point at a trap), the same
 in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
