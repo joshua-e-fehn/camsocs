@@ -268,13 +268,19 @@ read. What makes that work, and what keeps it working:
   `dynamicPrefetch`, which also sets a crawler trap's `rel="nofollow"`); links to cached pages
   keep Next's default.
 - **Dynamic segments build nothing** (`generateStaticParams` returns `[]` on `/societies/[slug]`,
-  `/events/[key]`, `/categories/[category]`, `/talks/[key]`, `/talks/events/[key]`): each page is
-  rendered on its first request, so `next build` never reads Convex for them. Pages without a
-  segment (`/`, `/about`, `/privacy`, `/categories`, `/term-dates`) are prerendered by a real
-  build from its own deployment, as any static page is. A build against
+  `/events/[key]`, `/talks/[key]`, `/talks/events/[key]`): each page is rendered on its first
+  request, so `next build` never reads Convex for them. Pages without a segment (`/`, `/about`,
+  `/privacy`, `/categories`, `/term-dates`) are prerendered by a real build from its own
+  deployment, as any static page is. The 16 category hubs (`/categories/[category]`) are the
+  exception: a fixed vocabulary, listed by `generateStaticParams` with `dynamicParams = false`, so
+  a real build prerenders them like `/categories` and any other slug is an unmatched URL that gets
+  `app/not-found.tsx`'s static 404 (x-matched-path /404, edge-cached; re-check 2026-11-03
+  not-found-template). In a placeholder or failed-read build the route is `ƒ` and the page's own
+  `notFound()` answers unknown slugs as before. A build against
   `scripts/build-env-defaults.sh`'s placeholder must not contact Convex, so there every cached read
   calls `connection()` first and those pages become dynamic in that build only (`lib/convex-url.ts`
-  `isPlaceholderDeployment`). The build's route table therefore shows them as `ƒ` in CI; build
+  `isPlaceholderDeployment`). The build's route table therefore shows them (and the category
+  hubs) as `ƒ` in CI; build
   with real `NEXT_PUBLIC_CONVEX_*` URLs to see `○ … 5m`. A real build whose deployment fails a read
   (a preview's dev deployment unreachable, or behind the branch's functions) does not fail either:
   during `next build` only (`NEXT_PHASE === "phase-production-build"`), a failed cached read logs

@@ -68,7 +68,9 @@ for (const { name, path, dark } of PAGES) {
  * server's HTML (ENG-20: proxy.ts, lib/missing-listing.ts) — never a 200
  * marked noindex, nor an empty shell that only JavaScript fills in. A
  * well-formed key the data does not have costs one existence query; a
- * malformed one none.
+ * malformed one none. An unknown category is no listing: the route's
+ * `dynamicParams = false` makes it an unmatched URL, with the same static
+ * 404 (re-check 2026-11-03, not-found-template).
  */
 // `heading` once hydrated; the server's HTML has the site's "Not found" for
 // every kind (app/not-found-variant.tsx: the root not-found reads no request
@@ -78,6 +80,7 @@ const UNKNOWN: { name: string; path: string; heading: string }[] = [
   { name: "society-malformed", path: "/societies/No_Such!", heading: "Not found" },
   { name: "event", path: `/events/evt-${"0".repeat(40)}`, heading: "Not found" },
   { name: "event-malformed", path: "/events/not-an-event", heading: "Not found" },
+  { name: "category", path: "/categories/zzqx-no-such-category", heading: "Not found" },
   { name: "talk", path: `/talks/talk-${"0".repeat(20)}`, heading: "This talk is no longer listed" },
   { name: "talk-malformed", path: "/talks/nope", heading: "This talk is no longer listed" },
 ]

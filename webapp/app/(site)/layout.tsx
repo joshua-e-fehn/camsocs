@@ -8,8 +8,10 @@ import { SiteFrame } from "./site-frame"
  * params (the directory, the calendar, the talks agenda, the form) or a
  * cookie: its Convex reads are anonymous and cached (lib/public-data.ts), and
  * nothing above it reads the session (app/layout.tsx). Dynamic segments
- * build no page with the site (`generateStaticParams` returns none), so a
- * build never reads Convex for them; each is rendered on its first request.
+ * build no page with the site (`generateStaticParams` returns none), except
+ * the 16 category hubs (a fixed list, so an unknown slug gets the static
+ * 404), so a build never reads Convex for them; each is rendered on its
+ * first request.
  * Must stay a literal (Next reads it statically).
  */
 export const revalidate = 300

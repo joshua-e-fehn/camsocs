@@ -5,6 +5,7 @@ import {
   categoryHubIntro,
   categoryHubPath,
   categoryHubPaths,
+  categorySlug,
   collectionJsonLd,
   collegeHubIntro,
   directorySeo,
@@ -29,6 +30,7 @@ describe("category hub paths (G13)", () => {
     expect(paths).toHaveLength(CATEGORIES.length)
     for (const path of paths) expect(path.startsWith(`${CATEGORIES_PATH}/`)).toBe(true)
     expect(categoryHubPath("science_tech")).toBe("/categories/science-tech")
+    expect(categorySlug("science_tech")).toBe("science-tech")
   })
 
   test("a slug reads back to its category; anything else to nothing", () => {
