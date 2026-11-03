@@ -61,7 +61,7 @@ Rate the risk to people's rights and freedoms: **none / unlikely**, **risk**, or
 
 - **Notify** the Information Commission (the Information Commissioner's Office, ICO, until 30 September 2026) unless the breach is **unlikely** to result in a risk to anyone's rights and freedoms. When in doubt, notify.
 - **Deadline:** within 72 hours of becoming aware (step 1). If the facts are not all known, report what is known and add the rest later (Art 33(4)). If it is late, say why.
-- **How:** its online breach report form on ico.org.uk, or its helpline (0303 123 1113), as the controller, with the registration number (`ICO_REGISTRATION_NUMBER`, once J6 is paid).
+- **How:** its online breach report form on ico.org.uk, or its helpline (0303 123 1113), as the controller, as an individual controller with no data protection fee registration (none is payable, PLAN.md J6).
 - **What to give** (Art 33(3)): what happened and when; the categories and rough numbers of people and records; the contact (camsocs@joshua-fehn.de); the likely consequences; what was done and will be done to contain it and limit harm.
 - Unlikely-to-risk examples, which need only the log: a key leaked and rotated within minutes with logs showing no use; a role address published by its own society shown once more.
 
