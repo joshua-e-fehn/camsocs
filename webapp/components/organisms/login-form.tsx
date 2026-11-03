@@ -1,7 +1,8 @@
 "use client"
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { MailCheckIcon, MailIcon, ShieldCheckIcon } from "lucide-react"
+import { LockKeyholeIcon, MailCheckIcon, MailIcon, ShieldCheckIcon } from "lucide-react"
+import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +17,18 @@ import { isCamEmail, normaliseCamEmail } from "@/lib/cam-email"
 import { cn } from "@/lib/utils"
 
 export type SignInMethod = "cam" | "google"
+
+/** `auth.getSignInOptions`: which options this deployment has switched on. */
+export type SignInOptions = { google: boolean; camEmail: boolean }
+
+/** The options to offer, Cambridge first; undefined while loading. */
+export function signInMethods(options: SignInOptions | undefined): SignInMethod[] | undefined {
+  if (!options) return undefined
+  const methods: SignInMethod[] = []
+  if (options.camEmail) methods.push("cam")
+  if (options.google) methods.push("google")
+  return methods
+}
 
 /** Messages for the `?error=` Better Auth appends to the error callback. */
 const LINK_ERRORS: Record<string, string> = {
@@ -32,26 +45,36 @@ const LINK_ERRORS: Record<string, string> = {
  *  - **Admin**: Google. A session alone grants nothing — the private area is
  *    limited to the addresses in the Convex env var BROKER_EMAILS.
  *
- * Either option is greyed out with a reason when the deployment has not
- * switched it on (`auth.getSignInOptions`). Signing in creates the account on
- * first use, so there is no separate sign-up page.
+ * Only the options the deployment has switched on are shown
+ * (`auth.getSignInOptions`), with no toggle when there is one; with none, the
+ * page says sign-in is not open rather than offering dead buttons (ENG-35).
+ * Signing in creates the account on first use, so there is no separate
+ * sign-up page.
  */
-export function LoginForm({
+export function LoginForm(props: Omit<React.ComponentProps<typeof SignInCard>, "options">) {
+  return <SignInCard options={useSignInOptions()} {...props} />
+}
+
+/** The form for given `options` (undefined while loading), for tests. */
+export function SignInCard({
   className,
-  defaultMethod = "google",
+  options,
+  defaultMethod = "cam",
   linkError,
   next,
   ...props
 }: React.ComponentProps<"div"> & {
+  options: SignInOptions | undefined
   defaultMethod?: SignInMethod
   /** `error` from a failed link, e.g. `INVALID_TOKEN`. */
   linkError?: string
   /** Where to land after a Cambridge sign-in; a same-origin path. */
   next?: string
 }) {
-  const [method, setMethod] = useState<SignInMethod>(defaultMethod)
-  const options = useSignInOptions()
+  const [chosen, setChosen] = useState<SignInMethod>(defaultMethod)
   const reduceMotion = useReducedMotion()
+  const methods = signInMethods(options)
+  const method = methods?.includes(chosen) ? chosen : methods?.[0]
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -61,49 +84,63 @@ export function LoginForm({
             {/* The page's one heading: /sign-in has no other. */}
             <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
           </CardTitle>
-          <CardDescription>
-            {method === "cam"
-              ? "Cambridge members see Cambridge-only events"
-              : "For the camsocs administrator"}
-          </CardDescription>
+          {method && (
+            <CardDescription>
+              {method === "cam"
+                ? "Cambridge members see Cambridge-only events"
+                : "For the camsocs administrator"}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            value={method}
-            onValueChange={(value) => value && setMethod(value as SignInMethod)}
-            className="w-full"
-            aria-label="Sign-in method"
-          >
-            <ToggleGroupItem value="cam" className="flex-1">
-              <MailIcon />
-              Cambridge email
-            </ToggleGroupItem>
-            <ToggleGroupItem value="google" className="flex-1">
-              <ShieldCheckIcon />
-              Admin
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={method}
-              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
-            >
-              {method === "cam" ? (
-                <CamEmailForm
-                  enabled={options?.camEmail}
-                  initialError={linkError ? (LINK_ERRORS[linkError] ?? "Sign-in failed.") : ""}
-                  next={next}
-                />
-              ) : (
-                <GoogleButton enabled={options?.google} />
+          {methods === undefined ? (
+            <div className="flex min-h-32 items-center justify-center" aria-busy>
+              <Spinner />
+              <span className="sr-only">Checking the sign-in options…</span>
+            </div>
+          ) : method === undefined ? (
+            <NotOpen next={next} />
+          ) : (
+            <>
+              {methods.length > 1 && (
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={method}
+                  onValueChange={(value) => value && setChosen(value as SignInMethod)}
+                  className="w-full"
+                  aria-label="Sign-in method"
+                >
+                  <ToggleGroupItem value="cam" className="flex-1">
+                    <MailIcon />
+                    Cambridge email
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="google" className="flex-1">
+                    <ShieldCheckIcon />
+                    Admin
+                  </ToggleGroupItem>
+                </ToggleGroup>
               )}
-            </motion.div>
-          </AnimatePresence>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={method}
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+                >
+                  {method === "cam" ? (
+                    <CamEmailForm
+                      initialError={linkError ? (LINK_ERRORS[linkError] ?? "Sign-in failed.") : ""}
+                      next={next}
+                    />
+                  ) : (
+                    <GoogleButton />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </>
+          )}
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
@@ -114,16 +151,24 @@ export function LoginForm({
   )
 }
 
-function CamEmailForm({
-  enabled,
-  initialError,
-  next,
-}: {
-  /** undefined while loading. */
-  enabled: boolean | undefined
-  initialError: string
-  next?: string
-}) {
+/** No option is switched on: say so, and send the visitor back. */
+function NotOpen({ next }: { next?: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-center" role="status">
+      <LockKeyholeIcon className="size-12 text-muted-foreground" aria-hidden="true" />
+      <p className="font-medium">Sign-in is not open yet</p>
+      <p className="text-sm text-muted-foreground">
+        There is nothing to sign in to for now. Everything camsocs lists can be read without an
+        account.
+      </p>
+      <Button variant="outline" asChild>
+        <Link href={next ?? "/events"}>{next ? "Go back" : "See what’s on"}</Link>
+      </Button>
+    </div>
+  )
+}
+
+function CamEmailForm({ initialError, next }: { initialError: string; next?: string }) {
   const [email, setEmail] = useState("")
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState(initialError)
@@ -156,15 +201,6 @@ function CamEmailForm({
     } finally {
       setSending(false)
     }
-  }
-
-  if (enabled === false) {
-    return (
-      <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-        Cambridge email sign-in is not switched on yet, so Cambridge-only events stay hidden for
-        now.
-      </p>
-    )
   }
 
   if (sentTo) {
@@ -200,7 +236,6 @@ function CamEmailForm({
           }}
           onBlur={() => setTouched(true)}
           aria-invalid={invalid || undefined}
-          disabled={enabled === undefined}
           required
         />
         {invalid ? (
@@ -209,7 +244,7 @@ function CamEmailForm({
           <FieldDescription>We email you a one-time link. No password.</FieldDescription>
         )}
       </Field>
-      <Button type="submit" disabled={sending || enabled === undefined}>
+      <Button type="submit" disabled={sending}>
         {sending ? <Spinner /> : <MailIcon />}
         {sending ? "Sending…" : "Email me a sign-in link"}
       </Button>
@@ -222,7 +257,7 @@ function CamEmailForm({
   )
 }
 
-function GoogleButton({ enabled }: { enabled: boolean | undefined }) {
+function GoogleButton() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -244,12 +279,7 @@ function GoogleButton({ enabled }: { enabled: boolean | undefined }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <Button
-        variant="outline"
-        type="button"
-        disabled={loading || enabled !== true}
-        onClick={signInWithGoogle}
-      >
+      <Button variant="outline" type="button" disabled={loading} onClick={signInWithGoogle}>
         {loading ? (
           <Spinner />
         ) : (
@@ -263,9 +293,7 @@ function GoogleButton({ enabled }: { enabled: boolean | undefined }) {
         {loading ? "Redirecting…" : "Continue with Google"}
       </Button>
       <FieldDescription className="text-center">
-        {enabled === false
-          ? "Google sign-in is not configured on this deployment."
-          : "Only listed broker accounts see the private area."}
+        Only listed broker accounts see the private area.
       </FieldDescription>
       {error && (
         <p className="text-sm text-destructive" role="alert">

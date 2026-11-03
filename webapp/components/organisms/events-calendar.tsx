@@ -50,7 +50,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/convex/_generated/api"
-import { useEvent, useVenues } from "@/hooks/convex"
+import { useEvent, useSignInOptions, useVenues } from "@/hooks/convex"
 import { useEventWindow, useRestrictedCount } from "@/hooks/convex/events"
 import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import {
@@ -350,7 +350,10 @@ export function EventsCalendar({
     preloadedRestricted && !universityView ? eventRestrictedArgs(args) : "skip",
     preloadedRestricted ?? undefined,
   )
-  const camOnly = universityView ? undefined : restricted
+  // Nor without the @cam.ac.uk sign-in link switched on: the prompt would
+  // lead to a sign-in page with nothing to do (ENG-35).
+  const camSignIn = useSignInOptions()?.camEmail === true
+  const camOnly = universityView || !camSignIn ? undefined : restricted
   const all = loaded.data ?? []
   const matching = useMemo(
     () => all.filter((event) => matchesEventQuery(event, state.q)),
@@ -1376,14 +1379,20 @@ export function EventsCalendar({
                 This event is not available
               </SheetTitle>
               <SheetDescription>
-                It may have been taken down, or it is a Cambridge-only event:{" "}
-                <Link
-                  href={camSignInHref(eventsHref({ ...base, event: openKey }))}
-                  className="underline underline-offset-4"
-                >
-                  sign in with your @cam.ac.uk email
-                </Link>{" "}
-                to see those.
+                {camSignIn ? (
+                  <>
+                    It may have been taken down, or it is a Cambridge-only event:{" "}
+                    <Link
+                      href={camSignInHref(eventsHref({ ...base, event: openKey }))}
+                      className="underline underline-offset-4"
+                    >
+                      sign in with your @cam.ac.uk email
+                    </Link>{" "}
+                    to see those.
+                  </>
+                ) : (
+                  "It may have been taken down, or it is only shown to Cambridge members."
+                )}
               </SheetDescription>
             </SheetHeader>
           ) : (

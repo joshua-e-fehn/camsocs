@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { useViewerTier } from "@/hooks/convex"
+import { useSignInOptions, useViewerTier } from "@/hooks/convex"
 import { authClient } from "@/lib/auth-client"
 import { openPalette } from "@/lib/palette"
 import { cn } from "@/lib/utils"
@@ -51,11 +51,18 @@ function isActive(pathname: string, href: string) {
  * events), "Dashboard" only when Convex says the viewer is the broker
  * (`auth.getViewerTier`, the same rule as `getViewer`) and Sign out. Showing
  * the link grants nothing; the broker functions check again.
+ *
+ * Signed out, the menu is there only while the @cam.ac.uk sign-in link is
+ * switched on (`auth.getSignInOptions`, ENG-35): that is the only sign-in a
+ * visitor can use, and without it Sign in led to a page with nothing to do.
+ * The administrator goes to /sign-in directly.
  */
 export function PublicHeader() {
   const pathname = usePathname()
   const router = useRouter()
   const access = useViewerTier()
+  const signInOptions = useSignInOptions()
+  const showAccount = access?.signedIn === true || signInOptions?.camEmail === true
   const [menuOpen, setMenuOpen] = useState(false)
   const [shortcut, setShortcut] = useState("⌘K")
 
@@ -128,9 +135,11 @@ export function PublicHeader() {
             <span className="sr-only">Search</span>
           </Button>
 
-          <div className="hidden md:block">
-            <AccountMenu access={access} onSignOut={signOut} />
-          </div>
+          {showAccount && (
+            <div className="hidden md:block">
+              <AccountMenu access={access} onSignOut={signOut} />
+            </div>
+          )}
 
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
@@ -167,13 +176,15 @@ export function PublicHeader() {
                   )
                 })}
               </nav>
-              <div className="flex flex-col gap-5 border-t px-5 py-4">
-                <AccountLinks
-                  access={access}
-                  onSignOut={signOut}
-                  onNavigate={() => setMenuOpen(false)}
-                />
-              </div>
+              {showAccount && (
+                <div className="flex flex-col gap-5 border-t px-5 py-4">
+                  <AccountLinks
+                    access={access}
+                    onSignOut={signOut}
+                    onNavigate={() => setMenuOpen(false)}
+                  />
+                </div>
+              )}
             </SheetContent>
           </Sheet>
         </div>

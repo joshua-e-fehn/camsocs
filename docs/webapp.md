@@ -282,7 +282,9 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   day). A verified link means
   `emailVerified: true`, so `getViewer(ctx).isCamVerified` holds for that session.
 - `auth.getSignInOptions` → `{ google, camEmail }` (booleans) and `auth.getViewerTier` →
-  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI.
+  `{ signedIn, isBroker, isCamVerified }` are public queries for the UI. While `camEmail` is
+  off, a signed-out visitor sees no Sign in in the header and no Cambridge-only prompt on /events;
+  /sign-in shows only the options that are on, and says sign-in is not open when none is (ENG-35).
 - Better Auth runs **inside Convex**. Flow: client → same-origin `/api/auth/*` → route handler
   (`lib/auth-forwarded-headers.ts`) → Convex site URL → Better Auth → session in the component's
   tables → `ConvexBetterAuthProvider` holds the token.
