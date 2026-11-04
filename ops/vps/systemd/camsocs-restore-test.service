@@ -1,0 +1,63 @@
+# The weekly restore test (ENG-44): the newest backup is imported into a
+# throwaway local Convex backend (127.0.0.1, SQLite in this unit's private
+# /tmp), exported again and compared table by table with its manifest. Never
+# a cloud deployment: this unit has no deploy key. Started by
+# camsocs-restore-test.timer, or by hand: `systemctl start
+# camsocs-restore-test.service`. Runbook: /opt/camsocs/docs/ops-vps.md §10.
+[Unit]
+Description=camsocs weekly restore test of the newest Convex backup
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+# A backup that does not restore, or a test that could not run, DMs the operator.
+OnFailure=camsocs-alert@restore_test.service
+
+[Service]
+Type=oneshot
+# The backup's own user (same name, so the same dynamic user and the same
+# state directory); no LoadCredential=, so no key.
+DynamicUser=yes
+User=camsocs-backup
+StateDirectory=camsocs-backup
+StateDirectoryMode=0700
+CacheDirectory=camsocs-backup
+CacheDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py restore-test
+Environment=PATH=/usr/bin:/bin
+Environment=CAMSOCS_BACKUP_DIR=%S/camsocs-backup CAMSOCS_BACKUP_TOOLS=/usr/local/lib/camsocs-ops/backup
+Environment=HOME=%C/camsocs-backup
+# The restored copy lives in the unit's private /tmp and is deleted with it.
+Environment=CAMSOCS_RESTORE_WORK=/tmp
+# Import and export of at most 1 h each, the backend's start, the lock.
+TimeoutStartSec=5h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# --- hardening: no network beyond its own backend on the loopback ------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/opt/camsocs -/var/lib/camsocs -/var/log/camsocs -/etc/camsocs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Not MemoryDenyWriteExecute: node's and the backend's V8 JIT need it.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# The loopback only: the CLI talks to the backend this run started, and
+# nothing reaches Convex's cloud (the backend's beacon is off too).
+IPAddressDeny=any
+IPAddressAllow=localhost
