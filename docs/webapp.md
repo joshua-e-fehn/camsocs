@@ -341,7 +341,8 @@ Static siblings (`/talks/departments`, or a metadata file such as `opengraph-ima
 the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
 one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
 listing is remembered per instance for as long as a page is cached (`FOUND_TTL_MS`, 300 s;
-missing ones never), so repeat views skip the round
+missing ones and a superseded key's redirect never: a later load can swap two keys' roles, and a
+stale redirect beside a fresh one would loop), so repeat views skip the round
 trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
 page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
 hidden since the check. A client-side navigation to a missing listing becomes a full page load (the

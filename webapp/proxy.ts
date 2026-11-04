@@ -65,7 +65,8 @@ export function boundaryRedirect(from: { href: string }, path: string): NextResp
  * (and, for an event, which side of the talks boundary it lives on) is the
  * same for every viewer. A slow answer counts as a failed one (the page
  * answers), and a found listing is remembered per instance for as long as
- * its page is cached at the edge (`FOUND_TTL_MS`). */
+ * its page is cached at the edge (`FOUND_TTL_MS`); a superseded key's
+ * redirect is asked afresh every time (`rememberFound`). */
 const listingLookup: ListingLookup = rememberFound(
   withTimeout(async ({ kind, key }) => {
     try {

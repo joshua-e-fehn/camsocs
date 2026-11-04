@@ -310,6 +310,20 @@ describe("rememberFound", () => {
     expect(lookup).toHaveBeenCalledTimes(1)
   })
 
+  test("never remembers a superseded key's redirect (ENG-47)", async () => {
+    // A load can swap two readings' roles: A moved to B, then B to A. A
+    // remembered `A → B` beside a fresh `B → A` would be a 308 loop.
+    const a = { kind: "event" as const, key: EVENT }
+    const b = `evt-${"1".repeat(40)}`
+    let state: ListingState = { movedTo: `/events/${b}` }
+    const lookup = mock<ListingLookup>(async () => state)
+    const cached = rememberFound(lookup, { ttlMs: 1000, max: 10, now: () => 0 })
+    expect(await cached(a)).toEqual({ movedTo: `/events/${b}` })
+    state = "found"
+    expect(await cached(a)).toBe("found")
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
   test("keys by kind and drops the oldest past the cap", async () => {
     const lookup = mock<ListingLookup>(async () => "found")
     const cached = rememberFound(lookup, { ttlMs: 1000, max: 2, now: () => 0 })

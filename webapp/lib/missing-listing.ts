@@ -152,8 +152,11 @@ const NEXT: ListingGate = { action: "next" }
  * The proxy's decision for one request: a 404 for a missing listing, a 308
  * from `/events/<key>` to `/talks/events/<key>` for a talks.cam-derived
  * event (G1), a 308 from a superseded event key, under either prefix, to the
- * page of the event that took it over (ENG-47: always another key, so no
- * loop), or let it through to the page.
+ * page of the event that took it over (ENG-47), or let it through to the
+ * page. The target is another key, and `events.locate` refuses a chain that
+ * comes back to itself; a redirect is never remembered (`rememberFound`), so
+ * a load that swaps two keys' roles cannot leave a stale `A → B` beside a
+ * fresh `B → A`.
  *
  * - A malformed key is missing, without asking Convex.
  * - A prefetch is let through unchecked: the directory and calendar prefetch
@@ -203,7 +206,9 @@ export function withTimeout(lookup: ListingLookup, ms: number): ListingLookup {
  * viewer, so repeat views skip the round trip. A missing one is never
  * remembered, so a listing added a moment ago is not 404'd; one hidden since
  * it was remembered falls back to the page's own `notFound()` for up to
- * `ttlMs`.
+ * `ttlMs`. A superseded key's redirect (`movedTo`, ENG-47) is never
+ * remembered either: the next load may revive it or swap it with its
+ * survivor, and a stale redirect could then loop.
  */
 export function rememberFound(
   lookup: ListingLookup,
@@ -218,7 +223,7 @@ export function rememberFound(
       found.delete(id)
     }
     const state = await lookup(listing)
-    if (state === "missing") return state
+    if (state === "missing" || typeof state === "object") return state
     found.delete(id)
     if (found.size >= max) {
       const oldest = found.keys().next().value
