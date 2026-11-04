@@ -314,6 +314,73 @@ def test_a_card_takes_its_term_from_its_own_dated_rows() -> None:
     assert trip["startsAt"].value_raw == "Week 2 Wednesday 7pm"
 
 
+def test_a_card_row_without_a_time_of_day_is_all_day() -> None:
+    # ENG-37: the model has filled a row the card prints without a time as
+    # 00:00–23:59, or as 00:00 alone; neither is a time the card states.
+    reply = {**TERMCARD_REPLY}
+    reply["events"] = [
+        {
+            "title": "Planetarium trip",
+            "term_week": 2,
+            "weekday": "wednesday",
+            "start_time": "00:00",
+            "end_time": "23:59",
+            "when_quote": "Week 2 Wednesday",
+        },
+        {
+            "title": "Telescope night",
+            "term_week": 3,
+            "weekday": "thursday",
+            "start_time": "00:00",
+            "when_quote": "Week 3 Thursday",
+        },
+        # A card that prints midnight means midnight.
+        {
+            "title": "Meteor watch",
+            "term_week": 5,
+            "weekday": "friday",
+            "start_time": "00:00",
+            "when_quote": "Week 5 Friday, midnight",
+        },
+    ]
+    by_title, _notes = _read(reply)
+    fields = {title: {f.field: f.value for f in e.fields} for title, e in by_title.items()}
+    # London midnight of the day, all day, no end.
+    assert fields["Planetarium trip"]["startsAt"] == _ms(2026, 10, 20, 23, 0)
+    assert fields["Planetarium trip"]["allDay"] is True
+    assert "endsAt" not in fields["Planetarium trip"]
+    assert fields["Telescope night"]["startsAt"] == _ms(2026, 10, 21, 23, 0)
+    assert fields["Telescope night"]["allDay"] is True
+    assert fields["Meteor watch"]["startsAt"] == _ms(2026, 11, 6, 0, 0)
+    assert fields["Meteor watch"]["allDay"] is False
+
+
+@pytest.mark.parametrize(
+    ("times", "quote", "kept"),
+    [
+        (("00:00", "23:59"), "Week 2 Wednesday", False),
+        (("00:00", "24:00"), "Sat 7 Nov", False),
+        (("00:00", "00:00"), "Sat 7 - Sun 8 Nov", False),
+        (("00:00", None), "Sat 7 Nov", False),
+        (("00:00", None), "Sat 7 Nov, 12am", True),
+        (("00:00", None), "Sat 7 Nov 00:00", True),
+        (("00:00", "02:00"), "Sat 7 Nov", True),  # a club night: midnight to 2am
+        (("19:00", "23:59"), "Sat 7 Nov", True),
+        ((None, None), "Sat 7 Nov", False),
+    ],
+)
+def test_untimed_clears_only_times_that_are_no_time_of_day(
+    times: tuple[str | None, str | None], quote: str, kept: bool
+) -> None:
+    from camsocs_pipeline.extract.cards import untimed
+    from camsocs_pipeline.extract.events import LlmEvent
+
+    start, end = times
+    event = LlmEvent(title="Social", start_time=start, end_time=end, when_quote=quote)
+    read = untimed(event)
+    assert (read.start_time, read.end_time) == (times if kept else (None, None))
+
+
 def test_a_long_pdf_is_read_four_pages_a_call() -> None:
     from tests.fakes import make_pdf_pages
 
