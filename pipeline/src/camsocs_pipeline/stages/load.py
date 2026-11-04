@@ -28,7 +28,10 @@ bulk model (replies cached by the input's sha256) and deterministic checks.
 A dry run uses cached replies and the deterministic rule only.
 
 Event readings another source already lists are merged into that source's
-event (`events.duplicates`); the notes say how many, from which sources.
+event (`events.duplicates`); the notes say how many, from which sources. Each
+such reading's own key is retired to that event (`events/superseded`,
+ENG-47): an event posted under it before the other source listed the evening
+is hidden and its page redirects to the survivor.
 
 After a successful post, the public pages whose claims changed and that the
 site's sitemaps list are pinged to IndexNow (`camsocs_pipeline.indexnow`,
@@ -138,6 +141,11 @@ def run(ctx: StageContext) -> None:
         ctx.report.metrics["eventNoticesDropped"] = sum(report.noise.dropped.values())
         ctx.report.metrics["eventsTakingPart"] = sum(report.noise.external.values())
     ctx.report.notes.extend(report.merged)
+    if report.superseded_skipped:
+        ctx.report.notes.append(
+            f"{report.superseded_skipped} event keys folded into another source's event were "
+            "not retired: the deployment lacks events/superseded (the next run retires them)"
+        )
     if ctx.loader.suppressions_note:
         ctx.report.notes.append(ctx.loader.suppressions_note)
     if report.suppressed:

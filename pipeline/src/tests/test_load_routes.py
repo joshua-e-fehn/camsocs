@@ -273,6 +273,77 @@ class TestRoutes:
         ]
         assert report.claims.entities == {"created": 1}
 
+    def test_retired_event_keys_are_posted_after_the_organiser_sets(
+        self, net: respx.MockRouter
+    ) -> None:
+        """ENG-47: a reading folded into another source's event retires its
+        own key (`events/superseded`), once the survivor has its claims and
+        organisers."""
+        order: list[str] = []
+        bodies: dict[str, dict] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path.removeprefix("/api/pipeline/")
+            order.append(path)
+            bodies[path] = json.loads(request.content or b"{}")
+            body = {"inserted": 0, "updated": 1, "unchanged": 0}
+            if path == "claims":
+                body |= {"entities": {"created": 1}, "rejected": []}
+            if path == "events/superseded":
+                body |= {"unknown": 0, "rejected": []}
+            return httpx.Response(200, json=body)
+
+        net.post(url__startswith=f"{SITE}/api/pipeline/").mock(side_effect=handler)
+        feed = event()
+        page = event(
+            source_type="society_website",
+            source_key="https://cugs.org/events",
+            source_url="https://cugs.org/events",
+            event_source="website",
+            external_id="org-cu-german-society:2026-10-08:stammtisch",
+        )
+        report = loader().post_observations([page, feed], run_key="r1")
+        assert order[-2:] == ["eventOrganisers", "events/superseded"]
+        assert bodies["events/superseded"]["events"] == [
+            {
+                "key": keys.event_key("website", page.external_id),
+                "by": keys.event_key("ics", "uid-1"),
+            }
+        ]
+        assert report.superseded.updated == 1
+
+    def test_a_deployment_without_the_retirement_route_fails_nothing(
+        self, net: respx.MockRouter
+    ) -> None:
+        """The VPS pulls main before Convex is deployed: a 404 from the new
+        route is a warning, and the next run posts the keys again."""
+        net.post(url__startswith=f"{SITE}/api/pipeline/").mock(
+            side_effect=lambda request: (
+                httpx.Response(404, json={"error": "No matching routes found"})
+                if request.url.path.endswith("events/superseded")
+                else httpx.Response(
+                    200,
+                    json={
+                        "inserted": 0,
+                        "updated": 0,
+                        "unchanged": 0,
+                        "entities": {},
+                        "rejected": [],
+                    },
+                )
+            )
+        )
+        page = event(
+            source_type="society_website",
+            source_key="https://cugs.org/events",
+            source_url="https://cugs.org/events",
+            event_source="website",
+            external_id="org-cu-german-society:2026-10-08:stammtisch",
+        )
+        report = loader().post_observations([page, event()])
+        assert report.superseded.requests == 0
+        assert report.superseded_skipped == 1
+
     def test_claims_carry_the_run_key_and_collect_rejections(self, net: respx.MockRouter) -> None:
         route = net.post(f"{SITE}/api/pipeline/claims").respond(
             200,

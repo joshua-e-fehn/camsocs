@@ -394,3 +394,43 @@ def test_a_term_cards_rows_fold_into_the_sites_own_calendar() -> None:
         (c.event_source, c.external_id): (p.event_source, p.external_id)
         for c, p in zip(cards, pages, strict=True)
     }
+
+
+def test_a_folded_readings_own_key_is_retired_to_its_primary() -> None:
+    """ENG-47: the society's page was posted as its own event before the
+    University's programme listed the same evening (ENG-24). The page's
+    reading now folds into the University's event and is never posted under
+    its own key again, so the load says which key that was and which event
+    took it over: the server hides the old key and redirects its page."""
+    university = reading(
+        "uni_events_api",
+        "aaaa1111-0000-4000-8000-000000000002/20261115T193000Z",
+        "Josephine Davies & CU Jazz Orchestra",
+        ms(2026, 11, 15, 19, 30),
+        organisers=(),
+    )
+    site = reading(
+        "website",
+        "org-cujo:2026-11-15:josephine-davies",
+        "Josephine Davies & CU Jazz Orchestra",
+        ms(2026, 11, 15, 19, 30),
+        organisers=("org-cujo",),
+    )
+    plan = plan_observations([site, university])
+    survivor = event_key("uni_events_api", university.external_id)
+    assert [(s.key, s.by) for s in plan.superseded] == [
+        (event_key("website", site.external_id), survivor)
+    ]
+    # Primaries and readings that fold into nothing retire no key.
+    assert plan_observations([university]).superseded == []
+    assert plan_observations([CAMDRAM]).superseded == []
+
+
+def test_every_folded_reading_of_a_cluster_is_retired_to_the_same_primary() -> None:
+    plan = plan_observations([SU, CAMDRAM])
+    assert [(s.key, s.by) for s in plan.superseded] == [
+        (
+            event_key("su_whatson", "events/1/2"),
+            event_key("camdram", "show:1/performance:2/2026-10-15"),
+        )
+    ]
