@@ -212,6 +212,27 @@ For a production that already holds societies and events, deployed before the ta
 4. **Never seed production with demo talks.** `talks-demo-seed` is for dev only and refuses any `--env`.
 5. **Check** (§5): `/talks`, `/talks/departments` and `/talks.ics` (200, `text/calendar`) render; an unknown `/talks/talk-00000000000000000000` is a 404; `/robots.txt` disallows `/talks` for the AI crawlers. The smoke suite covers these.
 
+### Upgrading production to the indexed event stream (ENG-31)
+
+`events.stream` (`society` / `university`, data-model §2) and its two indexes ship widen-only: the field is optional, and `events.list` reads the `stream`-unset rows through their own index range and classifies them in memory, so the calendar is the same before, during and after the backfill. Nothing has to happen at a particular time.
+
+1. **Deploy** (§1–§2). Convex builds the indexes `by_stream_visibility_startsAt` and `by_stream_visibility_spanEndsAt` during the deploy (the push waits for them). New and re-read events get `stream` on write from then on.
+2. **Backfill** — the daily derive walk (`derive-daily`, 03:30 UTC) fills it in by itself; to do it now, from `webapp/` with the Convex CLI logged in (never with `CONVEX_DEPLOY_KEY` exported):
+
+   ```bash
+   bunx convex run --prod derive:recomputeEvents '{}'
+   ```
+
+   The walk pages through every event (300 a transaction, rescheduling itself) and patches only rows whose derived fields differ; it is the same mutation the cron runs, so a second run is harmless. `pixi run pipeline -- --env prod derive` (all three walks) does it too.
+3. **Check**, read-only, once the scheduled pages have finished (seconds to a minute):
+
+   ```bash
+   bunx convex run --prod derive:streamBackfill '{}'   # want {"unset": 0, "atLeast": false}
+   ```
+
+   `atLeast: true` means at least 500 rows are still unset: wait and run it again.
+4. **Narrow (later, optional).** With `unset: 0` on production, a follow-up may make `stream` required in `schema.ts` and drop the `undefined` range from `events.list` (`convex/events.ts` `matchingEvents`) and `derive.streamBackfill`. Until then the empty range costs one index seek per tier.
+
 ## 6. Rolling back
 
 - Site: Vercel → Deployments → the last good one → Promote to Production (instant; Convex is untouched).
