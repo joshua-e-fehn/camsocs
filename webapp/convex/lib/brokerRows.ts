@@ -345,25 +345,75 @@ export function orgClassesOf(ctx: QueryCtx) {
   }
 }
 
+/** Website claims read per organisation when looking for the last one found. */
+const WEBSITE_CLAIMS = 100
+
+/**
+ * The website a sensitive society's officers must come from (DPIA-lite §5,
+ * ENG-42): its recorded `website`, or, when none is recorded because the
+ * latest reading of it failed (the site was unreachable or answered 404 on
+ * one run), the website it was last found at: the newest `found` reading,
+ * accepted or superseded. The pipeline read the officers from that site
+ * while it answered, so it is still the society's own; a failed fetch says
+ * nothing about whose pages they were. A reading a suppression set aside
+ * (`rejected`) never counts. Undefined when no website was ever found.
+ *
+ * Found on production 2026-11-04: 67 officers of 4 college bodies, all read
+ * from the bodies' own sites, were flagged only because one failed reading
+ * (`colleges.home`, `missing` / `unreachable` or `not_found`) had replaced
+ * the site's `found` reading.
+ */
+export async function ownWebsiteOf(
+  ctx: QueryCtx,
+  org: Pick<Doc<"organisations">, "key" | "website">,
+): Promise<string | undefined> {
+  if (org.website !== undefined) return org.website
+  let newest: { url: string; at: number } | undefined
+  for (const reviewStatus of ["accepted", "superseded"] as const) {
+    const claims = await ctx.db
+      .query("fieldClaims")
+      .withIndex("by_entity_field", (q) =>
+        q
+          .eq("entityType", "organisation")
+          .eq("entityKey", org.key)
+          .eq("field", "website")
+          .eq("reviewStatus", reviewStatus),
+      )
+      .take(WEBSITE_CLAIMS)
+    for (const claim of claims) {
+      if (claim.status !== "found" || claim.setAsideBy !== undefined) continue
+      if (typeof claim.value !== "string" || !isHttpUrl(claim.value)) continue
+      if (!newest || claim.retrievedAt > newest.at) {
+        newest = { url: claim.value, at: claim.retrievedAt }
+      }
+    }
+  }
+  return newest?.url
+}
+
 /**
  * Why each stored row at a sensitive society breaks the rules a manual entry
  * meets (`sensitiveOfficerProblem`), or null. The guard runs only on writes,
  * so a row stored before 2026-11-04, or before its society became sensitive,
  * may still hold notes, links or an off-site source; `broker.people.list`
  * flags those and `coverage.sensitiveOfficers` counts them (DPIA-lite §5).
+ * The society's site is `ownWebsiteOf`'s.
  */
 export function storedSensitiveProblems(ctx: QueryCtx) {
   const limit = nextHandoverDate(Date.now())
-  const sites = new Map<string, Promise<Doc<"organisations"> | null>>()
+  const societies = new Map<string, Promise<{ name?: string; website?: string }>>()
   return async (person: Doc<"people">, because: readonly string[]): Promise<string | null> => {
     if (because.length === 0) return null
-    let hit = sites.get(person.orgKey)
+    let hit = societies.get(person.orgKey)
     if (!hit) {
-      hit = findOrganisation(ctx, person.orgKey)
-      sites.set(person.orgKey, hit)
+      hit = (async () => {
+        const org = await findOrganisation(ctx, person.orgKey)
+        return org ? { name: org.name, website: await ownWebsiteOf(ctx, org) } : {}
+      })()
+      societies.set(person.orgKey, hit)
     }
     const org = await hit
-    const society = { name: org?.name ?? person.orgKey, website: org?.website, because }
+    const society = { name: org.name ?? person.orgKey, website: org.website, because }
     return sensitiveOfficerProblem(society, person, limit)
   }
 }

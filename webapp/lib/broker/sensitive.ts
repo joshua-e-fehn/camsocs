@@ -100,9 +100,12 @@ const START_FILE = /\.(s?html?|php|aspx?|jsp)$/i
  * host (`SHARED_HOSTS`: a college's site, a Google Site, an SRCF user
  * folder), a page inside the recorded folder. Another society's page on the
  * same shared host, a profile elsewhere and a missing website are all "no".
- * Every officer the pipeline stored for these societies passes (dev,
- * 2026-11-04: 892 of 892), since it takes them only from the society's own
- * site.
+ * The server passes the society's own website as `ownWebsiteOf`
+ * (convex/lib/brokerRows.ts) finds it: the recorded one, else the one it was
+ * last found at when its latest reading failed. Every officer the pipeline
+ * stored for these societies passes (dev, 2026-11-04: 892 of 892;
+ * production, the same day: 925 of 925 with that fallback, 858 without it),
+ * since it takes them only from the society's own site.
  */
 export function isOwnSocietyPage(url: string, website: string | undefined): boolean {
   const page = httpUrl(url)
