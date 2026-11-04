@@ -1,14 +1,16 @@
 # The nightly backup of Convex production (ENG-44). /opt/camsocs/docs/ops-vps.md §10.
 [Unit]
-Description=camsocs nightly backup of Convex production (01:30 Europe/London)
+Description=camsocs nightly backup of Convex production (00:45 Europe/London)
 Documentation=file:/opt/camsocs/docs/ops-vps.md
 
 [Timer]
 # Before the Sunday full harvest (02:00) and the daily one (04:30), and before
 # Convex's retention-daily cron (04:15 UTC): a backup sees the night's data
-# before the night's deletions. 01:30 exists exactly once on both
-# clock-change Sundays in London.
-OnCalendar=*-*-* 01:30:00 Europe/London
+# before the night's deletions. Not between 01:00 and 02:00: London skips that
+# hour on the last Sunday of March and has it twice on the last Sunday of
+# October (a skipped night, or two runs filling two of the 14 kept slots).
+# 00:45 exists exactly once every day.
+OnCalendar=*-*-* 00:45:00 Europe/London
 # A night missed while the host was down is backed up once at the next boot.
 Persistent=true
 Unit=camsocs-backup.service

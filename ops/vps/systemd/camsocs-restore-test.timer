@@ -4,7 +4,7 @@ Description=camsocs weekly restore test (Monday 03:00 Europe/London)
 Documentation=file:/opt/camsocs/docs/ops-vps.md
 
 [Timer]
-# After Monday's 01:30 backup, outside both harvests' windows.
+# After Monday's 00:45 backup, outside both harvests' windows.
 OnCalendar=Mon *-*-* 03:00:00 Europe/London
 Persistent=true
 Unit=camsocs-restore-test.service

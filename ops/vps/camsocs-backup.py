@@ -24,7 +24,8 @@ Convex deploy key.
   shrank to under half of what the previous backup held (from at least
   ``SHRINK_MIN_PREVIOUS`` documents) is kept but reported (exit 24, which
   alerts), so a mass deletion is noticed while the backups from before it
-  still exist. Then only the newest ``CAMSOCS_BACKUP_KEEP`` (14) backups are
+  still exist; tables that empty themselves by design (``SHRINK_IGNORE``)
+  are not compared. Then only the newest ``CAMSOCS_BACKUP_KEEP`` (14) backups are
   kept. Everything is ``0600`` in a ``0700`` directory.
 - **restore-test.** The newest backup (or ``ZIP``), checked against its
   manifest's sha256, is imported into a **throwaway local Convex backend**
@@ -43,10 +44,13 @@ the status files get names and numbers only. Exit codes (the alert maps them,
 ``camsocs-alert.py``): 0 ok; 20 a setting or tool is missing or wrong (no key,
 a key for another deployment); 21 not enough free disk; 22 the export failed
 or timed out; 23 the export is not a readable snapshot; 24 backed up, but a
-table shrank sharply; 30 no backup to test, or it does not match its
-manifest; 31 the local backend did not start; 32 the import failed; 33 the
-export from the local backend failed; 34 the restored data differs from the
-backup; 64 usage; 75 the other command held the lock for too long.
+table shrank sharply; 29 an unexpected error in the backup (a file that
+could not be written, a tool that could not be run: the exception's class and
+errno only); 30 no backup to test, or it does not match its manifest; 31 the
+local backend did not start; 32 the import failed; 33 the export from the
+local backend failed; 34 the restored data differs from the backup; 39 an
+unexpected error in the restore test; 64 usage; 75 the other command held the
+lock for too long.
 
 Standard library only (the host's python3).
 """
@@ -83,11 +87,13 @@ DISK = 21
 EXPORT_FAILED = 22
 BAD_SNAPSHOT = 23
 SHRUNK = 24
+UNEXPECTED_BACKUP = 29
 NO_BACKUP = 30
 BACKEND_FAILED = 31
 IMPORT_FAILED = 32
 REEXPORT_FAILED = 33
 MISMATCH = 34
+UNEXPECTED_RESTORE = 39
 USAGE = 64
 LOCKED = 75
 
@@ -104,6 +110,18 @@ _BACKUP_NAME = re.compile(rf"{PREFIX}\d{{8}}T\d{{6}}Z\.zip")
 #: backup and now holds less than this share of them.
 SHRINK_MIN_PREVIOUS = 20
 SHRINK_RATIO = 0.5
+#: Tables that keep only a rolling window and empty themselves by design, so a
+#: drop says nothing about lost data: the rate limits' last 24 hours
+#: (``listingRequests.ts``, ``authEmail.ts``) and Better Auth's sessions and
+#: one-time verification tokens.
+SHRINK_IGNORE = frozenset(
+    {
+        "listingRequestSubmits",
+        "signInLinkSends",
+        "_components/betterAuth/session",
+        "_components/betterAuth/verification",
+    }
+)
 #: How long one command waits for the other's lock (seconds).
 LOCK_WAIT = 2 * 3600
 #: The restore test's own backend: its name, and how long it may take to start.
@@ -364,11 +382,13 @@ def inspect(path: Path) -> dict[str, Any]:
 def shrunk_tables(previous: Mapping[str, Any], current: Mapping[str, Any]) -> list[str]:
     """Tables that held at least ``SHRINK_MIN_PREVIOUS`` documents in the
     previous backup and now hold less than ``SHRINK_RATIO`` of that (or are
-    gone)."""
+    gone), except the rolling windows in ``SHRINK_IGNORE``."""
     before = previous.get("tables") or {}
     after = current.get("tables") or {}
     names = []
     for name, table in before.items():
+        if name in SHRINK_IGNORE:
+            continue
         count = table.get("documents") if isinstance(table, dict) else None
         if not isinstance(count, int) or count < SHRINK_MIN_PREVIOUS:
             continue
@@ -794,6 +814,23 @@ def main(argv: list[str] | None = None, environ: Mapping[str, str] | None = None
         if directory is not None:
             record_failure(directory, command, started, failure)
         return failure.code
+    except Exception as error:  # any other error must still replace an "ok"
+        failure = unexpected(command, error)
+        say(f"failed: {failure}")
+        if directory is not None:
+            record_failure(directory, command, started, failure)
+        return failure.code
+
+
+def unexpected(command: str, error: Exception) -> Failure:
+    """An error the commands do not expect (a status file that cannot be
+    written, a tool that cannot be run, a timeout outside the CLI's), as a
+    ``Failure`` with its own exit code. Only the exception's class and errno
+    are kept: its message can name a path or quote a document."""
+    code = UNEXPECTED_RESTORE if command == "restore-test" else UNEXPECTED_BACKUP
+    errno = getattr(error, "errno", None)
+    detail = f" (errno {errno})" if isinstance(errno, int) else ""
+    return Failure(code, f"unexpected {type(error).__name__}{detail}")
 
 
 if __name__ == "__main__":

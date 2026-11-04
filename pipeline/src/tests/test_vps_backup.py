@@ -433,6 +433,18 @@ def test_a_table_that_shrank_sharply_alerts_but_the_backup_is_kept(host: Host, c
     )
 
 
+def test_rolling_window_tables_may_empty_without_alerting(host: Host, clock) -> None:
+    busy = {**TABLES, "listingRequestSubmits": documents("submits", 25)}
+    busy["_components/betterAuth/session"] = documents("session", 40)
+    snapshot(host.snapshot, busy)
+    assert host.run("backup") == 0
+    clock()
+    snapshot(host.snapshot, TABLES)  # a quiet day: the 24-hour windows are empty
+
+    assert host.run("backup") == 0
+    assert json.loads((host.dir / "status-backup.json").read_text())["result"] == "ok"
+
+
 def test_a_wrong_key_stops_before_anything_is_exported(host: Host) -> None:
     host.key.write_text("CONVEX_DEPLOY_KEY=dev:hushed-rhinoceros-215|abc\n")
     assert host.run("backup") == backup.CONFIG
@@ -442,6 +454,26 @@ def test_a_wrong_key_stops_before_anything_is_exported(host: Host) -> None:
 def test_too_little_disk_stops_before_the_export(host: Host) -> None:
     assert host.run("backup", CAMSOCS_BACKUP_MIN_FREE_MB=str(1 << 40)) == backup.DISK
     assert host.calls() == []
+
+
+def test_an_unexpected_error_replaces_an_earlier_ok(
+    host: Host, clock, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert host.run("backup") == 0
+    clock()
+
+    def broken_disk(path: object) -> object:
+        raise OSError(5, f"Input/output error: {MARKER}")
+
+    monkeypatch.setattr(backup.shutil, "disk_usage", broken_disk)
+    assert host.run("backup") == backup.UNEXPECTED_BACKUP
+
+    status = json.loads((host.dir / "status-backup.json").read_text())
+    assert status["result"] == "failed" and status["exitCode"] == backup.UNEXPECTED_BACKUP
+    assert status["error"] == "unexpected OSError (errno 5)"
+    captured = capsys.readouterr()
+    assert MARKER not in captured.out + captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_usage(host: Host, capsys: pytest.CaptureFixture[str]) -> None:
@@ -511,6 +543,19 @@ def test_a_failed_import_or_backend_fails_the_test(host: Host, clock) -> None:
     assert not list(host.tmp.glob("camsocs-restore-*"))
 
 
+def test_a_backend_that_cannot_run_replaces_an_earlier_ok(host: Host, clock) -> None:
+    _backed_up(host)
+    assert host.run("restore-test") == 0
+    host.backend.chmod(0o644)
+
+    assert host.run("restore-test") == backup.UNEXPECTED_RESTORE
+
+    status = json.loads((host.dir / "status-restore-test.json").read_text())
+    assert status["result"] == "failed"
+    assert status["error"] == "unexpected PermissionError (errno 13)"
+    assert not list(host.tmp.glob("camsocs-restore-*"))
+
+
 def test_inspect_prints_names_and_counts_only(host: Host, capsys) -> None:
     assert host.run("inspect", str(host.snapshot)) == 0
     out = capsys.readouterr().out
@@ -527,6 +572,8 @@ def test_inspect_prints_names_and_counts_only(host: Host, capsys) -> None:
         ("backup", "22", "the export from Convex failed or timed out"),
         ("backup", "24", "a table shrank"),
         ("restore_test", "34", "the restored data differs from the backup"),
+        ("backup", "29", "an unexpected error"),
+        ("restore_test", "39", "an unexpected error"),
         ("restore_test", "99", "exit status 99 (exit-code)"),
     ],
 )
@@ -592,6 +639,13 @@ def test_the_lock_keeps_the_backup_and_the_restore_test_apart(tmp_path: Path) ->
     ):
         pass
     assert raised.value.code == backup.LOCKED
+
+
+def test_the_backup_avoids_the_hour_the_clock_changes_skip_or_repeat() -> None:
+    timer = (OPS / "systemd" / "camsocs-backup.timer").read_text()
+    calendar = next(line for line in timer.splitlines() if line.startswith("OnCalendar="))
+    hour = int(calendar.split()[1].split(":")[0])
+    assert calendar.endswith("Europe/London") and hour != 1
 
 
 def test_the_units_hand_the_key_only_to_the_backup() -> None:

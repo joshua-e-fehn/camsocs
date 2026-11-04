@@ -111,6 +111,7 @@ BACKUP_EXITS = {
         "22": "the export from Convex failed or timed out",
         "23": "the export is not a readable snapshot (or holds no document)",
         "24": "backed up, but a table shrank to under half since the previous backup",
+        "29": "an unexpected error (the exception's class is in the journal)",
         "75": "the restore test held the lock for 2 hours",
     },
     RESTORE_TEST_GROUP: {
@@ -120,6 +121,7 @@ BACKUP_EXITS = {
         "32": "importing the backup into the local backend failed",
         "33": "exporting the restored data from the local backend failed",
         "34": "the restored data differs from the backup",
+        "39": "an unexpected error (the exception's class is in the journal)",
         "75": "the backup held the lock for 2 hours",
     },
 }
