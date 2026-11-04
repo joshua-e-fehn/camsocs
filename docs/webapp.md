@@ -865,7 +865,7 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), `webmailAddresses` (every published webmail address, best first, for the webmail-only export), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
 | `broker/people` | `list` (each row with `sensitiveBecause` and `sensitiveProblem`, why a stored row breaks the sensitive-society rules), `rules({orgKey})` (what a manual entry there may hold: `sensitiveBecause`, `website`, `staleAfterLimit`), `create`, `update` (the row becomes `manual`; `sourceUrl`, `consentRecord`; checked as it would be after the edit), `setArchived`. Both writes refuse a suppressed person (key, or a suppressed name anywhere in the typed name) or listing and, for sensitive societies (`lib/broker/sensitive.ts`, DPIA-lite §5), a source off the society's own website, links, notes, a later `staleAfter` and unrecorded consent, as `ConvexError`s the form shows; stored rows that break those rules are counted, without names, by the internal `coverage.sensitiveOfficers` (post-deploy check) |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
@@ -887,7 +887,8 @@ harvest that collected the data.
    (`email`, with `role` and `email_kind`; `next_emails` holds the others to try after a
    bounce); personal CRSid, lists.cam.ac.uk and webmail addresses are never chosen. A society
    that publishes only those, or no address at all, is left out of the CSV and counted under "No
-   outreach address", complete listing or not; it needs another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   outreach address", complete listing or not; it needs the webmail-only file (step 6) or
+   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
    empty.
 2. **Send** with the mail merge script `ops/outreach/art14-mail-merge.gs`, from the published
    contact address (`CONTACT_EMAIL`, a "Send mail as" address of the Workspace account, so
@@ -917,6 +918,24 @@ harvest that collected the data.
    interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice
    (outreach) sent via … on YYYY-MM-DD". That is the record for those societies; the import
    takes email sends only.
+6. **Webmail-only societies (your choice).** "Download webmail-only CSV (Art 14)" on the same
+   page gives the societies whose only usable published address is webmail (a society
+   @gmail.com, @outlook.com and the like), in the same columns (`webmailOutreachCsv`). The
+   outreach CSV never holds them, because a webmail address may be one officer's own; whether
+   to send to them is yours. `email_kind` is `webmail` on every row, and each notice adds that
+   it went to the contact address the society publishes and asks the reader to pass it to the
+   committee if it reaches one person. CRSid and alumni addresses are personal under
+   `classifyEmail` and are never in it; nor are hidden, suppressed or counterpart listings. The
+   "No outreach address" tile says how many there are, and the "Notice" button on such a row
+   shows the webmail text. To send them, import the file as a **second sheet** of the same
+   spreadsheet (File → Import → Upload → "Insert new sheet(s)", conversion off) or into a
+   separate Google Sheet with its own copy of the script. Every menu item works on the tab in
+   front, and "Check the setup" names it: select the webmail tab and run steps 2–3 the same way
+   (check, test, batches, "Mark bounces" on that tab, then "Queue the next address", which
+   keeps `email_kind` as `webmail`). Both tabs draw on one daily quota. Then File → Download →
+   CSV *with the webmail tab selected* and "Import send log" as in step 4; the import records
+   the sends the same way. A webmail-only society you do not send to still needs step 5, or
+   the disproportionate-effort measures in DPIA-lite §4.
 
 `sent_on` must fall between 1 Oct 2026 and today. A date outside that, usually a sheet in a US
 locale that wrote 5 Nov as `11/5/2026`, stops the import with the row named; a file with an

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { bestRoleAddress, outreachAddresses } from "./brokerRows"
+import { bestRoleAddress, outreachAddresses, webmailAddresses } from "./brokerRows"
 
 /**
  * The outreach address (the Art 14 notice goes to it): a role address only,
@@ -116,5 +116,29 @@ describe("outreachAddresses (where the notice goes after a bounce)", () => {
     const sample = org("chess@srcf.net", [{ role: "captain", email: "captain@cuchess.org" }])
     expect(bestRoleAddress(sample)).toEqual(outreachAddresses(sample)[0])
     expect(outreachAddresses(org("cuchessclub@gmail.com"))).toEqual([])
+  })
+})
+
+describe("webmailAddresses (the webmail-only export)", () => {
+  test("every webmail address once, best first; role and other kinds left out", () => {
+    expect(
+      webmailAddresses(
+        org("CUChessClub@gmail.com", [
+          { role: "president", email: "chess.president@outlook.com" },
+          { role: "secretary", email: "secretary@cuchess.org" },
+          { role: "other", email: "cuchessclub@gmail.com" },
+          { role: "events", email: "soc-chess@lists.cam.ac.uk" },
+        ]),
+      ).map((address) => `${address.role}:${address.email}:${address.kind}`),
+    ).toEqual([
+      "president:chess.president@outlook.com:webmail",
+      "other:cuchessclub@gmail.com:webmail",
+    ])
+  })
+
+  test("never a CRSid or a person's alumni address, which are personal", () => {
+    for (const email of ["ab123@cam.ac.uk", "ab123@srcf.net", "jane.example@cantab.net"]) {
+      expect(webmailAddresses(org(email))).toEqual([])
+    }
   })
 })

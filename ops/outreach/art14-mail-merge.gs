@@ -11,6 +11,16 @@
  * records one interaction per send. The procedure is docs/webapp.md
  * "Sending the Art 14 notice".
  *
+ * Every menu item works on the sheet (tab) in front, so one spreadsheet can
+ * hold both exports: the outreach CSV, and the webmail-only CSV ("Download
+ * webmail-only CSV (Art 14)", societies whose only usable address is webmail;
+ * `email_kind` is `webmail` on each row). Joshua decides whether to send the
+ * second. To use it, import it as a new sheet (File → Import → Upload →
+ * "Insert new sheet(s)", "Convert text to numbers, dates and formulas" off)
+ * or into a separate spreadsheet with its own copy of this script; select
+ * its tab, then the same menu flow (check, test, batches, bounces, next
+ * address), and download that tab as CSV for "Import send log" as well.
+ *
  * Install: in the sheet, Extensions → Apps Script, replace Code.gs with this
  * file, save, reload the sheet; the "Art 14 notice" menu appears. The script
  * runs as the signed-in Google account, which must have `CONFIG.from` as its
@@ -63,6 +73,7 @@ function checkSetup() {
   const status = setupStatus_()
   SpreadsheetApp.getUi().alert(
     [
+      `Sheet: "${status.sheet}".`,
       status.senderProblem || `Sending as ${CONFIG.from}: ready.`,
       `Rows to send: ${status.pending}. Sent: ${status.sent}. Bounced: ${status.bounced}.`,
       `Recipients left in today's quota: ${status.quota}.`,
@@ -93,7 +104,7 @@ function sendBatch() {
   }
   const ok = ui.alert(
     "Send the next batch",
-    `Send ${size} notices from ${CONFIG.from} now? (${status.pending} rows to send in all)`,
+    `Send ${size} notices from ${CONFIG.from} now, from the sheet "${status.sheet}"? (${status.pending} rows to send in all)`,
     ui.ButtonSet.OK_CANCEL,
   )
   if (ok !== ui.Button.OK) return
@@ -135,8 +146,9 @@ function queueNextAddresses() {
 
 // --- the work --------------------------------------------------------------
 
+/** The sheet (tab) in front: the outreach export or the webmail-only one. */
 function sheet_() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]
+  return SpreadsheetApp.getActiveSheet()
 }
 
 /** The sheet's rows and a column index by (lowercased) header name. */
@@ -201,7 +213,8 @@ function pendingRows_(values, col) {
 }
 
 function setupStatus_() {
-  const { values, col } = table_(sheet_())
+  const sheet = sheet_()
+  const { values, col } = table_(sheet)
   let sent = 0
   let bounced = 0
   for (const row of values.slice(1)) {
@@ -209,6 +222,7 @@ function setupStatus_() {
     if (cell_(row, col, "bounced") !== "") bounced++
   }
   return {
+    sheet: sheet.getName(),
     senderProblem: senderProblem_(),
     pending: pendingRows_(values, col).length,
     sent,
@@ -353,7 +367,8 @@ function queueNextAddresses_() {
     copy[col.email] = next[0]
     if ("next_emails" in col) copy[col.next_emails] = next.slice(1).join("; ")
     if ("role" in col) copy[col.role] = ""
-    if ("email_kind" in col) copy[col.email_kind] = ""
+    // The webmail-only export's next addresses are webmail too: keep its flag.
+    if ("email_kind" in col && copy[col.email_kind] !== "webmail") copy[col.email_kind] = ""
     copy[col.sent_on] = ""
     copy[col.bounced] = ""
     sheet.appendRow(copy)
