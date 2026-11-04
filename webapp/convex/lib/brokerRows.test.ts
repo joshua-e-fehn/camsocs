@@ -4,7 +4,8 @@ import { bestRoleAddress } from "./brokerRows"
 /**
  * The outreach address (the Art 14 notice goes to it): a role address only,
  * never a personal CRSid address, a lists.cam.ac.uk list (every member would
- * get it) or a webmail address (often one officer's own).
+ * get it), a webmail address (often one officer's own) or a person's alumni
+ * address.
  */
 
 type Org = Parameters<typeof bestRoleAddress>[0]
@@ -57,6 +58,26 @@ describe("bestRoleAddress", () => {
     expect(
       bestRoleAddress(org("ab123@cam.ac.uk", [{ role: "president", email: "xy99@cam.ac.uk" }])),
     ).toBeUndefined()
+  })
+
+  test("never picks a person's alumni address, however it is shaped (ENG-37)", () => {
+    for (const email of [
+      "jane.example2@cantab.ac.uk",
+      "janeexample@cantab.net",
+      "jane.president@cantab.net",
+      "anna.lena.van.example@cantab.net",
+      "jane.example@alumni.cam.ac.uk",
+      "jexample@alum.example.edu",
+    ]) {
+      expect(bestRoleAddress(org(undefined, [{ role: "president", email }]))).toBeUndefined()
+      expect(bestRoleAddress(org(email))).toBeUndefined()
+    }
+    // A post's alumni address is still a role address.
+    expect(
+      bestRoleAddress(
+        org("jane.example@cantab.net", [{ role: "secretary", email: "secretary@cantab.ac.uk" }]),
+      ),
+    ).toEqual({ email: "secretary@cantab.ac.uk", role: "secretary", kind: "role_own_domain" })
   })
 
   test("falls back to the general address when it is a role address", () => {
