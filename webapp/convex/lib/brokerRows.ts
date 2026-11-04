@@ -1,5 +1,6 @@
 import { type Infer, v } from "convex/values"
 import type { CoverageRow } from "../../lib/broker/coverage"
+import { type Classified, sensitiveOfficerProblem } from "../../lib/broker/sensitive"
 import {
   CATEGORIES,
   EMAIL_TYPES,
@@ -14,7 +15,8 @@ import {
 } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
-import { classifyEmail } from "./derived"
+import { classifyEmail, nextHandoverDate } from "./derived"
+import { findOrganisation } from "./entityStore"
 import { hostOf, isHttpUrl } from "./fields"
 import type { FieldMeta } from "./resolve"
 import { literalUnion } from "./validators"
@@ -295,4 +297,50 @@ export function checkIsoDate(value: string, what: string): string {
     throw new Error(`The ${what} must be a date (YYYY-MM-DD)`)
   }
   return value
+}
+
+/**
+ * Looks up, once per organisation, what the sensitive-society rules need:
+ * the small directory card first (categories and audiences, no website), the
+ * full row only for a hidden organisation, which has no card.
+ */
+export function orgClassesOf(ctx: QueryCtx) {
+  const cache = new Map<string, Promise<Classified | null>>()
+  return (key: string): Promise<Classified | null> => {
+    let hit = cache.get(key)
+    if (!hit) {
+      hit = (async () => {
+        const card = await ctx.db
+          .query("orgCards")
+          .withIndex("by_key", (q) => q.eq("key", key))
+          .unique()
+        return card ?? (await findOrganisation(ctx, key))
+      })()
+      cache.set(key, hit)
+    }
+    return hit
+  }
+}
+
+/**
+ * Why each stored row at a sensitive society breaks the rules a manual entry
+ * meets (`sensitiveOfficerProblem`), or null. The guard runs only on writes,
+ * so a row stored before 2026-11-04, or before its society became sensitive,
+ * may still hold notes, links or an off-site source; `broker.people.list`
+ * flags those and `coverage.sensitiveOfficers` counts them (DPIA-lite §5).
+ */
+export function storedSensitiveProblems(ctx: QueryCtx) {
+  const limit = nextHandoverDate(Date.now())
+  const sites = new Map<string, Promise<Doc<"organisations"> | null>>()
+  return async (person: Doc<"people">, because: readonly string[]): Promise<string | null> => {
+    if (because.length === 0) return null
+    let hit = sites.get(person.orgKey)
+    if (!hit) {
+      hit = findOrganisation(ctx, person.orgKey)
+      sites.set(person.orgKey, hit)
+    }
+    const org = await hit
+    const society = { name: org?.name ?? person.orgKey, website: org?.website, because }
+    return sensitiveOfficerProblem(society, person, limit)
+  }
 }
