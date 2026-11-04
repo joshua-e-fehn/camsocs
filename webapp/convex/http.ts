@@ -18,6 +18,7 @@ import type { Id } from "./_generated/dataModel"
 import { type ActionCtx, httpAction } from "./_generated/server"
 import { authComponent, createAuth } from "./betterAuth/auth"
 import { ALLOWED_CONTENT_TYPES, MAX_FILE_BYTES, sniffContentType } from "./ingest/files"
+import { secretEquals } from "./lib/secrets"
 
 /**
  * HTTP surface: Better Auth's own routes, the pipeline ingestion API, and the
@@ -43,28 +44,6 @@ const http = httpRouter()
 authComponent.registerRoutes(http, createAuth, { cors: true })
 
 // --- auth -----------------------------------------------------------------
-
-/**
- * Compares two secrets without leaking their contents through timing.
- *
- * Digests first so the loop bound is fixed and the supplied key's length is not
- * observable either. `crypto.subtle` is ambient in Convex's V8 runtime;
- * `node:crypto` would force `"use node"`, which an httpAction cannot use.
- */
-async function secretEquals(a: string, b: string): Promise<boolean> {
-  const encoder = new TextEncoder()
-  const [digestA, digestB] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(a)),
-    crypto.subtle.digest("SHA-256", encoder.encode(b)),
-  ])
-  const bytesA = new Uint8Array(digestA)
-  const bytesB = new Uint8Array(digestB)
-  let diff = 0
-  for (let i = 0; i < bytesA.length; i++) {
-    diff |= bytesA[i] ^ bytesB[i]
-  }
-  return diff === 0
-}
 
 /** Whether the request carries `Authorization: Bearer <expected>`. */
 async function bearerMatches(request: Request, expected: string | undefined): Promise<boolean> {

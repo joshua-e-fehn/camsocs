@@ -4,7 +4,7 @@
 //
 // A hook that must not run yet passes "skip" as the args:
 //   useQuery(api.x.y, ready ? { id } : "skip")
-import { useConvexAuth, useMutation, useQuery } from "convex/react"
+import { useConvexAuth, useQuery } from "convex/react"
 import { useMemo } from "react"
 import { api } from "@/convex/_generated/api"
 import { addDays, londonIsoDate, londonMidnight } from "@/lib/calendar"
@@ -89,11 +89,6 @@ export function useEventRequestLabel(key: string) {
 /** The venues, for naming an event's `venueKey`; skipped until `enabled`. */
 export function useVenues(enabled: boolean) {
   return useQuery(api.venues.list, enabled ? {} : "skip")
-}
-
-/** The public claim / correct / remove / object / add form. */
-export function useSubmitListingRequest() {
-  return useMutation(api.listingRequests.submit)
 }
 
 /** `{ google, camEmail }`: which sign-in options the deployment has switched on. */

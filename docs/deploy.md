@@ -69,6 +69,9 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the source map upload at build time (ENG-6, `next.config.ts`) |
    | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project, with error tracking write access (checked by a real upload on 2026-11-01). The upload runs only when both PostHog variables are set **and** `VERCEL_ENV` is `production`; otherwise the build skips it. A wrong or under-scoped key fails the production build (Turbopack), so rotate it with care. (The same key configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below; rotate all three together) |
 
+   | `REQUEST_FORM_SECRET` | a random secret, **sensitive** (`openssl rand -hex 32`) | unset | Server-only (never `NEXT_PUBLIC_`). Sent by `/api/request` to `listingRequests.submit`; the same value on Convex production makes the mutation refuse every other caller (ENG-37, "Request form bot check" below). Read at run time, but Vercel applies a changed value only to new deployments: redeploy after setting it. 1Password Mya vault, item `CAMsocs request form secret` |
+   | `REQUEST_BOT_CHECK` | unset | unset | `off` switches BotID's server check off for `/api/request` (an escape hatch, should it ever turn people away); unset = on, on Vercel only |
+
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
 
@@ -88,6 +91,7 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `PIPELINE_API_KEY` | `/api/pipeline/*` | `openssl rand -hex 32` — a new one; the same value goes into `pipeline/.env.prod` |
 | `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3) | optional; both unset = the option shows as off |
 | `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS`, `INBOUND_EMAIL_SECRET` | forwarded list mail (J3, J4) | optional; see `docs/setup/inbox-instagram.md`. Point the Resend webhook at the **production** site URL (`https://<prod>.convex.site/api/inbound/email`) once production is the one that should receive mail |
+| `REQUEST_FORM_SECRET` | the request form's route as the only way in (ENG-37) | the **same** value as Vercel's `REQUEST_FORM_SECRET`; set it **last**, after a production deploy that sends it ("Request form bot check" below). Unset = the mutation accepts any caller, as before. Never on dev |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog counts from Convex (`listing_request_received`, ENG-7, `convex/analytics.ts`) | the project token (`phc_…`) and `https://eu.i.posthog.com`; set on **production only**, so dev never sends events. Either unset = nothing is sent. Their events carry `environment: production`; `POSTHOG_ENV=development` (optional, never on production) tags a test deployment's events so the project's filter hides them |
 
 `bunx convex env list --prod` prints values; use `bunx convex env list --prod --names-only` to check what is set.
@@ -521,3 +525,43 @@ accepts both). A function next to its database pays one short hop per Convex rea
 would pay a transatlantic round trip per read, several per page. UK readers are served from the
 edge cache instead (docs/webapp.md "Caching"). Revisit only if production moves to a Convex EU
 deployment: then `"regions": ["lhr1"]` (or `dub1`) belongs in `webapp/vercel.json`.
+
+## Request form bot check (ENG-37)
+
+The request form posts to `POST /api/request` (`webapp/app/api/request/route.ts`,
+`webapp/lib/request-submit.ts`), which runs Vercel BotID's `checkBotId()` on Vercel and then calls
+`listingRequests.submit` with `REQUEST_FORM_SECRET`. BotID's Basic check needs nothing switched on
+in the dashboard; `withBotId` in `next.config.ts` adds its rewrites. Its server check reads the
+project's OIDC token, which Vercel issues when **Settings → Security → Secure Backend Access with
+OIDC Federation** is on (the default for new projects). Without it the check throws, the route
+fails open and logs `[request] BotID check failed (…); accepting the request`: look for that line in
+the runtime logs after the first production submission. Any other throw from the check (Vercel's
+answer unreadable, its API down) fails closed: the visitor sees the generic sentence with the
+contact address (503) and the log says `[request] BotID check errored (…); refusing the request`.
+Several of those in a row mean BotID itself is failing; `REQUEST_BOT_CHECK=off` plus a redeploy
+keeps the form open meanwhile.
+
+Rollout, in this order (a different order rejects real requests):
+
+1. Generate the secret once: `openssl rand -hex 32`; keep it in 1Password (Mya vault,
+   `CAMsocs request form secret`).
+2. Vercel → camsocs → Settings → Environment Variables: add `REQUEST_FORM_SECRET`, **Production**
+   only, marked Sensitive.
+3. Deploy the ENG-37 change to production (merge to main), or redeploy if it is already live, so
+   the running functions have the variable.
+4. Send one real request through `https://camsocs.uk/request` (kind "Correct something", a test
+   message) and check it arrives at `/dashboard/requests`; close it there. The runtime logs show no
+   `BotID check failed` line for it (if they do, turn on OIDC as above and redeploy).
+5. Only now: `cd webapp && bunx convex env set --prod REQUEST_FORM_SECRET` with the same value.
+   From here a direct call of the mutation answers "Please send your request through the form on
+   our site". Send a second test request through the form to confirm it still arrives.
+
+Rolling back: `bunx convex env remove --prod REQUEST_FORM_SECRET` reopens the mutation at once;
+`REQUEST_BOT_CHECK=off` on Vercel (and a redeploy) stops the bot check. **Before an Instant Rollback
+or promotion of any Vercel deployment built before ENG-37**, run that `convex env remove` first:
+the older form calls `listingRequests.submit` straight from the browser without the secret, and
+Convex code and environment do not roll back with Vercel, so with the secret still set every real
+request (removals and objections included) is refused. Set it again (step 5) once ENG-37 is live
+again. Optional, at a cost per
+check: **Firewall → Configure → Vercel BotID Deep Analysis** (Pro), which the route needs no change
+for.

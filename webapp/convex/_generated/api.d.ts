@@ -52,6 +52,7 @@ import type * as lib_posthog from "../lib/posthog.js";
 import type * as lib_projections from "../lib/projections.js";
 import type * as lib_relationships from "../lib/relationships.js";
 import type * as lib_resolve from "../lib/resolve.js";
+import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_signInEmail from "../lib/signInEmail.js";
 import type * as lib_suppressionEffects from "../lib/suppressionEffects.js";
 import type * as lib_suppressions from "../lib/suppressions.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "lib/projections": typeof lib_projections;
   "lib/relationships": typeof lib_relationships;
   "lib/resolve": typeof lib_resolve;
+  "lib/secrets": typeof lib_secrets;
   "lib/signInEmail": typeof lib_signInEmail;
   "lib/suppressionEffects": typeof lib_suppressionEffects;
   "lib/suppressions": typeof lib_suppressions;

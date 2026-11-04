@@ -180,7 +180,10 @@ export default function PrivacyPage() {
         <h3>When you contact us</h3>
         <p>
           If you use the request form, we keep your email address, any role you give and your
-          message.
+          message. When you send it, Vercel, our host, checks that the request comes from a person’s
+          browser rather than an automated script (Vercel BotID): a script from our own address
+          reads technical signals from your browser for that one check. What you wrote is not part
+          of it.
         </p>
         <h3>When you sign in</h3>
         <p>
@@ -525,6 +528,11 @@ export default function PrivacyPage() {
           <li>
             <strong>Signing in.</strong> If you sign in, we set the cookies needed to keep you
             signed in; they are strictly necessary for the service you asked for.
+          </li>
+          <li>
+            <strong>Sending the request form.</strong> The bot check above runs only when you send
+            the form. It may store security cookies whose names begin <InlineCode>KP_</InlineCode>.
+            They are strictly necessary to keep the form open to people and closed to spam.
           </li>
           <li>
             <strong>Recent searches.</strong> The search box remembers your last five searches in
