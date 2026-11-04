@@ -1,20 +1,23 @@
 import { ConvexError, v } from "convex/values"
-import {
-  type Classified,
-  sensitiveBecause,
-  sensitiveOfficerProblem,
-} from "../../lib/broker/sensitive"
+import { sensitiveBecause, sensitiveOfficerProblem } from "../../lib/broker/sensitive"
 import { personKey } from "../../lib/keys"
 import { CONSENT_BASES, type ConsentBasis } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
-import { type MutationCtx, mutation, type QueryCtx, query } from "../_generated/server"
+import { type MutationCtx, mutation, query } from "../_generated/server"
 import { requireBrokerUser } from "../lib/auth"
-import { brokerOrgRefs, checkIsoDate, cleanText, orgRefValidator } from "../lib/brokerRows"
+import {
+  brokerOrgRefs,
+  checkIsoDate,
+  cleanText,
+  orgClassesOf,
+  orgRefValidator,
+  storedSensitiveProblems,
+} from "../lib/brokerRows"
 import { academicYearOf, londonIsoDate, nextHandoverDate } from "../lib/derived"
 import { findOrganisation } from "../lib/entityStore"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { withoutSystemFields } from "../lib/ingest"
-import { loadSuppressionIndex, nameHash, nameWords } from "../lib/suppressions"
+import { loadSuppressionIndex, MAX_NAME_WORDS, nameHash, nameWords } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 import { personFields } from "../schema"
 
@@ -62,29 +65,6 @@ function refuse(message: string): never {
   throw new ConvexError(message)
 }
 
-/**
- * Looks up, once per organisation, what the sensitive-society rules need:
- * the small directory card first (categories and audiences, no website), the
- * full row only for a hidden organisation, which has no card.
- */
-function classesOf(ctx: QueryCtx) {
-  const cache = new Map<string, Promise<Classified | null>>()
-  return (key: string): Promise<Classified | null> => {
-    let hit = cache.get(key)
-    if (!hit) {
-      hit = (async () => {
-        const card = await ctx.db
-          .query("orgCards")
-          .withIndex("by_key", (q) => q.eq("key", key))
-          .unique()
-        return card ?? (await findOrganisation(ctx, key))
-      })()
-      cache.set(key, hit)
-    }
-    return hit
-  }
-}
-
 export const list = query({
   args: {},
   returns: v.array(
@@ -95,6 +75,8 @@ export const list = query({
       /** Why the organisation is a sensitive society ("Faith & Belief"), or
        * empty (lib/broker/sensitive.ts). */
       sensitiveBecause: v.array(v.string()),
+      /** Why the stored row breaks the sensitive-society rules, or null. */
+      sensitiveProblem: v.union(v.null(), v.string()),
     }),
   ),
   handler: async (ctx) => {
@@ -102,16 +84,19 @@ export const list = query({
     const today = londonIsoDate(Date.now())
     const rows = await ctx.db.query("people").take(MAX_PEOPLE)
     const refs = brokerOrgRefs(ctx)
-    const classes = classesOf(ctx)
+    const classes = orgClassesOf(ctx)
+    const problems = storedSensitiveProblems(ctx)
     const out = []
     for (const person of rows) {
       const classified = await classes(person.orgKey)
+      const because = classified ? sensitiveBecause(classified) : []
       out.push({
         ...withoutSystemFields<"people">(person),
         org: await refs(person.orgKey),
         // The daily cron sets `stale`; between runs the date decides.
         staleNow: person.stale || person.staleAfter < today,
-        sensitiveBecause: classified ? sensitiveBecause(classified) : [],
+        sensitiveBecause: because,
+        sensitiveProblem: await problems(person, because),
       })
     }
     return out.sort((a, b) => a.name.localeCompare(b.name, "en"))
@@ -181,16 +166,35 @@ type Draft = {
   notes?: string
 }
 
+/**
+ * Whether a typed name spells a name suppression (`names`: `nameHash`es)
+ * anywhere in it, in any case and with or without initials: "Dr Jane Smith",
+ * "Jane Smith (President)", "jane SMITH" and "Jane A. Smith" all name Jane
+ * Smith. Stricter than `carriesSuppressedName`, which reads free text and so
+ * needs capitals; a name field is only a name, so any run of its words counts
+ * ("Mary Jane Smith" is refused too, which errs toward the objection).
+ */
+function namesSuppressedPerson(name: string, names: ReadonlySet<string>): boolean {
+  if (names.size === 0) return false
+  const words = nameWords(name)
+  // Once as typed, once without single-letter initials ("Jane A. Smith").
+  for (const run of [words, words.filter((word) => word.length > 1)]) {
+    for (let first = 0; first < run.length; first++) {
+      for (let size = 2; size <= MAX_NAME_WORDS && first + size <= run.length; size++) {
+        if (names.has(nameHash(run.slice(first, first + size).join(" ")))) return true
+      }
+    }
+  }
+  return false
+}
+
 /** Refuses a person who objected, or anyone at a listing removed on request. */
 async function checkNotSuppressed(ctx: MutationCtx, draft: Draft, keys: readonly string[]) {
   const index = await loadSuppressionIndex(ctx)
   if (index.organisations.has(draft.orgKey)) {
     refuse("This listing was removed on request, so no one is kept for it")
   }
-  if (
-    keys.some((key) => index.people.has(key)) ||
-    (nameWords(draft.name).length >= 2 && index.names.has(nameHash(draft.name)))
-  ) {
+  if (keys.some((key) => index.people.has(key)) || namesSuppressedPerson(draft.name, index.names)) {
     refuse("This person objected and is on the suppression list, so they cannot be added back")
   }
 }

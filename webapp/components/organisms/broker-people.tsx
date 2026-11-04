@@ -194,6 +194,11 @@ export function BrokerPeople() {
                               sensitive
                             </Badge>
                           )}
+                          {person.sensitiveProblem && (
+                            <Badge variant="destructive" title={person.sensitiveProblem}>
+                              needs review
+                            </Badge>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {person.role} · {person.academicYear}

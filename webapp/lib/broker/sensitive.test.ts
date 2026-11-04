@@ -51,9 +51,33 @@ describe("isOwnSocietyPage", () => {
     expect(isOwnSocietyPage("https://sites.google.com/cam.ac.uk/quokkaball", site)).toBe(false)
     expect(isOwnSocietyPage("https://sites.google.com/cam.ac.uk/other", site)).toBe(false)
     // A site recorded by its start file is its folder.
-    const file = "https://quokka.soc.example.net/club/index.html"
-    expect(isOwnSocietyPage("https://quokka.soc.example.net/club/committee.html", file)).toBe(true)
-    expect(isOwnSocietyPage("https://quokka.soc.example.net/other/", file)).toBe(false)
+    const file = "https://www.quokka.cam.ac.uk/club/index.html"
+    expect(isOwnSocietyPage("https://www.quokka.cam.ac.uk/club/committee.html", file)).toBe(true)
+    expect(isOwnSocietyPage("https://www.quokka.cam.ac.uk/other/", file)).toBe(false)
+    // A folder with a dot in its name is still that folder, not its parent.
+    const dotted = "https://sites.google.com/view/cu.quokka"
+    expect(isOwnSocietyPage("https://sites.google.com/view/cu.quokka/team", dotted)).toBe(true)
+    expect(isOwnSocietyPage("https://sites.google.com/view/othersoc/committee", dotted)).toBe(false)
+    const user = "https://www.srcf.net/~jane.soc"
+    expect(isOwnSocietyPage("https://www.srcf.net/~jane.soc/committee", user)).toBe(true)
+    expect(isOwnSocietyPage("https://www.srcf.net/~other/committee", user)).toBe(false)
+    // Per-user subdomains of a shared domain keep their folder too.
+    const wix = "https://quokkasoc.wixsite.com/quokka"
+    expect(isOwnSocietyPage("https://quokkasoc.wixsite.com/quokka/committee", wix)).toBe(true)
+    expect(isOwnSocietyPage("https://quokkasoc.wixsite.com/other", wix)).toBe(false)
+  })
+
+  test("a society's own domain recorded by a subpage: the whole host", () => {
+    const site = "https://www.cuquokka.org/home"
+    expect(isOwnSocietyPage("https://www.cuquokka.org/committee", site)).toBe(true)
+    expect(isOwnSocietyPage("https://cuquokka.org/about/team.html", site)).toBe(true)
+    expect(
+      isOwnSocietyPage(
+        "https://cuquokka.soc.srcf.net/committee",
+        "https://cuquokka.soc.srcf.net/x.html",
+      ),
+    ).toBe(true)
+    expect(isOwnSocietyPage("https://www.cuquokka.org.uk/committee", site)).toBe(false)
   })
 
   test("no website, not a URL, not http", () => {

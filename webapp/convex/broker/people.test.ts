@@ -226,6 +226,16 @@ describe("broker.people: officers of sensitive societies", () => {
           })
         }
       })
+      // The list flags it until then, and the deploy audit counts it.
+      const flagged = (await broker.query(api.broker.people.list, {})).find((p) => p.key === key)
+      expect(flagged?.sensitiveProblem).toContain("Remove the profile links")
+      expect(await t.query(internal.coverage.sensitiveOfficers, {})).toEqual({
+        people: 2,
+        sensitive: 2,
+        manual: 2,
+        withProblem: 1,
+        societiesWithProblem: 1,
+      })
       await expect(
         broker.mutation(api.broker.people.update, { key, role: "Treasurer" }),
       ).rejects.toThrow("Remove the profile links")
@@ -246,7 +256,11 @@ describe("broker.people: officers of sensitive societies", () => {
       })
       await broker.mutation(api.broker.people.update, { key, staleAfter: "2100-06-30" })
       const person = (await broker.query(api.broker.people.list, {})).find((p) => p.key === key)
-      expect(person).toMatchObject({ sourceUrl: "manual:broker", sensitiveBecause: [] })
+      expect(person).toMatchObject({
+        sourceUrl: "manual:broker",
+        sensitiveBecause: [],
+        sensitiveProblem: null,
+      })
     })
   })
 
@@ -291,6 +305,18 @@ describe("broker.people: suppressions", () => {
 
       await suppress(t, { scope: "name", valueHash: nameHash("Hana Example") })
       await expect(create("Hana Example")).rejects.toThrow("objected")
+      // A title, a suffix, another case or a middle initial still names her.
+      for (const variant of [
+        "Dr Hana Example",
+        "Hana Example (President)",
+        "hana  EXAMPLE",
+        "Hana J. Example",
+        "Revd Hana Q Example MA",
+      ]) {
+        await expect(create(variant)).rejects.toThrow("objected")
+      }
+      // Two names that merely share a word are not her.
+      await expect(create("Hana Sample")).resolves.toBeDefined()
       // An edit that renames someone into a suppressed name is refused too.
       const { key } = await create("Ivo Example")
       await expect(

@@ -59,23 +59,59 @@ function httpUrl(value: string): URL | null {
 const bareHost = (url: URL) => url.hostname.toLowerCase().replace(/^www\./, "")
 
 /**
+ * Hosts that serve many sites, one per folder (`sites.google.com/view/x`,
+ * `www.srcf.net/~x`, `x.wixsite.com/site`, a college's `/societies/x`), where
+ * another society's page shares the host. Everywhere else the recorded
+ * website's host is the society's own, and a recorded subpage (`/home`,
+ * `/blog`) does not narrow it.
+ */
+const SHARED_HOSTS: ReadonlySet<string> = new Set([
+  "sites.google.com",
+  "srcf.net",
+  "camdram.net",
+  "facebook.com",
+  "instagram.com",
+  "linkedin.com",
+  "linktr.ee",
+  "bit.ly",
+  "forms.gle",
+  "notion.so",
+  "tix-mo.com",
+  "gymcatch.com",
+  "bridgewebs.com",
+  "eventbrite.co.uk",
+  "eventbrite.com",
+])
+/** Domains whose every subdomain is shared like that: user sites and
+ * institutions (a college, a department, a national body). */
+const SHARED_DOMAINS = ["github.io", "wixsite.com", "ac.uk", "gov.uk", "mod.uk", "nhs.uk"]
+
+function isSharedHost(host: string): boolean {
+  return SHARED_HOSTS.has(host) || SHARED_DOMAINS.some((domain) => host.endsWith(`.${domain}`))
+}
+
+/** A start file a site may be recorded by (`/club/index.html`), never a
+ * folder that merely has a dot in its name (`/view/cu.lgbt`, `/~jane.soc`). */
+const START_FILE = /\.(s?html?|php|aspx?|jsp)$/i
+
+/**
  * Whether `url` is a page of the society's own website (`website`, its
- * recorded `website` field): the same host, `www.` aside, and, when the site
- * is a folder on a shared host (a college's site, a Google Site, an SRCF
- * WordPress), a page inside that folder. Another society's page on the same
- * shared host, a profile elsewhere and a missing website are all "no". Every
- * officer the pipeline stored for these societies passes (dev, 2026-11-04:
- * 892 of 892), since it takes them only from the society's own site.
+ * recorded `website` field): the same host, `www.` aside, and, on a shared
+ * host (`SHARED_HOSTS`: a college's site, a Google Site, an SRCF user
+ * folder), a page inside the recorded folder. Another society's page on the
+ * same shared host, a profile elsewhere and a missing website are all "no".
+ * Every officer the pipeline stored for these societies passes (dev,
+ * 2026-11-04: 892 of 892), since it takes them only from the society's own
+ * site.
  */
 export function isOwnSocietyPage(url: string, website: string | undefined): boolean {
   const page = httpUrl(url)
   const site = website ? httpUrl(website) : null
   if (!page || !site || bareHost(page) !== bareHost(site)) return false
+  if (!isSharedHost(bareHost(site))) return true
   let folder = site.pathname
   // A site recorded by its start file (`/club/index.html`) is its folder.
-  if (folder.slice(folder.lastIndexOf("/") + 1).includes(".")) {
-    folder = folder.slice(0, folder.lastIndexOf("/") + 1)
-  }
+  if (START_FILE.test(folder)) folder = folder.slice(0, folder.lastIndexOf("/") + 1)
   const prefix = folder.endsWith("/") ? folder : `${folder}/`
   // `/gsb` itself, or anything under `/gsb/`.
   return `${page.pathname}/`.startsWith(prefix)
