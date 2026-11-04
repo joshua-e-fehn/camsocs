@@ -87,6 +87,7 @@ app/                         Next.js App Router pages
                              once hydrated (not-found-variant.tsx; see "Unknown listing URLs"). Static:
                              it reads no request header (see "Caching")
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
+  api/request/route.ts       POST /api/request: the request form, BotID-checked (lib/request-submit.ts)
   relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
                              next.config rewrite: that would pass cookies on)
 
@@ -146,6 +147,9 @@ lib/                         Pure logic + *.test.ts (no server imports)
   url-state.ts               /societies and /events state <-> URL, and the Convex args it preloads
   source-line.ts             What a SourceLine says for a field's public meta (status, source, …)
   listing-request.ts         The request form's draft, validation (server limits) and submit args
+  request-submit.ts          The form's route: POST /api/request, BotID on Vercel (fails open),
+                             REQUEST_FORM_SECRET, Convex refusals passed on; the browser's sender
+  focus.ts                   focusOnMount: a form's outcome takes focus (ENG-37)
   owner-corrections.ts       Accepting a correction: which fields, how each is edited and parsed
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
@@ -199,13 +203,17 @@ test/setup.ts                happy-dom preload (keeps native fetch/Headers/Reque
 e2e/                         Playwright smoke suite (not part of `bun test`; bunfig ignores it)
   fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
   smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, the
-                             ongoing strip, form
+                             ongoing strip, form (sent and refused, outcome focused)
+  a11y.spec.ts               The CI accessibility gate: axe over the main public pages and states;
+                             serious/critical fail, the rest are reported (ENG-37)
   consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen,
                              focus never hidden behind it (360px), 400% zoom (320x256)
   analytics.spec.ts          Without a key, Accept requests nothing from /relay or PostHog and stores
                              no ph_* cookie or storage; leftover ph_* storage is cleared on load
-playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
-instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
+playwright.config.ts         Projects, `next dev` on :3100 (`next start` with E2E_SERVER=start, or
+                             E2E_BASE_URL), output under ../var/
+instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client"),
+                             and on a Vercel build initBotId for POST /api/request (ENG-37)
 instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
 proxy.ts                     Listing pages and the talks pillar only: unknown society / event / talk
                              URL → real 404 (see "Unknown listing URLs"; lib/missing-listing.ts); a
@@ -375,7 +383,32 @@ banner neither covers what a test clicks nor sits in its screenshot; `e2e/consen
 Playwright and every `Mutation` / `Action` message is answered by the guard instead of the server
 (the test fails if any page tries one); the request-form test registers a mock result for
 `listingRequests:submit`, so the success state renders and nothing is written. Non-GET
-`/api/auth/*` requests are aborted. Server-rendered pages call public queries only.
+`/api/auth/*` requests are aborted. Server-rendered pages call public queries only. The request
+form posts to the site's own `POST /api/request` instead (below), which the guard blocks too unless
+a test answers it with `guard.answerRequestForm(status, body)`.
+
+**Accessibility gate (ENG-37).** `e2e/a11y.spec.ts` runs axe-core (WCAG 2.1 A/AA and best
+practice) over the main public pages — home, directory, a profile, the calendar views, an event,
+talks, about, privacy, terms, the request form, sign-in, a 404 — and the states a visitor reaches:
+the request form with errors and after sending, the search palette, the consent banner. A serious or
+critical violation fails it; moderate and minor ones are annotated and logged. The profile and
+event are the first ones linked, so it needs no particular data. CI's `accessibility (axe)` job
+(`.github/workflows/ci.yml`) builds against the dev deployment's public URLs (no secret; repository
+variables `E2E_CONVEX_URL` / `E2E_CONVEX_SITE_URL` override them), then runs
+`E2E_SERVER=start pixi run a11y` (`bun run e2e:a11y`: desktop and phone projects) over
+`next start`. Locally, `pixi run a11y` runs it over `next dev` against `.env.local`.
+
+**The request form's route (ENG-37, `lib/request-submit.ts`).** The form posts its arguments to
+`POST /api/request` rather than calling the mutation from the browser. On Vercel the route runs
+Vercel BotID's `checkBotId()` first (the browser half, `initBotId` in `instrumentation-client.ts`,
+adds its challenge headers to that one request; next.config's `withBotId` rewrites carry the
+challenge script from this origin) and answers a bot 403. Off Vercel neither half runs. The check
+fails open: if it throws, the request is stored and the failure logged; `REQUEST_BOT_CHECK=off`
+switches it off without a build. The route then calls `listingRequests.submit` with
+`formSecret` = `REQUEST_FORM_SECRET`; once that is set on Convex too, the mutation refuses any other
+caller (docs/deploy.md "Request form bot check"). Convex's refusals reach the form in its own words
+(422); nothing the visitor wrote is logged. The outcome, "Request received" or "Not sent", takes
+focus (`lib/focus.ts`), as does the sign-in form's "Check your inbox".
 - Pre-commit: husky runs `webapp/.husky/pre-commit` (it `cd webapp`s, since `.git` is one level
   up; `prepare` is `cd .. && husky webapp/.husky`), which runs lint-staged →
   `biome check --write --no-errors-on-unmatched` on staged JS/TS/JSON. Unfixable lint errors block
@@ -800,7 +833,7 @@ read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 | `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add), formSecret? (only from `/api/request`; required once `REQUEST_FORM_SECRET` is set, ENG-37) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
