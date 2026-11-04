@@ -214,10 +214,10 @@ For a production that already holds societies and events, deployed before the ta
 
 ### Upgrading production to the indexed event stream (ENG-31)
 
-`events.stream` (`society` / `university`, data-model §2) and its two indexes ship widen-only: the field is optional, and `events.list` reads the `stream`-unset rows through their own index range and classifies them in memory, so the calendar is the same before, during and after the backfill. Nothing has to happen at a particular time.
+`events.stream` (`society` / `university`, data-model §2) and its two indexes ship widen-only: the field is optional, and `events.list` reads the `stream`-unset rows through their own index range and classifies them in memory. While a window holds fewer than 1,000 events per visibility tier, the calendar is the same before, during and after the backfill. Above that it is not: before the backfill every row is in the unset range, read by start time as before ENG-31, so a Festival of University listings can still push society events out of "All" and "Hide University"; part-way through, a backfilled society event can show while an earlier one not yet reached is left out, with no sign (`universityEvents.test.ts`, "before the backfill"). The daily walk alone could leave that state for up to a day, so step 2 is required straight after the deploy, and before any Cambridge Festival programme is loaded.
 
 1. **Deploy** (§1–§2). Convex builds the indexes `by_stream_visibility_startsAt` and `by_stream_visibility_spanEndsAt` during the deploy (the push waits for them). New and re-read events get `stream` on write from then on.
-2. **Backfill** — the daily derive walk (`derive-daily`, 03:30 UTC) fills it in by itself; to do it now, from `webapp/` with the Convex CLI logged in (never with `CONVEX_DEPLOY_KEY` exported):
+2. **Backfill, straight after the deploy (required).** The daily derive walk (`derive-daily`, 03:30 UTC) would fill it in by itself, but not before the next 03:30; run it now, from `webapp/` with the Convex CLI logged in (never with `CONVEX_DEPLOY_KEY` exported):
 
    ```bash
    bunx convex run --prod derive:recomputeEvents '{}'

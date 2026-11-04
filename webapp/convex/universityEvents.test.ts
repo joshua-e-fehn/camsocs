@@ -9,7 +9,7 @@ import { newTest, type TestConvex } from "./lib/harness.testing"
  * The University's own listings on the calendar (ENG-24): an event read from
  * the University of Cambridge's public events programme (`uni_events_api`)
  * that names no student group is `fromUniversity`, derived in the projection
- * and never stored; `events.list`'s `university` argument hides it or lists
+ * at every read (the stored `stream` below only picks the rows); `events.list`'s `university` argument hides it or lists
  * nothing else, and the organiser-card filters (category, college) never
  * match it. The calendar reads each listing stream through its own index
  * (`events.stream`, ENG-31), so a crowd of University listings never hides a
@@ -171,8 +171,14 @@ async function streams(t: TestConvex): Promise<Record<string, Doc<"events">["str
 }
 
 /** `count` University listings, written straight to the table (no claims):
- * a Festival-sized programme, one a minute from `startsAt`. */
-async function insertUniversityListings(t: TestConvex, count: number, startsAt: number) {
+ * a Festival-sized programme, one a minute from `startsAt`. Without
+ * `stream` when `backfilled` is false, as rows written before ENG-31. */
+async function insertUniversityListings(
+  t: TestConvex,
+  count: number,
+  startsAt: number,
+  backfilled = true,
+) {
   await t.run(async (ctx) => {
     for (let i = 0; i < count; i++) {
       await ctx.db.insert("events", {
@@ -193,7 +199,7 @@ async function insertUniversityListings(t: TestConvex, count: number, startsAt: 
         sourceUrl: `https://events.example.ac.uk/whats-on/festival-${i}`,
         hosting: "hosts",
         lastSeenAt: NOW,
-        stream: "university",
+        stream: backfilled ? "university" : undefined,
         confidence: 0.9,
         meta: {},
         createdAt: NOW,
@@ -290,5 +296,41 @@ describe("Indexed listing stream (ENG-31)", () => {
     const only = await t.query(api.events.list, { ...window, university: "only" })
     expect(only).toHaveLength(1_000)
     expect(only.every((e) => e.fromUniversity)).toBe(true)
+  })
+
+  test("before the backfill a Festival can still crowd society events out", async () => {
+    // Why the deploy runbook backfills right after the deploy: rows without a
+    // stream share one range, read by start time as before ENG-31.
+    const t = newTest()
+    await seed(t)
+    await insertUniversityListings(t, 1_050, NOW + DAY, false)
+    const clear = async (key: string) =>
+      await t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("events")
+          .withIndex("by_key", (i) => i.eq("key", key))
+          .unique()
+        if (row) await ctx.db.patch("events", row._id, { stream: undefined })
+      })
+    for (const key of Object.values(keys)) await clear(key)
+    const societies = async () =>
+      (await t.query(api.events.list, window)).filter((e) => !e.fromUniversity).map((e) => e.title)
+    expect(await societies()).toEqual([])
+
+    // Part-way through, a backfilled society event shows and an earlier one
+    // not yet reached does not.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("events")
+        .withIndex("by_key", (i) => i.eq("key", keys.universityBySociety))
+        .unique()
+      if (row) await ctx.db.patch("events", row._id, { stream: "society" })
+    })
+    expect(await societies()).toEqual(["Open board night"])
+
+    await t.mutation(internal.derive.recomputeEvents, {})
+    await t.finishAllScheduledFunctions(() => {})
+    expect(await t.query(internal.derive.streamBackfill, {})).toEqual({ unset: 0, atLeast: false })
+    expect(await societies()).toEqual(["Open simul", "Open board night"])
   })
 })

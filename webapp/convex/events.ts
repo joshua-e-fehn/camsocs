@@ -87,11 +87,65 @@ const listArgs = {
 const listArgsObject = v.object(listArgs)
 type ListArgs = Infer<typeof listArgsObject>
 
-/** The streams (`events.stream`, ENG-31) a `university` argument reads. */
-function streamsOf(university: ListArgs["university"]): EventStream[] {
-  if (university === "hide") return ["society"]
-  if (university === "only") return ["university"]
-  return ["society", "university"]
+/**
+ * The stream ranges (`events.stream`, ENG-31) a `university` argument reads,
+ * in the order they share a tier's read budget (`tierRows`): society events
+ * first, then rows not yet backfilled (`undefined`), then the University's.
+ */
+function readOrder(university: ListArgs["university"]): (EventStream | undefined)[] {
+  if (university === "hide") return ["society", undefined]
+  if (university === "only") return [undefined, "university"]
+  return ["society", undefined, "university"]
+}
+
+/**
+ * One tier's rows for a window, every stream in `order` sharing one budget:
+ * `MAX_EVENTS` starting and `MAX_SPANNING` spanning rows, each range taking
+ * what the ranges before it left. That is the bound from before ENG-31, so a
+ * list reads at most 1,200 events per tier (2,400 for a signed-in viewer's
+ * two, ~11.5 MB at the 4.8 KB mean measured on dev) and stays inside Convex's
+ * 16 MiB read limit per function. Society events read first, so University
+ * listings never take their room; the University's get what is left, which
+ * is what `capByStream` keeps unless filters below drop society rows read
+ * here (then fewer University rows than the cap would allow, as before).
+ */
+async function tierRows(
+  ctx: QueryCtx,
+  args: ListArgs,
+  tier: EventVisibility,
+  order: readonly (EventStream | undefined)[],
+): Promise<Doc<"events">[]> {
+  const rows: Doc<"events">[] = []
+  let starting = 0
+  let spanning = 0
+  for (const stream of order) {
+    const [started, spans] = await Promise.all([
+      starting < MAX_EVENTS
+        ? ctx.db
+            .query("events")
+            .withIndex("by_stream_visibility_startsAt", (i) =>
+              i
+                .eq("stream", stream)
+                .eq("visibility", tier)
+                .gte("startsAt", args.from)
+                .lt("startsAt", args.to),
+            )
+            .take(MAX_EVENTS - starting)
+        : [],
+      spanning < MAX_SPANNING
+        ? ctx.db
+            .query("events")
+            .withIndex("by_stream_visibility_spanEndsAt", (i) =>
+              i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", args.from),
+            )
+            .take(MAX_SPANNING - spanning)
+        : [],
+    ])
+    starting += started.length
+    spanning += spans.length
+    rows.push(...started, ...spans)
+  }
+  return rows
 }
 
 /**
@@ -177,32 +231,13 @@ async function matchingEvents(
       if (event) byKey.set(event.key, event)
     }
   } else {
-    // One index range per tier and stream (ENG-31), so neither stream's rows
-    // count against the other's `.take`. The `undefined` range holds rows
-    // written before `stream` existed and not yet backfilled (derive.ts
-    // `recomputeEvents`): the filter below classifies them, and once the
-    // backfill has run the range is empty.
-    const streams: (EventStream | undefined)[] = [...streamsOf(args.university), undefined]
-    const reads = tiers.flatMap((tier) =>
-      streams.flatMap((stream) => [
-        ctx.db
-          .query("events")
-          .withIndex("by_stream_visibility_startsAt", (i) =>
-            i
-              .eq("stream", stream)
-              .eq("visibility", tier)
-              .gte("startsAt", args.from)
-              .lt("startsAt", args.to),
-          )
-          .take(MAX_EVENTS),
-        ctx.db
-          .query("events")
-          .withIndex("by_stream_visibility_spanEndsAt", (i) =>
-            i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", args.from),
-          )
-          .take(MAX_SPANNING),
-      ]),
-    )
+    // One index range per tier and stream (ENG-31), society first, so the
+    // University's listings never use up a society event's room. The
+    // `undefined` range holds rows written before `stream` existed and not
+    // yet backfilled (derive.ts `recomputeEvents`): the filter below
+    // classifies them, and once the backfill has run the range is empty.
+    const order = readOrder(args.university)
+    const reads = tiers.map((tier) => tierRows(ctx, args, tier, order))
     for (const event of (await Promise.all(reads)).flat()) byKey.set(event.key, event)
   }
 
