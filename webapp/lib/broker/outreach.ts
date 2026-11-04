@@ -13,6 +13,10 @@
  * webmail one. A society with no such address needs the notice by another
  * route, recorded by hand as an interaction (docs/webapp.md).
  *
+ * Sending is the Google Sheets script in `ops/outreach/art14-mail-merge.gs`
+ * (Gmail, from the contact address): it sends the rows in batches, writes
+ * `sent_on`, marks bounces and queues the row's next address.
+ *
  * The send log closes the loop (Art 5(2) evidence of who was told, and
  * when): the export has empty `sent_on` and `bounced` columns; once the mail
  * merge has gone out they are filled in and the file is imported back
@@ -37,6 +41,8 @@ export type OutreachRow = {
   /** The outreach address and its `EMAIL_TYPES` kind; absent when the listing
    * publishes no role address the outreach may use. */
   bestAddress?: { email: string; role: string; kind: string }
+  /** The other outreach addresses, in the order to try them after a bounce. */
+  nextAddresses?: readonly string[]
   missingFields: readonly string[]
   /** Fields we hold a value for. */
   heldFields: readonly string[]
@@ -169,6 +175,7 @@ export const OUTREACH_COLUMNS = [
   "role",
   "email",
   "email_kind",
+  "next_emails",
   "missing_count",
   "missing_fields",
   "held_fields",
@@ -183,6 +190,8 @@ export const OUTREACH_COLUMNS = [
  * address, sorted by name. Organisations without a usable address, hidden or
  * suppressed ones, and counterparts are left out — see `isOutreachCandidate`.
  * `sent_on` and `bounced` are left empty for the send log (`parseSendLog`).
+ * `next_emails` lists where the notice goes when `email` bounces; the mail
+ * merge script (`ops/outreach/art14-mail-merge.gs`) queues the next one.
  */
 export function outreachCsv(rows: readonly OutreachRow[], siteUrl: string): string {
   const lines = [OUTREACH_COLUMNS.join(",")]
@@ -196,6 +205,7 @@ export function outreachCsv(rows: readonly OutreachRow[], siteUrl: string): stri
       row.bestAddress?.role ?? "",
       row.bestAddress?.email ?? "",
       row.bestAddress?.kind ?? "",
+      (row.nextAddresses ?? []).join("; "),
       String(row.missingFields.length),
       row.missingFields.join("; "),
       row.heldFields.join("; "),

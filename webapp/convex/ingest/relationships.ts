@@ -9,6 +9,7 @@ import {
 } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
+import { eventStreamOf } from "../lib/derived"
 import { eventOrganiserCopy, loadTerms } from "../lib/entityStore"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, emptyBatchResult, recordBatch } from "../lib/ingest"
@@ -162,13 +163,17 @@ export const setEventOrganisers = internalMutation({
         coHostKeys: byRole("co_host"),
         sponsorKeys: byRole("sponsor"),
       }
+      // A University listing credited to a society becomes the society's
+      // (ENG-24), and back: its indexed stream follows (ENG-31).
+      const stream = eventStreamOf({ ...event, ...keys })
       if (
         changed ||
         keys.organiserKeys.join() !== event.organiserKeys.join() ||
         keys.coHostKeys.join() !== event.coHostKeys.join() ||
-        keys.sponsorKeys.join() !== event.sponsorKeys.join()
+        keys.sponsorKeys.join() !== event.sponsorKeys.join() ||
+        stream !== event.stream
       ) {
-        await ctx.db.patch("events", event._id, { ...keys, updatedAt: now })
+        await ctx.db.patch("events", event._id, { ...keys, stream, updatedAt: now })
         result.updated++
       } else {
         result.unchanged++

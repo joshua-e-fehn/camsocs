@@ -12,6 +12,12 @@ Precedence follows stage order: deterministic feeds run first and always win;
 then `instagram`, then `termcards`. `inbox` (cam_only) defers to every staged
 source, and `instagram` / `termcards` ignore staged list-mail events, so a
 public event is never hidden behind a cam_only copy.
+
+`match_record` names the staged reading that has the event, so `instagram`
+and `termcards`, which read the same posts and cards again every run, can
+keep the pair (`ShadowedReading`): a reading posted under its own key before
+the other source listed the evening is retired to it at load (ENG-47). A
+mail is read once, so `inbox` never drops a reading it posted before.
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from camsocs_pipeline.extract.evidence import normalise_text
-from camsocs_pipeline.models.observation import EventObservation
+from camsocs_pipeline.models.observation import EventObservation, ShadowedReading
 from camsocs_pipeline.staging.store import Record, StagingStore
 
 #: Words that say nothing about which event it is.
@@ -66,25 +72,37 @@ def _value(record: EventObservation, name: str) -> object:
     return None
 
 
+#: A reading's identity: (event source, external id), as `keys.event_key` takes it.
+EventId = tuple[str, str]
+#: A known title and the reading it came from (None when added without one).
+_Known = tuple[str, EventId | None]
+
+
 class EventIndex:
     """Known events by (organiser, start minute) → titles."""
 
     def __init__(self) -> None:
-        self._titles: dict[tuple[str | None, int], list[str]] = defaultdict(list)
-        self._by_minute: dict[int, list[str]] = defaultdict(list)
+        self._titles: dict[tuple[str | None, int], list[_Known]] = defaultdict(list)
+        self._by_minute: dict[int, list[_Known]] = defaultdict(list)
 
-    def add(self, org_keys: Iterable[str | None], starts_at: int, title: str) -> None:
+    def add(
+        self,
+        org_keys: Iterable[str | None],
+        starts_at: int,
+        title: str,
+        identity: EventId | None = None,
+    ) -> None:
         minute = starts_at // 60_000
         for org_key in org_keys:
-            self._titles[(org_key, minute)].append(title)
-        self._by_minute[minute].append(title)
+            self._titles[(org_key, minute)].append((title, identity))
+        self._by_minute[minute].append((title, identity))
 
     def add_record(self, record: EventObservation) -> None:
         starts_at, title = _value(record, "startsAt"), _value(record, "title")
         if not isinstance(starts_at, int) or not isinstance(title, str):
             return
         orgs = [o.identity.known_key for o in record.organisers if o.identity.known_key]
-        self.add(orgs or [None], starts_at, title)
+        self.add(orgs or [None], starts_at, title, (record.event_source, record.external_id))
 
     @classmethod
     def from_records(cls, records: Iterable[Record]) -> EventIndex:
@@ -106,24 +124,56 @@ class EventIndex:
             for record in store.read_latest(name)
         )
 
-    def is_duplicate(self, org_key: str | None, starts_at: int, title: str) -> bool:
+    def _match(self, org_key: str | None, starts_at: int, title: str) -> _Known | None:
         minute = starts_at // 60_000
         candidates = (
             self._titles.get((org_key, minute), [])
             if org_key is not None
             else self._by_minute.get(minute, [])
         )
-        return any(similar_titles(title, known) for known in candidates)
+        return next((known for known in candidates if similar_titles(title, known[0])), None)
 
-    def is_duplicate_record(self, record: EventObservation) -> bool:
+    def is_duplicate(self, org_key: str | None, starts_at: int, title: str) -> bool:
+        return self._match(org_key, starts_at, title) is not None
+
+    def match_record(self, record: EventObservation) -> _Known | None:
+        """The first known title (and its reading) this record duplicates."""
         starts_at, title = _value(record, "startsAt"), _value(record, "title")
         if not isinstance(starts_at, int) or not isinstance(title, str):
-            return False
+            return None
         orgs = [o.identity.known_key for o in record.organisers if o.identity.known_key]
-        return any(self.is_duplicate(org, starts_at, title) for org in (orgs or [None]))
+        return next(
+            (
+                known
+                for org in (orgs or [None])
+                if (known := self._match(org, starts_at, title)) is not None
+            ),
+            None,
+        )
+
+    def is_duplicate_record(self, record: EventObservation) -> bool:
+        return self.match_record(record) is not None
+
+    def shadowed(self, record: EventObservation) -> ShadowedReading | None:
+        """The pair to keep when `record` is dropped as a duplicate of a staged
+        reading (ENG-47), or None when it is no duplicate, or the reading that
+        has it is not known (added without one)."""
+        known = self.match_record(record)
+        if known is None or known[1] is None:
+            return None
+        by_source, by_external_id = known[1]
+        organisers = [o.identity.known_key for o in record.organisers if o.identity.known_key]
+        return ShadowedReading(
+            event_source=record.event_source,
+            external_id=record.external_id,
+            organiser=organisers[0] if organisers else None,
+            by_source=by_source,
+            by_external_id=by_external_id,
+        )
 
 
 __all__ = [
+    "EventId",
     "EventIndex",
     "named_in",
     "similar_titles",

@@ -13,7 +13,8 @@ CAMsocs is a verified, current database of Cambridge student societies and sport
   - `docs/data-model.md`: the schema contract;
   - `docs/source-research.md`: per-source rules (cite as §N);
   - `docs/webapp.md`: webapp internals;
-  - `docs/ops-vps.md`: the scheduled harvests on the VPS host (D5).
+  - `docs/ops-vps.md`: the scheduled harvests on the VPS host (D5);
+  - `docs/rollback.md`, `docs/key-rotation.md`, `docs/platform-limits.md`: production runbooks (ENG-37).
 
 ## Techstack
 
@@ -76,6 +77,7 @@ pixi run pipeline -- --env prod clean-events [--apply]   # stored events no read
 pixi run pipeline -- --env prod status   # pipeline/.env.prod on top of pipeline/.env (docs/deploy.md §4)
 pixi run pipeline -- --env prod monitor  # the VPS's hourly PostHog checks, once (docs/ops-vps.md §6 "Monitor")
 pixi run posthog-dashboards -- --dry-run # PostHog dashboards as code; --validate / --apply need the personal key (docs/deploy.md)
+cd webapp && bun run scripts/data-quality-sample.ts   # T15 sample over public queries; NEXT_PUBLIC_CONVEX_URL=<prod> for production (docs/data-quality.md)
 cd webapp && bun run e2e                 # Playwright smoke + screenshots → var/screenshots/<date>/ (read-only guard)
 cd webapp && unset CONVEX_DEPLOY_KEY && bunx convex dev --once   # push to dev and regenerate convex/_generated (commit it)
 cd webapp && bunx convex env list                                # add --prod for production
@@ -84,6 +86,7 @@ cd webapp && bunx convex env list                                # add --prod fo
 - Dev Convex deployment: `hushed-rhinoceros-215` (team `joshua-fehn`, project `camsocs`). Production (Vercel + Convex prod + the pipeline's `--env prod`): `docs/deploy.md`.
 - **Never export `CONVEX_DEPLOY_KEY` in a shell.** It overrides `.env.local`, and once deployed one project's functions onto another project's production. `scripts/convex-deploy-if-key.sh` deploys only on Vercel.
 - Secrets live in `webapp/.env.local` (Convex) and `pipeline/.env` (pipeline). Both are gitignored, and their values must never be printed.
+- **Never open a production backup** (`convex-prod-*.zip` on the VPS, a pre-restore export, `last-restore-test.log`) in an agent session: it holds the talks pillar's talks.cam data and the CRM. `camsocs-backup.py inspect` prints table names and counts only (docs/ops-vps.md §10). A restore test runs only into a throwaway local backend, never into dev or another cloud deployment.
 - Bun is the only JS/TS package manager. Never use npm, pnpm or yarn.
 - Gates before review: `pixi run lint` (Ruff, ShellCheck, Biome), `typecheck`, `test`, `check-codegen`, plus `cd webapp && bun run build`.
 - Any time you create or change UI, consult `webapp/DESIGN.md`. Follow the Atomic Design import rules in `docs/webapp.md`.

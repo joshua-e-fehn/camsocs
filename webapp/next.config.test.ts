@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import nextConfigExport, {
+  botCheckClientFlag,
   contentSecurityPolicy,
   HTML_LIMITED_BOTS,
   nextConfig,
@@ -226,5 +227,28 @@ describe("private routes say noindex (private-routes-noindex)", () => {
     for (const rule of noindex) {
       expect(rule.source).toMatch(/^\/(dashboard|sign-in|api|relay)\//)
     }
+  })
+})
+
+describe("Vercel BotID (ENG-37)", () => {
+  test("its challenge paths are rewritten to Vercel, and only they may be framed", async () => {
+    const rewrites = await nextConfig.rewrites?.()
+    const list = Array.isArray(rewrites) ? rewrites : []
+    expect(list.map((rewrite) => rewrite.destination)).toEqual([
+      "https://api.vercel.com/bot-protection/v1/challenge",
+      "https://api.vercel.com/bot-protection/v1/proxy/:path*",
+    ])
+    const rules = (await nextConfig.headers?.()) ?? []
+    // Next applies the last matching rule's value: BotID's comes after the site's.
+    const botid = rules.findIndex((rule) => rule.source.startsWith("/149e9513-"))
+    expect(botid).toBeGreaterThan(rules.findIndex((rule) => rule.source === "/:path*"))
+    expect(rules[botid].headers).toContainEqual({ key: "X-Frame-Options", value: "SAMEORIGIN" })
+  })
+
+  test("the browser half starts only in a build on Vercel", () => {
+    expect(botCheckClientFlag({ VERCEL: "1" })).toBe("1")
+    expect(botCheckClientFlag({})).toBe("")
+    expect(botCheckClientFlag({ VERCEL_ENV: "preview" })).toBe("")
+    expect(nextConfig.env?.NEXT_PUBLIC_BOT_CHECK).toBe(botCheckClientFlag())
   })
 })

@@ -1,5 +1,6 @@
 import { type Infer, v } from "convex/values"
 import type { CoverageRow } from "../../lib/broker/coverage"
+import { type Classified, sensitiveOfficerProblem } from "../../lib/broker/sensitive"
 import {
   CATEGORIES,
   EMAIL_TYPES,
@@ -11,10 +12,12 @@ import {
   ORG_STATUSES,
   ORG_TYPES,
   ROLES,
+  type Role,
 } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
-import { classifyEmail } from "./derived"
+import { classifyEmail, nextHandoverDate } from "./derived"
+import { findOrganisation } from "./entityStore"
 import { hostOf, isHttpUrl } from "./fields"
 import type { FieldMeta } from "./resolve"
 import { literalUnion } from "./validators"
@@ -56,20 +59,38 @@ function outreachKind(email: string): EmailType | undefined {
   return NOT_FOR_OUTREACH.has(kind) ? undefined : kind
 }
 
+type OutreachAddress = { email: string; role: Role | "general"; kind: EmailType }
+
+/**
+ * Every published address the outreach may write to, best first: role
+ * addresses in `ROLE_PREFERENCE` order, then the general address, each once.
+ * The first is the one the notice goes to; the rest are where it goes next
+ * when that one bounces (the export's `next_emails`).
+ */
+export function outreachAddresses(
+  org: Pick<Doc<"organisations">, "email" | "roleEmails">,
+): OutreachAddress[] {
+  const out: OutreachAddress[] = []
+  const seen = new Set<string>()
+  const add = (email: string, role: Role | "general") => {
+    const kind = outreachKind(email)
+    const id = email.trim().toLowerCase()
+    if (!kind || seen.has(id)) return
+    seen.add(id)
+    out.push({ email, role, kind })
+  }
+  for (const role of ROLE_PREFERENCE) {
+    for (const item of org.roleEmails) if (item.role === role) add(item.email, role)
+  }
+  if (org.email) add(org.email, "general")
+  return out
+}
+
 /** The best published role address to send the outreach to, or undefined. */
 export function bestRoleAddress(
   org: Pick<Doc<"organisations">, "email" | "roleEmails">,
-): { email: string; role: string; kind: EmailType } | undefined {
-  for (const role of ROLE_PREFERENCE) {
-    for (const item of org.roleEmails) {
-      if (item.role !== role) continue
-      const kind = outreachKind(item.email)
-      if (kind) return { email: item.email, role, kind }
-    }
-  }
-  const kind = org.email ? outreachKind(org.email) : undefined
-  if (org.email && kind) return { email: org.email, role: "general", kind }
-  return undefined
+): OutreachAddress | undefined {
+  return outreachAddresses(org)[0]
 }
 
 /** Whether the listing publishes any non-personal address (coverage's
@@ -130,6 +151,9 @@ export const brokerOrgRowValidator = v.object({
       kind: literalUnion(EMAIL_TYPES),
     }),
   ),
+  /** The other outreach addresses, in the order to try them when the notice
+   * to `bestAddress` bounces (`outreachAddresses`). */
+  nextAddresses: v.array(v.string()),
   heldFields: v.array(v.string()),
   sourceHosts: v.array(v.string()),
   /** Rejected entries are left out. */
@@ -174,7 +198,7 @@ export function brokerOrgRow(
   org: Doc<"organisations">,
   profile: Doc<"orgBrokerProfiles"> | null,
 ): BrokerOrgRow {
-  const best = bestRoleAddress(org)
+  const [best, ...next] = outreachAddresses(org)
   return {
     key: org.key,
     slug: org.slug,
@@ -188,7 +212,8 @@ export function brokerOrgRow(
     categories: org.categories,
     has: headlineFields(org),
     missingFields: org.missingFields,
-    bestAddress: best as BrokerOrgRow["bestAddress"],
+    bestAddress: best,
+    nextAddresses: next.map((address) => address.email),
     heldFields: heldFields(org.meta),
     sourceHosts: sourceHosts(org.meta),
     needs: chips(profile?.needs ?? []),
@@ -295,4 +320,50 @@ export function checkIsoDate(value: string, what: string): string {
     throw new Error(`The ${what} must be a date (YYYY-MM-DD)`)
   }
   return value
+}
+
+/**
+ * Looks up, once per organisation, what the sensitive-society rules need:
+ * the small directory card first (categories and audiences, no website), the
+ * full row only for a hidden organisation, which has no card.
+ */
+export function orgClassesOf(ctx: QueryCtx) {
+  const cache = new Map<string, Promise<Classified | null>>()
+  return (key: string): Promise<Classified | null> => {
+    let hit = cache.get(key)
+    if (!hit) {
+      hit = (async () => {
+        const card = await ctx.db
+          .query("orgCards")
+          .withIndex("by_key", (q) => q.eq("key", key))
+          .unique()
+        return card ?? (await findOrganisation(ctx, key))
+      })()
+      cache.set(key, hit)
+    }
+    return hit
+  }
+}
+
+/**
+ * Why each stored row at a sensitive society breaks the rules a manual entry
+ * meets (`sensitiveOfficerProblem`), or null. The guard runs only on writes,
+ * so a row stored before 2026-11-04, or before its society became sensitive,
+ * may still hold notes, links or an off-site source; `broker.people.list`
+ * flags those and `coverage.sensitiveOfficers` counts them (DPIA-lite §5).
+ */
+export function storedSensitiveProblems(ctx: QueryCtx) {
+  const limit = nextHandoverDate(Date.now())
+  const sites = new Map<string, Promise<Doc<"organisations"> | null>>()
+  return async (person: Doc<"people">, because: readonly string[]): Promise<string | null> => {
+    if (because.length === 0) return null
+    let hit = sites.get(person.orgKey)
+    if (!hit) {
+      hit = findOrganisation(ctx, person.orgKey)
+      sites.set(person.orgKey, hit)
+    }
+    const org = await hit
+    const society = { name: org?.name ?? person.orgKey, website: org?.website, because }
+    return sensitiveOfficerProblem(society, person, limit)
+  }
 }

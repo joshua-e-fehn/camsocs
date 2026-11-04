@@ -93,6 +93,7 @@ app/                         Next.js App Router pages
                              once hydrated (not-found-variant.tsx; see "Unknown listing URLs"). Static:
                              it reads no request header (see "Caching")
   api/auth/[...all]/route.ts /api/auth/* proxy to Better Auth in Convex (NOT a next.config rewrite)
+  api/request/route.ts       POST /api/request: the request form, BotID-checked (lib/request-submit.ts)
   relay/[...path]/route.ts   /relay/* hop to PostHog EU, forwarding by allow-list (lib/relay.ts; NOT a
                              next.config rewrite: that would pass cookies on)
 
@@ -152,6 +153,11 @@ lib/                         Pure logic + *.test.ts (no server imports)
   url-state.ts               /societies and /events state <-> URL, and the Convex args it preloads
   source-line.ts             What a SourceLine says for a field's public meta (status, source, …)
   listing-request.ts         The request form's draft, validation (server limits) and submit args
+  request-submit.ts          The form's route (server only): POST /api/request, BotID on Vercel
+                             (fails open only while not set up), REQUEST_FORM_SECRET, Convex refusals
+  request-client.ts          The form's sender (aborts after 30 s), REQUEST_PATH and its sentences;
+                             zod-free, since instrumentation-client.ts ships it on every page
+  focus.ts                   focusOnMount: a form's outcome takes focus (ENG-37)
   owner-corrections.ts       Accepting a correction: which fields, how each is edited and parsed
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
   public-api.ts              Client names for the public API's return types (types only)
@@ -184,7 +190,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              messages and stacks, frame paths only (browser and server)
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
-                             notice + send log), force-layout, format
+                             notice + send log; art14-mail-merge.test.ts runs the Apps Script
+                             ops/outreach/art14-mail-merge.gs), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
@@ -205,13 +212,17 @@ test/setup.ts                happy-dom preload (keeps native fetch/Headers/Reque
 e2e/                         Playwright smoke suite (not part of `bun test`; bunfig ignores it)
   fixtures.ts                Read-only guard on the Convex socket, page checks, screenshot paths
   smoke.spec.ts              Every public page at 1440×900 and 390×844 (+ dark), filters, sheet, the
-                             ongoing strip, form
+                             ongoing strip, form (sent and refused, outcome focused)
+  a11y.spec.ts               The CI accessibility gate: axe over the main public pages and states;
+                             serious/critical fail, the rest are reported (ENG-37)
   consent.spec.ts            The consent banner: first visit (axe), Reject, Accept, footer reopen,
                              focus never hidden behind it (360px), 400% zoom (320x256)
   analytics.spec.ts          Without a key, Accept requests nothing from /relay or PostHog and stores
                              no ph_* cookie or storage; leftover ph_* storage is cleared on load
-playwright.config.ts         Projects, `next dev` on :3100 (or E2E_BASE_URL), output under ../var/
-instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client")
+playwright.config.ts         Projects, `next dev` on :3100 (`next start` with E2E_SERVER=start, or
+                             E2E_BASE_URL), output under ../var/
+instrumentation-client.ts    Browser start-up: startAnalytics(), startClickTracking() (see "Analytics client"),
+                             and on a Vercel build initBotId for POST /api/request (ENG-37)
 instrumentation.ts           Server: onRequestError → PostHog error report (see "Error tracking")
 proxy.ts                     Listing pages and the talks pillar only: unknown society / event / talk
                              URL → real 404 (see "Unknown listing URLs"; lib/missing-listing.ts); a
@@ -333,7 +344,10 @@ matched on those three paths (and the rest of the talks pillar, for its AI-agent
 (`lib/missing-listing.ts`): a malformed key (`isOrgSlug` / `isEventKey` / `isTalkKey`) is missing
 without a Convex call; a well-formed one costs one anonymous indexed query (`orgs.exists`,
 `events.locate`, `talks.exists`, which share their test with `getBySlug` / `get`); a talks.cam-derived
-event is answered with a 308 to `/talks/events/<key>` (see "The talks boundary"). A missing listing
+event is answered with a 308 to `/talks/events/<key>` (see "The talks boundary"), and a superseded
+event key (ENG-47) with a 308 to the page of the event that took it over (`/talks/events/<survivor>`
+when that one is talks.cam-derived; from either prefix, never back, since it is always another key;
+`lib/missing-listing.ts` `eventListingState`). A missing listing
 is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404: the
 site's not-found page in the (site) frame, which becomes the talks not-found page in the browser
 for a talk's address (`app/not-found-variant.tsx`; deciding on the server would need a request
@@ -344,7 +358,8 @@ Static siblings (`/talks/departments`, or a metadata file such as `opengraph-ima
 the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
 one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
 listing is remembered per instance for as long as a page is cached (`FOUND_TTL_MS`, 300 s;
-missing ones never), so repeat views skip the round
+missing ones and a superseded key's redirect never: a later load can swap two keys' roles, and a
+stale redirect beside a fresh one would loop), so repeat views skip the round
 trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
 page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
 hidden since the check. A client-side navigation to a missing listing becomes a full page load (the
@@ -381,7 +396,36 @@ banner neither covers what a test clicks nor sits in its screenshot; `e2e/consen
 Playwright and every `Mutation` / `Action` message is answered by the guard instead of the server
 (the test fails if any page tries one); the request-form test registers a mock result for
 `listingRequests:submit`, so the success state renders and nothing is written. Non-GET
-`/api/auth/*` requests are aborted. Server-rendered pages call public queries only.
+`/api/auth/*` requests are aborted. Server-rendered pages call public queries only. The request
+form posts to the site's own `POST /api/request` instead (below), which the guard blocks too unless
+a test answers it with `guard.answerRequestForm(status, body)`.
+
+**Accessibility gate (ENG-37).** `e2e/a11y.spec.ts` runs axe-core (WCAG 2.1 A/AA and best
+practice) over the main public pages — home, directory, a profile, the calendar views, an event,
+talks, about, privacy, terms, the request form, sign-in, a 404 — and the states a visitor reaches:
+the request form with errors and after sending, the search palette, the consent banner. A serious or
+critical violation fails it; moderate and minor ones are annotated and logged. The profile and
+event are the first ones linked, so it needs no particular data. CI's `accessibility (axe)` job
+(`.github/workflows/ci.yml`) builds against the dev deployment's public URLs (no secret; repository
+variables `E2E_CONVEX_URL` / `E2E_CONVEX_SITE_URL` override them), then runs
+`E2E_SERVER=start pixi run a11y` (`bun run e2e:a11y`: desktop and phone projects) over
+`next start`. Locally, `pixi run a11y` runs it over `next dev` against `.env.local`.
+
+**The request form's route (ENG-37, `lib/request-submit.ts`).** The form posts its arguments to
+`POST /api/request` rather than calling the mutation from the browser. On Vercel the route runs
+Vercel BotID's `checkBotId()` first (the browser half, `initBotId` in `instrumentation-client.ts`,
+adds its challenge headers to that one request; next.config's `withBotId` rewrites carry the
+challenge script from this origin) and answers a bot 403. Off Vercel neither half runs. The check
+fails open only while BotID is not set up (no OIDC token or request context: the request is stored
+and the failure logged); any other throw fails closed (503, the generic sentence with the contact
+address), so a client cannot get past the check by making it throw. `REQUEST_BOT_CHECK=off` on
+Vercel, plus a redeploy, switches it off. The browser's sender (`lib/request-client.ts`) is a
+separate, zod-free module because `instrumentation-client.ts` imports its `REQUEST_PATH`, and that
+file's imports load on every page; it aborts the request after 30 s. The route then calls `listingRequests.submit` with
+`formSecret` = `REQUEST_FORM_SECRET`; once that is set on Convex too, the mutation refuses any other
+caller (docs/deploy.md "Request form bot check"). Convex's refusals reach the form in its own words
+(422); nothing the visitor wrote is logged. The outcome, "Request received" or "Not sent", takes
+focus (`lib/focus.ts`), as does the sign-in form's "Check your inbox".
 - Pre-commit: husky runs `webapp/.husky/pre-commit` (it `cd webapp`s, since `.git` is one level
   up; `prepare` is `cd .. && husky webapp/.husky`), which runs lint-staged →
   `biome check --write --no-errors-on-unmatched` on staged JS/TS/JSON. Unfixable lint errors block
@@ -666,11 +710,11 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university?, talksCam? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default); `talksCam` (`exclude` by default, `only`, `include`): talks.cam-derived events (see "The talks boundary" below). `university` filters after the per-tier index reads (`.take(1000)` starting, `.take(200)` spanning, no index on `fromUniversity`), so a window holding more than 1,000 events of a tier can drop its later days from either view without a sign; safe for What's On (about 100 rows in 10 weeks), not for a Cambridge Festival window: store the flag with an index (widen, backfill, switch) or page past the cap before the Festival's events are loaded (ENG-24 follow-up). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
-| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university?, talksCam? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default); `talksCam` (`exclude` by default, `only`, `include`): talks.cam-derived events (see "The talks boundary" below). The window is read per tier and per stream (`events.stream`, ENG-31: indexes `by_stream_visibility_startsAt` and `by_stream_visibility_spanEndsAt`); `university` picks the streams read. The streams of one tier share one read budget, the bound from before ENG-31: 1,000 starting and 200 spanning rows, society events first, then rows not yet backfilled, then the University's in what is left (`events.ts` `tierRows`). A list therefore reads at most 1,200 events per tier, 2,400 for a signed-in viewer's two (~11.5 MB at the 4.8 KB mean measured on dev 2026-11-04, inside Convex's 16 MiB read limit per function), and University listings never take a society event's room. The 1,000-row cap is then applied society events first: every society event of the window up to the cap, then the University's listings in the room left, earliest first — a Cambridge Festival window of University listings can drop only its own later days, never a society's event, and the University view has the whole cap. Only when filters (`q`, `eventTypes`, talks.cam) drop society rows read can the University get fewer rows than the cap's room, as with any filter applied after the read. Rows written before `stream` existed are read through the `stream`-unset range and classified in memory until the backfill has run (data-model §2 `stream`; above 1,000 events a tier they compete by start time as before ENG-31, so production backfills straight after the deploy, deploy.md). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`), superseded events (data-model §2 `supersededBy`, ENG-47) |
+| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn or superseded) |
 | `events.requestLabel` | `{ key }` | `{ title: string \| null }`: the title `get` would show this viewer, null when it shows nothing or for a talks.cam-derived event (G1); for the request form at `/request?event=`, so no talks.cam text reaches it |
 | `events.exists` | `{ key }` | `boolean`: whether `get` would return the event to a verified @cam.ac.uk viewer (so `cam_only` is true for everyone; `members_only`, withdrawn, suppressed or every host hidden is false); for the 404 gate in `proxy.ts` |
-| `events.locate` | `{ key }` | `"missing" \| "event" \| "talks"`: `missing` when `exists` is false, `talks` for a talks.cam-derived event (its page is `/talks/events/<key>`); for the gate in `proxy.ts` |
+| `events.locate` | `{ key }` | `"missing" \| "event" \| "talks" \| { supersededBy, talks }`: `missing` when `exists` is false, `talks` for a talks.cam-derived event (its page is `/talks/events/<key>`), `{ supersededBy, talks }` for a key another source's event took over (ENG-47, data-model §2 `supersededBy`: the survivor's key, following at most 3 retirements, and whether its page is under /talks; `missing` when the chain loops or ends at nothing shown); for the gate in `proxy.ts` |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored; talks.cam-derived events count unless `talksCam: "exclude"`, which a society profile passes) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,
@@ -689,8 +733,9 @@ and its "Include taking part" toggle (`?external=show`) lists them.
 `fromUniversity` (ENG-24) marks the University's own listings: read from the University of
 Cambridge's public events programme (`source: uni_events_api`) and credited to no student group
 as organiser or co-host. It is derived in the projection (`convex/lib/derived.ts`
-`isUniversityListing`), never stored, so there is no index or migration behind it; an event of
-the programme that names exactly one society is that society's and is not `fromUniversity`.
+`isUniversityListing`) at every read; its stored, indexed copy `events.stream` (ENG-31) only
+selects rows for `events.list`. An event of the programme that names exactly one society is
+that society's and is not `fromUniversity`.
 `fromUniversity` says only that no student group is linked here, not who runs the event (a
 department, a college, a museum, two societies): the UI says "listed by" the University, never
 that no society runs it. The UI names the University in words ("University of Cambridge", the "University" badge with a
@@ -722,8 +767,9 @@ session; a Cambridge-only event's file is `private, no-store`). `/events.ics` is
 the next 60 days' public events, "Cambridge events · CAMsocs": societies' and the University's
 own listings, as the calendar's default (`?org=<slug>` for one society's, named for it),
 edge-cached an hour, and the calendar and event pages advertise their `.ics` as a
-`text/calendar` alternate. It reads `events.list` once, so the 1,000-per-tier cap there applies
-to both kinds together.
+`text/calendar` alternate. It reads `events.list` once, so the cap there applies: society
+events first (ENG-31), so in a Cambridge Festival window the feed can lose only the
+University's later days; `university: "hide"` would read the society stream alone.
 
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
@@ -806,7 +852,7 @@ read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 | `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
-| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
+| `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add), formSecret? (only from `/api/request`; required once `REQUEST_FORM_SECRET` is set, ENG-37) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
@@ -825,8 +871,8 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
-| `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
+| `broker/people` | `list` (each row with `sensitiveBecause` and `sensitiveProblem`, why a stored row breaks the sensitive-society rules), `rules({orgKey})` (what a manual entry there may hold: `sensitiveBecause`, `website`, `staleAfterLimit`), `create`, `update` (the row becomes `manual`; `sourceUrl`, `consentRecord`; checked as it would be after the edit), `setArchived`. Both writes refuse a suppressed person (key, or a suppressed name anywhere in the typed name) or listing and, for sensitive societies (`lib/broker/sensitive.ts`, DPIA-lite §5), a source off the society's own website, links, notes, a later `staleAfter` and unrecorded consent, as `ConvexError`s the form shows; stored rows that break those rules are counted, without names, by the internal `coverage.sensitiveOfficers` (post-deploy check) |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
 | `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
@@ -844,23 +890,34 @@ harvest that collected the data.
 
 1. **Export.** `/dashboard/reports` → "Download outreach CSV": one row per listed, non-suppressed
    society with an outreach address (`lib/broker/outreach.ts`). The address is a role address
-   (`email`, with `role` and `email_kind`); personal CRSid, lists.cam.ac.uk and webmail
-   addresses are never chosen. A society that publishes only those, or no address at all, is
-   left out of the CSV and counted under "No outreach address", complete listing or not; it needs
-   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   (`email`, with `role` and `email_kind`; `next_emails` holds the others to try after a
+   bounce); personal CRSid, lists.cam.ac.uk and webmail addresses are never chosen. A society
+   that publishes only those, or no address at all, is left out of the CSV and counted under "No
+   outreach address", complete listing or not; it needs another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
    empty.
-2. **Send** from the published contact address (`CONTACT_EMAIL`, set up as a "Send mail as"
-   address so replies reach it) with a mail merge over the CSV, in batches of a few hundred a
-   day. Send one test to your own @cam.ac.uk address first and check where it lands.
-3. **Log.** In the sheet, put the date each row went out in `sent_on` (`YYYY-MM-DD`; a UK
-   `DD/MM/YYYY` is read too) and leave rows not sent empty. Put `yes` in `bounced` for each
-   bounce. Download it as CSV and use "Import send log" on the same page. Any bad row stops the
-   whole file with the row named; nothing is recorded until it is fixed. A minimal log with just
-   `org_key,email,sent_on,bounced` works as well.
-4. **Bounces.** A bounce becomes a follow-up on the interaction ("Send the notice to the next
-   role address, or find another route"). Send it to the next address, add that row to the log
-   and import again: rows already recorded are left as they are, and a bounce is never undone.
-   An interaction you have edited since (a reply, a new address) is not overwritten.
+2. **Send** with the mail merge script `ops/outreach/art14-mail-merge.gs`, from the published
+   contact address (`CONTACT_EMAIL`, a "Send mail as" address of the Workspace account, so
+   replies reach it). Import the CSV into a new Google Sheet (File → Import → Upload → "Replace
+   current sheet", with "Convert text to numbers, dates and formulas" **off**), then
+   Extensions → Apps Script, paste the script, save and reload: the sheet gets an "Art 14
+   notice" menu. "Check the setup" confirms the sender and the day's quota; "Send a test to me"
+   sends the first row to your own @cam.ac.uk address (check where it lands: inbox, junk or
+   quarantine); "Send the next batch" sends up to 100 rows, one email per row (never Cc or
+   Bcc), and writes the date into each row's `sent_on` as it goes, so a stopped run leaves an
+   exact log. Apps Script allows 1,500 recipients a day from a Workspace account.
+3. **Bounces.** After a batch, wait an hour and run "Mark bounces": it reads the bounce
+   messages (`from:mailer-daemon OR postmaster`, failures only, not delay warnings) and puts
+   `yes` in `bounced` for each address one names. "Queue the next address for bounces" then
+   appends a row for the next address in that society's `next_emails` (the other role
+   addresses its listing publishes, best first), to go out with the next batch; a society with
+   none left is named, and needs step 5.
+4. **Log.** File → Download → CSV, and "Import send log" on the same dashboard page. Any bad row
+   stops the whole file with the row named; nothing is recorded until it is fixed. A minimal log
+   with just `org_key,email,sent_on,bounced` works as well (`sent_on` as `YYYY-MM-DD`; a UK
+   `DD/MM/YYYY` is read too). A bounce becomes a follow-up on the interaction ("Send the notice
+   to the next role address, or find another route"). Import again after each round: rows
+   already recorded are left as they are, and a bounce is never undone. An interaction you
+   have edited since (a reply, a new address) is not overwritten.
 5. **Other routes.** For each society under "No outreach address", send the notice (the
    "Notice" button copies its text) through its contact form or social account, then add an
    interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice
@@ -904,6 +961,7 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
 | `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |
 | `events/remove` | `{keys, confirm: "REMOVE-EVENTS"}` (events only, ≤ 25 a call) → `{removed, missing}`: deletes events as `ingest/purge:removeEntity` does (docs/deploy.md §7) |
+| `events/superseded` | `{events: [{key, by}]}` (≤ 500) → `{updated, unchanged, unknown, rejected}`: each event key whose reading this load folded into another source's event `by`, or an LLM stage dropped as that event's (ENG-47, `convex/ingest/superseded.ts`); sets `supersededBy` on an existing old event, counts a key or survivor the deployment lacks as `unknown` (the load's note shows the count). The load posts it after the organiser sets; a 404 (route not deployed yet) is a warning, not a failure |
 | `runs/start`, `runs/finish` | the run log |
 
 ## Inbound mail webhook

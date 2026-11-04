@@ -11,13 +11,15 @@
 # lockfile-strict: setup-pixi passes `--locked` when pixi.lock exists, and
 # `bun install --frozen-lockfile` fails instead of updating bun.lock.
 #
-# One job, because the gates share an install that costs more than the gates
-# themselves; cheap, clear failures (codegen, lint, typecheck) run before the
-# expensive build.
+# One job for the gates, because they share an install that costs more than
+# the gates themselves; cheap, clear failures (codegen, lint, typecheck) run
+# before the expensive build. The accessibility gate (`a11y`, at the end) is a
+# second job: it needs a browser and a build with data.
 #
 # No secrets: convex/_generated is committed (check-codegen guards it), the
 # pipeline tests are offline (respx), and the build compiles against a
-# placeholder deployment via webapp/scripts/build-env-defaults.sh.
+# placeholder deployment via webapp/scripts/build-env-defaults.sh; the
+# accessibility job reads the dev deployment's public URLs, which are no secret.
 
 name: CI
 
@@ -82,3 +84,58 @@ jobs:
       # pair — which it refuses to do for a deploying build.
       - name: Build (production-equivalent, no deploy)
         run: pixi run build
+
+  # The accessibility gate (ENG-37): axe-core over the main public pages at
+  # desktop and phone size (webapp/e2e/a11y.spec.ts), failing on a serious or
+  # critical violation. A job of its own, as it needs a browser and a server
+  # the gates above do not, and runs beside them.
+  #
+  # Pages need data, so this build is not the placeholder one above: it reads
+  # the dev deployment, whose two URLs are public by construction (every
+  # preview ships them to the browser; docs/deploy.md §2) and need no secret.
+  # Public queries only, and the e2e guard keeps every write in the browser
+  # (webapp/e2e/fixtures.ts). Repository variables `E2E_CONVEX_URL` and
+  # `E2E_CONVEX_SITE_URL` point it elsewhere without a code change.
+  a11y:
+    name: accessibility (axe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CONVEX_URL: ${{ vars.E2E_CONVEX_URL || 'https://hushed-rhinoceros-215.convex.cloud' }}
+      NEXT_PUBLIC_CONVEX_SITE_URL: ${{ vars.E2E_CONVEX_SITE_URL || 'https://hushed-rhinoceros-215.convex.site' }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          pixi-version: v0.73.0
+          cache: true
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install JS dependencies
+        working-directory: webapp
+        env:
+          HUSKY: "0"
+        run: bun install --frozen-lockfile
+
+      # The Chromium build this Playwright version drives, with its system
+      # libraries. Setup, not a gate, so not a pixi task.
+      - name: Install Chromium
+        working-directory: webapp
+        run: bunx playwright install --with-deps chromium
+
+      # With both Convex URLs set, scripts/build-env-defaults.sh passes them
+      # through; with no CONVEX_DEPLOY_KEY nothing is deployed.
+      - name: Build (against the dev deployment, no deploy)
+        run: pixi run build
+
+      - name: axe-core over the public pages
+        env:
+          E2E_SERVER: start
+        run: pixi run a11y

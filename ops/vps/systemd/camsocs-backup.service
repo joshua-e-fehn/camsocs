@@ -1,0 +1,78 @@
+# The nightly backup of Convex production (ENG-44): `convex export` with file
+# storage into /var/lib/camsocs-backup, read back whole, the newest 14 kept.
+# Started by camsocs-backup.timer, or by hand: `systemctl start
+# camsocs-backup.service`. Runbook: /opt/camsocs/docs/ops-vps.md §10.
+# Installed by install.sh from a reviewed commit; the script, the Convex CLI
+# and its node are root-owned in /usr/local/lib/camsocs-ops/, never the
+# checkout's: this unit holds production's deploy key.
+[Unit]
+Description=camsocs nightly backup of Convex production
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+# A failed or shrunken backup DMs the operator (the exit code says which).
+OnFailure=camsocs-alert@backup.service
+
+[Service]
+Type=oneshot
+# Neither root nor the harvest's camsocs: a user of its own, shared by name
+# with camsocs-restore-test.service, so both own the backups. Its state
+# directory is /var/lib/private/camsocs-backup (/var/lib/private is 0700
+# root), so nobody else can read a backup: the CRM, the requests, sign-in
+# sessions and the auth component's keys are in it.
+DynamicUser=yes
+User=camsocs-backup
+StateDirectory=camsocs-backup
+StateDirectoryMode=0700
+CacheDirectory=camsocs-backup
+CacheDirectoryMode=0700
+UMask=0077
+# The key file holds CONVEX_DEPLOY_KEY=prod:cheerful-bandicoot-511|… and
+# nothing else; systemd hands the unit a read-only copy only it can read,
+# for as long as it runs. The CLI reads it with --env-file: the key is never
+# in an environment variable or on a command line.
+LoadCredential=convex-backup-env:/etc/camsocs/backup.env
+ExecStart=/usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py backup
+Environment=PATH=/usr/bin:/bin
+Environment=CAMSOCS_BACKUP_DIR=%S/camsocs-backup CAMSOCS_BACKUP_TOOLS=/usr/local/lib/camsocs-ops/backup
+Environment=CAMSOCS_BACKUP_ENV=%d/convex-backup-env
+# The CLI keeps its small state under $HOME/.convex and $HOME/.cache.
+Environment=HOME=%C/camsocs-backup
+# The script's own limit ends the export first (2 h); the lock may wait for a
+# restore test up to 2 h more.
+TimeoutStartSec=5h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# --- hardening: it reads its key, talks to convex.cloud / api.convex.dev ------
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+# Mya's data, Docker, root's files, the harvest's checkout, state and logs.
+# (/etc/camsocs is 0750 root: the unit's user cannot read it; it gets the key
+# only as its credential, like the alert's Slack values.)
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/opt/camsocs -/var/lib/camsocs -/var/log/camsocs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Not MemoryDenyWriteExecute: node's JIT needs it.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# Convex only, over the internet: no private, CGNAT (Tailscale), link-local
+# or multicast range, and no loopback service but the host's DNS stub.
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 localhost
+IPAddressAllow=127.0.0.53

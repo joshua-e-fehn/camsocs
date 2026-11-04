@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { bestRoleAddress } from "./brokerRows"
+import { bestRoleAddress, outreachAddresses } from "./brokerRows"
 
 /**
  * The outreach address (the Art 14 notice goes to it): a role address only,
  * never a personal CRSid address, a lists.cam.ac.uk list (every member would
- * get it) or a webmail address (often one officer's own).
+ * get it), a webmail address (often one officer's own) or a person's alumni
+ * address.
  */
 
 type Org = Parameters<typeof bestRoleAddress>[0]
@@ -59,6 +60,26 @@ describe("bestRoleAddress", () => {
     ).toBeUndefined()
   })
 
+  test("never picks a person's alumni address, however it is shaped (ENG-37)", () => {
+    for (const email of [
+      "jane.example2@cantab.ac.uk",
+      "janeexample@cantab.net",
+      "jane.president@cantab.net",
+      "anna.lena.van.example@cantab.net",
+      "jane.example@alumni.cam.ac.uk",
+      "jexample@alum.example.edu",
+    ]) {
+      expect(bestRoleAddress(org(undefined, [{ role: "president", email }]))).toBeUndefined()
+      expect(bestRoleAddress(org(email))).toBeUndefined()
+    }
+    // A post's alumni address is still a role address.
+    expect(
+      bestRoleAddress(
+        org("jane.example@cantab.net", [{ role: "secretary", email: "secretary@cantab.ac.uk" }]),
+      ),
+    ).toEqual({ email: "secretary@cantab.ac.uk", role: "secretary", kind: "role_own_domain" })
+  })
+
   test("falls back to the general address when it is a role address", () => {
     expect(bestRoleAddress(org("chess@srcf.net"))).toEqual({
       email: "chess@srcf.net",
@@ -66,5 +87,34 @@ describe("bestRoleAddress", () => {
       kind: "srcf",
     })
     expect(bestRoleAddress(org("president@chess.cambridgesu.co.uk"))?.kind).toBe("cambridgesu")
+  })
+})
+
+describe("outreachAddresses (where the notice goes after a bounce)", () => {
+  test("every usable address once, best first, the general one last", () => {
+    expect(
+      outreachAddresses(
+        org("Info@CUChess.org", [
+          { role: "treasurer", email: "treasurer@cuchess.org" },
+          { role: "president", email: "president@cuchess.org" },
+          { role: "secretary", email: "secretary@cuchess.org" },
+          { role: "other", email: "info@cuchess.org" },
+          { role: "welfare", email: "ab123@cam.ac.uk" },
+          { role: "events", email: "soc-chess@lists.cam.ac.uk" },
+          { role: "publicity", email: "chess.publicity@gmail.com" },
+        ]),
+      ).map((address) => `${address.role}:${address.email}`),
+    ).toEqual([
+      "secretary:secretary@cuchess.org",
+      "president:president@cuchess.org",
+      "other:info@cuchess.org",
+      "treasurer:treasurer@cuchess.org",
+    ])
+  })
+
+  test("the first is bestRoleAddress", () => {
+    const sample = org("chess@srcf.net", [{ role: "captain", email: "captain@cuchess.org" }])
+    expect(bestRoleAddress(sample)).toEqual(outreachAddresses(sample)[0])
+    expect(outreachAddresses(org("cuchessclub@gmail.com"))).toEqual([])
   })
 })

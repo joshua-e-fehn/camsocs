@@ -28,6 +28,13 @@ one stage's newer run never hides another stage's observations.
 A file is written to ``<name>.jsonl.tmp`` and renamed when complete, so a
 crashed stage leaves no half-file for the next stage to read. A stage that
 produced nothing writes nothing (the previous file stays the latest).
+
+**Shadowed readings.** ``var/staging/<source_type>/shadowed.json`` holds the
+event readings an LLM stage dropped because another staged source has the
+evening, each with that source's reading (`ShadowedReading`, ENG-47). It is
+one file per directory, replaced by every run of its stage with the full
+current set, and not a staging file: no reader of records sees it. The load
+retires each one's own key to the event that took it over.
 """
 
 from __future__ import annotations
@@ -40,7 +47,12 @@ from typing import Self
 
 from pydantic import TypeAdapter
 
-from camsocs_pipeline.models.observation import EventObservation, Observation, StagedRecord
+from camsocs_pipeline.models.observation import (
+    EventObservation,
+    Observation,
+    ShadowedReading,
+    StagedRecord,
+)
 from camsocs_pipeline.models.vocab import SOURCE_TYPES
 
 logger = logging.getLogger(__name__)
@@ -73,6 +85,10 @@ def is_events_directory(name: str) -> bool:
 
 Record = Observation | EventObservation
 _RECORD = TypeAdapter(StagedRecord)
+_SHADOWED = TypeAdapter(list[ShadowedReading])
+
+#: The shadowed readings beside a directory's staging files (not ``*.jsonl``).
+SHADOWED_FILE = "shadowed.json"
 
 
 def _check_directory(name: str) -> str:
@@ -214,6 +230,30 @@ class StagingStore:
         paths = [path for path in sorted(folder.glob("*.jsonl")) if _part_of(path) == part]
         return [record for path in paths for record in self.read(path)]
 
+    def write_shadowed(self, directory: str, readings: Iterable[ShadowedReading]) -> int:
+        """Replaces the directory's shadowed readings with `readings` (ENG-47);
+        none removes the file. Written to a temporary file and renamed."""
+        path = self.root / _check_directory(directory) / SHADOWED_FILE
+        rows = list(readings)
+        if not rows:
+            path.unlink(missing_ok=True)
+            return 0
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_bytes(_SHADOWED.dump_json(rows, exclude_none=True))
+        temporary.replace(path)
+        return len(rows)
+
+    def read_shadowed(self, directory: str) -> list[ShadowedReading]:
+        """The directory's shadowed readings, or none."""
+        path = self.root / _check_directory(directory) / SHADOWED_FILE
+        if not path.is_file():
+            return []
+        try:
+            return _SHADOWED.validate_json(path.read_bytes())
+        except ValueError as error:
+            raise ValueError(f"{path}: {error}") from error
+
     def directories(self) -> list[str]:
         """Every staging directory that holds at least one file, sources first."""
         if not self.root.is_dir():
@@ -235,6 +275,7 @@ __all__ = [
     "EVENTS_SUFFIX",
     "PART_SEPARATOR",
     "RESOLVED",
+    "SHADOWED_FILE",
     "Record",
     "StagingStore",
     "StagingWriter",

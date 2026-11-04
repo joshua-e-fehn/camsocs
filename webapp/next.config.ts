@@ -1,5 +1,6 @@
 import path from "node:path"
 import { withPostHogConfig } from "@posthog/nextjs-config"
+import { withBotId } from "botid/next/config"
 import type { NextConfig } from "next"
 // An internal Next path, not a public export: if an upgrade moves it the build
 // fails loudly here, and HTML_LIMITED_BOTS below needs re-pointing (or a copy).
@@ -76,9 +77,33 @@ export const NOINDEX_SOURCES = [
   "/relay/:path*",
 ] as const
 
-const nextConfig: NextConfig = {
+/**
+ * Whether the browser half of Vercel BotID starts (`instrumentation-client.ts`,
+ * ENG-37): only in a build on Vercel, whose rewrites reach Vercel's challenge.
+ * Anywhere else (`next dev`, CI, the e2e suite) a protected `fetch` would wait
+ * for a challenge nobody answers. Inlined at build time as
+ * `process.env.NEXT_PUBLIC_BOT_CHECK`; the server decides for itself at run
+ * time (lib/request-submit.ts `botCheckEnabled`).
+ */
+export function botCheckClientFlag(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): "1" | "" {
+  return env.VERCEL === "1" ? "1" : ""
+}
+
+/**
+ * Wrapped by `withBotId` (ENG-37), which adds the two rewrites that carry
+ * BotID's challenge scripts from this origin to Vercel (a fixed
+ * `/149e9513-…/2d206a39-…/` prefix) and, for that prefix only, headers that
+ * let Vercel's challenge frame itself (`X-Frame-Options: SAMEORIGIN`,
+ * `frame-ancestors 'self'`). Next lets the last matching rule win, and the
+ * wrapper's comes after `securityHeaders()`, so the site's `DENY` holds
+ * everywhere else. Same-origin paths, so the CSP needs no new source.
+ */
+const nextConfig: NextConfig = withBotId({
   // No `x-powered-by: Next.js`: it tells a scanner nothing we want it to know.
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_BOT_CHECK: botCheckClientFlag() },
   // Pin the workspace root to this directory. Without it Next walks up looking
   // for lockfiles and can adopt an unrelated one above the repo (it picked
   // ~/package-lock.json on the scaffold machine), which changes file tracing.
@@ -117,7 +142,7 @@ const nextConfig: NextConfig = {
       })),
     ]
   },
-}
+})
 
 /**
  * The browser protections every response carries (ENG-35, launch audit

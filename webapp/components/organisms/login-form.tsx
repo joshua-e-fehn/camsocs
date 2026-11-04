@@ -14,6 +14,7 @@ import { useSignInOptions } from "@/hooks/convex"
 import { withSignInMarker } from "@/lib/analytics-events"
 import { authClient } from "@/lib/auth-client"
 import { isCamEmail, normaliseCamEmail } from "@/lib/cam-email"
+import { focusOnMount } from "@/lib/focus"
 import { cn } from "@/lib/utils"
 
 export type SignInMethod = "cam" | "google"
@@ -205,7 +206,13 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
 
   if (sentTo) {
     return (
-      <div className="flex flex-col items-center gap-3 text-center" role="status">
+      // Takes focus: the button that was pressed is gone (lib/focus.ts, ENG-37).
+      <div
+        className="flex flex-col items-center gap-3 rounded-lg text-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        role="status"
+        ref={focusOnMount}
+        tabIndex={-1}
+      >
         <MailCheckIcon className="size-10 text-primary" aria-hidden="true" />
         <p className="font-medium">Check your inbox</p>
         <p className="text-sm text-muted-foreground">

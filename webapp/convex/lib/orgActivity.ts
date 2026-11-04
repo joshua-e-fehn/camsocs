@@ -100,6 +100,8 @@ export type ActivityRow = {
   runKey?: string
   /** Absent on rows from before the copy (not cancelled, as far as we know). */
   cancelled?: boolean
+  /** True while the event is superseded by another source's (ENG-47). */
+  superseded?: boolean
 }
 
 /** The run a title belongs to: a short hash of it lower-cased, accents and
@@ -129,6 +131,7 @@ export function countsAsActivity(row: ActivityRow, removed: ReadonlySet<string>)
     row.visibility === "public" &&
     row.hosting !== "takes_part" &&
     row.cancelled !== true &&
+    row.superseded !== true &&
     !removed.has(row.eventKey)
   )
 }

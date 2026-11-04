@@ -15,10 +15,14 @@ import { defineConfig } from "@playwright/test"
  *   bun run e2e:install               # once: the Chromium build Playwright drives
  *   bun run e2e                       # starts `next dev` on :3100 unless E2E_BASE_URL is set
  *   E2E_LABEL=after bun run e2e       # a second set of screenshots beside the first
+ *   E2E_SERVER=start bun run e2e:a11y # `next start` over a finished `bun run build` (CI)
  */
 
 const PORT = Number(process.env.E2E_PORT ?? 3100)
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`
+// `start` serves the production build CI made (the accessibility job); a
+// production server compiles nothing on request, so it needs no warm-up.
+const SERVER = process.env.E2E_SERVER === "start" ? "start" : "dev --turbopack"
 
 const desktop = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }
 const mobile = {
@@ -58,7 +62,7 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: `bunx next dev --turbopack --port ${PORT}`,
+        command: `bunx next ${SERVER} --port ${PORT}`,
         url: baseURL,
         reuseExistingServer: true,
         timeout: 180_000,
