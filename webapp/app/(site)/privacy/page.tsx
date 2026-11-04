@@ -63,8 +63,9 @@ export const metadata: Metadata = pageMetadata({
  * "If we have not written to you" and "Changes" say "we are writing"; put
  * them back in the present tense once it has gone out. "If we have not
  * written to you" is the published side of the Art 14(5)(e) assessment
- * (dpia-lite §4), and the faith, political, LGBTQ+, ethnic, national, health
- * and disability society officers sentences
+ * (dpia-lite §4, including group 5, societies with no usable address,
+ * decided 4 November 2026), and the faith, political, LGBTQ+, ethnic,
+ * national, health and disability society officers sentences
  * follow the Art 9 decision (dpia-lite §5, ENG-42, 3 November 2026): such
  * names are kept under Art 9(2)(e), only as the society's own pages list its
  * officers, never published or passed to a partner without the officer's
@@ -280,14 +281,18 @@ export default function PrivacyPage() {
         <h3>If we have not written to you</h3>
         <p>
           We are writing to every society we list about its listing, at the role address it
-          publishes (by 9 November 2026). We do not write to each speaker on a talk or event, each
-          person named in the title of a University event, or each sender of a mailing-list message:
-          there are thousands of them, for most we have no address, and finding one would mean
-          collecting more about them than the listing needs. This notice is how we tell them
-          instead. To protect them, we show only what the organiser published and link to it, infer
-          nothing about anyone, delete talks 30 days and events a year after they took place, keep
-          mailing-list messages private and delete them on the schedule below, and remove a name for
-          good when its owner asks.
+          publishes (by 9 November 2026). Some societies publish no address we can write to: none at
+          all, only a mailing list that would reach every member, or only an address that may be one
+          person's own. Where such a society has a contact form or a social account we write to it
+          there; otherwise this notice is how its committee is told. Every listing has links to
+          claim, correct or remove it, or to object. We do not write to each speaker on a talk or
+          event, each person named in the title of a University event, or each sender of a
+          mailing-list message: there are thousands of them, for most we have no address, and
+          finding one would mean collecting more about them than the listing needs. This notice is
+          how we tell them instead. To protect them, we show only what the organiser published and
+          link to it, infer nothing about anyone, delete talks 30 days and events a year after they
+          took place, keep mailing-list messages private and delete them on the schedule below, and
+          remove a name for good when its owner asks.
         </p>
       </ProseSection>
 

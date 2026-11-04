@@ -29,7 +29,8 @@ import { literalUnion } from "./validators"
  * with one exception kept even here: the outreach (the Art 14 notice) goes
  * to a role address only — never a personal CRSid address, a lists.cam.ac.uk
  * mailing list (it would reach every member) or a webmail address (often one
- * officer's own).
+ * officer's own). The webmail addresses are listed apart (`webmailAddresses`)
+ * for the webmail-only export, which Joshua sends or not by his own choice.
  */
 
 /** Statuses that mean "we hold a value". */
@@ -53,29 +54,21 @@ const isPersonal = (email: string) => classifyEmail(email) === "personal_crsid"
 /** Address kinds the outreach never writes to (see the module comment). */
 const NOT_FOR_OUTREACH: ReadonlySet<EmailType> = new Set(["personal_crsid", "lists_cam", "webmail"])
 
-/** The address's kind when the outreach may write to it, else undefined. */
-function outreachKind(email: string): EmailType | undefined {
-  const kind = classifyEmail(email)
-  return NOT_FOR_OUTREACH.has(kind) ? undefined : kind
-}
-
 type OutreachAddress = { email: string; role: Role | "general"; kind: EmailType }
+type Addressed = Pick<Doc<"organisations">, "email" | "roleEmails">
 
-/**
- * Every published address the outreach may write to, best first: role
- * addresses in `ROLE_PREFERENCE` order, then the general address, each once.
- * The first is the one the notice goes to; the rest are where it goes next
- * when that one bounces (the export's `next_emails`).
- */
-export function outreachAddresses(
-  org: Pick<Doc<"organisations">, "email" | "roleEmails">,
+/** The published addresses whose kind `accept` takes, best first: role
+ * addresses in `ROLE_PREFERENCE` order, then the general address, each once. */
+function publishedAddresses(
+  org: Addressed,
+  accept: (kind: EmailType) => boolean,
 ): OutreachAddress[] {
   const out: OutreachAddress[] = []
   const seen = new Set<string>()
   const add = (email: string, role: Role | "general") => {
-    const kind = outreachKind(email)
+    const kind = classifyEmail(email)
     const id = email.trim().toLowerCase()
-    if (!kind || seen.has(id)) return
+    if (!accept(kind) || seen.has(id)) return
     seen.add(id)
     out.push({ email, role, kind })
   }
@@ -86,16 +79,34 @@ export function outreachAddresses(
   return out
 }
 
+/**
+ * Every published address the outreach may write to, best first. The first
+ * is the one the notice goes to; the rest are where it goes next when that
+ * one bounces (the export's `next_emails`).
+ */
+export function outreachAddresses(org: Addressed): OutreachAddress[] {
+  return publishedAddresses(org, (kind) => !NOT_FOR_OUTREACH.has(kind))
+}
+
+/**
+ * Every published webmail address (a society's @gmail.com and the like),
+ * best first. The outreach never picks one; the webmail-only export
+ * (`lib/broker/outreach.ts` `webmailOutreachCsv`) offers them for societies
+ * with no other usable address. A CRSid or alumni address on any domain is
+ * `personal_crsid`, not webmail (`classifyEmail`), so it is never here.
+ */
+export function webmailAddresses(org: Addressed): OutreachAddress[] {
+  return publishedAddresses(org, (kind) => kind === "webmail")
+}
+
 /** The best published role address to send the outreach to, or undefined. */
-export function bestRoleAddress(
-  org: Pick<Doc<"organisations">, "email" | "roleEmails">,
-): OutreachAddress | undefined {
+export function bestRoleAddress(org: Addressed): OutreachAddress | undefined {
   return outreachAddresses(org)[0]
 }
 
 /** Whether the listing publishes any non-personal address (coverage's
  * "email"), whether or not the outreach may use it. */
-function hasPublishedAddress(org: Pick<Doc<"organisations">, "email" | "roleEmails">): boolean {
+function hasPublishedAddress(org: Addressed): boolean {
   if (org.email && !isPersonal(org.email)) return true
   return org.roleEmails.some((item) => !isPersonal(item.email))
 }
@@ -123,6 +134,12 @@ const needOfferChip = v.object({
   status: literalUnion(NEED_OFFER_STATUSES),
 })
 
+const addressValidator = v.object({
+  email: v.string(),
+  role: v.union(literalUnion(ROLES), v.literal("general")),
+  kind: literalUnion(EMAIL_TYPES),
+})
+
 /** One organisation in the broker's table, coverage and outreach export. */
 export const brokerOrgRowValidator = v.object({
   key: v.string(),
@@ -144,16 +161,13 @@ export const brokerOrgRowValidator = v.object({
   missingFields: v.array(v.string()),
   /** The outreach address (`bestRoleAddress`): a role address, never a
    * personal, mailing-list or webmail one. */
-  bestAddress: v.optional(
-    v.object({
-      email: v.string(),
-      role: v.union(literalUnion(ROLES), v.literal("general")),
-      kind: literalUnion(EMAIL_TYPES),
-    }),
-  ),
+  bestAddress: v.optional(addressValidator),
   /** The other outreach addresses, in the order to try them when the notice
    * to `bestAddress` bounces (`outreachAddresses`). */
   nextAddresses: v.array(v.string()),
+  /** The published webmail addresses, best first (`webmailAddresses`); the
+   * webmail-only export uses them when there is no `bestAddress`. */
+  webmailAddresses: v.array(addressValidator),
   heldFields: v.array(v.string()),
   sourceHosts: v.array(v.string()),
   /** Rejected entries are left out. */
@@ -214,6 +228,7 @@ export function brokerOrgRow(
     missingFields: org.missingFields,
     bestAddress: best,
     nextAddresses: next.map((address) => address.email),
+    webmailAddresses: webmailAddresses(org),
     heldFields: heldFields(org.meta),
     sourceHosts: sourceHosts(org.meta),
     needs: chips(profile?.needs ?? []),
