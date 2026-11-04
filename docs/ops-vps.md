@@ -141,7 +141,7 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
 ## 4. Rollback
 
 - **Pin a commit:** `echo <commit> | sudo -u camsocs tee /var/lib/camsocs/pin`. The next run fetches and checks out that commit (detached) instead of pulling main. `/var/lib/camsocs/last-good-commit` is the last commit whose run ended with exit 0. `rm /var/lib/camsocs/pin` follows main again from the next run. (The runner itself: install an earlier reviewed commit with `install.sh --revision`.) A pinned commit from before ENG-10 has no `monitor` command: the monitor unit then skips each run quietly (`ConditionPathExists=` on `monitor.py`, shown as a skipped condition in `systemctl status camsocs-monitor`), so the checks stop while the pin holds; a runner installed from before ENG-10 has no monitor unit at all.
-- **Data:** every pipeline write is an upsert of claims; the next good run repairs what a bad one wrote. Function and site rollbacks are docs/deploy.md §6.
+- **Data:** every pipeline write is an upsert of claims; the next good run repairs what a bad one wrote. Function, site and data rollbacks (and backups) are `docs/rollback.md`.
 - **Stop:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer` (and `camsocs-monitor.timer`, or the monitor alerts on the stale harvest; the backups are independent of the harvest and keep running: `camsocs-backup.timer camsocs-restore-test.timer` stop them, §10); a run in progress: `systemctl stop camsocs-harvest@full.service` (recorded as `stopped`, exit 143, which alerts). Re-running the installer keeps them off, and while both harvest timers are off it does not turn on a timer the host never had (the monitor's) either.
 - **Uninstall:** stop as above, then `rm /etc/systemd/system/camsocs-* /etc/logrotate.d/camsocs && systemctl daemon-reload`; `userdel camsocs`; `rm -rf /opt/camsocs /var/lib/camsocs /var/log/camsocs /usr/local/lib/camsocs-ops /var/lib/camsocs-ops /etc/camsocs` (the cache and logs go with it) and `rm -rf /var/lib/private/camsocs-backup /var/cache/private/camsocs-backup /var/lib/camsocs-backup /var/cache/camsocs-backup` (the backups); remove the deploy key in GitHub, the camsocs key from cliproxy and the backup's deploy key in the Convex dashboard (§10).
 
@@ -226,6 +226,8 @@ The `uni_events` stage reads the University's events programme only under the pe
 - **Changing a threshold** is a code change in `monitor.py` (a reviewed commit on main). The monitor never pulls: it runs the checkout as the last harvest left it, so a merged change reaches it after the next harvest. The alert's text comes from the installed `camsocs-alert.py` instead, so a change to it (ENG-33's requests and recoveries) needs `install.sh --revision <commit>` too; until then the old script reports a run that paged only for a request or a recovery as "the monitor itself failed".
 
 ## 7. Rotating keys
+
+The keys on this host. Those that live only in Vercel, Convex, Google Cloud or PostHog (the Convex deploy key, `BETTER_AUTH_SECRET`, the Google OAuth client, the PostHog keys' other copies, the IndexNow key, Vercel tokens) are in `docs/key-rotation.md`.
 
 Do it outside the run windows (not 02:00–08:00 on Sundays, not 04:30–06:30 daily) or with the timers stopped; a run between the two halves fails with 401 and alerts.
 
