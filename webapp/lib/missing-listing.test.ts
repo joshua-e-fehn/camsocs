@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import {
+  eventListingState,
   FOUND_TTL_MS,
   isPrefetch,
   LISTING_SECTIONS,
@@ -162,6 +163,38 @@ describe("listingGate", () => {
     expect(await listingGate(get(`/events/${EVENT}`), answering("found"))).toEqual(next)
   })
 
+  test("a superseded event key is a 308 to the event that took it over (ENG-47)", async () => {
+    const survivor = `evt-${"1".repeat(40)}`
+    const moved: ListingState = { movedTo: `/events/${survivor}` }
+    expect(await listingGate(get(`/events/${EVENT}`), answering(moved))).toEqual({
+      action: "redirect",
+      path: `/events/${survivor}`,
+    })
+    // From under /talks too: the survivor's own page, wherever it lives.
+    expect(await listingGate(get(`/talks/events/${EVENT}`), answering(moved))).toEqual({
+      action: "redirect",
+      path: `/events/${survivor}`,
+    })
+  })
+
+  test("events.locate's answer as the gate's state (ENG-47)", () => {
+    const survivor = `evt-${"1".repeat(40)}`
+    expect(eventListingState("event")).toBe("found")
+    expect(eventListingState("talks")).toBe("talks")
+    expect(eventListingState("missing")).toBe("missing")
+    expect(eventListingState({ supersededBy: survivor, talks: false })).toEqual({
+      movedTo: `/events/${survivor}`,
+    })
+    // A talks.cam-derived survivor's page is under /talks (G1): one hop there.
+    expect(eventListingState({ supersededBy: survivor, talks: true })).toEqual({
+      movedTo: `/talks/events/${survivor}`,
+    })
+    // Anything that is not an event key is no redirect target.
+    expect(eventListingState({ supersededBy: "https://evil.example/", talks: false })).toBe(
+      "missing",
+    )
+  })
+
   test("a fresh proxy and a stale page that disagree never loop (talks-boundary-redirect-loop)", async () => {
     // Follows redirects from `start` the way a browser would: the proxy
     // first (its verdict, `proxyState`), then the page's own fallback with
@@ -275,6 +308,20 @@ describe("rememberFound", () => {
     expect(await cached(event)).toBe("talks")
     expect(await cached(event)).toBe("talks")
     expect(lookup).toHaveBeenCalledTimes(1)
+  })
+
+  test("never remembers a superseded key's redirect (ENG-47)", async () => {
+    // A load can swap two readings' roles: A moved to B, then B to A. A
+    // remembered `A → B` beside a fresh `B → A` would be a 308 loop.
+    const a = { kind: "event" as const, key: EVENT }
+    const b = `evt-${"1".repeat(40)}`
+    let state: ListingState = { movedTo: `/events/${b}` }
+    const lookup = mock<ListingLookup>(async () => state)
+    const cached = rememberFound(lookup, { ttlMs: 1000, max: 10, now: () => 0 })
+    expect(await cached(a)).toEqual({ movedTo: `/events/${b}` })
+    state = "found"
+    expect(await cached(a)).toBe("found")
+    expect(lookup).toHaveBeenCalledTimes(2)
   })
 
   test("keys by kind and drops the oldest past the cap", async () => {

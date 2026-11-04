@@ -33,7 +33,10 @@
 
 The stage writes `var/staging/termcard/<run>.jsonl` with the full current set:
 cards read this run plus the previous file's events for cards not reached
-(the `--limit` budget), because `load` posts only the latest file.
+(the `--limit` budget), because `load` posts only the latest file. Rows
+dropped as another source's go to `shadowed.json` beside it, carried the same
+way, so a row loaded before that source listed the evening is retired to its
+event (`StagingStore.write_shadowed`, ENG-47).
 """
 
 from __future__ import annotations
@@ -46,7 +49,7 @@ from camsocs_pipeline.extract.dedupe import EventIndex
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.extract.when import TermCalendar, london_date
-from camsocs_pipeline.models.observation import EventObservation
+from camsocs_pipeline.models.observation import EventObservation, ShadowedReading
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.resolve.lookup import OrgLookup, domain_of
 from camsocs_pipeline.sources.base import PoliteClient
@@ -90,6 +93,8 @@ def run(ctx: StageContext) -> None:
     today = london_date(now)
 
     events: list[EventObservation] = []
+    #: Rows another staged source has, by their own identity (ENG-47).
+    shadowed: dict[tuple[str, str], ShadowedReading] = {}
     reached: set[str] = set()  # organisations whose cards this run reached
     skipped: dict[str, int] = {}
     read = 0
@@ -148,7 +153,11 @@ def run(ctx: StageContext) -> None:
                 skipped[reason] = skipped.get(reason, 0) + 1
                 continue
             read += 1
-            events.extend(event for event in found if not index.is_duplicate_record(event))
+            for event in found:
+                if not index.is_duplicate_record(event):
+                    events.append(event)
+                elif (pair := index.shadowed(event)) is not None:
+                    shadowed[(pair.event_source, pair.external_id)] = pair
 
     with_cards = {org_key for org_key, _url in cards}
     carried = [
@@ -161,6 +170,14 @@ def run(ctx: StageContext) -> None:
     current = [*carried, *events]
     if current:
         ctx.staging.write(SOURCE_TYPE, ctx.run.run_key, current)
+    # Rows dropped as another source's, carried like the cards' events: a row
+    # loaded before that source listed the evening is retired to it (ENG-47).
+    carried_pairs = {
+        (pair.event_source, pair.external_id): pair
+        for pair in ctx.staging.read_shadowed(SOURCE_TYPE)
+        if pair.organiser in with_cards and pair.organiser not in reached
+    }
+    ctx.staging.write_shadowed(SOURCE_TYPE, {**carried_pairs, **shadowed}.values())
     # Staged: the events read this run are new; carried ones are unchanged.
     ctx.report.inserted += len(events)
     ctx.report.unchanged += len(carried)

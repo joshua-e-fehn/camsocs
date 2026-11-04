@@ -15,8 +15,9 @@ from camsocs_pipeline.models.observation import (
     IdentityHints,
     Observation,
     OrganiserObs,
+    ShadowedReading,
 )
-from camsocs_pipeline.staging.store import RESOLVED, StagingStore
+from camsocs_pipeline.staging.store import RESOLVED, SHADOWED_FILE, StagingStore
 
 AT = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
 
@@ -170,3 +171,26 @@ class TestParts:
     def test_parts_are_stage_names(self, tmp_path) -> None:
         with pytest.raises(ValueError, match="stage name"):
             StagingStore(tmp_path).path("camdram", "20261007T120000Z-aaaaaa", part="../x")
+
+    def test_shadowed_readings_sit_beside_the_files_and_no_record_reader_sees_them(
+        self, tmp_path
+    ) -> None:
+        """ENG-47: one replaceable `shadowed.json` per directory, not a staging
+        file — `read_latest`, `directories` and pruning never see it."""
+        store = StagingStore(tmp_path)
+        pair = ShadowedReading(
+            event_source="instagram_api",
+            external_id="m-1:quiz",
+            organiser="org-cuqas",
+            by_source="google_calendar",
+            by_external_id="uid-quiz",
+        )
+        assert store.read_shadowed("instagram_api") == []
+        assert store.write_shadowed("instagram_api", [pair]) == 1
+        assert store.read_shadowed("instagram_api") == [pair]
+        assert store.directories() == []
+        assert store.read_latest("instagram_api") == []
+        # Replaced by the next run's full set; an empty set removes the file.
+        store.write_shadowed("instagram_api", [])
+        assert store.read_shadowed("instagram_api") == []
+        assert not (tmp_path / "instagram_api" / SHADOWED_FILE).exists()

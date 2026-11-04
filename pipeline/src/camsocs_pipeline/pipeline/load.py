@@ -82,7 +82,12 @@ from camsocs_pipeline.events.duplicates import identity as event_identity
 from camsocs_pipeline.extract.event_noise import NoiseClassifier, NoiseStats, sift_events
 from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
-from camsocs_pipeline.models.observation import EventObservation, FetchInfo, Observation
+from camsocs_pipeline.models.observation import (
+    EventObservation,
+    FetchInfo,
+    Observation,
+    ShadowedReading,
+)
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
     ClaimInput,
@@ -114,6 +119,7 @@ from camsocs_pipeline.models.wire import (
     RemoveEventsRequest,
     ScannedEvent,
     SourceInput,
+    SupersededEvent,
     SuppressionList,
     TermDate,
     WireModel,
@@ -186,11 +192,15 @@ class BatchResult:
     rejected: list[Any] = field(default_factory=list)
     #: `claims` only: entity rows created / updated / unchanged.
     entities: dict[str, int] = field(default_factory=dict)
+    #: `events/superseded` only: pairs naming a key or survivor the
+    #: deployment does not have (counted, not listed: most never had an event).
+    unknown: int = 0
 
     def record(self, response: dict[str, Any]) -> None:
         self.inserted += int(response.get("inserted", 0))
         self.updated += int(response.get("updated", 0))
         self.unchanged += int(response.get("unchanged", 0))
+        self.unknown += int(response.get("unknown", 0))
         self.requests += 1
         for name in ("rejected", "missingEvents", "missing"):
             self.rejected.extend(response.get(name) or [])
@@ -201,7 +211,8 @@ class BatchResult:
         return (
             f"{self.inserted + self.updated} {self.unit} written "
             f"({self.inserted} new, {self.updated} updated, {self.unchanged} unchanged, "
-            f"{self.requests} requests)"
+            + (f"{self.unknown} unknown, " if self.unknown else "")
+            + f"{self.requests} requests)"
         )
 
 
@@ -474,6 +485,26 @@ class ConvexLoader:
         """Replaces each event's organiser set; `rejected` lists unknown events."""
         return self.post_batches("eventOrganisers", "events", sets, unit="event organiser sets")
 
+    def retire_superseded(self, events: Sequence[SupersededEvent]) -> BatchResult | None:
+        """`events/superseded` (ENG-47): event keys whose reading this load
+        folded into another source's event, and that event. The server hides
+        each old key that exists and sends its page to the survivor; a key
+        that never had an event of its own is counted `unknown`.
+
+        None when the deployment does not have the route yet (a 404: the VPS
+        pulls main before Convex is deployed). Nothing is lost: the next load
+        retires the same keys again."""
+        try:
+            return self.post_batches(
+                "events/superseded", "events", events, unit="superseded event keys"
+            )
+        except ConvexNotFound:
+            logger.warning(
+                "events/superseded is not deployed here yet; %d event keys wait for the next load",
+                len(events),
+            )
+            return None
+
     def post_broker_inferences(
         self,
         profiles: Sequence[BrokerProfileInput] = (),
@@ -674,16 +705,19 @@ class ConvexLoader:
         media: MediaSource | None = None,
         redactor: Redactor | None = None,
         noise: NoiseClassifier | None = None,
+        shadowed: Iterable[ShadowedReading] = (),
     ) -> LoadReport:
         """Posts keyed observations as every row they imply, in dependency
         order: sources → (files) → claims → orgInternal → relationships →
-        event organisers → broker inferences — after taking out calendar
+        event organisers → superseded event keys → broker inferences — after taking out calendar
         noise (D6, `extract.event_noise`: with `noise`, else by the rules alone) and
         whatever the suppression list forbids. Unkeyed records are skipped
         (they wait for the resolve stage) and counted. With `media`, image
         values that name only a ``sourceUrl`` are uploaded first. Public free
         text is redacted (D1, `extract.redact`) with `redactor`, or with the
-        deterministic rule alone when none is given.
+        deterministic rule alone when none is given. `shadowed`: readings an
+        LLM stage dropped as another source's (`StagingStore.read_shadowed`),
+        whose own keys are retired with the folded readings' (ENG-47).
 
         The suppression list comes first of all (`suppress_records`): no
         model — the calendar-noise one, the redaction's — ever reads a
@@ -693,7 +727,7 @@ class ConvexLoader:
         suppressions = self.suppressions()
         records, held = suppress_records(list(records), suppressions)
         records = sift_events(records, classifier)
-        plan = plan_observations(records)
+        plan = plan_observations(records, shadowed=shadowed)
         report = LoadReport(
             skipped=plan.skipped,
             collisions=plan.collisions,
@@ -711,6 +745,8 @@ class ConvexLoader:
             # A title that cannot be made safe: the event is not posted at all.
             unsafe = set(report.redaction.dropped)
             plan.event_organisers = [s for s in plan.event_organisers if s.event_key not in unsafe]
+            # Nothing was posted for such an event: no key is retired to it.
+            plan.superseded = [s for s in plan.superseded if s.by not in unsafe]
         report.sources = self.upsert_sources(plan.sources)
         reused_before = self.file_cache.reused if self.file_cache else 0
         if media is not None and not self.dry_run:
@@ -733,6 +769,11 @@ class ConvexLoader:
         report.org_internal = self.patch_org_internal(plan.org_internal)
         report.relationships = self.upsert_relationships(plan.relationships)
         report.event_organisers = self.set_event_organisers(plan.event_organisers)
+        retired = self.retire_superseded(plan.superseded)
+        if retired is None:
+            report.superseded_skipped = len(plan.superseded)
+        else:
+            report.superseded = retired
         report.broker = self.post_broker_inferences(plan.broker_profiles, plan.people)
         return report
 
@@ -785,6 +826,10 @@ class LoadReport:
     org_internal: BatchResult = field(default_factory=lambda: BatchResult("orgInternal"))
     relationships: BatchResult = field(default_factory=lambda: BatchResult("relationships"))
     event_organisers: BatchResult = field(default_factory=lambda: BatchResult("event organisers"))
+    #: Event keys retired to another source's event (ENG-47, `events/superseded`).
+    superseded: BatchResult = field(default_factory=lambda: BatchResult("superseded event keys"))
+    #: Keys not retired because the deployment lacks the route (posted next run).
+    superseded_skipped: int = 0
     broker: BatchResult = field(default_factory=lambda: BatchResult("broker rows"))
     #: The claims posted (`indexnow.ping_changed` reads which pages changed).
     posted: list[ClaimInput] = field(default_factory=list)
@@ -796,6 +841,7 @@ class LoadReport:
             self.org_internal,
             self.relationships,
             self.event_organisers,
+            self.superseded,
             self.broker,
         ]
 
@@ -816,6 +862,44 @@ class LoadPlan:
     collisions: list[str] = field(default_factory=list)
     #: Event readings folded into another source's event (`events.duplicates`).
     duplicates: Duplicates = field(default_factory=Duplicates)
+    #: Each folded reading's own key, retired to its primary's (ENG-47).
+    superseded: list[SupersededEvent] = field(default_factory=list)
+
+
+def _shadowed_keys(
+    items: Sequence[Observation | EventObservation],
+    shadowed: Iterable[ShadowedReading],
+    duplicates: Duplicates,
+    retired: Sequence[SupersededEvent],
+) -> list[SupersededEvent]:
+    """The keys of readings an LLM stage dropped as another staged source's
+    (`extract.dedupe`), each retired to the event that has it (ENG-47): the
+    primary that reading folds into here, or the reading itself. Such a
+    reading never reaches `find_duplicates` (the stage kept it out of
+    staging), but it may have been posted under its own key before the other
+    source listed the evening; an Instagram post's or a card's event has no
+    listing sweep to hide it.
+
+    Left out: a reading this load posts after all (staged again, as its own
+    event or folded: the claims bring it back, or `primary_of` retired it),
+    a pair naming itself, and a key already retired."""
+    staged = {
+        event_identity(record)
+        for record in items
+        if isinstance(record, EventObservation) and record.is_keyed
+    }
+    done = {pair.key for pair in retired}
+    pairs: list[SupersededEvent] = []
+    for reading in shadowed:
+        own = (reading.event_source, reading.external_id)
+        holder = (reading.by_source, reading.by_external_id)
+        survivor = duplicates.primary_of.get(holder, holder)
+        key = event_key(*own)
+        if own in staged or survivor == own or key in done:
+            continue
+        done.add(key)
+        pairs.append(SupersededEvent(key=key, by=event_key(*survivor)))
+    return pairs
 
 
 class StoredFileCache:
@@ -981,7 +1065,11 @@ def merge_coverage(a: CoverageCounts, b: CoverageCounts) -> CoverageCounts:
     )
 
 
-def plan_observations(records: Iterable[Observation | EventObservation]) -> LoadPlan:
+def plan_observations(
+    records: Iterable[Observation | EventObservation],
+    *,
+    shadowed: Iterable[ShadowedReading] = (),
+) -> LoadPlan:
     """Turns keyed observations into wire rows. See `ConvexLoader.post_observations`.
 
     Event readings another source already lists (`events.duplicates`: the
@@ -990,7 +1078,9 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
     own provenance, instead of events of their own; they are planned after
     every other record, so the event exists first. Each event gets one
     organiser set, folded from all of its readings (`replace` when every one
-    resolved its organisers, else `merge`)."""
+    resolved its organisers, else `merge`). Each folded reading's own key is
+    retired to its primary's (`superseded`, ENG-47), and so is each
+    `shadowed` reading's, to the primary of the reading that has its event."""
     plan = LoadPlan()
     items = list(records)
     duplicates = find_duplicates(record for record in items if record.is_keyed)
@@ -1057,6 +1147,16 @@ def plan_observations(records: Iterable[Observation | EventObservation]) -> Load
         )
         for target, (organisers, resolved) in organiser_sets.items()
     ]
+    # A reading folded into another event this run had, in an earlier run
+    # with fewer sources, an event of its own (the society's page before the
+    # University listed the same evening, ENG-24): nothing posts under that
+    # key any more, so the load retires it to the event that took it over
+    # (ENG-47). Most such keys never had an event; the server counts those.
+    plan.superseded = [
+        SupersededEvent(key=event_key(*duplicate), by=event_key(*primary))
+        for duplicate, primary in duplicates.primary_of.items()
+    ]
+    plan.superseded += _shadowed_keys(items, shadowed, duplicates, plan.superseded)
     plan.claims, plan.collisions = _without_collisions(plan.claims)
     plan.sources = list(sources.values())
     plan.broker_profiles = _merge_profiles(plan.broker_profiles)

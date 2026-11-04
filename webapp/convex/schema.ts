@@ -352,6 +352,14 @@ export const eventFields = {
   /** Derived: the listing it was read from (lib/derived.ts `sweepGroupOf`);
    * a future event far behind its listing's newest sighting is withdrawn. */
   sweepGroup: v.optional(v.string()),
+  /** The event that took this one over (ENG-47, convex/ingest/superseded.ts):
+   * the reading behind this key now folds into a higher-ranked source's event
+   * (pipeline events/duplicates.py) and is never posted under it again. A
+   * superseded event is in no public list, and its page answers with the
+   * survivor's; the key's own identity claims, posted again, clear it. */
+  supersededBy: v.optional(v.string()),
+  /** When `supersededBy` was last set. */
+  supersededAt: v.optional(v.number()),
   /** Derived: `university` for the University's own listing, else `society`
    * (lib/derived.ts `eventStreamOf`, ENG-31), indexed so `events.list` reads
    * each stream on its own. Optional while rows written before it are
@@ -959,6 +967,9 @@ export default defineSchema({
     /** The event's `cancelled`, so activity counts skip cancelled events
      * without reading them; absent as above (counted then). */
     cancelled: v.optional(v.boolean()),
+    /** True while the event is superseded (`events.supersededBy`, ENG-47), so
+     * activity counts skip it without reading it; absent otherwise. */
+    superseded: v.optional(v.boolean()),
   })
     .index("by_org_startsAt", ["orgKey", "startsAt"])
     .index("by_org_spanEndsAt", ["orgKey", "spanEndsAt"])

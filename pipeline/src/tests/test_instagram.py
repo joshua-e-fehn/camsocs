@@ -12,8 +12,15 @@ import pytest
 from PIL import Image
 
 import camsocs_pipeline.pipeline.load as load
-from camsocs_pipeline.models.observation import EventObservation, Observation
-from camsocs_pipeline.pipeline.state import load_state
+from camsocs_pipeline.claims import parser_field
+from camsocs_pipeline.keys import event_key
+from camsocs_pipeline.models.observation import (
+    EventObservation,
+    IdentityHints,
+    Observation,
+    OrganiserObs,
+)
+from camsocs_pipeline.pipeline.state import load_state, save_state
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.sources.instagram import (
     BusinessDiscovery,
@@ -23,7 +30,7 @@ from camsocs_pipeline.sources.instagram import (
     classify_error,
     parse_profile,
 )
-from camsocs_pipeline.staging.store import StagingStore
+from camsocs_pipeline.staging.store import StagingStore, events_directory
 from tests.fakes import QUOKKA_KEY, known_orgs_records
 
 SITE = "https://happy-otter-123.convex.site"
@@ -282,6 +289,70 @@ def test_a_handle_checked_recently_is_not_due_and_its_records_carry_forward(
     report = run_sync(settings=settings, stages=["instagram"])
     assert report.ok and graph_again.call_count == calls_before
     assert store.read_latest("instagram_api") == first
+
+
+def test_a_post_event_another_source_lists_later_is_kept_to_retire_its_key(
+    make_settings, net
+) -> None:
+    """ENG-47 review: run 1 stages (and the load posts) the post's event under
+    its own key; then the society's calendar lists the same evening. Run 2
+    drops the post's reading (`extract.dedupe`), so it is never staged or
+    folded again — the stage keeps the pair beside its staging file, carries
+    it while the handle is not re-checked, and the load retires the key."""
+    settings = settings_for(make_settings)
+    store = StagingStore(settings.staging_dir)
+    store.write("_resolved", "20261001T000000Z-aaaaaa", known_orgs_records())
+    mock_run_log(net)
+    net.get(GRAPH).mock(return_value=httpx.Response(200, json=profile_body(datetime.now(UTC))))
+    net.get(CDN).mock(return_value=httpx.Response(200, content=jpeg()))
+    net.post("http://llm.test/v1/chat/completions").mock(side_effect=caption_completion)
+    net.post(f"{SITE}/api/pipeline/files").mock(
+        return_value=httpx.Response(200, json={"storageId": "kg2stored", "sha256": "0" * 64})
+    )
+    assert run_sync(settings=settings, stages=["instagram"]).ok
+    (post,) = [r for r in store.read_latest("instagram_api") if isinstance(r, EventObservation)]
+    assert store.read_shadowed("instagram_api") == []
+
+    starts = next(f.value for f in post.fields if f.field == "startsAt")
+    calendar = EventObservation(
+        source_type="ics_feed",
+        source_key="uid-quokka-quiz",
+        source_url="https://calendar.example.org/cuqas.ics",
+        retrieved_at=datetime.now(UTC),
+        fields=[
+            parser_field("title", "CUQAS Quokka Quiz", extractor="ics.title", evidence="primary"),
+            parser_field("startsAt", starts, extractor="ics.startsAt", evidence="primary"),
+        ],
+        event_source="google_calendar",
+        external_id="uid-quokka-quiz",
+        visibility="public",
+        organisers=[OrganiserObs(identity=IdentityHints(name="CUQAS", known_key=QUOKKA_KEY))],
+    )
+    store.write(events_directory("ics_feed"), "20261002T000000Z-bbbbbb", [calendar])
+    state = load_state(settings.state_path)
+    # The handle is due again.
+    state.stage_data["instagram"]["handles"]["cuqas_example"]["checked"] = "2000-01-01T00:00:00Z"
+    save_state(settings.state_path, state)
+
+    second = run_sync(settings=settings, stages=["instagram"])
+    assert second.ok and "0 events this run" in second.stages[0].notes[0]
+    (pair,) = store.read_shadowed("instagram_api")
+    assert (pair.event_source, pair.external_id, pair.organiser) == (
+        "instagram_api",
+        post.external_id,
+        QUOKKA_KEY,
+    )
+    assert (pair.by_source, pair.by_external_id) == ("google_calendar", "uid-quokka-quiz")
+
+    # Not re-checked: the pair is carried forward with the account's records.
+    assert run_sync(settings=settings, stages=["instagram"]).ok
+    assert store.read_shadowed("instagram_api") == [pair]
+
+    plan = load.plan_observations([calendar], shadowed=store.read_shadowed("instagram_api"))
+    survivor = event_key("google_calendar", "uid-quokka-quiz")
+    assert [(s.key, s.by) for s in plan.superseded] == [
+        (event_key("instagram_api", post.external_id), survivor)
+    ]
 
 
 def test_rate_limits_stop_and_non_professional_accounts_are_remembered(make_settings, net) -> None:

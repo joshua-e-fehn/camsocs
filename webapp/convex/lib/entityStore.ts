@@ -85,7 +85,12 @@ export async function latestPastEvent(
   let scanned = 0
   for await (const row of rows) {
     if (++scanned > LATEST_EVENT_SCAN) break
-    if (row.role === "sponsor" || row.visibility !== "public" || row.hosting === "takes_part") {
+    if (
+      row.role === "sponsor" ||
+      row.visibility !== "public" ||
+      row.hosting === "takes_part" ||
+      row.superseded === true
+    ) {
       continue
     }
     const event = await ctx.db
@@ -183,13 +188,13 @@ export async function refreshOrganisation(
 /** What an `eventOrganisers` row copies from its event. */
 export type EventOrganiserSource = Pick<
   Doc<"events">,
-  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "title" | "cancelled"
+  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "title" | "cancelled" | "supersededBy"
 >
 
 /** The fields `eventOrganisers` rows hold copied from their event. */
 export type EventOrganiserCopy = Pick<
   Doc<"eventOrganisers">,
-  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "runKey" | "cancelled"
+  "startsAt" | "spanEndsAt" | "visibility" | "hosting" | "runKey" | "cancelled" | "superseded"
 >
 
 export function eventOrganiserCopy(event: EventOrganiserSource): EventOrganiserCopy {
@@ -200,6 +205,8 @@ export function eventOrganiserCopy(event: EventOrganiserSource): EventOrganiserC
     hosting: event.hosting ?? "hosts",
     runKey: runKeyOf(event.title),
     cancelled: event.cancelled,
+    // Absent unless superseded, so no row of a live event changes (ENG-47).
+    superseded: event.supersededBy !== undefined ? true : undefined,
   }
 }
 
@@ -213,7 +220,8 @@ function copyDiffers(row: EventOrganiserCopy, copy: EventOrganiserCopy): boolean
     row.visibility !== copy.visibility ||
     (row.hosting ?? "hosts") !== (copy.hosting ?? "hosts") ||
     row.runKey !== copy.runKey ||
-    row.cancelled !== copy.cancelled
+    row.cancelled !== copy.cancelled ||
+    row.superseded !== copy.superseded
   )
 }
 
@@ -240,12 +248,15 @@ export async function syncEventOrganiserRows(
 
 /**
  * Whether an event was withdrawn by its listing (lib/derived.ts
- * `isWithdrawn`): its listing still being read, but no longer showing it.
- * Looks each listing's newest sighting up once per query.
+ * `isWithdrawn`): its listing still being read, but no longer showing it —
+ * or superseded by another source's event (`supersededBy`, ENG-47), past or
+ * future. Every public list and page asks this, so a superseded key leaves
+ * them all at once. Looks each listing's newest sighting up once per query.
  */
 export function withdrawnCheck(ctx: QueryCtx, now: number) {
   const newest = new Map<string, Promise<number | undefined>>()
   return async (event: Doc<"events">): Promise<boolean> => {
+    if (event.supersededBy !== undefined) return true
     const group = event.sweepGroup
     if (group === undefined || event.startsAt < now) return false
     let found = newest.get(group)

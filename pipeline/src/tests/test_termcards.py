@@ -526,6 +526,11 @@ def test_the_stage_stages_new_events_and_drops_known_ones(make_settings, net) ->
     staged = store.read_latest("termcard")
     titles = [next(f.value for f in e.fields if f.field == "title") for e in staged]
     assert titles == ["Orrery building"]
+    # The dropped row is kept with Camdram's reading: had an earlier run
+    # loaded it under its own key, the load retires that key (ENG-47).
+    (pair,) = store.read_shadowed("termcard")
+    assert pair.event_source == "termcard" and pair.organiser == ORRERY_KEY
+    assert (pair.by_source, pair.by_external_id) == ("camdram", "show-1")
 
     # A cam_only copy from list mail never hides the public termcard event.
     store.write(
@@ -555,6 +560,7 @@ def test_the_stage_stages_new_events_and_drops_known_ones(make_settings, net) ->
     assert second.ok and llm.call_count == 1
     # This run itself kept the event: it was not deduplicated away.
     assert second.stages[0].notes[0] == "1 termcards known, 1 read, 1 events"
+    assert store.read_shadowed("termcard") == [pair]
 
 
 def test_no_termcards_and_dry_runs_are_quiet(make_settings) -> None:

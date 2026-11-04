@@ -226,6 +226,8 @@ ingestionRoute("purge", internal.ingest.purge.purge)
 // convex/ingest/cleanup.ts): read them all; remove some, by key, confirmed.
 readRoute("events/scan", internal.ingest.cleanup.eventsPage)
 ingestionRoute("events/remove", internal.ingest.cleanup.removeEvents)
+// Event keys a higher-ranked source took over (ENG-47, convex/ingest/superseded.ts).
+ingestionRoute("events/superseded", internal.ingest.superseded.supersede)
 
 // The talks pillar (D7, convex/ingest/talks.ts): the department registry, talk
 // batches and the run summary; `talks/sweep` is below.
