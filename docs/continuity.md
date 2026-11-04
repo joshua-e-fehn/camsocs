@@ -1,16 +1,17 @@
 # After the MPhil: continuity plan (DRAFT for Joshua's decision)
 
-> **Status: draft, 2026-11-04 (ENG-37).** Nothing here is decided. Joshua picks an option by the decision date below and records it in PLAN.md's decisions log; this file then becomes the plan.
+> **Status: draft, 2026-11-04 (ENG-37).** Joshua's current expectation (2026-11-04) is **D. keep running it himself** after the MPhil; the final choice is open until the decision date below and is recorded in PLAN.md's decisions log, when this file becomes the plan.
 
 CAMsocs is run by one person, Joshua Fehn, as a personal / portfolio project during the MPhil ACS 2026-27. He is the **controller** for every piece of personal data it holds (record-of-processing.md). The course ends with the vivas of **28–30 June 2027**. After that someone has to keep the site honest and answer requests, or it has to stop in an orderly way: a database of societies that silently goes stale is worse than none, and personal data kept with no one answering for it is a compliance problem, not a neutral state.
 
 ## What has to be decided
 
-One of three end states, reached by **31 August 2027**:
+One of four end states, reached by **31 August 2027**:
 
 - **A. Hand over** to a successor that becomes the new controller (a student society, the SU, or a named student maintainer).
 - **B. Archive read-only**: harvesting stops, the site stays up with a dated "no longer updated" notice, Joshua stays the controller.
 - **C. Shut down** and delete the data on the retention schedule's terms.
+- **D. Keep running it** (Joshua's current expectation): Joshua stays the controller and runs it remotely after the course. What changes is listed under "Option D" below.
 
 ## What the site depends on
 
@@ -104,3 +105,14 @@ Cost: nothing after the closing month, except the domain if renewed.
 ## Draft recommendation (for Joshua to accept or change)
 
 Try **A** in Lent term 2027 with one or two concrete successors, because the directory is only worth keeping if someone keeps it current. If nobody has agreed in writing by **30 April 2027**, go to **C** on 31 July 2027 (with B only as a bridge if a successor is close). In every case delete the broker CRM by 31 July 2027 at the latest: it is the most sensitive data here and the one part no successor needs.
+
+
+## Option D: keep running it
+
+Joshua's current expectation (2026-11-04). Everything in "What the site depends on" stays with him, so the work is to make it run without the University:
+
+1. **Data that depends on being a student.** The University events API permission (D3a) was given for camsocs, not for a student: ask UIS and the Office of External Affairs and Communications to confirm it continues after the course. The `@cam.ac.uk` list-mail inbox (J4) cannot continue once his University account closes.
+2. **Costs.** About $45 a month (Vercel Pro, Convex Professional) plus the LLM subscription, on his card: keep the spend caps in `docs/platform-limits.md`.
+3. **Freshness.** The harvest keeps running on the VPS. The yearly turnover of committees (R5 deletes people 30 days after 30 June) and the October rush of new events need the July annual review and a check in early October.
+4. **Contact.** `camsocs@joshua-fehn.de` and `/request` stay the route for rights requests; the privacy notice needs no change unless the controller's contact details change.
+5. **Review each July** (retention.md "Annual review"): is the site still used (PostHog), still accurate (T15 sample), still lawful (DPIA-lite)? If not, fall back to B or C.
