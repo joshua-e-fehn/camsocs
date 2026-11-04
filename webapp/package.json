@@ -16,6 +16,7 @@
     "firewall:rules": "bun run scripts/firewall-rules.ts",
     "test": "bun test",
     "e2e": "playwright test",
+    "e2e:a11y": "playwright test e2e/a11y.spec.ts --project=desktop --project=mobile",
     "e2e:install": "playwright install chromium",
     "prepare": "cd .. && husky webapp/.husky"
   },
@@ -23,6 +24,7 @@
     "@convex-dev/better-auth": "^0.12.5",
     "@vercel/functions": "3.10.2",
     "better-auth": "~1.6.25",
+    "botid": "1.5.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

@@ -137,6 +137,35 @@ describe("listingRequests.submit", () => {
     const { key } = await t.mutation(api.listingRequests.submit, request)
     expect(key).toMatch(/^lr-/)
   })
+
+  test("with REQUEST_FORM_SECRET set, only the site's route gets in (ENG-37)", async () => {
+    const t = newTest()
+    await seed(t)
+    process.env.REQUEST_FORM_SECRET = "test-form-secret"
+    try {
+      for (const formSecret of [undefined, "", "wrong", "test-form-secret "]) {
+        await expect(
+          t.mutation(api.listingRequests.submit, {
+            ...request,
+            ...(formSecret === undefined ? {} : { formSecret }),
+          }),
+        ).rejects.toThrow(/through the form on our site/)
+      }
+      // A refusal stores nothing and uses up no limit.
+      const stored = await t.run(async (ctx) => await ctx.db.query("listingRequests").collect())
+      expect(stored).toEqual([])
+      const { key } = await t.mutation(api.listingRequests.submit, {
+        ...request,
+        formSecret: "test-form-secret",
+      })
+      expect(key).toMatch(/^lr-/)
+    } finally {
+      delete process.env.REQUEST_FORM_SECRET
+    }
+    // Unset (dev, before the rollout), the secret is neither needed nor checked.
+    const open = await t.mutation(api.listingRequests.submit, { ...request, message: "Unset now." })
+    expect(open.key).toMatch(/^lr-/)
+  })
 })
 
 describe("listingRequests.submit — a flood aimed at one listing", () => {

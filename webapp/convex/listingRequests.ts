@@ -5,6 +5,7 @@ import { LISTING_REQUEST_KINDS, requestNeedsListing } from "../lib/vocab"
 import { internal } from "./_generated/api"
 import { type MutationCtx, mutation } from "./_generated/server"
 import { isEmail } from "./lib/fields"
+import { secretEquals } from "./lib/secrets"
 import { literalUnion } from "./lib/validators"
 
 /**
@@ -48,6 +49,14 @@ import { literalUnion } from "./lib/validators"
  * Refusals are `ConvexError`s carrying the user-readable message as `data`:
  * a production deployment replaces a plain `Error`'s message with "Server
  * Error", and the form must be able to say what was wrong.
+ *
+ * The form's own route (ENG-37). The form posts to the site's
+ * `/api/request` (app/api/request/route.ts), which runs Vercel BotID's check
+ * and then calls `submit` with `formSecret`. Once `REQUEST_FORM_SECRET` is set
+ * on a deployment, a call without that secret is refused, so a script can no
+ * longer skip the bot check by calling the mutation directly; unset (dev, the
+ * tests, a deployment before the rollout in docs/deploy.md), every call is
+ * accepted as before. The limits above apply either way.
  *
  * An accepted request is counted in PostHog by kind only
  * (`listing_request_received`, `analytics.captureListingRequest`, ENG-7,
@@ -190,9 +199,15 @@ export const submit = mutation({
      * host, so a correction of it may name no listing (event-correction-link,
      * event-correction-no-org). It must be a stored event's. */
     eventKey: v.optional(v.string()),
+    /** `REQUEST_FORM_SECRET`, sent only by the site's `/api/request` route. */
+    formSecret: v.optional(v.string()),
   },
   returns: v.object({ key: v.string() }),
   handler: async (ctx, args) => {
+    const expected = process.env.REQUEST_FORM_SECRET
+    if (expected && !(await secretEquals(args.formSecret ?? "", expected))) {
+      throw new ConvexError(`Please send your request through the form on our site${OR_WRITE}`)
+    }
     const email = args.submitterEmail.trim().toLowerCase()
     if (!isEmail(email) || email.length > LIMITS.email) {
       throw new ConvexError("Please give a valid email address")

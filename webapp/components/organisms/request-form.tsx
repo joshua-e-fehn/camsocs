@@ -1,6 +1,5 @@
 "use client"
 
-import { ConvexError } from "convex/values"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { CalendarDaysIcon, CircleCheckIcon, PlusIcon, TrashIcon, XIcon } from "lucide-react"
 import Link from "next/link"
@@ -30,8 +29,9 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { useEventRequestLabel, useSubmitListingRequest } from "@/hooks/convex"
+import { useEventRequestLabel } from "@/hooks/convex"
 import { track } from "@/lib/analytics"
+import { focusOnMount } from "@/lib/focus"
 import {
   CORRECTABLE_FIELDS,
   type DraftErrors,
@@ -42,6 +42,7 @@ import {
   validateDraft,
 } from "@/lib/listing-request"
 import type { OrgRef } from "@/lib/public-api"
+import { sendListingRequest } from "@/lib/request-submit"
 import {
   LISTING_REQUEST_KINDS,
   type ListingRequestKind,
@@ -64,9 +65,15 @@ const NEXT_STEPS: Record<ListingRequestKind, string> = {
 /**
  * The public claim / correct / remove / object / add form (T12). It validates
  * in the browser with the server's own limits (lib/listing-request.ts), then
- * calls `listingRequests.submit`, which stores the request for review — it
- * never edits a listing directly. A hidden honeypot field catches form-filling
- * bots: if it is filled, the form pretends to succeed and sends nothing.
+ * posts to the site's `/api/request`, which checks the sender with Vercel
+ * BotID and calls `listingRequests.submit` (lib/request-submit.ts, ENG-37);
+ * that stores the request for review — it never edits a listing directly. A
+ * hidden honeypot field catches form-filling bots: if it is filled, the form
+ * pretends to succeed and sends nothing.
+ *
+ * The outcome takes focus (lib/focus.ts, ENG-37): "Request received" when the
+ * form gives way to it, "Not sent" when the server refused, so a keyboard or
+ * screen-reader user lands on what happened instead of on `<body>`.
  *
  * Opened from an event page's correction link (`?event=evt-…`), it is about
  * that event too, and sends its key (event-correction-link).
@@ -81,7 +88,6 @@ export function RequestForm({
   /** A well-formed event key from `?event=`; the page checks the shape only. */
   initialEventKey?: string | null
 }) {
-  const submit = useSubmitListingRequest()
   const reduceMotion = useReducedMotion()
   const [draft, setDraft] = useState<RequestDraft>(() =>
     emptyDraft(initialKind, initialOrg, initialEventKey),
@@ -121,19 +127,14 @@ export function RequestForm({
       return
     }
     setPending(true)
-    try {
-      const { key } = await submit(result.args)
-      setDone({ reference: key, kind: draft.kind })
+    const sent = await sendListingRequest(result.args)
+    setPending(false)
+    if (sent.ok) {
+      setDone({ reference: sent.key, kind: draft.kind })
       // Only the kind: never the listing, the address or anything written.
       track("listing_request_submitted", { kind: draft.kind })
-    } catch (error) {
-      setServerError(
-        error instanceof ConvexError && typeof error.data === "string"
-          ? error.data
-          : "Something went wrong sending your request. Please try again in a moment.",
-      )
-    } finally {
-      setPending(false)
+    } else {
+      setServerError(sent.error)
     }
   }
 
@@ -150,7 +151,13 @@ export function RequestForm({
     <AnimatePresence mode="wait" initial={false}>
       {done ? (
         <motion.div key="done" {...motionProps} className="flex flex-col gap-6">
-          <Alert>
+          {/* A status, not an alert: good news is not urgent, and focus brings it up. */}
+          <Alert
+            role="status"
+            ref={focusOnMount}
+            tabIndex={-1}
+            className="outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
             <CircleCheckIcon />
             <AlertTitle>Request received</AlertTitle>
             <AlertDescription>
@@ -404,7 +411,12 @@ export function RequestForm({
             </div>
 
             {serverError && (
-              <Alert variant="destructive">
+              <Alert
+                variant="destructive"
+                ref={focusOnMount}
+                tabIndex={-1}
+                className="outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
                 <AlertTitle>Not sent</AlertTitle>
                 <AlertDescription>{serverError}</AlertDescription>
               </Alert>
