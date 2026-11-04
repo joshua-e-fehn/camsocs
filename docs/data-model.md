@@ -457,13 +457,16 @@ These live under `convex/broker/*` and every function calls `requireBrokerUser`.
   | seenAt | number |
   | publicLinks | `{ platform, url }[]` |
   | consentBasis | `public_source \| consent \| legitimate_interest` |
+  | consentRecord | `{ recordedOn, evidence }?`: how explicit consent was recorded (date, where the record is kept); set only in the dashboard, and required before an officer of a sensitive society is held on `consent` (below) |
   | method | `parser \| llm` rows are pipeline-owned; `manual` rows are never overwritten by the pipeline |
   | notes | string? |
   | archived | boolean |
 
   A person may also appear in a public listing, but only by role and never by name, unless the organisation itself publishes the name *and* we have consent. That is out of scope for v1, which is why `people` is private. First-name-only committee members from public pages are kept here too (decision D2, 2026-10-08), with the same `staleAfter`.
 
-  Retention (R5, `convex/retention.ts`): once `staleAfter` has passed, the broker's own (`manual`) rows are archived for a 30-day grace in which the broker may extend `staleAfter`; 30 days after it every row is deleted, unless `consentBasis` is `consent`, and its key and academic year are kept in **expiredPeople** (`{key, academicYear, deletedAt}`, index `by_key`) so the pipeline does not add it back from a page that still lists last year's committee — only a reading that states a later academic year does. A person removed on request is never re-added (§3 `suppressions`, scope `person`).
+  Retention (R5, `convex/retention.ts`): once `staleAfter` has passed, the broker's own (`manual`) rows are archived for a 30-day grace in which the broker may extend `staleAfter`; 30 days after it every row is deleted, unless `consentBasis` is `consent`, and its key and academic year are kept in **expiredPeople** (`{key, academicYear, deletedAt}`, index `by_key`) so the pipeline does not add it back from a page that still lists last year's committee — only a reading that states a later academic year does. A person removed on request is never re-added (§3 `suppressions`, scope `person`), by the pipeline or by hand: the dashboard's `create` and `update` refuse a suppressed person key or name, and anyone at a suppressed listing.
+
+  Officers of **sensitive societies** (categories `faith`, `politics_debate`, `cultural_international`, `identity_wellbeing`, or the `lgbtq` audience; `webapp/lib/broker/sensitive.ts`) are kept under Art 9(2)(e) only as the society's own website lists them (DPIA-lite §5, ENG-42). A manual entry or edit for them needs a `sourceUrl` on the organisation's recorded `website` (same host, `www.` aside, inside its folder when the site is a folder of a shared host), no `publicLinks`, no `notes`, a `staleAfter` no later than the next 30 June and never moved later, and `consent` only with a `consentRecord` (`convex/broker/people.ts`).
 - **orgBrokerProfiles**: one per organisation.
 
   | Field | Type |
