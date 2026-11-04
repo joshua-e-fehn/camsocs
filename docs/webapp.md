@@ -147,8 +147,10 @@ lib/                         Pure logic + *.test.ts (no server imports)
   url-state.ts               /societies and /events state <-> URL, and the Convex args it preloads
   source-line.ts             What a SourceLine says for a field's public meta (status, source, …)
   listing-request.ts         The request form's draft, validation (server limits) and submit args
-  request-submit.ts          The form's route: POST /api/request, BotID on Vercel (fails open),
-                             REQUEST_FORM_SECRET, Convex refusals passed on; the browser's sender
+  request-submit.ts          The form's route (server only): POST /api/request, BotID on Vercel
+                             (fails open only while not set up), REQUEST_FORM_SECRET, Convex refusals
+  request-client.ts          The form's sender (aborts after 30 s), REQUEST_PATH and its sentences;
+                             zod-free, since instrumentation-client.ts ships it on every page
   focus.ts                   focusOnMount: a form's outcome takes focus (ENG-37)
   owner-corrections.ts       Accepting a correction: which fields, how each is edited and parsed
   syntax.ts                  isEmail / isHttpUrl, shared with convex/lib/fields.ts
@@ -403,8 +405,12 @@ variables `E2E_CONVEX_URL` / `E2E_CONVEX_SITE_URL` override them), then runs
 Vercel BotID's `checkBotId()` first (the browser half, `initBotId` in `instrumentation-client.ts`,
 adds its challenge headers to that one request; next.config's `withBotId` rewrites carry the
 challenge script from this origin) and answers a bot 403. Off Vercel neither half runs. The check
-fails open: if it throws, the request is stored and the failure logged; `REQUEST_BOT_CHECK=off`
-switches it off without a build. The route then calls `listingRequests.submit` with
+fails open only while BotID is not set up (no OIDC token or request context: the request is stored
+and the failure logged); any other throw fails closed (503, the generic sentence with the contact
+address), so a client cannot get past the check by making it throw. `REQUEST_BOT_CHECK=off` on
+Vercel, plus a redeploy, switches it off. The browser's sender (`lib/request-client.ts`) is a
+separate, zod-free module because `instrumentation-client.ts` imports its `REQUEST_PATH`, and that
+file's imports load on every page; it aborts the request after 30 s. The route then calls `listingRequests.submit` with
 `formSecret` = `REQUEST_FORM_SECRET`; once that is set on Convex too, the mutation refuses any other
 caller (docs/deploy.md "Request form bot check"). Convex's refusals reach the form in its own words
 (422); nothing the visitor wrote is logged. The outcome, "Request received" or "Not sent", takes

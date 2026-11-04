@@ -461,7 +461,11 @@ in the dashboard; `withBotId` in `next.config.ts` adds its rewrites. Its server 
 project's OIDC token, which Vercel issues when **Settings → Security → Secure Backend Access with
 OIDC Federation** is on (the default for new projects). Without it the check throws, the route
 fails open and logs `[request] BotID check failed (…); accepting the request`: look for that line in
-the runtime logs after the first production submission.
+the runtime logs after the first production submission. Any other throw from the check (Vercel's
+answer unreadable, its API down) fails closed: the visitor sees the generic sentence with the
+contact address (503) and the log says `[request] BotID check errored (…); refusing the request`.
+Several of those in a row mean BotID itself is failing; `REQUEST_BOT_CHECK=off` plus a redeploy
+keeps the form open meanwhile.
 
 Rollout, in this order (a different order rejects real requests):
 
@@ -479,6 +483,11 @@ Rollout, in this order (a different order rejects real requests):
    our site". Send a second test request through the form to confirm it still arrives.
 
 Rolling back: `bunx convex env remove --prod REQUEST_FORM_SECRET` reopens the mutation at once;
-`REQUEST_BOT_CHECK=off` on Vercel (and a redeploy) stops the bot check. Optional, at a cost per
+`REQUEST_BOT_CHECK=off` on Vercel (and a redeploy) stops the bot check. **Before an Instant Rollback
+or promotion of any Vercel deployment built before ENG-37**, run that `convex env remove` first:
+the older form calls `listingRequests.submit` straight from the browser without the secret, and
+Convex code and environment do not roll back with Vercel, so with the secret still set every real
+request (removals and objections included) is refused. Set it again (step 5) once ENG-37 is live
+again. Optional, at a cost per
 check: **Firewall → Configure → Vercel BotID Deep Analysis** (Pro), which the route needs no change
 for.

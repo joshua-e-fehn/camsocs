@@ -1,7 +1,7 @@
 import { ConvexError } from "convex/values"
 import { z } from "zod"
 import type { SubmitArgs } from "./listing-request"
-import { CONTACT_EMAIL } from "./site"
+import { BOT_REFUSED, SEND_FAILED } from "./request-client"
 import { LISTING_REQUEST_KINDS } from "./vocab"
 
 /**
@@ -18,31 +18,45 @@ import { LISTING_REQUEST_KINDS } from "./vocab"
  * (`checkBotId`) asks Vercel whether that challenge was passed. Off Vercel
  * (`next dev`, the e2e suite, CI, `bun test`) neither half runs: the browser
  * would wait on a challenge nobody answers, and the server check needs a
- * Vercel OIDC token. On Vercel the check fails open: if it throws (OIDC off,
- * Vercel's API down) the request goes through and the failure is logged, so a
- * fault in the bot check never costs a society its request; the ENG-35 limits
- * still apply. `REQUEST_BOT_CHECK=off` in Vercel's environment switches the
- * server check off at once, without a build (should it ever turn people away).
+ * Vercel OIDC token. On Vercel the check fails open only when it is not set
+ * up (no OIDC token, no request context; `isBotIdSetupError`): the request
+ * goes through and the failure is logged, so a missing project setting never
+ * costs a society its request; the ENG-35 limits still apply. Any other throw
+ * (Vercel's answer unreadable, its API down) fails closed with the generic
+ * sentence and the contact address, since part of what the check sends is the
+ * visitor's own headers and a check a client can make throw must not wave it
+ * through. `REQUEST_BOT_CHECK=off` in Vercel's environment, plus a redeploy
+ * (Vercel applies env changes to new deployments only), switches the server
+ * check off, should it ever turn people away.
  *
  * `formSecret` (`REQUEST_FORM_SECRET`, server-only) is what makes the check
  * mean something: once Convex has it too, `submit` refuses callers without it,
  * so a script cannot go around this route (convex/listingRequests.ts).
+ *
+ * Server only: app/api/request/route.ts is its one importer outside the
+ * tests. The browser's sender and the shared sentences are in
+ * lib/request-client.ts, which must stay free of zod.
  */
-
-export const REQUEST_PATH = "/api/request"
 
 /** A request is at most ~70 KB of text (30 fields of 2,000 characters and a
  * 5,000-character message); anything much bigger is not from the form. */
 export const MAX_BODY_BYTES = 128 * 1024
 
-const OR_WRITE = CONTACT_EMAIL ? `, or write to ${CONTACT_EMAIL}` : ""
-
-export const SEND_FAILED = `Something went wrong sending your request. Please try again in a moment${OR_WRITE}.`
-export const BOT_REFUSED = `We could not confirm this request came from a browser. Please reload the page and try again${OR_WRITE}.`
-
 /** Whether this server checks requests with BotID: on Vercel, unless switched off. */
 export function botCheckEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
   return env.VERCEL === "1" && env.REQUEST_BOT_CHECK !== "off"
+}
+
+/** Whether a `checkBotId()` throw means BotID is not set up on this deployment
+ * (botid 1.5.11: no OIDC token in the request or environment, or no Vercel
+ * request context), the one case the route accepts the request unchecked. */
+export function isBotIdSetupError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : ""
+  return (
+    message.includes("x-vercel-oidc-token") ||
+    message.includes("VERCEL_OIDC_TOKEN") ||
+    message.startsWith("Must be deployed on Vercel")
+  )
 }
 
 /** The form's arguments as the browser may send them: `listingRequests.submit`'s
@@ -77,7 +91,8 @@ function answer(body: { key: string } | { error: string }, status: number): Resp
  * with a sentence the form shows: 400 for a body the form would never send,
  * 403 for a bot, 413 for an oversized body, 422 for a refusal from Convex
  * (validation, the ENG-35 limits; its own words), 502 when Convex could not
- * be reached. Nothing the visitor wrote is ever logged.
+ * be reached, 503 when the bot check failed for a reason other than its
+ * setup. Nothing the visitor wrote is ever logged.
  */
 export async function handleRequestSubmit(request: Request, deps: SubmitDeps): Promise<Response> {
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) {
@@ -98,8 +113,15 @@ export async function handleRequestSubmit(request: Request, deps: SubmitDeps): P
     try {
       if ((await deps.checkBot()).isBot) return answer({ error: BOT_REFUSED }, 403)
     } catch (error) {
+      if (!isBotIdSetupError(error)) {
+        // The name only: botid's own throws are the setup messages above.
+        console.error(
+          `[request] BotID check errored (${error instanceof Error ? error.name : typeof error}); refusing the request`,
+        )
+        return answer({ error: SEND_FAILED }, 503)
+      }
       console.error(
-        `[request] BotID check failed (${error instanceof Error ? error.message : typeof error}); accepting the request`,
+        `[request] BotID check failed (${(error as Error).message}); accepting the request`,
       )
     }
   }
@@ -117,40 +139,5 @@ export async function handleRequestSubmit(request: Request, deps: SubmitDeps): P
       `[request] listingRequests.submit failed: ${error instanceof Error ? error.name : typeof error}`,
     )
     return answer({ error: SEND_FAILED }, 502)
-  }
-}
-
-export type SendResult = { ok: true; key: string } | { ok: false; error: string }
-
-/**
- * The browser side: posts the form's arguments to `REQUEST_PATH`. `fetch` is
- * read at call time, so it is the one BotID patched in instrumentation-client.ts.
- * Gives up after `timeoutMs` (a challenge script that never loads would
- * otherwise leave the form spinning) and never throws.
- */
-export async function sendListingRequest(
-  args: SubmitArgs,
-  { fetch: send = fetch, timeoutMs = 30_000 }: { fetch?: typeof fetch; timeoutMs?: number } = {},
-): Promise<SendResult> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    const response = await Promise.race([
-      send(REQUEST_PATH, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(args),
-      }),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timeout")), timeoutMs)
-      }),
-    ])
-    const body: unknown = await response.json().catch(() => null)
-    const record = (body ?? {}) as { key?: unknown; error?: unknown }
-    if (response.ok && typeof record.key === "string") return { ok: true, key: record.key }
-    return { ok: false, error: typeof record.error === "string" ? record.error : SEND_FAILED }
-  } catch {
-    return { ok: false, error: SEND_FAILED }
-  } finally {
-    clearTimeout(timer)
   }
 }

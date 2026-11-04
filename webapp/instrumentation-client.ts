@@ -1,7 +1,7 @@
 import { initBotId } from "botid/client/core"
 import { startClickTracking } from "@/lib/analytics"
 import { startAnalytics } from "@/lib/analytics-client"
-import { REQUEST_PATH } from "@/lib/request-submit"
+import { REQUEST_PATH } from "@/lib/request-client"
 
 /**
  * Runs in the browser before the app hydrates (Next.js
@@ -15,7 +15,9 @@ import { REQUEST_PATH } from "@/lib/request-submit"
  * On a Vercel build it also starts Vercel BotID's browser half (ENG-37): it
  * wraps `fetch` so a POST to the request form's route carries BotID's
  * challenge headers (lib/request-submit.ts). Elsewhere the flag is empty
- * (next.config.ts `botCheckClientFlag`) and nothing is wrapped.
+ * (next.config.ts `botCheckClientFlag`) and nothing is wrapped. Everything
+ * imported here ships on every page: `REQUEST_PATH` comes from the zod-free
+ * lib/request-client.ts, never from the route's server module.
  */
 startAnalytics()
 startClickTracking()

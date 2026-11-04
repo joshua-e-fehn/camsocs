@@ -1,21 +1,20 @@
 import { afterEach, describe, expect, type Mock, spyOn, test } from "bun:test"
 import { ConvexError } from "convex/values"
 import type { SubmitArgs } from "./listing-request"
+import { BOT_REFUSED, REQUEST_PATH, SEND_FAILED } from "./request-client"
 import {
-  BOT_REFUSED,
   botCheckEnabled,
   handleRequestSubmit,
+  isBotIdSetupError,
   MAX_BODY_BYTES,
-  REQUEST_PATH,
-  SEND_FAILED,
   type SubmitDeps,
-  sendListingRequest,
 } from "./request-submit"
 
 /**
- * The request form's route (ENG-37): BotID only on Vercel and failing open,
- * the form secret added on the server only, Convex's refusals passed on in
- * its own words, and nothing the visitor wrote in a log line.
+ * The request form's route (ENG-37): BotID only on Vercel, failing open only
+ * while it is not set up, the form secret added on the server only, Convex's
+ * refusals passed on in its own words, and nothing the visitor wrote in a log
+ * line.
  */
 
 const ARGS = {
@@ -77,6 +76,23 @@ describe("botCheckEnabled", () => {
   })
 })
 
+describe("isBotIdSetupError", () => {
+  test("botid 1.5.11's setup throws, and nothing else", () => {
+    for (const message of [
+      "The 'x-vercel-oidc-token' header is missing from the request. Do you have the OIDC option enabled in the Vercel project settings?",
+      "VERCEL_OIDC_TOKEN is not set",
+      "Must be deployed on Vercel to access response headers",
+      "Must be deployed on Vercel to set response headers",
+    ]) {
+      expect(isBotIdSetupError(new Error(message))).toBe(true)
+    }
+    expect(isBotIdSetupError(new SyntaxError("Unexpected end of JSON input"))).toBe(false)
+    expect(isBotIdSetupError(new TypeError("fetch failed"))).toBe(false)
+    expect(isBotIdSetupError("VERCEL_OIDC_TOKEN is not set")).toBe(false)
+    expect(isBotIdSetupError(undefined)).toBe(false)
+  })
+})
+
 describe("handleRequestSubmit", () => {
   test("off Vercel it stores without asking BotID, and sends no secret it lacks", async () => {
     const { calls, deps: d } = deps()
@@ -104,7 +120,7 @@ describe("handleRequestSubmit", () => {
     expect(calls.submit).toEqual([])
   })
 
-  test("a failing check lets the request through (fail open) and logs no content", async () => {
+  test("a check that is not set up lets the request through (fail open) and logs no content", async () => {
     const log = quiet()
     const { calls, deps: d } = deps({
       env: ON_VERCEL,
@@ -117,6 +133,30 @@ describe("handleRequestSubmit", () => {
     expect(calls.submit).toHaveLength(1)
     const logged = log.mock.calls.flat().join(" ")
     expect(logged).toContain("BotID check failed")
+    expect(logged).not.toContain(ARGS.submitterEmail)
+  })
+
+  test("any other failing check refuses the request (fail closed) and logs no content", async () => {
+    const log = quiet()
+    for (const thrown of [
+      new SyntaxError(`Unexpected token '<', "<html>" is not valid JSON`),
+      new TypeError("fetch failed"),
+      "a string",
+    ]) {
+      const { calls, deps: d } = deps({
+        env: ON_VERCEL,
+        checkBot: async () => {
+          throw thrown
+        },
+      })
+      const response = await handleRequestSubmit(post(ARGS), d)
+      expect(response.status).toBe(503)
+      expect(await response.json()).toEqual({ error: SEND_FAILED })
+      expect(calls.submit).toEqual([])
+    }
+    const logged = log.mock.calls.flat().join(" ")
+    expect(logged).toContain("BotID check errored")
+    expect(logged).not.toContain("<html>")
     expect(logged).not.toContain(ARGS.submitterEmail)
   })
 
@@ -166,47 +206,5 @@ describe("handleRequestSubmit", () => {
     expect(failed.status).toBe(502)
     expect(await failed.json()).toEqual({ error: SEND_FAILED })
     expect(log.mock.calls.flat().join(" ")).not.toContain(ARGS.submitterEmail)
-  })
-})
-
-describe("sendListingRequest", () => {
-  const respond = (body: unknown, status = 200) =>
-    (async () => Response.json(body, { status })) as unknown as typeof fetch
-
-  test("posts the arguments as JSON to the route", async () => {
-    let seen: { url: string; init?: RequestInit } | null = null
-    const send = (async (url: string, init?: RequestInit) => {
-      seen = { url, init }
-      return Response.json({ key: "lr-1" })
-    }) as unknown as typeof fetch
-    expect(await sendListingRequest(ARGS, { fetch: send })).toEqual({ ok: true, key: "lr-1" })
-    expect(seen).toMatchObject({ url: REQUEST_PATH, init: { method: "POST" } })
-    expect(JSON.parse(String((seen as unknown as { init: RequestInit }).init.body))).toEqual(ARGS)
-  })
-
-  test("passes on the route's sentence, and falls back to a generic one", async () => {
-    expect(await sendListingRequest(ARGS, { fetch: respond({ error: "Busy" }, 422) })).toEqual({
-      ok: false,
-      error: "Busy",
-    })
-    expect(await sendListingRequest(ARGS, { fetch: respond("<html>", 500) })).toEqual({
-      ok: false,
-      error: SEND_FAILED,
-    })
-    const offline = (async () => {
-      throw new TypeError("Failed to fetch")
-    }) as unknown as typeof fetch
-    expect(await sendListingRequest(ARGS, { fetch: offline })).toEqual({
-      ok: false,
-      error: SEND_FAILED,
-    })
-  })
-
-  test("gives up on a request that never answers", async () => {
-    const never = (() => new Promise<Response>(() => {})) as unknown as typeof fetch
-    expect(await sendListingRequest(ARGS, { fetch: never, timeoutMs: 20 })).toEqual({
-      ok: false,
-      error: SEND_FAILED,
-    })
   })
 })

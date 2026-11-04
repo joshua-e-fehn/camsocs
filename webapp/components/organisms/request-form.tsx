@@ -42,7 +42,7 @@ import {
   validateDraft,
 } from "@/lib/listing-request"
 import type { OrgRef } from "@/lib/public-api"
-import { sendListingRequest } from "@/lib/request-submit"
+import { sendListingRequest } from "@/lib/request-client"
 import {
   LISTING_REQUEST_KINDS,
   type ListingRequestKind,
