@@ -1,0 +1,8 @@
+{
+  "name": "camsocs-backup-cli",
+  "private": true,
+  "description": "The Convex CLI, pinned, for the VPS backup (ENG-44; docs/ops-vps.md §10). Installed with `npm ci --ignore-scripts` from package-lock.json; the same version as webapp/package.json resolves.",
+  "dependencies": {
+    "convex": "1.46.0"
+  }
+}

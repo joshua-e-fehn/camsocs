@@ -1,0 +1,19 @@
+## The Convex CLI's runtime for the nightly backup and the weekly restore test
+## (ENG-44; docs/ops-vps.md §10). Not the repo's workspace: install.sh installs
+## this manifest, its lock and the npm lock beside it root-owned into
+## /usr/local/lib/camsocs-ops/backup/ from a reviewed commit, so the units that
+## hold production's deploy key never run anything from the checkout the
+## harvest writes. Node from conda-forge (hash-pinned by pixi.lock); the CLI
+## from npm (hash-pinned by package-lock.json, `npm ci --ignore-scripts`).
+
+[workspace]
+name = "camsocs-backup"
+version = "0.1.0"
+description = "Node for the Convex CLI that exports production and restore-tests the backups."
+channels = ["conda-forge"]
+# linux-64 is the host; osx-arm64 runs the same scripts on a laptop.
+platforms = ["linux-64", "osx-arm64"]
+
+[dependencies]
+# convex 1.46 needs node >= 20; 22 is the current LTS line.
+nodejs = "22.*"

@@ -124,6 +124,33 @@ describe("orgs.getBySlug", () => {
     expect(JSON.stringify(page)).not.toContain("soc-chess@")
   })
 
+  test("a person's alumni address is hidden, even under an emailType stored before the rule (ENG-37)", async () => {
+    const t = newTest()
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim("org-go", "name", "CU Go Society"),
+        claim("org-go", "email", "jane.example2@cantab.ac.uk"),
+        claim("org-go", "roleEmails", [
+          { role: "president", email: "janeexample@cantab.net" },
+          { role: "secretary", email: "secretary@cantab.ac.uk" },
+        ]),
+      ],
+    })
+    // As a row materialised under the old rule would hold it.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", "org-go"))
+        .unique()
+      if (row) await ctx.db.patch("organisations", row._id, { emailType: "role_own_domain" })
+    })
+    const org = (await t.query(api.orgs.getBySlug, { slug: "go" }))?.org
+    expect(org?.email).toBeUndefined()
+    expect(org?.emailType).toBeUndefined()
+    expect(org?.meta.email).toEqual({ status: "missing", missingReason: "not_published" })
+    expect(org?.roleEmails).toEqual([{ role: "secretary", email: "secretary@cantab.ac.uk" }])
+  })
+
   test("events are gated by visibility: public for all, cam_only for @cam.ac.uk, members_only never", async () => {
     await withEnv({ BROKER_EMAILS: "broker@example.com" }, async () => {
       const t = newTest()

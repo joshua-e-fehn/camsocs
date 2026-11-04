@@ -94,6 +94,70 @@
       "type": "personal_crsid"
     },
     {
+      "email": "janeexample@cantab.net",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "jane.example2@cantab.ac.uk",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "jexample1999@cantab.ac.uk",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "anna.lena.van.example@cantab.net",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "jane+chess@cantab.net",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "jane.president@cantab.net",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "cuchess@cantab.net",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "secretary@cantab.ac.uk",
+      "type": "role_own_domain"
+    },
+    {
+      "email": "chess-committee@cantab.ac.uk",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "chesssociety.committee.2026@cantab.net",
+      "type": "role_own_domain"
+    },
+    {
+      "email": "jane.example@alumni.cam.ac.uk",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "development@alumni.cam.ac.uk",
+      "type": "college_domain"
+    },
+    {
+      "email": "jane.example@alumni.example.edu",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "committee@alumni.example.edu",
+      "type": "role_own_domain"
+    },
+    {
+      "email": "jexample@alum.example.edu",
+      "type": "personal_crsid"
+    },
+    {
+      "email": "jane.example@oxon.org",
+      "type": "personal_crsid"
+    },
+    {
       "email": "jcr-president@jesus.cam.ac.uk",
       "type": "college_domain"
     },

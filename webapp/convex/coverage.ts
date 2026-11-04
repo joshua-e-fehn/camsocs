@@ -5,9 +5,10 @@ import {
   emptyCoverage,
   finishCoverage,
 } from "../lib/broker/coverage"
+import { sensitiveBecause } from "../lib/broker/sensitive"
 import { internal } from "./_generated/api"
 import { internalMutation, internalQuery } from "./_generated/server"
-import { coverageRowOf } from "./lib/brokerRows"
+import { coverageRowOf, orgClassesOf, storedSensitiveProblems } from "./lib/brokerRows"
 import { coverageCountsValidator } from "./schema"
 
 /**
@@ -150,6 +151,55 @@ export const eventsPage = internalQuery({
       rows: result.page.length,
       isDone: result.isDone,
       continueCursor: result.continueCursor,
+    }
+  },
+})
+
+/** People rows read at most (as `broker.people.list`). */
+const MAX_PEOPLE = 5_000
+
+/**
+ * Officers of sensitive societies (DPIA-lite §5, ENG-42), counts only, for
+ * the check after each deploy (`npx convex run --prod
+ * coverage:sensitiveOfficers`): how many there are, how many the broker
+ * entered or edited, and how many stored rows break the rules a manual entry
+ * meets (`storedSensitiveProblems`; the broker's people list marks them
+ * "needs review"). No names or keys, so the output is safe to print.
+ */
+export const sensitiveOfficers = internalQuery({
+  args: {},
+  returns: v.object({
+    people: v.number(),
+    sensitive: v.number(),
+    manual: v.number(),
+    withProblem: v.number(),
+    societiesWithProblem: v.number(),
+  }),
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("people").take(MAX_PEOPLE)
+    const classes = orgClassesOf(ctx)
+    const problems = storedSensitiveProblems(ctx)
+    let sensitive = 0
+    let manual = 0
+    let withProblem = 0
+    const societies = new Set<string>()
+    for (const person of rows) {
+      const classified = await classes(person.orgKey)
+      const because = classified ? sensitiveBecause(classified) : []
+      if (because.length === 0) continue
+      sensitive++
+      if (person.method === "manual") manual++
+      if (await problems(person, because)) {
+        withProblem++
+        societies.add(person.orgKey)
+      }
+    }
+    return {
+      people: rows.length,
+      sensitive,
+      manual,
+      withProblem,
+      societiesWithProblem: societies.size,
     }
   },
 })

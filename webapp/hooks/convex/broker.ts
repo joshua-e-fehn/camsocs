@@ -102,6 +102,11 @@ export function useBrokerOrgMutations() {
   }
 }
 
+/** What a manual entry at `orgKey` may hold (sensitive societies, ENG-42). */
+export function useBrokerPersonRules(orgKey: string | undefined) {
+  return useQuery(api.broker.people.rules, orgKey ? { orgKey } : "skip")
+}
+
 export function useBrokerPeopleMutations() {
   return {
     create: useMutation(api.broker.people.create),

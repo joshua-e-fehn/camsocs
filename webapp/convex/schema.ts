@@ -48,6 +48,7 @@ import {
   TERM_SCOPES,
   TERMS,
 } from "../lib/vocab"
+import { EVENT_STREAMS } from "./lib/derived"
 import {
   chatChannelValidator,
   imageValidator,
@@ -359,6 +360,12 @@ export const eventFields = {
   supersededBy: v.optional(v.string()),
   /** When `supersededBy` was last set. */
   supersededAt: v.optional(v.number()),
+  /** Derived: `university` for the University's own listing, else `society`
+   * (lib/derived.ts `eventStreamOf`, ENG-31), indexed so `events.list` reads
+   * each stream on its own. Optional while rows written before it are
+   * backfilled (derive.ts `recomputeEvents`); `events.list` classifies an
+   * unset row in memory. */
+  stream: v.optional(literalUnion(EVENT_STREAMS)),
   /** Derived: the lower of `title` and `startsAt` confidence. */
   confidence: v.number(),
   meta: metaValidator,
@@ -755,6 +762,14 @@ export const personFields = {
   seenAt: v.number(),
   publicLinks: v.array(v.object({ platform: v.string(), url: v.string() })),
   consentBasis: literalUnion(CONSENT_BASES),
+  /**
+   * How the person's explicit consent was recorded, for `consentBasis:
+   * consent`: the date and where the record is kept ("their email of 4 Nov
+   * 2026, admin@ inbox"). Required before an officer of a sensitive society
+   * (lib/broker/sensitive.ts) is held on consent, which R5 never deletes
+   * (DPIA-lite §5, ENG-42). Set only in the dashboard.
+   */
+  consentRecord: v.optional(v.object({ recordedOn: v.string(), evidence: v.string() })),
   /** `parser` / `llm` rows are pipeline-owned; `manual` rows are never overwritten by it. */
   method: literalUnion(CLAIM_METHODS),
   notes: v.optional(v.string()),
@@ -925,6 +940,10 @@ export default defineSchema({
     .index("by_startsAt", ["startsAt"])
     .index("by_visibility_startsAt", ["visibility", "startsAt"])
     .index("by_visibility_spanEndsAt", ["visibility", "spanEndsAt"])
+    // events.list (ENG-31): one index range per stream, so neither stream's
+    // rows count against the other's `.take`.
+    .index("by_stream_visibility_startsAt", ["stream", "visibility", "startsAt"])
+    .index("by_stream_visibility_spanEndsAt", ["stream", "visibility", "spanEndsAt"])
     .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"])
     // Retention (convex/retention.ts): is a stored file still an event's image?
     .index("by_imageStorageId", ["image.storageId"]),
