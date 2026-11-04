@@ -135,6 +135,7 @@ describe("outreachCsv", () => {
       role: "president",
       email: "president@cuchess.org",
       email_kind: "role_own_domain",
+      next_emails: "",
       missing_count: "2",
       missing_fields: "website; sport.blueStatus",
       sources: "cambridgesu.co.uk; cuchess.org",
@@ -143,6 +144,15 @@ describe("outreachCsv", () => {
     })
     // The multi-paragraph notice survives the round trip intact.
     expect(chess.notice).toBe(outreachNotice(row(), SITE))
+  })
+
+  test("next_emails lists the addresses to try after a bounce, in order", () => {
+    const csv = outreachCsv(
+      [row({ nextAddresses: ["secretary@cuchess.org", "chess@srcf.net"] })],
+      SITE,
+    )
+    const [header, first] = parseCsv(csv)
+    expect(first[header.indexOf("next_emails")]).toBe("secretary@cuchess.org; chess@srcf.net")
   })
 
   test("quotes commas, quotes and line breaks, and defuses formulas", () => {
