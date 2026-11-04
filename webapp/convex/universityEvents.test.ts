@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
+import type { Doc } from "./_generated/dataModel"
 import type { ClaimInput } from "./ingest/claims"
 import { newTest, type TestConvex } from "./lib/harness.testing"
 
@@ -10,7 +11,9 @@ import { newTest, type TestConvex } from "./lib/harness.testing"
  * that names no student group is `fromUniversity`, derived in the projection
  * and never stored; `events.list`'s `university` argument hides it or lists
  * nothing else, and the organiser-card filters (category, college) never
- * match it. Every event here is invented.
+ * match it. The calendar reads each listing stream through its own index
+ * (`events.stream`, ENG-31), so a crowd of University listings never hides a
+ * society's event. Every event here is invented.
  */
 
 const NOW = Date.now()
@@ -158,5 +161,134 @@ describe("University listings (ENG-24)", () => {
       ["Open simul", false],
       ["Open board night", false],
     ])
+  })
+})
+
+/** The stored `stream` of each seeded event, by key. */
+async function streams(t: TestConvex): Promise<Record<string, Doc<"events">["stream"]>> {
+  const rows = await t.run((ctx) => ctx.db.query("events").collect())
+  return Object.fromEntries(rows.map((row) => [row.key, row.stream]))
+}
+
+/** `count` University listings, written straight to the table (no claims):
+ * a Festival-sized programme, one a minute from `startsAt`. */
+async function insertUniversityListings(t: TestConvex, count: number, startsAt: number) {
+  await t.run(async (ctx) => {
+    for (let i = 0; i < count; i++) {
+      await ctx.db.insert("events", {
+        key: eventKey("uni_events_api", `festival-${i}`),
+        title: `Festival talk ${i}`,
+        startsAt: startsAt + i * 60_000,
+        allDay: false,
+        organiserKeys: [],
+        coHostKeys: [],
+        sponsorKeys: [],
+        speakers: [],
+        visibility: "public",
+        eventType: "talk",
+        cancelled: false,
+        status: "confirmed",
+        source: "uni_events_api",
+        externalId: `festival-${i}`,
+        sourceUrl: `https://events.example.ac.uk/whats-on/festival-${i}`,
+        hosting: "hosts",
+        lastSeenAt: NOW,
+        stream: "university",
+        confidence: 0.9,
+        meta: {},
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+    }
+  })
+}
+
+describe("Indexed listing stream (ENG-31)", () => {
+  test("stored on ingest and kept in step with the organiser set", async () => {
+    const t = newTest()
+    await seed(t)
+    expect(await streams(t)).toEqual({
+      [keys.society]: "society",
+      [keys.university]: "university",
+      // Credited to the Chess Club after ingest: the society's now.
+      [keys.universityBySociety]: "society",
+    })
+    // The club leaves the event: the programme's listing is the University's again.
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: keys.universityBySociety, organisers: [] }],
+    })
+    expect((await streams(t))[keys.universityBySociety]).toBe("university")
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [
+        {
+          eventKey: keys.universityBySociety,
+          organisers: [{ orgKey: "org-chess", role: "organiser" as const }],
+        },
+      ],
+    })
+    expect((await streams(t))[keys.universityBySociety]).toBe("society")
+    // Removing the club altogether takes it off its events, and back again.
+    await t.mutation(internal.ingest.purge.removeEntity, {
+      entityType: "organisation",
+      key: "org-chess",
+    })
+    expect(await streams(t)).toEqual({
+      [keys.society]: "society",
+      [keys.university]: "university",
+      [keys.universityBySociety]: "university",
+    })
+  })
+
+  test("rows from before the field are listed alike, and the daily walk backfills them", async () => {
+    const t = newTest()
+    await seed(t)
+    const before = await Promise.all(
+      [undefined, "hide" as const, "only" as const].map((university) =>
+        t.query(api.events.list, { ...window, university }),
+      ),
+    )
+    // As deployed before ENG-31: no row has a stream.
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("events").collect()) {
+        await ctx.db.patch("events", row._id, { stream: undefined })
+      }
+    })
+    expect(await t.query(internal.derive.streamBackfill, {})).toEqual({ unset: 3, atLeast: false })
+    for (const [i, university] of [undefined, "hide" as const, "only" as const].entries()) {
+      expect(await t.query(api.events.list, { ...window, university })).toEqual(before[i])
+    }
+
+    expect(await t.mutation(internal.derive.recomputeEvents, {})).toMatchObject({ done: true })
+    expect(await t.query(internal.derive.streamBackfill, {})).toEqual({ unset: 0, atLeast: false })
+    expect(await streams(t)).toEqual({
+      [keys.society]: "society",
+      [keys.university]: "university",
+      [keys.universityBySociety]: "society",
+    })
+    for (const [i, university] of [undefined, "hide" as const, "only" as const].entries()) {
+      expect(await t.query(api.events.list, { ...window, university })).toEqual(before[i])
+    }
+  })
+
+  test("a Festival of University listings never pushes a society's event past the cap", async () => {
+    const t = newTest()
+    await seed(t)
+    // 1,050 listings, all starting before the society events (days 2 and 4).
+    await insertUniversityListings(t, 1_050, NOW + DAY)
+
+    const all = await t.query(api.events.list, window)
+    expect(all).toHaveLength(1_000)
+    const societies = all.filter((e) => !e.fromUniversity).map((e) => e.title)
+    expect(societies).toEqual(["Open simul", "Open board night"])
+    // By start time; the University fills the 998 places left, earliest first.
+    expect(all.map((e) => e.startsAt)).toEqual(all.map((e) => e.startsAt).sort((a, b) => a - b))
+    const university = all.filter((e) => e.fromUniversity)
+    expect(university[university.length - 1]?.title).toBe("Festival talk 997")
+
+    const hidden = await t.query(api.events.list, { ...window, university: "hide" })
+    expect(hidden.map((e) => e.title)).toEqual(["Open simul", "Open board night"])
+    const only = await t.query(api.events.list, { ...window, university: "only" })
+    expect(only).toHaveLength(1_000)
+    expect(only.every((e) => e.fromUniversity)).toBe(true)
   })
 })

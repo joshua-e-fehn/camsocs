@@ -48,6 +48,7 @@ import {
   TERM_SCOPES,
   TERMS,
 } from "../lib/vocab"
+import { EVENT_STREAMS } from "./lib/derived"
 import {
   chatChannelValidator,
   imageValidator,
@@ -351,6 +352,12 @@ export const eventFields = {
   /** Derived: the listing it was read from (lib/derived.ts `sweepGroupOf`);
    * a future event far behind its listing's newest sighting is withdrawn. */
   sweepGroup: v.optional(v.string()),
+  /** Derived: `university` for the University's own listing, else `society`
+   * (lib/derived.ts `eventStreamOf`, ENG-31), indexed so `events.list` reads
+   * each stream on its own. Optional while rows written before it are
+   * backfilled (derive.ts `recomputeEvents`); `events.list` classifies an
+   * unset row in memory. */
+  stream: v.optional(literalUnion(EVENT_STREAMS)),
   /** Derived: the lower of `title` and `startsAt` confidence. */
   confidence: v.number(),
   meta: metaValidator,
@@ -917,6 +924,10 @@ export default defineSchema({
     .index("by_startsAt", ["startsAt"])
     .index("by_visibility_startsAt", ["visibility", "startsAt"])
     .index("by_visibility_spanEndsAt", ["visibility", "spanEndsAt"])
+    // events.list (ENG-31): one index range per stream, so neither stream's
+    // rows count against the other's `.take`.
+    .index("by_stream_visibility_startsAt", ["stream", "visibility", "startsAt"])
+    .index("by_stream_visibility_spanEndsAt", ["stream", "visibility", "spanEndsAt"])
     .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"])
     // Retention (convex/retention.ts): is a stored file still an event's image?
     .index("by_imageStorageId", ["image.storageId"]),

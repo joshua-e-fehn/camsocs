@@ -183,9 +183,9 @@ export function isWithdrawn(
  * University of Cambridge's public events programme (`uni_events_api`) and
  * credited to no student group as organiser or co-host. Such an event is
  * shown as "University of Cambridge" and is what the calendar's University
- * switch selects. Derived from the stored row in the public projection,
- * never stored: an event the pipeline later credits to a society stops
- * being one at its next read.
+ * switch selects. The projection derives `fromUniversity` from the row with
+ * this at every read; the stored, indexed copy is `events.stream`
+ * (`eventStreamOf`, ENG-31), which only selects rows.
  */
 export function isUniversityListing(event: {
   source: string
@@ -197,6 +197,30 @@ export function isUniversityListing(event: {
     event.organiserKeys.length === 0 &&
     event.coHostKeys.length === 0
   )
+}
+
+/** The two listing streams of the calendar (ENG-31): the University's own
+ * listings and everything else (a society's, a club's, a college's). */
+export const EVENT_STREAMS = ["society", "university"] as const
+export type EventStream = (typeof EVENT_STREAMS)[number]
+
+/**
+ * The stream an event belongs to (`events.stream`, ENG-31): `university` for
+ * the University's own listing (`isUniversityListing`), else `society`.
+ * Stored and indexed so `events.list` reads each stream through its own
+ * index range, and a window crowded with one stream (the Cambridge
+ * Festival's University listings) cannot push the other past the 1,000-row
+ * cap. Every write of `source` or of the organiser keys re-derives it
+ * (lib/materialise.ts, ingest/relationships.ts, ingest/purge.ts), and the
+ * daily walk (convex/derive.ts `recomputeEvents`) fills it in on rows written
+ * before it existed.
+ */
+export function eventStreamOf(event: {
+  source: string
+  organiserKeys: readonly string[]
+  coHostKeys: readonly string[]
+}): EventStream {
+  return isUniversityListing(event) ? "university" : "society"
 }
 
 // --- organisation status --------------------------------------------------------------------

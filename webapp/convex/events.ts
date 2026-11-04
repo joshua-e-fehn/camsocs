@@ -4,7 +4,13 @@ import { isTalksDerivedEvent } from "../lib/talks-boundary"
 import { CATEGORIES, EVENT_TYPES, type EventVisibility } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
-import { DAY_MS, isUniversityListing, londonIsoDate } from "./lib/derived"
+import {
+  DAY_MS,
+  type EventStream,
+  eventStreamOf,
+  isUniversityListing,
+  londonIsoDate,
+} from "./lib/derived"
 import { withdrawnCheck } from "./lib/entityStore"
 import {
   type EventListItem,
@@ -75,11 +81,34 @@ const listArgs = {
   talksCam: v.optional(talksCamMode),
   /** The University's own listings (ENG-24, lib/derived.ts
    * `isUniversityListing`): `hide` leaves them out, `only` lists nothing
-   * else; both kinds by default. */
+   * else; both kinds by default. Read by stream index (ENG-31). */
   university: v.optional(v.union(v.literal("hide"), v.literal("only"))),
 }
 const listArgsObject = v.object(listArgs)
 type ListArgs = Infer<typeof listArgsObject>
+
+/** The streams (`events.stream`, ENG-31) a `university` argument reads. */
+function streamsOf(university: ListArgs["university"]): EventStream[] {
+  if (university === "hide") return ["society"]
+  if (university === "only") return ["university"]
+  return ["society", "university"]
+}
+
+/**
+ * The 1,000-row cap, society events first (ENG-31): every society event of
+ * the window up to the cap, then the University's listings in the room left,
+ * each by start time. A Cambridge Festival week of University listings can
+ * then crowd out only its own later days, never a society's event; the
+ * University view (`university: "only"`) has the whole cap to itself.
+ */
+function capByStream(sorted: Doc<"events">[]): Doc<"events">[] {
+  const society = sorted.filter((event) => eventStreamOf(event) === "society")
+  const kept = society.slice(0, MAX_EVENTS)
+  const university = sorted
+    .filter((event) => eventStreamOf(event) === "university")
+    .slice(0, MAX_EVENTS - kept.length)
+  return [...kept, ...university].sort((a, b) => a.startsAt - b.startsAt)
+}
 
 /** Whether an event is on screen in [from, to): it starts inside, or it is a
  * multi-day event that started earlier and is still running at `from`. */
@@ -112,8 +141,9 @@ async function eventByKey(ctx: QueryCtx, key: string): Promise<Doc<"events"> | n
 }
 
 /**
- * The events in `tiers` matching the filters, by start time (≤ 1000). The
- * caller decides the tiers from the viewer; this function never widens them.
+ * The events in `tiers` matching the filters, by start time (≤ 1000, society
+ * events first: `capByStream`). The caller decides the tiers from the
+ * viewer; this function never widens them.
  */
 async function matchingEvents(
   ctx: QueryCtx,
@@ -147,23 +177,33 @@ async function matchingEvents(
       if (event) byKey.set(event.key, event)
     }
   } else {
-    for (const tier of tiers) {
-      const [starting, spanning] = await Promise.all([
+    // One index range per tier and stream (ENG-31), so neither stream's rows
+    // count against the other's `.take`. The `undefined` range holds rows
+    // written before `stream` existed and not yet backfilled (derive.ts
+    // `recomputeEvents`): the filter below classifies them, and once the
+    // backfill has run the range is empty.
+    const streams: (EventStream | undefined)[] = [...streamsOf(args.university), undefined]
+    const reads = tiers.flatMap((tier) =>
+      streams.flatMap((stream) => [
         ctx.db
           .query("events")
-          .withIndex("by_visibility_startsAt", (i) =>
-            i.eq("visibility", tier).gte("startsAt", args.from).lt("startsAt", args.to),
+          .withIndex("by_stream_visibility_startsAt", (i) =>
+            i
+              .eq("stream", stream)
+              .eq("visibility", tier)
+              .gte("startsAt", args.from)
+              .lt("startsAt", args.to),
           )
           .take(MAX_EVENTS),
         ctx.db
           .query("events")
-          .withIndex("by_visibility_spanEndsAt", (i) =>
-            i.eq("visibility", tier).gt("spanEndsAt", args.from),
+          .withIndex("by_stream_visibility_spanEndsAt", (i) =>
+            i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", args.from),
           )
           .take(MAX_SPANNING),
-      ])
-      for (const event of [...starting, ...spanning]) byKey.set(event.key, event)
-    }
+      ]),
+    )
+    for (const event of (await Promise.all(reads)).flat()) byKey.set(event.key, event)
   }
 
   // The window is applied before any text match, so a search finds this
@@ -181,7 +221,7 @@ async function matchingEvents(
       (!args.university || (args.university === "only") === isUniversityListing(event)) &&
       words.every((word) => event.title.toLowerCase().includes(word)),
   )
-  events = events.sort((a, b) => a.startsAt - b.startsAt).slice(0, MAX_EVENTS)
+  events = capByStream(events.sort((a, b) => a.startsAt - b.startsAt))
 
   const categories = args.categories?.length ? new Set<string>(args.categories) : null
   const colleges = args.collegeKeys?.length ? new Set(args.collegeKeys) : null

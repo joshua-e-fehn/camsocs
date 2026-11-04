@@ -1,8 +1,8 @@
 import { v } from "convex/values"
 import { spanEndOf } from "../lib/calendar"
 import { internal } from "./_generated/api"
-import { internalMutation } from "./_generated/server"
-import { londonIsoDate, sweepGroupOf, termWeekLabel } from "./lib/derived"
+import { internalMutation, internalQuery } from "./_generated/server"
+import { eventStreamOf, londonIsoDate, sweepGroupOf, termWeekLabel } from "./lib/derived"
 import { loadTerms, refreshOrganisation, syncEventOrganiserRows } from "./lib/entityStore"
 
 /**
@@ -13,7 +13,9 @@ import { loadTerms, refreshOrganisation, syncEventOrganiserRows } from "./lib/en
  *  - an organisation's `status` turns `dormant` 180 days after its last
  *    activity, and registrations lapse at the academic-year boundary;
  *  - events' `termWeekLabel` changes when `termDates` change (and their
- *    `spanEndsAt` is kept current, also for rows written before it existed);
+ *    `spanEndsAt`, `sweepGroup` and `stream` are kept current, also for rows
+ *    written before they existed: this walk is their backfill — ENG-31's
+ *    `stream` among them, `streamBackfill` below says when it is done);
  *  - a person's `stale` flag turns on when `staleAfter` passes.
  *
  * Each walk is paginated and reschedules itself, so no transaction reads a
@@ -61,17 +63,24 @@ export const recomputeEvents = internalMutation({
       const label = termWeekLabel(event.startsAt, terms)
       const spanEndsAt = spanEndOf(event.startsAt, event.endsAt)
       const sweepGroup = sweepGroupOf(event.source, event.meta.externalId?.sourceUrl, event)
+      const stream = eventStreamOf(event)
       // Also fills in the organiser rows' copy of `hosting` for rows written
       // before it was copied (it patches only rows that differ).
       await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
       if (
         label === event.termWeekLabel &&
         spanEndsAt === event.spanEndsAt &&
-        sweepGroup === event.sweepGroup
+        sweepGroup === event.sweepGroup &&
+        stream === event.stream
       ) {
         continue
       }
-      await ctx.db.patch("events", event._id, { termWeekLabel: label, spanEndsAt, sweepGroup })
+      await ctx.db.patch("events", event._id, {
+        termWeekLabel: label,
+        spanEndsAt,
+        sweepGroup,
+        stream,
+      })
       changed++
     }
     if (!page.isDone) {
@@ -80,6 +89,28 @@ export const recomputeEvents = internalMutation({
       })
     }
     return { processed: page.page.length, changed, done: page.isDone }
+  },
+})
+
+/** How far `streamBackfill` counts before it stops reading. */
+const STREAM_BACKFILL_SCAN = 500
+
+/**
+ * How many events still have no `stream` (ENG-31), read-only: 0 once
+ * `recomputeEvents` has walked every row written before the field existed
+ * (it reads at most `STREAM_BACKFILL_SCAN`, so `atLeast` means more remain).
+ * Until then `events.list` reads such rows through their own index range
+ * and classifies them in memory, so the backfill is never urgent.
+ */
+export const streamBackfill = internalQuery({
+  args: {},
+  returns: v.object({ unset: v.number(), atLeast: v.boolean() }),
+  handler: async (ctx) => {
+    const unset = await ctx.db
+      .query("events")
+      .withIndex("by_stream_visibility_startsAt", (i) => i.eq("stream", undefined))
+      .take(STREAM_BACKFILL_SCAN)
+    return { unset: unset.length, atLeast: unset.length === STREAM_BACKFILL_SCAN }
   },
 })
 
