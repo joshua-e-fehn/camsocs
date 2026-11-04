@@ -102,6 +102,13 @@ describe("Privacy notice", () => {
     expect(rights).toContain("Article 20")
   })
 
+  test("database backups have their retention, as retention.md R14 sets it (ENG-44)", async () => {
+    const retention = section(await render(<PrivacyPage />), "retention")
+    expect(retention).toContain("Backups of our database")
+    expect(retention).toContain("14 nights")
+    expect(retention).toContain("we delete again whatever had been deleted since it was made")
+  })
+
   test("the sources name the University's events programme and Meta Business Discovery", async () => {
     const what = section(await render(<PrivacyPage />), "what")
     expect(what).toContain("public events programme (What’s On, the Cambridge Festival")

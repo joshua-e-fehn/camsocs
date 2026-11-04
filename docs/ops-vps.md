@@ -4,7 +4,7 @@ The scheduled harvests run on the VPS host (`srv1608974`, Ubuntu 24.04, systemd)
 
 Everything here lives in `ops/vps/` and is installed by Joshua's operator; nothing in this repo deploys it. Until it is installed, production is harvested by hand from the laptop (docs/deploy.md §4).
 
-**Secrets.** Never paste a value into a chat, a commit or a log. On the host each secret lives in one place: `pipeline/.env` (LLM key, Camdram, Meta), `pipeline/.env.prod` (production's `PIPELINE_API_KEY`, the PostHog project token for run telemetry, and the PostHog personal API key the hourly monitor queries with), both `0600` and owned by `camsocs`; the deploy key in `/var/lib/camsocs/.ssh/` (the harvest's) and `/etc/camsocs/deploy_key` (root's, for the installer's mirror); the three Slack values the alert needs in `/etc/camsocs/alert.env` (`0600` root), copied from Mya's env file by the installer — nothing else of that file leaves it.
+**Secrets.** Never paste a value into a chat, a commit or a log. On the host each secret lives in one place: `pipeline/.env` (LLM key, Camdram, Meta), `pipeline/.env.prod` (production's `PIPELINE_API_KEY`, the PostHog project token for run telemetry, and the PostHog personal API key the hourly monitor queries with), both `0600` and owned by `camsocs`; the deploy key in `/var/lib/camsocs/.ssh/` (the harvest's) and `/etc/camsocs/deploy_key` (root's, for the installer's mirror); the three Slack values the alert needs in `/etc/camsocs/alert.env` (`0600` root), copied from Mya's env file by the installer — nothing else of that file leaves it; the backup's production deploy key in `/etc/camsocs/backup.env` (`0600` root, §10).
 
 **Who runs what (review 2026-10-10).** Root runs only code it installed itself from a commit the operator reviewed: `install.sh` fetches that commit into root's own mirror (`/var/lib/camsocs-ops/camsocs.git`) and installs the runner's scripts root-owned in `/usr/local/lib/camsocs-ops/` and the units and logrotate config from there. Nothing root runs or installs ever comes from `/opt/camsocs`, which the harvest writes (its own `git pull`, `pixi install`, `var/`). The harvest unit runs the root-owned `camsocs-harvest.sh` as `camsocs`; the pipeline it starts is the checkout's (main, pulled each run). The alert runs as a user of its own (`DynamicUser`), never as `camsocs`.
 
@@ -32,20 +32,32 @@ VPS host srv1608974 (systemd)
 │      └─► https://camsocs.uk/ and /societies (HEAD, status code only)
 │    OnFailure= ─► camsocs-alert@monitor.service ─► Slack DM: failing checks' numbers,
 │                    recovered site checks, new listing requests by kind
+├─ camsocs-backup.timer           daily 01:30 Europe/London (§10, ENG-44)
+│  camsocs-backup.service    DynamicUser camsocs-backup, key by LoadCredential=, sandboxed
+│    camsocs-backup.py backup → convex export --include-file-storage (pinned CLI, root-owned)
+│      ─► Convex production (cheerful-bandicoot-511) ─► /var/lib/camsocs-backup/convex-prod-<UTC>.zip
+│      read back whole, manifest (names and counts), newest 14 kept
+│    OnFailure= ─► camsocs-alert@backup.service ─► Slack DM: what the exit code means
+├─ camsocs-restore-test.timer     Monday 03:00 Europe/London
+│  camsocs-restore-test.service   same user, no key, loopback only
+│    camsocs-restore-test → throwaway convex-local-backend on 127.0.0.1 → import → export
+│      → compared with the manifest table by table → status-restore-test.json
+│    OnFailure= ─► camsocs-alert@restore_test.service
 └─ Docker: Mya's Hermes container, cliproxy, … — never touched by the runner
 ```
 
 | What | Where |
 |---|---|
 | Checkout (main, read-only deploy key) | `/opt/camsocs` (owned by `camsocs`; `var/` holds cache, staging, state, reports). Root never runs or installs anything from it |
-| The runner (root-owned, from the reviewed commit in `REVISION`) | `/usr/local/lib/camsocs-ops/`: `camsocs-harvest.sh`, `camsocs-alert.py`, `camsocs-status.py`, `install.sh`, `REVISION` |
-| Root's keys and the alert's Slack values | `/etc/camsocs/` (`0750` root): `deploy_key`, `known_hosts`, `alert.env` (`0600`) |
+| The runner (root-owned, from the reviewed commit in `REVISION`) | `/usr/local/lib/camsocs-ops/`: `camsocs-harvest.sh`, `camsocs-alert.py`, `camsocs-status.py`, `camsocs-backup.py`, `install.sh`, `REVISION`; `backup/` the Convex CLI's toolchain (node, `node_modules/convex`, `convex-local-backend`, §10) |
+| Root's keys, the alert's Slack values, the backup's key | `/etc/camsocs/` (`0750` root): `deploy_key`, `known_hosts`, `alert.env` (`0600`), `backup.env` (`0600`, §10) |
+| Backups of Convex production (§10) | `/var/lib/camsocs-backup` → `/var/lib/private/camsocs-backup` (`0700`, the dynamic user `camsocs-backup`; root): `convex-prod-<UTC>.zip`, `.manifest.json`, `status-backup.json`, `status-restore-test.json`, `last-backup.log`, `last-restore-test.log` |
 | Root's mirror of the repository | `/var/lib/camsocs-ops/camsocs.git` (`0700` root) |
 | Run state of production | `/opt/camsocs/.camsocs-state.prod.json` |
 | User home, deploy key, pixi cache | `/var/lib/camsocs` (`.ssh/camsocs_deploy`, `.ssh/known_hosts`, `.cache/rattler`) |
 | Status, lock, pin, last good commit | `/var/lib/camsocs/status.json`, `status-<group>.json`, `run-<group>.json`, `harvest.lock`, `pin`, `last-good-commit`; the monitor's `status-monitor.json` |
 | Logs | `/var/log/camsocs/<London date>-<group>.log`, removed after 90 days (`/etc/logrotate.d/camsocs`); the script's own lines also in the journal |
-| Units | `/etc/systemd/system/camsocs-harvest@.service`, `camsocs-alert@.service`, `camsocs-harvest-events.timer`, `camsocs-harvest-full.timer`, `camsocs-monitor.service`, `camsocs-monitor.timer` |
+| Units | `/etc/systemd/system/camsocs-harvest@.service`, `camsocs-alert@.service`, `camsocs-harvest-events.timer`, `camsocs-harvest-full.timer`, `camsocs-monitor.service`, `camsocs-monitor.timer`, `camsocs-backup.service`, `camsocs-backup.timer`, `camsocs-restore-test.service`, `camsocs-restore-test.timer` |
 | pixi | `/usr/local/bin/pixi` (0.73.0, the version CI pins) |
 
 ### The two groups
@@ -110,6 +122,7 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
     The harvest unit denies the private, CGNAT and link-local ranges (`IPAddressDeny`) and filters system calls (`SystemCallFilter=@system-service`, refused calls answer `EPERM`); if the first run fails on DNS or a refused call, the journal says which.
 11. **Alerts:** §6 "Testing".
 12. **Timers on:** `systemctl enable --now camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer`, then `systemctl list-timers 'camsocs-*'`. Run the monitor once by hand first (§6 "Monitor": `systemctl start camsocs-monitor.service`); until the first harvest has finished, `stale_harvest` fails and alerts.
+13. **Backups:** §10 "Install".
 
 ## 3. Upgrade
 
@@ -129,8 +142,8 @@ All on Joshua's side; Claude does not ssh to the host. Commands marked *laptop* 
 
 - **Pin a commit:** `echo <commit> | sudo -u camsocs tee /var/lib/camsocs/pin`. The next run fetches and checks out that commit (detached) instead of pulling main. `/var/lib/camsocs/last-good-commit` is the last commit whose run ended with exit 0. `rm /var/lib/camsocs/pin` follows main again from the next run. (The runner itself: install an earlier reviewed commit with `install.sh --revision`.) A pinned commit from before ENG-10 has no `monitor` command: the monitor unit then skips each run quietly (`ConditionPathExists=` on `monitor.py`, shown as a skipped condition in `systemctl status camsocs-monitor`), so the checks stop while the pin holds; a runner installed from before ENG-10 has no monitor unit at all.
 - **Data:** every pipeline write is an upsert of claims; the next good run repairs what a bad one wrote. Function and site rollbacks are docs/deploy.md §6.
-- **Stop:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer` (and `camsocs-monitor.timer`, or the monitor alerts on the stale harvest); a run in progress: `systemctl stop camsocs-harvest@full.service` (recorded as `stopped`, exit 143, which alerts). Re-running the installer keeps them off, and while both harvest timers are off it does not turn on a timer the host never had (the monitor's) either.
-- **Uninstall:** stop as above, then `rm /etc/systemd/system/camsocs-* /etc/logrotate.d/camsocs && systemctl daemon-reload`; `userdel camsocs`; `rm -rf /opt/camsocs /var/lib/camsocs /var/log/camsocs /usr/local/lib/camsocs-ops /var/lib/camsocs-ops /etc/camsocs` (the cache and logs go with it); remove the deploy key in GitHub and the camsocs key from cliproxy.
+- **Stop:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer` (and `camsocs-monitor.timer`, or the monitor alerts on the stale harvest; the backups are independent of the harvest and keep running: `camsocs-backup.timer camsocs-restore-test.timer` stop them, §10); a run in progress: `systemctl stop camsocs-harvest@full.service` (recorded as `stopped`, exit 143, which alerts). Re-running the installer keeps them off, and while both harvest timers are off it does not turn on a timer the host never had (the monitor's) either.
+- **Uninstall:** stop as above, then `rm /etc/systemd/system/camsocs-* /etc/logrotate.d/camsocs && systemctl daemon-reload`; `userdel camsocs`; `rm -rf /opt/camsocs /var/lib/camsocs /var/log/camsocs /usr/local/lib/camsocs-ops /var/lib/camsocs-ops /etc/camsocs` (the cache and logs go with it) and `rm -rf /var/lib/private/camsocs-backup /var/cache/private/camsocs-backup /var/lib/camsocs-backup /var/cache/camsocs-backup` (the backups); remove the deploy key in GitHub, the camsocs key from cliproxy and the backup's deploy key in the Convex dashboard (§10).
 
 ## 5. Running by hand
 
@@ -221,6 +234,7 @@ Do it outside the run windows (not 02:00–08:00 on Sundays, not 04:30–06:30 d
 - **The deploy key:** a new pair (§2 step 2), add it in GitHub, `bash /usr/local/lib/camsocs-ops/install.sh --revision "$(cat /usr/local/lib/camsocs-ops/REVISION)" --deploy-key <new private key>` (it installs root's and the harvest's copy and leaves the timers as they are), check `sudo -u camsocs git -C /opt/camsocs fetch`, delete the old key in GitHub.
 - **Slack:** the bot token is Mya's; after it changes in her env file, `bash /usr/local/lib/camsocs-ops/install.sh --refresh-alert-env` copies the three values again.
 - **Meta token** (about every 60 days) and **Camdram key:** in `/opt/camsocs/pipeline/.env`.
+- **The backup's Convex deploy key** (§10): generate the new key in the dashboard with the same permissions, put it in the 1Password item, write the one-line file as in §10 "Install" step 2 and `bash /usr/local/lib/camsocs-ops/install.sh --revision "$(cat /usr/local/lib/camsocs-ops/REVISION)" --backup-env /root/camsocs-setup/backup.env` (it also turns the backup's timers on), `shred -u` the file, `systemctl start camsocs-backup.service` and check `status-backup.json`, then delete the old key in the dashboard. Outside 01:30–02:00.
 - **PostHog project token** (`POSTHOG_KEY`): after rotating it in PostHog, `sudoedit /opt/camsocs/pipeline/.env.prod` (it stays `0600 camsocs`) and update the laptop's `pipeline/.env.prod` and the 1Password item. Removing the line turns run telemetry off.
 - **The monitor's personal API key** (`POSTHOG_PERSONAL_API_KEY`): create the new key in PostHog (camsocs project only, the same scopes), update the 1Password item, `sudoedit /opt/camsocs/pipeline/.env.prod`, run `systemctl start camsocs-monitor.service` and check `journalctl -u camsocs-monitor -n 10` shows no `unknown`, then delete the old key in PostHog (the dashboards script and the Vercel source-map upload use the same key: update `POSTHOG_PERSONAL_API_KEY` in Vercel Production too). Removing the two lines turns the checks off.
 
@@ -247,8 +261,80 @@ The runner calls cliproxy on the host's loopback, `http://127.0.0.1:8317/v1`, wi
 ## 9. What the runner never does
 
 - touch Docker, Mya's container, her data (`/docker` is inaccessible to the harvest unit) or cliproxy's configuration;
-- deploy anything: no `vercel`, no `convex deploy`; it only posts to `/api/pipeline/*` with production's pipeline key;
+- deploy anything: no `vercel`, no `convex deploy`, no `convex import` into production; the harvest only posts to `/api/pipeline/*` with production's pipeline key, and the backup holds a deploy key made to export and nothing else (no `deployment:deploy`, no data write, no restore permission; §10) and runs only `convex export`;
 - target the dev deployment (the host has no dev key);
 - run as root: the harvest and the monitor run as `camsocs` (the alert as a dynamic user of its own; the monitor writes only `/var/lib/camsocs` and the checkout's `.pixi`) with `NoNewPrivileges`, `ProtectSystem=strict` (writable: `/opt/camsocs` — the run's own `git pull` and `pixi install` write the checkout — `/var/lib/camsocs`, `/var/log/camsocs`), `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `ProtectProc=invisible`, a system-call filter and an empty capability set;
 - reach the host's private networks: the fetcher refuses any URL whose host resolves to a loopback, private, link-local, CGNAT or other non-public address, at every redirect and again when it connects (pipeline `sources/base.py`), and the unit denies the private, CGNAT and link-local ranges (`IPAddressDeny`); cliproxy is reached by the LLM client on the loopback, which no scraped URL can use;
-- let root run anything from the checkout: the installer, units, logrotate config, alert and harvest script come from a reviewed commit in root's own mirror.
+- let root run anything from the checkout: the installer, units, logrotate config, alert and harvest script come from a reviewed commit in root's own mirror, and so do the backup script and its toolchain (lock files of the reviewed commit; the backup unit, which holds production's key, reads nothing of the checkout).
+
+## 10. Backups of Convex production (ENG-44)
+
+Everything that exists only in Convex production — the CRM (`people`, `orgBrokerProfiles`, `interactions`, `introductions`), listing requests and the suppression (removal) list, the inbox, sign-in accounts — is backed up every night on this host and restore-tested every week. The public directory, events and talks would come back with the next harvest; those tables do not.
+
+**Two layers.**
+
+- **Convex's own backups** (dashboard → camsocs → Production → Backups; [docs](https://docs.convex.dev/database/backup-restore), read 2026-11-04): "Backup now" on any plan, at most two stored per deployment on Free/Starter, kept 7 days; *periodic* backups (daily, kept 7 days, or weekly, kept 14) only on Pro. A backup can include file storage, can be downloaded, and can be restored into the same deployment or another of the team. Not in a backup: code, environment variables, pending scheduled functions. Turning on periodic backups is Joshua's call (plan and cost, docs/deploy.md §8).
+- **This host** (below): `convex export` of production every night at 01:30 London, the newest 14 kept, and a weekly restore of the newest into a throwaway local backend. It does not depend on the plan, and its copies outlive Convex's 7 days.
+
+The two fail independently: a VPS lost with its disk takes only these copies (production is untouched), and a Convex-side mistake (a bad migration, a wrong mutation, a mass deletion) leaves 14 nights here.
+
+### How it works
+
+- **`camsocs-backup.service`** (`camsocs-backup.timer`, daily 01:30 Europe/London, `Persistent=true`: before the Sunday full harvest, the daily one and Convex's `retention-daily` cron, so a backup holds the night's data before the night's deletions) runs `/usr/local/lib/camsocs-ops/camsocs-backup.py backup` (root-owned, standard library). It checks the key file (exactly one line, `CONVEX_DEPLOY_KEY=prod:cheerful-bandicoot-511|…`; a dev or preview key, `CONVEX_DEPLOYMENT` or a self-hosted URL is refused before anything runs) and the free disk (at least 2 GB and twice the last backup), then runs the pinned Convex CLI: `convex export --env-file <key file> --include-file-storage --path …` (the CLI reads the key from the file: never an environment variable or a command line; no `CONVEX_*` variable of the unit reaches it). The ZIP is read back whole before it counts: every member's CRC, every document line a JSON object with an `_id`, no `_id` twice, at least one document. Then `convex-prod-<UTC stamp>.zip` and its manifest `….manifest.json` (size, sha256 and, per table and per storage folder, the count and a digest of the documents or files — names and numbers only), and all but the newest 14 (`CAMSOCS_BACKUP_KEEP`) are deleted. A failed export keeps every earlier backup and deletes nothing.
+- **A sharp shrink alerts.** A table that held at least 20 documents last night and now holds less than half (or is gone) is backed up and kept as usual, but the run exits 24, which alerts: a mass deletion is noticed while 13 backups from before it remain.
+- **`camsocs-restore-test.service`** (`camsocs-restore-test.timer`, Monday 03:00 Europe/London) checks the newest backup against its manifest's sha256, starts the pinned `convex-local-backend` on `127.0.0.1` (random free ports, a random instance secret, SQLite and file storage in the unit's private `/tmp`, beacon off), makes an admin key for that run with the binary's own `keygen`, `convex import --replace-all -y` the backup into it, `convex export`s it again and compares the two table by table: the same number of documents with the same digest, the same stored files. Then the backend is stopped and its data deleted. It never names a cloud deployment: the unit has no credential, its only `--env-file` is the one it writes for its own backend, and its network is the loopback alone (`IPAddressDeny=any`). The functions are not pushed to it: a snapshot restores table by table (the Better Auth component's tables too) without them, which is what a restore into production relies on.
+- **Who.** Both units run as the dynamic user `camsocs-backup` (one user, by name, so both own the backups), never root and never the harvest's `camsocs`. The state directory is `/var/lib/private/camsocs-backup` (`/var/lib/private` is `0700` root), files `0600`: only that user and root can read a backup. The backup unit gets the key as a systemd credential (`LoadCredential=`, read-only, for as long as it runs), reaches the internet only (private, CGNAT, link-local ranges and the loopback denied but the DNS stub), and cannot see the checkout, the harvest's state, its logs, `/docker` or `/root`. Nothing of the toolchain comes from the checkout the harvest writes: node (conda-forge, `ops/vps/backup/pixi.lock`), the CLI (`ops/vps/backup/package-lock.json`, `npm ci --ignore-scripts`) and the local backend (`precompiled-2026-10-22-1447815`, sha256 pinned in `install.sh`) are installed root-owned by `install.sh` from the reviewed commit, in `/usr/local/lib/camsocs-ops/backup/`.
+- **The key** is a production deploy key made for the backup and allowed nothing else (Install step 1): it cannot deploy, write data or restore. A key for another deployment is refused by the script and by `install.sh`.
+- **What goes where.** The CLI's own output (which on an import error can quote a document) goes to `last-backup.log` / `last-restore-test.log` in the backup directory (`0600`), never to the journal; the journal, the status files and the alert carry names and numbers only.
+- **Never open a backup, a manifest's source ZIP or `last-restore-test.log` in an agent session**: a backup holds the talks pillar's talks.cam data and the CRM. `python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py inspect <zip>` prints table names and counts, nothing else.
+- **Cost.** Each export reads every document and, with file storage, every stored file: Convex counts that as database and file bandwidth (docs, "How are they priced?"). After the first week, compare `bunx convex deployment usage --prod` with the plan's included amounts; if file bandwidth matters, `CAMSOCS_BACKUP_FILE_STORAGE=0` (a drop-in, below) backs up documents only — stored logos and event images would then be missing after a restore until the harvest stores them again, and a restore leaves `storedFiles` rows pointing at files that are gone.
+- **Settings** (environment of the units; change with `systemctl edit camsocs-backup.service`, which survives upgrades): `CAMSOCS_BACKUP_KEEP` (14), `CAMSOCS_BACKUP_FILE_STORAGE` (1), `CAMSOCS_BACKUP_MIN_FREE_MB` (2048), `CAMSOCS_BACKUP_TIMEOUT` (7200 s), `CAMSOCS_RESTORE_TIMEOUT` (3600 s for each of import and export). Retention R14 (docs/compliance/retention.md) and `/privacy` state 14 nights: change them with the setting.
+
+| Exit | `camsocs-backup.py backup` | `restore-test` |
+|---|---|---|
+| 0 | backed up | the newest backup restores identically |
+| 20 | no key file, or not production's key alone | the local backend or the CLI is missing (re-run `install.sh`) |
+| 21 | not enough free disk | — |
+| 22 | the export failed or timed out (`last-backup.log`) | — |
+| 23 | the export is not a readable snapshot, or holds no document | — |
+| 24 | backed up, but a table shrank to under half (`shrunkTables` in `status-backup.json`) | — |
+| 30 | — | no backup yet, or it does not match its manifest's sha256 |
+| 31 | — | the throwaway backend did not start (`SystemCallFilter=` is the first suspect: `journalctl -u camsocs-restore-test`) |
+| 32 / 33 | — | the import into / the export from the throwaway backend failed |
+| 34 | — | the restored data differs (`differences` in `status-restore-test.json`: table names and counts) |
+| 75 | the other unit held the lock for 2 hours | the same |
+
+Any non-zero exit fails the unit, and `OnFailure=` sends `camsocs-alert@backup` / `camsocs-alert@restore_test`: the exit status and what it means, built from systemd's variables only (`camsocs-alert.py` `BACKUP_EXITS`). Test it without sending: `MONITOR_SERVICE_RESULT=exit-code MONITOR_EXIT_STATUS=22 python3 -I /usr/local/lib/camsocs-ops/camsocs-alert.py --dry-run backup`.
+
+### Install (after the merge; the runner is installed, §2)
+
+1. **The key (Joshua, dashboard).** <https://dashboard.convex.dev> → team `joshua-fehn` → project `camsocs` → **Production** (`cheerful-bandicoot-511`) → Settings → Deploy keys → Generate a deploy key. Name `camsocs-vps-backup`. Permissions: `deployment:view`, `deployment:backups:view`, `deployment:backups:create`, `deployment:backups:download`, `deployment:data:view` — and nothing else (no `deployment:deploy`, `deployment:data:write`, `deployment:env:*`, `deployment:backups:import` or `:delete`). Copy it once into 1Password, vault **Mya**, a new item **Convex camsocs prod backup key** (field `credential`). If the dashboard offers no permission choice, a plain production deploy key works too, but it can also deploy and write: record that in the item.
+2. **The file (laptop, never in a shell history or a chat):**
+
+   ```bash
+   umask 077 && printf 'CONVEX_DEPLOY_KEY=%s\n' "$(mya-op read 'op://Mya/Convex camsocs prod backup key/credential')" > ~/camsocs-backup.env
+   ssh mya-ts 'install -d -m 700 /root/camsocs-setup' && scp ~/camsocs-backup.env mya-ts:/root/camsocs-setup/backup.env && shred -u ~/camsocs-backup.env
+   ```
+
+3. **Install (host, root), with the full id of the reviewed commit of main that has ENG-44:**
+
+   ```bash
+   bash /usr/local/lib/camsocs-ops/install.sh --revision <commit> --diff         # what changes
+   bash /usr/local/lib/camsocs-ops/install.sh --revision <commit> --backup-env /root/camsocs-setup/backup.env
+   shred -u /root/camsocs-setup/backup.env
+   ```
+
+   It installs `/etc/camsocs/backup.env` (`0600` root; it refuses anything but production's key alone and prints no value), node and the CLI (`pixi install --locked`, `npm ci --ignore-scripts`, a few minutes the first time), the local backend (about 64 MB, sha256 checked), the script and the four units, and turns both timers on (with `--backup-env`; an upgrade without it leaves them as they are, and without the key file they stay off).
+4. **First backup by hand:** `systemctl start camsocs-backup.service` (blocks; a few minutes), then `journalctl -u camsocs-backup -n 20` (`convex-prod-…zip: … MB, N tables, N documents, N files; 1 backups kept`), `python3 -m json.tool /var/lib/camsocs-backup/status-backup.json` (`"result": "ok"`) and `ls -la /var/lib/camsocs-backup/` (`-rw-------`). On exit 22, `tail -n 30 /var/lib/camsocs-backup/last-backup.log` names the CLI's error: a permission error means the key lacks one (add the one it names to a new key, step 1, and re-run step 2–3), `ExportInProgress` means a dashboard backup was running (start again). On the Free/Starter plan, if the export is refused because two backups are stored already, delete the oldest in the dashboard's Backups page and decide about the plan (docs/deploy.md §8).
+5. **First restore test by hand:** `systemctl start camsocs-restore-test.service`, then `journalctl -u camsocs-restore-test -n 20` (`… restores: N tables, N documents and N files read back identical`) and `python3 -m json.tool /var/lib/camsocs-backup/status-restore-test.json` (`"result": "ok"`, `"differences": []`). The counts must equal the backup's (`status-backup.json`).
+6. **Check:** `systemctl list-timers 'camsocs-backup*' 'camsocs-restore*'`; `systemd-analyze verify /etc/systemd/system/camsocs-backup.* /etc/systemd/system/camsocs-restore-test.*`; `systemd-analyze security camsocs-backup.service camsocs-restore-test.service`; the alert path: `systemctl start camsocs-alert@backup.service` sends a real DM saying the backup failed (exit status unknown); say so in Slack if anyone else reads the channel.
+
+**Stop:** `systemctl disable --now camsocs-backup.timer camsocs-restore-test.timer` (an upgrade keeps them off). **Upgrade:** like the runner (§3); the toolchain is reinstalled only when a lock file changed, the local backend only when its pinned sha256 did. A new CLI version: bump `convex` in `ops/vps/backup/package.json` and regenerate the lock (`cd ops/vps/backup && pixi run --manifest-path pixi.toml npm install --package-lock-only --ignore-scripts`); a new local backend: the release tag and its asset's sha256 (`gh api repos/get-convex/convex-backend/releases/latest`, the asset's `digest`) in `install.sh`, after a restore test against it on a laptop.
+
+### Restoring
+
+docs/deploy.md §8: a whole restore of production from one of these backups (or from a Convex dashboard backup), and what to do after it.
+
+### Tested (2026-11-04, laptop)
+
+The pinned CLI (1.46.0, from `ops/vps/backup/`) and local backend (`precompiled-2026-10-22-1447815`, macOS arm64 build of the same release) with synthetic data only: the webapp's functions pushed to a local backend, synthetic rows in app and component tables and two stored files, `camsocs-backup.py backup` (through a wrapper that pointed the CLI's `--env-file` at that backend) three times with `CAMSOCS_BACKUP_KEEP=2`, then `restore-test`: every table and file read back identical, `_id`s and `_creationTime`s preserved, and component tables restored into a backend without the functions. Not tested: an export of production itself (no key yet: Install step 4 is the first), systemd's sandbox (the laptop has none: step 5 is the first), the Linux build of the backend.

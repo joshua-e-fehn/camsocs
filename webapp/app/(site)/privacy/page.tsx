@@ -412,6 +412,12 @@ export default function PrivacyPage() {
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
           <li>
+            Backups of our database: one a night, kept on our own server for 14 nights and readable
+            only by its administrator. Something deleted from the site leaves the backups as the
+            older ones are deleted; if we ever have to restore one, we delete again whatever had
+            been deleted since it was made.
+          </li>
+          <li>
             Analytics and error records in PostHog: up to one year, the retention of the PostHog
             plan we use; each July we check that nothing older is kept.
           </li>
