@@ -41,15 +41,25 @@ export const metadata: Metadata = pageMetadata({
  *
  * ENG-34 (3 November 2026, the launch audit): the sources name the
  * University's events programme and Meta Business Discovery; the VPS host is
- * named, ⚠ its region still to confirm (record-of-processing, transfers); the
- * AI model is described as it is reached today, a ChatGPT subscription through
- * cliproxy with no API data processing agreement. Training is off since
- * 3 November 2026, and Joshua decided to stay on the subscription rather than
- * move to the API (ENG-41): change "The AI model" if that changes. The OpenAI
- * company that holds the subscription and its transfer safeguard are not yet
- * checked (record-of-processing, transfers; ENG-41): the notice says
- * "not yet confirmed" until they are, then names them, here and in dpia-lite
- * R-4 alike. The Art 14 notice to societies (J7, ENG-32) is not sent yet, so
+ * named; the AI model is described as it is reached today, a ChatGPT
+ * subscription through cliproxy with no API data processing agreement.
+ * Training is off since 3 November 2026, and Joshua decided to stay on the
+ * subscription rather than move to the API (ENG-41): change "The AI model" if
+ * that changes.
+ *
+ * ENG-44 (4 November 2026, each provider's terms read from its own pages,
+ * record-of-processing "International transfers"): Convex and Vercel's
+ * functions are in the US (both deployments `aws-us-east-1`, `iad1`), the VPS
+ * is in Frankfurt by its address's geolocation (⚠ Joshua to confirm in
+ * hPanel, then drop "as far as we can tell"). OpenAI's Europe terms give a UK
+ * resident's subscription to OpenAI OpCo, LLC and an EEA resident's to OpenAI
+ * Ireland; which one holds Joshua's account is ⚠ not yet confirmed (its
+ * country and invoices), so the notice names both and says so. Once he has,
+ * name the one, here and in dpia-lite R-4 alike. The consumer terms give us
+ * no transfer safeguard: the notice says OpenAI's own SCCs are its
+ * arrangement, not one with us, and does not claim a safeguard we lack.
+ *
+ * The Art 14 notice to societies (J7, ENG-32) is not sent yet, so
  * "If we have not written to you" and "Changes" say "we are writing"; put
  * them back in the present tense once it has gone out. "If we have not
  * written to you" is the published side of the Art 14(5)(e) assessment
@@ -335,13 +345,16 @@ export default function PrivacyPage() {
           addresses. Service providers process data on our behalf:
         </p>
         <ul>
-          <li>Vercel (website hosting) and Convex (database and server code);</li>
+          <li>
+            Vercel (website hosting; its server code runs in Washington, D.C., in the United States)
+            and Convex (database and server code, in Northern Virginia, in the United States);
+          </li>
           <li>
             Hostinger, from which the operator rents the virtual server that runs the harvester on a
-            schedule (region to be confirmed). It holds the harvester’s working copies: the public
-            pages it reads, staged listings and talks, and mailing-list messages being processed,
-            for up to 90 days (list mail for 30 days), and it runs the relay to the AI model
-            described below;
+            schedule (in Frankfurt, Germany, as far as we can tell from its network address). It
+            holds the harvester’s working copies: the public pages it reads, staged listings and
+            talks, and mailing-list messages being processed, for up to 90 days (list mail for 30
+            days), and it runs the relay to the AI model described below;
           </li>
           <li>Resend (sign-in emails and receiving forwarded mailing-list messages);</li>
           <li>Google (sign-in for the operator only);</li>
@@ -363,25 +376,33 @@ export default function PrivacyPage() {
           descriptions with roles, is one of OpenAI’s. We do not use OpenAI’s API service for it:
           the operator reaches the models through his own ChatGPT subscription, by way of a relay
           (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI under the
-          subscription’s own terms, and may be processed in the United States. We have no data
-          processing agreement with OpenAI, so it is not a provider acting only on our instructions
-          like those above. We have not yet confirmed which OpenAI company the subscription is with
-          (for people in the UK and Europe it may be OpenAI’s Irish company) or what safeguard its
-          terms provide for transfers outside the UK; we will say so here once we have. The account
-          setting that lets OpenAI use what it is sent to train its models is switched off (since 3
-          November 2026), and we send it as little as we can: talk listings from talks.cam and
-          departments never, and mailing-list messages only after quoted replies, signatures,
-          addresses and phone numbers are cut out.
+          subscription’s own terms. We have no data processing agreement with OpenAI, so it is not a
+          provider acting only on our instructions like those above. Under OpenAI’s terms for
+          Europe, a subscription held by someone living in the UK is with OpenAI OpCo, LLC in the
+          United States, and one held by someone living in the European Economic Area with OpenAI
+          Ireland Ltd; we have not yet confirmed which of the two holds the operator’s subscription,
+          and will say so here once we have. Either way OpenAI processes the text outside the UK,
+          including in the United States. OpenAI’s privacy policy says it relies on adequacy
+          decisions and on the standard contractual clauses with the UK’s addendum for those
+          transfers, but that is OpenAI’s own arrangement: the subscription’s terms give us no
+          safeguard of our own for sending the text to OpenAI, and OpenAI is not certified under the
+          UK Extension to the EU–US Data Privacy Framework. The account setting that lets OpenAI use
+          what it is sent to train its models is switched off (since 3 November 2026), and we send
+          it as little as we can: talk listings from talks.cam and departments never, and
+          mailing-list messages only after quoted replies, signatures, addresses and phone numbers
+          are cut out.
         </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
-          Where they do, we rely on the safeguards each provider offers for transfers from the UK,
-          except for OpenAI, whose safeguard under the subscription’s terms we have not yet
-          confirmed (see above). PostHog, a US company, stores analytics in the EU; where it or its
-          subprocessors handle the data elsewhere, its data processing agreement provides for the
-          UK’s International Data Transfer Addendum to the EU standard contractual clauses and the
-          UK Extension to the EU–US Data Privacy Framework. Ask us (see{" "}
-          <a href="#rights">Your rights</a>) for a copy of the safeguards for any provider.
+          Where they do, we rely on the safeguards in each provider’s data processing agreement,
+          part of its terms: the EU standard contractual clauses with the UK’s International Data
+          Transfer Addendum (Vercel, Convex, Resend, and Hostinger for anything it handles outside
+          Europe); Vercel and Resend are also certified under the UK Extension to the EU–US Data
+          Privacy Framework. OpenAI is the exception (see above). PostHog, a US company, stores
+          analytics in the EU; where it or its subprocessors handle the data elsewhere, its data
+          processing agreement provides for the UK’s International Data Transfer Addendum to the EU
+          standard contractual clauses and the UK Extension to the EU–US Data Privacy Framework. Ask
+          us (see <a href="#rights">Your rights</a>) for a copy of the safeguards for any provider.
         </p>
       </ProseSection>
 
@@ -411,6 +432,12 @@ export default function PrivacyPage() {
           </li>
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
+          <li>
+            Backups of our database: one a night, kept on our own server for 14 nights and readable
+            only by its administrator. Something deleted from the site leaves the backups as the
+            older ones are deleted; if we ever have to restore one, we delete again whatever had
+            been deleted since it was made.
+          </li>
           <li>
             Analytics and error records in PostHog: up to one year, the retention of the PostHog
             plan we use; each July we check that nothing older is kept.
