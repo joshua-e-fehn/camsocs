@@ -178,7 +178,8 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              messages and stacks, frame paths only (browser and server)
   broker/                    Broker analysis shared by server, browser and tests: coverage (the
                              fold convex/coverage.ts runs), matching, outreach (CSV + Art 14
-                             notice + send log), force-layout, format
+                             notice + send log; art14-mail-merge.test.ts runs the Apps Script
+                             ops/outreach/art14-mail-merge.gs), force-layout, format
   keys.ts / hash.ts          Key minting + claim fingerprints (pure SHA-1/256); keys.fixtures.json shared with Python
   broker-access.ts           BROKER_EMAILS parsing/matching
   inbound-email.ts           inbound mail: payload parsing, List-Id, HTML→text, limits, Svix verify
@@ -819,7 +820,7 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
 | `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
@@ -838,23 +839,34 @@ harvest that collected the data.
 
 1. **Export.** `/dashboard/reports` → "Download outreach CSV": one row per listed, non-suppressed
    society with an outreach address (`lib/broker/outreach.ts`). The address is a role address
-   (`email`, with `role` and `email_kind`); personal CRSid, lists.cam.ac.uk and webmail
-   addresses are never chosen. A society that publishes only those, or no address at all, is
-   left out of the CSV and counted under "No outreach address", complete listing or not; it needs
-   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   (`email`, with `role` and `email_kind`; `next_emails` holds the others to try after a
+   bounce); personal CRSid, lists.cam.ac.uk and webmail addresses are never chosen. A society
+   that publishes only those, or no address at all, is left out of the CSV and counted under "No
+   outreach address", complete listing or not; it needs another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
    empty.
-2. **Send** from the published contact address (`CONTACT_EMAIL`, set up as a "Send mail as"
-   address so replies reach it) with a mail merge over the CSV, in batches of a few hundred a
-   day. Send one test to your own @cam.ac.uk address first and check where it lands.
-3. **Log.** In the sheet, put the date each row went out in `sent_on` (`YYYY-MM-DD`; a UK
-   `DD/MM/YYYY` is read too) and leave rows not sent empty. Put `yes` in `bounced` for each
-   bounce. Download it as CSV and use "Import send log" on the same page. Any bad row stops the
-   whole file with the row named; nothing is recorded until it is fixed. A minimal log with just
-   `org_key,email,sent_on,bounced` works as well.
-4. **Bounces.** A bounce becomes a follow-up on the interaction ("Send the notice to the next
-   role address, or find another route"). Send it to the next address, add that row to the log
-   and import again: rows already recorded are left as they are, and a bounce is never undone.
-   An interaction you have edited since (a reply, a new address) is not overwritten.
+2. **Send** with the mail merge script `ops/outreach/art14-mail-merge.gs`, from the published
+   contact address (`CONTACT_EMAIL`, a "Send mail as" address of the Workspace account, so
+   replies reach it). Import the CSV into a new Google Sheet (File → Import → Upload → "Replace
+   current sheet", with "Convert text to numbers, dates and formulas" **off**), then
+   Extensions → Apps Script, paste the script, save and reload: the sheet gets an "Art 14
+   notice" menu. "Check the setup" confirms the sender and the day's quota; "Send a test to me"
+   sends the first row to your own @cam.ac.uk address (check where it lands: inbox, junk or
+   quarantine); "Send the next batch" sends up to 100 rows, one email per row (never Cc or
+   Bcc), and writes the date into each row's `sent_on` as it goes, so a stopped run leaves an
+   exact log. Apps Script allows 1,500 recipients a day from a Workspace account.
+3. **Bounces.** After a batch, wait an hour and run "Mark bounces": it reads the bounce
+   messages (`from:mailer-daemon OR postmaster`, failures only, not delay warnings) and puts
+   `yes` in `bounced` for each address one names. "Queue the next address for bounces" then
+   appends a row for the next address in that society's `next_emails` (the other role
+   addresses its listing publishes, best first), to go out with the next batch; a society with
+   none left is named, and needs step 5.
+4. **Log.** File → Download → CSV, and "Import send log" on the same dashboard page. Any bad row
+   stops the whole file with the row named; nothing is recorded until it is fixed. A minimal log
+   with just `org_key,email,sent_on,bounced` works as well (`sent_on` as `YYYY-MM-DD`; a UK
+   `DD/MM/YYYY` is read too). A bounce becomes a follow-up on the interaction ("Send the notice
+   to the next role address, or find another route"). Import again after each round: rows
+   already recorded are left as they are, and a bounce is never undone. An interaction you
+   have edited since (a reply, a new address) is not overwritten.
 5. **Other routes.** For each society under "No outreach address", send the notice (the
    "Notice" button copies its text) through its contact form or social account, then add an
    interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice

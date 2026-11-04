@@ -110,6 +110,7 @@ describe("broker.orgs", () => {
         role: "president",
         kind: "role_own_domain",
       })
+      expect(chess?.nextAddresses).toEqual([])
       expect(go?.bestAddress).toBeUndefined()
       expect(go?.has.email).toBe(false)
       // A list and a webmail address: coverage counts an address, the outreach has none.
