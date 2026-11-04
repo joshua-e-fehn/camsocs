@@ -1,0 +1,13 @@
+# The weekly restore test of the newest Convex backup (ENG-44). /opt/camsocs/docs/ops-vps.md §10.
+[Unit]
+Description=camsocs weekly restore test (Monday 03:00 Europe/London)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+
+[Timer]
+# After Monday's 01:30 backup, outside both harvests' windows.
+OnCalendar=Mon *-*-* 03:00:00 Europe/London
+Persistent=true
+Unit=camsocs-restore-test.service
+
+[Install]
+WantedBy=timers.target
