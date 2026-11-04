@@ -24,6 +24,7 @@ from camsocs_pipeline.models.observation import (
 )
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader, plan_observations
 from camsocs_pipeline.seeds.term_dates import TERM_DATES
+from camsocs_pipeline.stages.load import _describe
 
 SITE = "https://happy-otter-123.convex.site"
 AT = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -290,7 +291,7 @@ class TestRoutes:
             if path == "claims":
                 body |= {"entities": {"created": 1}, "rejected": []}
             if path == "events/superseded":
-                body |= {"unknown": 0, "rejected": []}
+                body |= {"unknown": 2, "rejected": []}
             return httpx.Response(200, json=body)
 
         net.post(url__startswith=f"{SITE}/api/pipeline/").mock(side_effect=handler)
@@ -311,6 +312,11 @@ class TestRoutes:
             }
         ]
         assert report.superseded.updated == 1
+        # Pairs naming a key or survivor the deployment lacks are counted in
+        # the run note, so "retired" and "never had an event" read apart.
+        assert report.superseded.unknown == 2
+        assert "2 unknown" in str(report.superseded)
+        assert "unknown" not in str(report.event_organisers)
 
     def test_a_deployment_without_the_retirement_route_fails_nothing(
         self, net: respx.MockRouter
@@ -420,3 +426,12 @@ class TestRoutes:
             "fullTermEnd": "2026-12-04",
             "sourceUrl": "https://www.cam.ac.uk/about-the-university/term-dates-and-calendars",
         }
+
+
+def test_refusals_name_the_claim_or_the_retired_key() -> None:
+    """The load's note on a refusal: a claim's entity and field, or the key
+    `events/superseded` refused (ENG-47), never "None.None"."""
+    claim = {"index": 0, "entityKey": "org-x", "field": "name", "reason": "too long"}
+    assert _describe(claim) == "org-x.name: too long"
+    retired = {"index": 1, "key": "evt-1", "reason": "by is not an event key"}
+    assert _describe(retired) == "evt-1: by is not an event key"

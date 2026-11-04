@@ -902,7 +902,7 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
 | `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |
 | `events/remove` | `{keys, confirm: "REMOVE-EVENTS"}` (events only, ≤ 25 a call) → `{removed, missing}`: deletes events as `ingest/purge:removeEntity` does (docs/deploy.md §7) |
-| `events/superseded` | `{events: [{key, by}]}` (≤ 500) → `{updated, unchanged, unknown, rejected}`: each event key whose reading this load folded into another source's event `by` (ENG-47, `convex/ingest/superseded.ts`); sets `supersededBy` on an existing old event, counts a key or survivor the deployment lacks as `unknown`. The load posts it after the organiser sets; a 404 (route not deployed yet) is a warning, not a failure |
+| `events/superseded` | `{events: [{key, by}]}` (≤ 500) → `{updated, unchanged, unknown, rejected}`: each event key whose reading this load folded into another source's event `by`, or an LLM stage dropped as that event's (ENG-47, `convex/ingest/superseded.ts`); sets `supersededBy` on an existing old event, counts a key or survivor the deployment lacks as `unknown` (the load's note shows the count). The load posts it after the organiser sets; a 404 (route not deployed yet) is a warning, not a failure |
 | `runs/start`, `runs/finish` | the run log |
 
 ## Inbound mail webhook

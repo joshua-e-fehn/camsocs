@@ -294,6 +294,27 @@ class EventObservation(_ObservationBase):
 StagedRecord = Annotated[Observation | EventObservation, Field(discriminator="kind")]
 
 
+class ShadowedReading(_Strict):
+    """An event reading an LLM stage dropped because another staged source
+    has the evening (`extract.dedupe`), and the reading that has it (ENG-47).
+
+    The dropped reading may have been posted under its own key by an earlier
+    run, before the other source listed the evening: an Instagram post's event
+    from before the society's calendar carried it. It is never staged again,
+    so the load would never fold it; the stage keeps the pair beside its
+    staging file (`StagingStore.write_shadowed`) and the load retires the old
+    key to the event that took it over (`pipeline.load.plan_observations`).
+    Not a staged record: no other reader of staging sees it."""
+
+    event_source: EventSourceStr
+    external_id: str
+    #: The organisation whose account or card the reading came from (the
+    #: stage carries its pairs forward with its records).
+    organiser: str | None = None
+    by_source: EventSourceStr
+    by_external_id: str
+
+
 __all__ = [
     "EventObservation",
     "FetchInfo",
@@ -302,5 +323,6 @@ __all__ = [
     "Observation",
     "OrganiserObs",
     "RelObs",
+    "ShadowedReading",
     "StagedRecord",
 ]

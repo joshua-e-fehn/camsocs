@@ -10,7 +10,12 @@ from zoneinfo import ZoneInfo
 from camsocs_pipeline.claims import llm_field, parser_field
 from camsocs_pipeline.events.duplicates import find_duplicates
 from camsocs_pipeline.keys import event_key
-from camsocs_pipeline.models.observation import EventObservation, IdentityHints, OrganiserObs
+from camsocs_pipeline.models.observation import (
+    EventObservation,
+    IdentityHints,
+    OrganiserObs,
+    ShadowedReading,
+)
 from camsocs_pipeline.pipeline.load import plan_observations
 
 LONDON = ZoneInfo("Europe/London")
@@ -80,6 +85,7 @@ def reading(
             "google_calendar": "ics_feed",
             "uni_events_api": "uni_events_api",
             "talks_cam": "talks_list",
+            "instagram_api": "instagram_api",
         }[source],
         source_key=external_id,
         source_url=source_url,
@@ -434,3 +440,60 @@ def test_every_folded_reading_of_a_cluster_is_retired_to_the_same_primary() -> N
             event_key("camdram", "show:1/performance:2/2026-10-15"),
         )
     ]
+
+
+def shadow(dropped: EventObservation, holder: EventObservation) -> ShadowedReading:
+    """What an LLM stage keeps when it drops `dropped` as `holder`'s event."""
+    return ShadowedReading(
+        event_source=dropped.event_source,
+        external_id=dropped.external_id,
+        organiser=ORG,
+        by_source=holder.event_source,
+        by_external_id=holder.external_id,
+    )
+
+
+def test_a_reading_an_llm_stage_dropped_is_retired_to_the_event_that_has_it() -> None:
+    """ENG-47 review: an Instagram post's event was loaded under its own key;
+    the society's calendar now lists the evening, so the instagram stage drops
+    the post's reading before staging (`extract.dedupe`) and the load never
+    folds it. The pair it kept retires the old key to the calendar's event."""
+    post = reading("instagram_api", "m-1:quiz", "Pub Quiz", ms(2026, 10, 15, 19, 0), llm=True)
+    calendar = reading("google_calendar", "uid-quiz", "CUGS Pub Quiz", ms(2026, 10, 15, 19, 0))
+    plan = plan_observations([calendar], shadowed=[shadow(post, calendar)])
+    assert [(s.key, s.by) for s in plan.superseded] == [
+        (event_key("instagram_api", post.external_id), event_key("google_calendar", "uid-quiz"))
+    ]
+
+
+def test_a_dropped_reading_retires_to_the_primary_its_holder_folds_into() -> None:
+    """The reading that has the event may itself fold into another source's
+    (the society's page into the University's programme): the old key goes
+    to the event that is posted, not to a key that never had one."""
+    start = ms(2026, 11, 15, 19, 30)
+    university = reading(
+        "uni_events_api", "aaaa/20261115T193000Z", "CU Jazz Orchestra", start, organisers=()
+    )
+    site = reading("website", "org:2026-11-15:jazz", "CU Jazz Orchestra", start)
+    post = reading("instagram_api", "m-2:jazz", "CU Jazz Orchestra", start, llm=True)
+    plan = plan_observations([site, university], shadowed=[shadow(post, site)])
+    survivor = event_key("uni_events_api", university.external_id)
+    assert sorted((s.key, s.by) for s in plan.superseded) == sorted(
+        [
+            (event_key("website", site.external_id), survivor),
+            (event_key("instagram_api", post.external_id), survivor),
+        ]
+    )
+
+
+def test_a_dropped_reading_staged_again_is_not_retired() -> None:
+    """A reading staged in this load is posted (its identity claims revive
+    its key) or folded (retired once, through `primary_of`): a carried pair
+    for it never fights that."""
+    post = reading("instagram_api", "m-1:quiz", "Pub Quiz", ms(2026, 10, 15, 19, 0), llm=True)
+    calendar = reading("google_calendar", "uid-quiz", "CUGS Pub Quiz", ms(2026, 10, 15, 19, 0))
+    assert plan_observations([post], shadowed=[shadow(post, calendar)]).superseded == []
+    folded = plan_observations([post, calendar], shadowed=[shadow(post, calendar)])
+    assert len(folded.superseded) == 1
+    # A pair naming itself retires nothing.
+    assert plan_observations([], shadowed=[shadow(post, post)]).superseded == []

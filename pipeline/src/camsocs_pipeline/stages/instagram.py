@@ -30,7 +30,10 @@ green. instagram.com is never fetched.
 
 The stage writes `var/staging/instagram_api/<run>.jsonl` with the full current
 set: this run's accounts plus the previous file's records for accounts not
-re-checked, because `load` posts only the latest file.
+re-checked, because `load` posts only the latest file. The events dropped as
+another source's go to `shadowed.json` beside it, carried the same way: a
+post's event loaded before the society's calendar listed it is retired to
+that calendar's event (`StagingStore.write_shadowed`, ENG-47).
 """
 
 from __future__ import annotations
@@ -60,6 +63,7 @@ from camsocs_pipeline.models.observation import (
     FetchInfo,
     IdentityHints,
     Observation,
+    ShadowedReading,
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader
@@ -99,6 +103,8 @@ class Tools:
     upload: bool
     loader: ConvexLoader
     notes: list[str] = field(default_factory=list)
+    #: Events dropped as another staged source's, with that reading (ENG-47).
+    shadowed: list[ShadowedReading] = field(default_factory=list)
 
 
 def run(ctx: StageContext) -> None:
@@ -189,6 +195,17 @@ def run(ctx: StageContext) -> None:
     current = carried + records
     if current:
         ctx.staging.write(SOURCE_TYPE, ctx.run.run_key, current)
+    ctx.staging.write_shadowed(
+        SOURCE_TYPE,
+        _unique(
+            [
+                pair
+                for pair in ctx.staging.read_shadowed(SOURCE_TYPE)
+                if pair.organiser in still_targets and pair.organiser not in processed
+            ]
+            + tools.shadowed
+        ),
+    )
     # Staged: the records read this run are new; carried ones are unchanged.
     ctx.report.inserted += len(records)
     ctx.report.unchanged += len(carried)
@@ -215,6 +232,11 @@ def _due(entry: dict | None, now: datetime) -> bool:
         else timedelta(hours=RECHECK_HOURS)
     )
     return now - checked >= wait
+
+
+def _unique(pairs: list[ShadowedReading]) -> list[ShadowedReading]:
+    """One pair per dropped reading, the last one seen."""
+    return list({(p.event_source, p.external_id): p for p in pairs}.values())
 
 
 def _org_of(record: Record) -> str | None:
@@ -288,7 +310,11 @@ def _events(
             tools.notes.append(f"a post of @{profile.handle} did not validate")
             continue
         for event in events:
-            if event.external_id in seen or tools.index.is_duplicate_record(event):
+            if event.external_id in seen:
+                continue
+            if tools.index.is_duplicate_record(event):
+                if (pair := tools.index.shadowed(event)) is not None:
+                    tools.shadowed.append(pair)
                 continue
             seen.add(event.external_id)
             found.append(event)
