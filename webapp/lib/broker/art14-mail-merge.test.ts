@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { runInNewContext } from "node:vm"
-import { type OutreachRow, outreachCsv, parseCsv, parseSendLog } from "./outreach"
+import {
+  type OutreachRow,
+  outreachCsv,
+  parseCsv,
+  parseSendLog,
+  webmailOutreachCsv,
+} from "./outreach"
 
 /**
  * The Art 14 mail merge (ops/outreach/art14-mail-merge.gs) is an Apps Script
@@ -39,9 +45,18 @@ function exportRow(key: string, name: string, email: string, next: string[] = []
 
 function harness(
   csvRows: OutreachRow[],
-  opts: { quota?: number; aliases?: string[]; me?: string; bounces?: Bounce[] } = {},
+  opts: {
+    quota?: number
+    aliases?: string[]
+    me?: string
+    bounces?: Bounce[]
+    /** Import the webmail-only CSV instead of the outreach CSV. */
+    webmail?: boolean
+  } = {},
 ) {
-  const grid: unknown[][] = parseCsv(outreachCsv(csvRows, SITE))
+  const grid: unknown[][] = parseCsv(
+    (opts.webmail ? webmailOutreachCsv : outreachCsv)(csvRows, SITE),
+  )
   const sent: Sent[] = []
   const formats: string[] = []
   let quota = opts.quota ?? 1500
@@ -57,13 +72,16 @@ function harness(
     },
   })
   const sheet = {
+    getName: () => (opts.webmail ? "webmail" : "outreach"),
     getDataRange: () => ({ getValues: () => grid.map((row) => row.slice()) }),
     getRange: range,
     appendRow: (values: unknown[]) => grid.push(values.slice()),
   }
   const context: Record<string, unknown> = {
     SpreadsheetApp: {
-      getActiveSpreadsheet: () => ({ getSheets: () => [sheet] }),
+      // The tab in front; a first tab elsewhere must not be the one used.
+      getActiveSheet: () => sheet,
+      getActiveSpreadsheet: () => ({ getSheets: () => [{}, sheet] }),
       flush: () => {},
     },
     Session: {
@@ -231,6 +249,47 @@ describe("art14-mail-merge.gs", () => {
       sentOn: TODAY,
       bounced: true,
     })
+  })
+
+  test("runs the webmail-only CSV the same way, keeping its webmail flag on queued rows", () => {
+    const webmail = (key: string, name: string, emails: string[]): OutreachRow => ({
+      ...exportRow(key, name, ""),
+      bestAddress: undefined,
+      webmailAddresses: emails.map((email) => ({ email, role: "general", kind: "webmail" })),
+    })
+    const h = harness(
+      [
+        webmail("org-rowing", "Rowing Society", [
+          "cu.rowing.soc@gmail.com",
+          "rowing.sec@outlook.com",
+        ]),
+        webmail("org-poetry", "Poetry Society", ["cupoetrysoc@gmail.com"]),
+        rows[0],
+      ],
+      {
+        webmail: true,
+        bounces: [
+          { subject: "Undeliverable", body: "cu.rowing.soc@gmail.com could not be delivered" },
+        ],
+      },
+    )
+    expect(h.fn.setupStatus_()).toMatchObject({ sheet: "webmail", pending: 2 })
+    h.fn.sendNext_(10)
+    expect(h.sent.map((m) => m.to)).toEqual(["cupoetrysoc@gmail.com", "cu.rowing.soc@gmail.com"])
+    expect(h.sent[1].body).toContain("because it is the contact address your society publishes")
+    h.fn.markBounces_()
+    expect(h.fn.queueNextAddresses_()).toEqual({ queued: 1, noRoute: [] })
+    const last = h.grid.length
+    expect(h.value(last, "email")).toBe("rowing.sec@outlook.com")
+    expect(h.value(last, "email_kind")).toBe("webmail")
+    h.fn.sendNext_(10)
+    const log = parseSendLog(h.csv(), "2026-11-10")
+    expect(log.errors).toEqual([])
+    expect(log.entries.map((entry) => `${entry.email}:${entry.bounced}`).sort()).toEqual([
+      "cu.rowing.soc@gmail.com:true",
+      "cupoetrysoc@gmail.com:false",
+      "rowing.sec@outlook.com:false",
+    ])
   })
 
   test("refuses a sheet that is not the export", () => {

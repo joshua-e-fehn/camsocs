@@ -10,8 +10,12 @@
  * email" is a real contact route and no address is invented here. The
  * address is the row's `bestAddress` (`convex/lib/brokerRows.ts`
  * `bestRoleAddress`): a role address, never a personal, mailing-list or
- * webmail one. A society with no such address needs the notice by another
- * route, recorded by hand as an interaction (docs/webapp.md).
+ * webmail one. A society whose only usable address is webmail (a society
+ * @gmail.com) is offered in a second file of the same shape,
+ * `webmailOutreachCsv`, which Joshua sends or not by his own choice; its
+ * notice says why it was written to that address. Any other society with no
+ * such address needs the notice by another route, recorded by hand as an
+ * interaction (docs/webapp.md).
  *
  * Sending is the Google Sheets script in `ops/outreach/art14-mail-merge.gs`
  * (Gmail, from the contact address): it sends the rows in batches, writes
@@ -30,6 +34,8 @@
 
 import { todayIso } from "./format"
 
+type Address = { email: string; role: string; kind: string }
+
 /** What the export needs from a broker organisation row (structural). */
 export type OutreachRow = {
   key: string
@@ -40,9 +46,13 @@ export type OutreachRow = {
   suppressed: boolean
   /** The outreach address and its `EMAIL_TYPES` kind; absent when the listing
    * publishes no role address the outreach may use. */
-  bestAddress?: { email: string; role: string; kind: string }
+  bestAddress?: Address
   /** The other outreach addresses, in the order to try them after a bounce. */
   nextAddresses?: readonly string[]
+  /** The published webmail addresses, best first (`convex/lib/brokerRows.ts`
+   * `webmailAddresses`): never CRSid or alumni ones, which classify as
+   * personal. Used only when there is no `bestAddress`. */
+  webmailAddresses?: readonly Address[]
   missingFields: readonly string[]
   /** Fields we hold a value for. */
   heldFields: readonly string[]
@@ -116,21 +126,35 @@ export function isOutreachCandidate(row: OutreachRow): boolean {
 }
 
 /**
+ * A candidate with no outreach address but a published webmail one, as the
+ * webmail-only export sends it: `bestAddress` is its first webmail address
+ * and `nextAddresses` the others. Undefined for every other row.
+ */
+export function asWebmailRow<T extends OutreachRow>(row: T): T | undefined {
+  const [first, ...rest] = row.webmailAddresses ?? []
+  if (!isOutreachCandidate(row) || row.bestAddress || !first) return undefined
+  return { ...row, bestAddress: first, nextAddresses: rest.map((address) => address.email) }
+}
+
+/**
  * The reports page's groups, which split the candidates with no overlap:
  * `address` (missing data, in the export), `complete` (nothing missing, in
  * the export) and `noAddress` (no outreach address, complete or not: left out
- * of the export, so each still needs the notice another way). `excluded`
- * counts the hidden and suppressed listings, never contacted.
+ * of the export, so each still needs the notice another way). `webmailOnly`
+ * counts those of `noAddress` in the webmail-only export. `excluded` counts
+ * the hidden and suppressed listings, never contacted.
  */
 export function outreachGroups<T extends OutreachRow>(rows: readonly T[]) {
   const candidates = rows.filter(isOutreachCandidate)
   const withAddress = candidates.filter((row) => row.bestAddress)
+  const noAddress = candidates.filter((row) => !row.bestAddress)
   return {
     address: withAddress.filter((row) => row.missingFields.length > 0),
     complete: withAddress.filter((row) => row.missingFields.length === 0),
-    noAddress: candidates.filter((row) => !row.bestAddress),
+    noAddress,
     excluded: rows.filter((row) => !row.isCounterpart && !isOutreachCandidate(row)).length,
     withAddress: withAddress.length,
+    webmailOnly: noAddress.filter((row) => asWebmailRow(row)).length,
   }
 }
 
@@ -146,6 +170,10 @@ export function outreachNotice(row: OutreachRow, siteUrl: string): string {
   const paragraphs = [
     `Hello ${row.name},`,
     "I run CAMsocs, a free-to-use directory of Cambridge student societies and clubs. It is a personal project by Joshua Fehn and is not affiliated with the University of Cambridge or Cambridge SU.",
+    // A webmail address may be one officer's own mailbox (the webmail-only export).
+    row.bestAddress?.kind === "webmail"
+      ? `I am writing to this address because it is the contact address your society publishes. If it reaches one person rather than the society, please pass this message on to your committee, or tell us a better address at ${site}/request.`
+      : undefined,
     held.length > 0
       ? `Your listing currently shows your ${list(held)}. We collected this from public pages: ${sources}. Every fact on the listing shows where it came from and when.`
       : `Your listing currently shows only your name, collected from public pages: ${sources}.`,
@@ -158,7 +186,7 @@ export function outreachNotice(row: OutreachRow, siteUrl: string): string {
     "This is a one-off message; we will not email you again unless you reply.",
     "Joshua Fehn, CAMsocs",
   ]
-  return paragraphs.join("\n\n")
+  return paragraphs.filter((paragraph) => paragraph !== undefined).join("\n\n")
 }
 
 /** One CSV field, quoted when it holds a comma, quote or line break (RFC 4180).
@@ -194,10 +222,29 @@ export const OUTREACH_COLUMNS = [
  * merge script (`ops/outreach/art14-mail-merge.gs`) queues the next one.
  */
 export function outreachCsv(rows: readonly OutreachRow[], siteUrl: string): string {
+  return csvOf(
+    rows.filter((row) => isOutreachCandidate(row) && row.bestAddress),
+    siteUrl,
+  )
+}
+
+/**
+ * The webmail-only CSV: the same columns, for the candidates whose only
+ * usable published address is webmail (`asWebmailRow`). `email_kind` is
+ * `webmail` on every row, which flags them in a sheet, and each notice says
+ * it was sent to the society's published contact address. Kept apart from
+ * `outreachCsv` because the outreach never writes to webmail unasked.
+ */
+export function webmailOutreachCsv(rows: readonly OutreachRow[], siteUrl: string): string {
+  return csvOf(
+    rows.flatMap((row) => asWebmailRow(row) ?? []),
+    siteUrl,
+  )
+}
+
+function csvOf(rows: readonly OutreachRow[], siteUrl: string): string {
   const lines = [OUTREACH_COLUMNS.join(",")]
-  const candidates = rows
-    .filter((row) => isOutreachCandidate(row) && row.bestAddress)
-    .sort((a, b) => a.name.localeCompare(b.name, "en"))
+  const candidates = rows.slice().sort((a, b) => a.name.localeCompare(b.name, "en"))
   for (const row of candidates) {
     const fields = [
       row.name,

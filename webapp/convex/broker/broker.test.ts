@@ -117,6 +117,11 @@ describe("broker.orgs", () => {
       const rowing = rows.find((r) => r.key === "org-rowing")
       expect(rowing?.bestAddress).toBeUndefined()
       expect(rowing?.has.email).toBe(true)
+      // The webmail one is offered apart, for the webmail-only export.
+      expect(rowing?.webmailAddresses).toEqual([
+        { email: "rowing-soc@gmail.com", role: "general", kind: "webmail" },
+      ])
+      expect(chess?.webmailAddresses).toEqual([])
       expect(chess?.sourceHosts).toEqual(["example.org"])
       expect(chess?.heldFields).toContain("roleEmails")
       expect(chess?.missingFields).toContain("website")
