@@ -18,9 +18,10 @@ import { isOrgSlug } from "@/lib/url-state"
  * calendar's default; the University's own listings (ENG-24) are in the
  * whole-site feed, also as the calendar's default, so it is named
  * "Cambridge events", not "society events" (review of the ENG-24 merge,
- * 2026-11-02). It shares `events.list`'s 1,000-per-tier cap with them;
- * `university: "hide"` would not help, as it filters after the cap (see
- * docs/webapp.md `events.list`).
+ * 2026-11-02). It shares `events.list`'s 1,000-row cap with them, society
+ * events first (ENG-31), so in a Festival window the feed can lose only the
+ * University's later days; `university: "hide"` reads the society stream
+ * alone (see docs/webapp.md `events.list`).
  *
  * Cached at the edge for an hour per URL, like `/talks.ics`. A served feed
  * is counted after the response (`ics_feed_fetched { feed: "events" }`,

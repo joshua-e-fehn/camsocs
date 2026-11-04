@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { ENTITY_TYPES } from "../../lib/vocab"
 import type { TableNames } from "../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../_generated/server"
+import { eventStreamOf } from "../lib/derived"
 import { ENTITY_TABLES, findEntity, loadTerms, refreshOrganisation } from "../lib/entityStore"
 import { FIELD_SPECS, hostOf } from "../lib/fields"
 import { literalUnion } from "../lib/validators"
@@ -221,12 +222,14 @@ export async function deleteEntity(
         .unique()
       if (event) {
         const without = (keys: string[]) => keys.filter((other) => other !== key)
-        await ctx.db.patch("events", event._id, {
+        const keys = {
           organiserKeys: without(event.organiserKeys),
           coHostKeys: without(event.coHostKeys),
           sponsorKeys: without(event.sponsorKeys),
-          updatedAt: Date.now(),
-        })
+        }
+        // A programme event left with no society is the University's again.
+        const stream = eventStreamOf({ ...event, ...keys })
+        await ctx.db.patch("events", event._id, { ...keys, stream, updatedAt: Date.now() })
       }
     }
     const owned = await ctx.db
