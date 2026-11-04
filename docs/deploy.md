@@ -1,6 +1,6 @@
 # Deploying CAMsocs (T14)
 
-How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Nothing here has been run yet; these are Joshua's steps (PLAN.md J1, J2), checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
+How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Production has run this way since 2026-10-10 (public at camsocs.uk since 2026-11-01); the steps below are kept for a rebuild and were checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
 
 **Secrets.** Never paste a value into a chat, a commit or a log. Each one goes in exactly one place: Convex env, Vercel env or `pipeline/.env.prod`. `bunx convex env set NAME` without a value prompts for it, which keeps it out of the shell history.
 
@@ -214,12 +214,15 @@ For a production that already holds societies and events, deployed before the ta
 
 ## 6. Rolling back
 
-- Site: Vercel → Deployments → the last good one → Promote to Production (instant; Convex is untouched).
-- Functions: redeploy the last good commit (Vercel → Redeploy, which runs `convex deploy` again). Schema changes that removed fields need a widen-migrate-narrow plan first; never roll a schema back past data written under the newer one.
+The runbook is `docs/rollback.md` (site, Convex functions and schema, the VPS harvester, data and backups). In short:
+
+- Site: Vercel instant rollback to the last good production deployment (Convex is untouched); afterwards new deployments are not assigned the domain until one is promoted.
+- Functions: revert on `main` and let the production build run `convex deploy`; Convex has no one-click function rollback, and refuses a schema that existing documents no longer match, so never roll a schema back past data written under the newer one.
+- Keys: `docs/key-rotation.md`; plans and spend caps: `docs/platform-limits.md`.
 
 ## 7. After the next deploy: cleaning what the review fixes left behind (operator)
 
-The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Not run yet; these are Joshua's steps.
+The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Applied on 2026-10-10 (11 notices removed); the latest dry run and what is left are in `docs/data-quality.md` "J9". These are Joshua's steps.
 
 1. **Deploy** (§1–§2): the routes `events/scan` and `events/remove` ship with the functions, and the new `eventOrganisers.hosting` copy with the schema (optional, additive).
 2. **Harvest** production once with the new pipeline (`pixi run harvest -- --env prod`, or the VPS's full run), then re-derive: `pixi run pipeline -- --env prod derive`. Current events are restated by their readers (titles restored, notices withdrawn, hosting claimed); what is left is what no reader restates.
