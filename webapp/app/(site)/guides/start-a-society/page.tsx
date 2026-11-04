@@ -124,8 +124,9 @@ export default async function StartASocietyGuide() {
             constitution. Then register with Cambridge SU, which takes up to 14 working days.
           </li>
           <li>
-            Registering with the Junior Proctor as well is optional. It needs a Senior Treasurer and
-            brings University grants, insurance and the right to use the University's name.
+            Registering with the Junior Proctor is optional and separate. It needs a Senior
+            Treasurer and brings University grants, insurance and the right to use the University's
+            name.
           </li>
           <li>A society within one college starts with its JCR or MCR.</li>
         </ul>
@@ -475,9 +476,9 @@ export default async function StartASocietyGuide() {
       <ProseSection id="events" title="Rooms, events and publicity">
         <h3>Rooms</h3>
         <p>
-          The SU Hub, on the third floor of the University Centre, is free to SU-registered
-          societies and booked through the SU's Activities Dashboard. In term it can be booked from
-          5pm to 8:45pm on Mondays, Wednesdays and Fridays and from 5pm to 7pm on Tuesdays and
+          The SU Hub, in the University Centre, is free to SU-registered societies and booked
+          through the SU's Activities Dashboard, at least two weeks ahead. In term it can be booked
+          from 5pm to 8:45pm on Mondays, Wednesdays and Fridays and from 5pm to 7pm on Tuesdays and
           Thursdays, and holds 50 people (about 20 seated). The SU also publishes a room booking
           guide covering the colleges, University sites and others.
           <Cite id="su-rooms" />
@@ -487,9 +488,9 @@ export default async function StartASocietyGuide() {
         <ul>
           <li>
             On University premises, an event outside the curriculum needs a University organiser and
-            permission; rooms should be booked at least fourteen working days ahead, and a
-            contentious event referred at least seven working days ahead. Colleges have their own
-            codes.
+            permission, and rooms should be booked at least fourteen working days ahead. If you
+            expect significant protest, consult the Proctors as early as you can, ideally at least
+            seven working days ahead. Colleges have their own codes.
             <Cite id="free-speech" />
           </li>
           <li>
@@ -509,8 +510,8 @@ export default async function StartASocietyGuide() {
             <Cite id="su-promotion" />
           </li>
           <li>
-            The SU emails registered committees about Freshers' Fair stalls in July and August, and
-            about the Refreshers' Fair in November and December.
+            Stalls for the Freshers' Fair go on sale in July and August, and for the Refreshers'
+            Fair in November and December; the SU emails registered committees when they do.
             <Cite id="su-promotion" /> In 2026 a standard stall cost £50 indoors or £40 outdoors.
             <Cite id="su-fair-2026" /> No alcohol is allowed at the fair, and high-risk equipment
             needs a risk assessment.
@@ -583,7 +584,9 @@ export default async function StartASocietyGuide() {
           </li>
           <li>
             <strong>Winding up.</strong> When a society registered with the Junior Proctor is
-            dissolved, its remaining funds go to the Societies Syndicate.
+            dissolved, its remaining funds go to the Societies Syndicate (or, under the model
+            constitution, to another registered society), and the Syndicate may ask for its grants
+            back.
             <Cite id="jp-notes" />
           </li>
         </ul>

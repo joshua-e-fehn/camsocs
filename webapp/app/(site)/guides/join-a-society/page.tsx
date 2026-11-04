@@ -106,8 +106,8 @@ export default async function JoinASocietyGuide() {
       <ProseSection id="short" title="In short">
         <ul>
           <li>
-            Most students find their societies at the fairs in the first days of Michaelmas: one for
-            sport, one for University-wide societies and one in each college.
+            The easiest way in is the fairs in the first days of Michaelmas: one for sport, one for
+            University-wide societies and one in each college.
           </li>
           <li>
             Signing up at a stall usually puts you on a mailing list. You are not committing to
@@ -211,8 +211,9 @@ export default async function JoinASocietyGuide() {
         <EditorNote id="join-fair-year" />
         <h3>Your college's fair</h3>
         <p>
-          Colleges hold their own fair for college societies and teams, usually in the first few
-          days and run by the college's student union.
+          Colleges hold their own fairs for college societies and teams.
+          <Cite id="pembroke-fairs" /> At Christ's, for example, the college's student union runs
+          it, normally in your first few days.
           <Cite id="christs-fair" />
         </p>
         <h3>How to use a fair</h3>
@@ -227,8 +228,8 @@ export default async function JoinASocietyGuide() {
             <Cite id="su-what-is" />
           </li>
           <li>
-            Not every society keeps its website up to date, so the stall and the first meeting are
-            often the best source.
+            Not every society keeps its website up to date, so ask at the stall or the first
+            meeting.
             <Cite id="christs-fair" />
           </li>
         </ul>
@@ -309,7 +310,6 @@ export default async function JoinASocietyGuide() {
             <Cite id="sport-clubs" />
           </li>
         </ul>
-        <EditorNote id="join-sport-guide-url" />
         {facets && (
           <p>
             On CAMsocs:{" "}
@@ -331,9 +331,9 @@ export default async function JoinASocietyGuide() {
       <ProseSection id="lists" title="Mailing lists and social media">
         <ul>
           <li>
-            Many societies run their mailing list on the University's list service, with addresses
-            ending @lists.cam.ac.uk. You sign in with Raven to search for lists, join them, and
-            leave them again from your account page.
+            Many student societies have their own mailing lists. Lists on the University's list
+            service have addresses ending @lists.cam.ac.uk; you sign in with Raven to search for
+            lists, join them, and leave them again from your account page.
             <Cite id="uis-lists" />
           </li>
           <li>
@@ -342,7 +342,7 @@ export default async function JoinASocietyGuide() {
             <Cite id="uis-subscribe" />
           </li>
           <li>
-            Cambridge SU posts as @YourCambridgeSU on Instagram, Facebook and X, and the Sports
+            Cambridge SU posts as @YourCambridgeSU on Instagram, Facebook and TikTok, and the Sports
             Service as @camunisport; it suggests following clubs' own Instagram pages too.
             <Cite id="su-freshers" />
             <Cite id="sport-clubs" />
@@ -352,7 +352,7 @@ export default async function JoinASocietyGuide() {
 
       <ProseSection id="cost" title="What it costs">
         <p>
-          There is no standard fee: each society sets its own, and many charge nothing. Some sell
+          There is no standard fee: each society sets its own, and some charge nothing. Some sell
           membership through an outside ticketing or payment site linked from their SU profile;
           others ask you only to join a free group or mailing list.
           <Cite id="su-profile-paid-a" />
@@ -374,8 +374,8 @@ export default async function JoinASocietyGuide() {
           <li>to act with due regard for its members' safety and wellbeing;</li>
           <li>to keep its finances open to its members' scrutiny;</li>
           <li>
-            not to discriminate unlawfully, and not to engage in abusive, offensive, violent or
-            criminal behaviour.
+            not to discriminate, unless that is both lawful and directly necessary for its
+            legitimate aims, and not to engage in abusive, offensive, violent or criminal behaviour.
           </li>
         </ul>
         <p>
@@ -393,8 +393,9 @@ export default async function JoinASocietyGuide() {
           </li>
           <li>
             The SU's Student Advice Service gives free, confidential and impartial advice on any
-            problem: 3rd floor, University Centre, Mill Lane, weekdays 9:30am to 5pm, or call 0808
-            1641 222.
+            problem you might have as a student. The SU is on the 3rd floor of the University
+            Centre, Mill Lane; its reception is open weekdays 9:30am to 5pm, and its phone number is
+            0808 1641 222.
             <Cite id="su-advice" />
           </li>
           <li>

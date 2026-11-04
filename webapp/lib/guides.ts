@@ -249,7 +249,7 @@ export const SOURCES = {
   },
   "sport-guide": {
     publisher: "Sports Service",
-    title: "Sports Club Guide 2026–27 (PDF)",
+    title: "Sports Club Guide 2026–27 (PDF, as linked from its clubs page)",
     url: "https://live-cambridge-sports-cwp.pantheonsite.io/sites/default/files/UoC%20Sports%20Club%20Guide%2026-27_web.pdf",
     retrieved: READ,
   },
@@ -423,25 +423,19 @@ export const REVIEW_NOTES: readonly ReviewNote[] = [
     id: "join-sports-fair-time",
     guide: "join-a-society",
     kind: "check",
-    note: "Sports Fair: the Sports Service's public pages give only '5 October' (no year); the 2026 page now needs a login. The Monday, 12–5pm, Sports Centre detail comes from Pembroke's undated guide. Confirm or cut the time and place.",
+    note: "Sports Fair: the Sports Service's public pages give only '5 October' (no year); the 2026 page now needs a login. The Monday, 12–5pm, Sports Centre detail comes from Pembroke's undated guide, which looks like 2024's (its college fair is on 'Tuesday 8th October'). Confirm or cut the time and place.",
   },
   {
     id: "join-counts",
     guide: "join-a-society",
     kind: "decide",
-    note: "Counts differ by source: the SU says over 500 registered societies (Sept 2025), the 2026 fair page says 300+ at the fair, the Sports Service 75+ clubs (web) and over 70 (guide). Each is cited where it is used; check the framing reads right.",
+    note: "Counts differ by source: the SU says over 500 registered societies (Sept 2025), the 2026 fair page says 300+ at the fair, the Sports Service both 'more than 75' and 'more than 70' clubs (on its web pages and in its club guide). Each is cited where it is used; check the framing reads right.",
   },
   {
     id: "join-refreshers",
     guide: "join-a-society",
     kind: "check",
     note: "Refreshers' Fair: the only readable source is the SU's January 2024 article; no 2027 date is published and the SU's Refreshers pages have expired. Check with the SU, or cut the venue and hours.",
-  },
-  {
-    id: "join-sport-guide-url",
-    guide: "join-a-society",
-    kind: "check",
-    note: "The Sports Club Guide 2026–27 PDF was found on a pantheonsite.io host. Find the link to it on sport.cam.ac.uk and cite that instead.",
   },
   {
     id: "join-initiations",
@@ -484,7 +478,7 @@ export const REVIEW_NOTES: readonly ReviewNote[] = [
     id: "start-su-renewal",
     guide: "start-a-society",
     kind: "check",
-    note: "SU re-registration 'in June/July' comes from the Proctors' page only; no SU page confirms the window.",
+    note: "SU re-registration 'in June/July' comes from the Proctors' page only. The SU's own Society Re-registration page (/opportunities/support/handover/) gives no window, and its constitution template names a handover period of 1 July to 31 August. Check with the SU.",
   },
   {
     id: "start-jp-email",
