@@ -86,6 +86,7 @@ cd webapp && bunx convex env list                                # add --prod fo
 - Dev Convex deployment: `hushed-rhinoceros-215` (team `joshua-fehn`, project `camsocs`). Production (Vercel + Convex prod + the pipeline's `--env prod`): `docs/deploy.md`.
 - **Never export `CONVEX_DEPLOY_KEY` in a shell.** It overrides `.env.local`, and once deployed one project's functions onto another project's production. `scripts/convex-deploy-if-key.sh` deploys only on Vercel.
 - Secrets live in `webapp/.env.local` (Convex) and `pipeline/.env` (pipeline). Both are gitignored, and their values must never be printed.
+- **Never open a production backup** (`convex-prod-*.zip` on the VPS, a pre-restore export, `last-restore-test.log`) in an agent session: it holds the talks pillar's talks.cam data and the CRM. `camsocs-backup.py inspect` prints table names and counts only (docs/ops-vps.md §10). A restore test runs only into a throwaway local backend, never into dev or another cloud deployment.
 - Bun is the only JS/TS package manager. Never use npm, pnpm or yarn.
 - Gates before review: `pixi run lint` (Ruff, ShellCheck, Biome), `typecheck`, `test`, `check-codegen`, plus `cd webapp && bun run build`.
 - Any time you create or change UI, consult `webapp/DESIGN.md`. Follow the Atomic Design import rules in `docs/webapp.md`.

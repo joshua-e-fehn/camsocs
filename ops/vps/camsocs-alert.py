@@ -41,6 +41,12 @@ from the checkout the harvest can write.
   requests as a count per kind (a kind's shape, a number) with the window's
   times (ENG-33). No event property and no page text is in that file to
   begin with.
+- **The backup and the restore test** (``<group>`` ``backup`` /
+  ``restore_test``, ENG-44, ``camsocs-backup.py``): from systemd's ``MONITOR_*``
+  variables only — the exit status, mapped to what it means
+  (``BACKUP_EXITS``), and where to look. Their status files are not read
+  (they sit in the backup's private directory, out of this unit's reach), and
+  nothing of a backup's content is anywhere in the message.
 - ``--dry-run`` prints the message instead of sending it.
 
 Standard library only (the host's python3). Exit 0 when the message was sent
@@ -94,6 +100,32 @@ _REASON = re.compile(r"[A-Z][A-Za-z]{0,39}|HTTP \d{3}")
 _KIND = re.compile(r"[a-z]{1,20}")
 #: Where requests are read and answered.
 REQUESTS_INBOX = "https://camsocs.uk/dashboard/requests"
+#: The backup's pseudo-groups (camsocs-backup.service, camsocs-restore-test.service).
+BACKUP_GROUP = "backup"
+RESTORE_TEST_GROUP = "restore_test"
+#: What camsocs-backup.py's exit codes mean (its docstring), per command.
+BACKUP_EXITS = {
+    BACKUP_GROUP: {
+        "20": "a setting is wrong: no key file, or a key that is not production's",
+        "21": "not enough free disk for the next backup",
+        "22": "the export from Convex failed or timed out",
+        "23": "the export is not a readable snapshot (or holds no document)",
+        "24": "backed up, but a table shrank to under half since the previous backup",
+        "29": "an unexpected error (the exception's class is in the journal)",
+        "75": "the restore test held the lock for 2 hours",
+    },
+    RESTORE_TEST_GROUP: {
+        "20": "the local backend or the Convex CLI is missing (re-run install.sh)",
+        "30": "no backup to test, or the newest one does not match its manifest",
+        "31": "the throwaway local backend did not start",
+        "32": "importing the backup into the local backend failed",
+        "33": "exporting the restored data from the local backend failed",
+        "34": "the restored data differs from the backup",
+        "39": "an unexpected error (the exception's class is in the journal)",
+        "75": "the backup held the lock for 2 hours",
+    },
+}
+BACKUP_STATE_DIR = "/var/lib/camsocs-backup"
 
 #: An environment-style name that says it holds a secret (LLM_API_KEY, SLACK_BOT_TOKEN).
 _SECRET_ENV_NAME = r"[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL)[A-Z0-9_]*"
@@ -231,6 +263,8 @@ def build_message(
         return build_monitor_message(
             environ=environ, status=status, host=host, known_secrets=known_secrets
         )
+    if group in BACKUP_EXITS:
+        return build_backup_message(group, environ=environ, host=host, known_secrets=known_secrets)
     result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
     exit_code = _shaped(environ.get("MONITOR_EXIT_CODE"), _MONITOR) or ""
     exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR)
@@ -401,6 +435,37 @@ def build_monitor_message(
         reminder = "; a check still failing reminds every 6 h" if failed else ""
         body.append(f"checked {checked}{reminder}")
     body.append(tail)
+    return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
+
+
+def build_backup_message(
+    group: str,
+    *,
+    environ: Mapping[str, str],
+    host: str,
+    known_secrets: Iterable[str] = (),
+) -> str:
+    """The backup's or the restore test's alert (ENG-44), from systemd's
+    variables only: what the exit status means and where to look."""
+    result = _shaped(environ.get("MONITOR_SERVICE_RESULT"), _MONITOR) or "failed"
+    exit_status = _shaped(environ.get("MONITOR_EXIT_STATUS"), _MONITOR) or "?"
+    meaning = BACKUP_EXITS[group].get(exit_status)
+    if result == "timeout":
+        meaning = "the unit hit its time limit"
+    unit = "camsocs-backup" if group == BACKUP_GROUP else "camsocs-restore-test"
+    status_file = "status-backup.json" if group == BACKUP_GROUP else "status-restore-test.json"
+    if group == BACKUP_GROUP and exit_status == "24":
+        head = f":warning: camsocs backup on {host}: a table shrank sharply"
+    elif group == BACKUP_GROUP:
+        head = f":rotating_light: camsocs backup of Convex production failed on {host}"
+    else:
+        head = f":rotating_light: camsocs restore test failed on {host}"
+    body = [
+        head,
+        f"exit status {exit_status} ({result})" + (f": {meaning}" if meaning else ""),
+        f"status: {BACKUP_STATE_DIR}/{status_file} (as root) · journalctl -u {unit} · "
+        "docs/ops-vps.md §10",
+    ]
     return mask("\n".join(body), known_secrets)[:MAX_MESSAGE_CHARS]
 
 
