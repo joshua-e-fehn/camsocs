@@ -364,6 +364,11 @@ def test_a_card_row_without_a_time_of_day_is_all_day() -> None:
         (("00:00", None), "Sat 7 Nov", False),
         (("00:00", None), "Sat 7 Nov, 12am", True),
         (("00:00", None), "Sat 7 Nov 00:00", True),
+        (("00:00", "23:59:59"), "Sat 7 Nov", False),
+        # A dotted date is no time of day; a dotted time is.
+        (("00:00", None), "Sa, 07.11.", False),
+        (("00:00", None), "Fri 13.11.2026", False),
+        (("00:00", None), "Sat 7 Nov, 00.00", True),
         (("00:00", "02:00"), "Sat 7 Nov", True),  # a club night: midnight to 2am
         (("19:00", "23:59"), "Sat 7 Nov", True),
         ((None, None), "Sat 7 Nov", False),
@@ -628,6 +633,66 @@ def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
     assert {e.event_source for e in events} == {"termcard"}
     assert by_title["Orrery building"].visibility == "members_only"
     assert llm.calls[0]["tier"] == "bulk" and llm.calls[0]["version"] == "website_events_v1"
+
+
+def test_a_termcard_page_row_without_a_time_of_day_is_all_day(tmp_path, net) -> None:
+    # ENG-37 on a term card that is an HTML page: read by the website prompt,
+    # its rows are still a card's.
+    from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+    from camsocs_pipeline.stages.termcards import page_events
+
+    net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
+    html = (
+        "<html><head><title>Term card</title></head><body><main>"
+        "<h1>Michaelmas 2026 term card</h1>"
+        "<p>Friday 6 November 2026: Orrery building</p>"
+        "<p>Saturday 7 November 2026, 7pm: Planetarium trip</p>"
+        "</main></body></html>"
+    )
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, text=html, headers={"content-type": "text/html"})
+    )
+    reply = {
+        "events": [
+            {
+                "title": "Orrery building",
+                "date": "2026-11-06",
+                "start_time": "00:00",
+                "end_time": "23:59",
+                "when_quote": "Friday 6 November 2026",
+            },
+            {
+                "title": "Planetarium trip",
+                "date": "2026-11-07",
+                "start_time": "19:00",
+                "when_quote": "Saturday 7 November 2026, 7pm",
+            },
+        ]
+    }
+    with client(tmp_path) as polite:
+        fetch_termcard(polite, CARD_PAGE, SOCIETY_WEBSITE)
+        events = page_events(
+            polite,
+            CARD_PAGE,
+            SOCIETY_WEBSITE,
+            org_key=ORRERY_KEY,
+            org_name="CU Orrery Club",
+            now=datetime(2026, 10, 9, 12, tzinfo=UTC),
+            llm=FakeLLM(lambda _text, _tier: reply),
+            memo=None,
+            calendar=TermCalendar.default(),
+        )
+    assert events is not None
+    fields = {
+        title: {f.field: f.value for f in e.fields}
+        for e in events
+        for title in [next(f.value for f in e.fields if f.field == "title")]
+    }
+    assert fields["Orrery building"]["startsAt"] == _ms(2026, 11, 6, 0, 0)
+    assert fields["Orrery building"]["allDay"] is True
+    assert "endsAt" not in fields["Orrery building"]
+    assert fields["Planetarium trip"]["startsAt"] == _ms(2026, 11, 7, 19, 0)
+    assert fields["Planetarium trip"]["allDay"] is False
 
 
 def test_a_card_last_modified_before_this_academic_year_is_old() -> None:

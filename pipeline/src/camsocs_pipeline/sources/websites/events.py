@@ -21,8 +21,9 @@ checks them (`site.ai_reading`); a page read only through the override says
 **Structured data first.** A page's JSON-LD / microdata ``Event`` items
 (The Events Calendar, Squarespace, Wix and others publish them) are read by a
 parser: name, start and end (a date without a time is all day, and so is a
-span of whole London days, 00:00 to 23:59 or to a later midnight, as The
-Events Calendar publishes an "all day" event: ENG-37), location,
+span of whole London days, 00:00 to 23:59, to a later midnight or to a
+date-only end, as The Events Calendar publishes an "all day" event: ENG-37),
+location,
 the event's URL, image, description and cancellation — ``found`` values.
 
 **Then the model** (bulk tier, prompt `website_events_v1`) over the page's
@@ -126,7 +127,7 @@ from camsocs_pipeline.events.common import (
     london_midnight,
     observations_from,
 )
-from camsocs_pipeline.extract.cards import CardHints, card_events
+from camsocs_pipeline.extract.cards import CardHints, card_events, untimed
 from camsocs_pipeline.extract.dating import (
     dated_quote,
     page_dating,
@@ -408,15 +409,19 @@ def _url(value: Any) -> str | None:
     return None
 
 
-def _whole_days(starts_at: datetime, ends_at: datetime | None) -> datetime | None:
+def _whole_days(starts_at: datetime, end_when: tuple[datetime, bool] | None) -> date | None:
     """The last London day of a timed span that covers whole London days —
-    from midnight to 23:59 (or 23:59:59), or to a later midnight — else None.
-    The Events Calendar publishes its "all day" events so (ENG-37)."""
-    if ends_at is None:
+    from midnight to 23:59 (or 23:59:59), to a later midnight, or to a
+    date-only ``endDate`` (its inclusive last day) — else None. The Events
+    Calendar publishes its "all day" events so (ENG-37)."""
+    if end_when is None:
         return None
+    ends_at, date_only = end_when
     start, end = starts_at.astimezone(LONDON), ends_at.astimezone(LONDON)
     if start.time() != time(0):
         return None
+    if date_only:
+        return end.date() if end.date() >= start.date() else None
     if end.time() == time(0) and end.date() > start.date():
         return end.date() - timedelta(days=1)
     if (end.hour, end.minute) == (23, 59) and end.date() >= start.date():
@@ -433,7 +438,7 @@ def structured_draft(item: dict[str, Any], site: Site) -> EventDraft | None:
     starts_at, all_day = start
     end = _when(item.get("endDate"))
     ends_at = end[0] if end else None
-    if not all_day and (last_day := _whole_days(starts_at, ends_at)) is not None:
+    if not all_day and (last_day := _whole_days(starts_at, end)) is not None:
         # A span of whole days is no time of day: all day, through its last day.
         all_day, ends_at = True, london_midnight(last_day)
     if all_day:
@@ -519,8 +524,12 @@ def llm_events(
         # the site's organisation.
         out.tally.drop("a venue's booking calendar", len(extracted.events))
         return []
+    readings = extracted.events
+    if event_source == CARD_SOURCE:
+        # A termcard that is an HTML page: its rows are a card's (ENG-37).
+        readings = [untimed(event) for event in readings]
     kept: list[LlmEvent] = []
-    for event in extracted.events:
+    for event in readings:
         if is_booking(event.title):
             out.tally.drop("a room booking, not an event")
         elif not dated_quote(event, text):

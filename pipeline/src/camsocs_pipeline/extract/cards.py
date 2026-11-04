@@ -35,7 +35,9 @@
    model may fill a row the card prints without a time as 00:00–23:59, or
    as 00:00 alone; such a row is read as if it gave no time (all day from
    London midnight, as `extract.when` files any untimed event). 00:00 with
-   a time on the card's words for it ("midnight", "12am", "00:00") stays.
+   a time on the card's words for it ("midnight", "12am", "00:00") stays;
+   a dotted date ("Sa, 07.11.") is no time. A termcard that is an HTML page
+   is read the same way (`sources.websites.events.llm_events`).
 6. Events are **public** (the society published the card), or
    ``members_only`` where the card says so, organised by the card's
    organisation, with external ids ``<org key>:<date>:<title slug>``.
@@ -93,11 +95,14 @@ MAX_CARD_PAGES = 12
 #: A named term's dates run from its Week 0 to a week after Full Term.
 _TERM_TAIL = timedelta(days=7)
 #: Words that give a time of day: "19:30", "7.30", "7pm", "12 am", "midnight".
+#: A dotted pair inside a dotted date ("Sa, 07.11.", "13.11.2026") is a date.
 _TIME_OF_DAY = re.compile(
-    r"\b\d{1,2}[:.]\d{2}\b|\b\d{1,2}\s*[ap]\.?m\b|\b(?:midnight|noon|midday)\b", re.IGNORECASE
+    r"\b\d{1,2}:\d{2}\b|(?<![.\d])\d{1,2}\.\d{2}(?![.\d])"
+    r"|\b\d{1,2}\s*[ap]\.?m\b|\b(?:midnight|noon|midday)\b",
+    re.IGNORECASE,
 )
 #: The ends of a whole day the model may give (`parse_hhmm` drops "24:00").
-_DAY_ENDS = {"23:59", "24:00", "00:00", "0:00"}
+_DAY_ENDS = {"23:59", "23:59:59", "24:00", "00:00", "0:00"}
 
 
 @dataclass(frozen=True)
