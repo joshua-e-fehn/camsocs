@@ -1,6 +1,6 @@
 # Deploying CAMsocs (T14)
 
-How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Nothing here has been run yet; these are Joshua's steps (PLAN.md J1, J2), checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
+How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Production has run this way since 2026-10-10 (public at camsocs.uk since 2026-11-01); the steps below are kept for a rebuild and were checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
 
 **Secrets.** Never paste a value into a chat, a commit or a log. Each one goes in exactly one place: Convex env, Vercel env or `pipeline/.env.prod`. `bunx convex env set NAME` without a value prompts for it, which keeps it out of the shell history.
 
@@ -235,12 +235,16 @@ For a production that already holds societies and events, deployed before the ta
 
 ## 6. Rolling back
 
-- Site: Vercel → Deployments → the last good one → Promote to Production (instant; Convex is untouched).
-- Functions: redeploy the last good commit (Vercel → Redeploy, which runs `convex deploy` again). Schema changes that removed fields need a widen-migrate-narrow plan first; never roll a schema back past data written under the newer one.
+The runbook is `docs/rollback.md` (site, Convex functions and schema, the VPS harvester, data and backups). In short:
+
+- Site: Vercel instant rollback to the last good production deployment (Convex is untouched); afterwards new deployments are not assigned the domain until one is promoted.
+- Functions: revert on `main` and let the production build run `convex deploy`; Convex has no one-click function rollback, and refuses a schema that existing documents no longer match, so never roll a schema back past data written under the newer one.
+- Data: restore a backup (§8).
+- Keys: `docs/key-rotation.md`; plans and spend caps: `docs/platform-limits.md`.
 
 ## 7. After the next deploy: cleaning what the review fixes left behind (operator)
 
-The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Not run yet; these are Joshua's steps.
+The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Applied on 2026-10-10 (11 notices removed); the latest dry run and what is left are in `docs/data-quality.md` "J9". These are Joshua's steps.
 
 1. **Deploy** (§1–§2): the routes `events/scan` and `events/remove` ship with the functions, and the new `eventOrganisers.hosting` copy with the schema (optional, additive).
 2. **Harvest** production once with the new pipeline (`pixi run harvest -- --env prod`, or the VPS's full run), then re-derive: `pixi run pipeline -- --env prod derive`. Current events are restated by their readers (titles restored, notices withdrawn, hosting claimed); what is left is what no reader restates.
@@ -260,6 +264,55 @@ The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles 
 
    It prints how many were removed and how many were already gone. Run the dry run again: it should list nothing. Once the VPS timers are on, run it on the host instead (`sudo -u camsocs -H bash -lc 'cd /opt/camsocs && flock -n /var/lib/camsocs/harvest.lock pixi run pipeline -- --env prod clean-events'`), never next to a harvest.
 
+
+## 8. Backups and restoring production (ENG-44)
+
+Production's data is backed up in two places (docs/ops-vps.md §10): **Convex's own backups** (dashboard → camsocs → Production → Backups) and **the VPS host's nightly export** (`/var/lib/camsocs-backup/`, the newest 14, restore-tested every Monday into a throwaway local backend). A backup holds every table (the Better Auth component's too) and stored files; not the functions (git has them), not the environment variables (§3 lists them) and not pending scheduled functions. Dev (`hushed-rhinoceros-215`) is never a restore target: it holds only invented talks.
+
+### Convex's own backups (plan-dependent)
+
+- **Which plan:** <https://dashboard.convex.dev> → team `joshua-fehn` → Settings → Billing. On Free/Starter: "Backup now" only, at most two stored per deployment, each kept 7 days. On Pro: also "Backup automatically", daily (kept 7 days) or weekly (kept 14), with or without file storage. Both read every document (database bandwidth) and, with files, every file (file bandwidth).
+- **The VPS backup and the plan:** each nightly `convex export` is a snapshot export of the deployment, the kind of object the dashboard lists under Backups. Whether it counts towards Free/Starter's two stored backups is unconfirmed (2026-11-04); if it does, the VPS backup fails from the third night on that plan, because its key may not delete backups. docs/ops-vps.md §10 "Install" step 4 (plan gate) tests it after the first run; record the result here: _not yet tested_.
+- **Recommendation:** the VPS backups are the routine layer. If the team is on Pro anyway, turn on a daily periodic backup with file storage as well (Production → Backups → "Backup automatically" → Daily, a time such as 03:00, "Include file storage"): it restores from the dashboard in two clicks and does not depend on the host. On Free/Starter, use "Backup now" before anything risky.
+- **Before anything risky** (a migration's narrow step, a bulk mutation, `clean-events --apply`, a `--replace` import): take a fresh backup — "Backup now" in the dashboard, or on the host `systemctl start camsocs-backup.service` (a manual run counts towards the 14 kept).
+
+### Restoring production from a VPS backup
+
+For data lost or corrupted in production (a bad migration, a wrong mutation, a mass deletion — the backup's shrink alert, exit 24, may be the first sign). Joshua's steps, on the host as root unless marked; nothing here is automated, and nothing restores without the confirmation the CLI asks for.
+
+1. **Choose the backup:** the newest from before the damage, `ls -l /var/lib/camsocs-backup/` (names carry the UTC time), with its counts: `python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py inspect /var/lib/camsocs-backup/convex-prod-<stamp>.zip` (table names and counts only).
+2. **Prove it restores** (the weekly test covers only the newest), as the backup's own user, into a throwaway local backend:
+
+   ```bash
+   systemd-run --wait --pipe -p DynamicUser=yes -p User=camsocs-backup -p StateDirectory=camsocs-backup \
+     -p CacheDirectory=camsocs-backup -p PrivateTmp=yes -p IPAddressDeny=any -p IPAddressAllow=localhost \
+     --setenv=CAMSOCS_BACKUP_DIR=/var/lib/camsocs-backup --setenv=CAMSOCS_RESTORE_WORK=/tmp \
+     --setenv=HOME=/var/cache/camsocs-backup \
+     /usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py restore-test /var/lib/camsocs-backup/convex-prod-<stamp>.zip
+   ```
+
+3. **Stop the writers:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer camsocs-backup.timer camsocs-restore-test.timer`; a running harvest: `systemctl stop 'camsocs-harvest@*'`. (The site stays up; a request submitted during the restore is lost with the rest of what happened since the backup, step 7.)
+4. **A restore key (Joshua, dashboard):** Production → Settings → Deploy keys → Generate, name `camsocs-restore-<date>`, permissions `deployment:view`, `deployment:data:view`, `deployment:data:write`, `deployment:backups:create`, `deployment:backups:download`, `deployment:backups:import`. The backup's own key cannot restore, by design. On the host, without the shell history: `read -rs KEY && (umask 077 && printf 'CONVEX_DEPLOY_KEY=%s\n' "$KEY" >/root/restore.env); unset KEY`.
+5. **Keep what is there now** (the damaged state still holds everything since the backup):
+
+   ```bash
+   cd /usr/local/lib/camsocs-ops/backup
+   .pixi/envs/default/bin/node node_modules/convex/bin/main.js export --env-file /root/restore.env \
+     --include-file-storage --path "/root/pre-restore-$(date -u +%Y%m%dT%H%M%SZ).zip"
+   ```
+
+6. **Restore:**
+
+   ```bash
+   .pixi/envs/default/bin/node node_modules/convex/bin/main.js import --env-file /root/restore.env \
+     --replace-all /var/lib/camsocs-backup/convex-prod-<stamp>.zip
+   ```
+
+   It prints, per table, what it will create and delete, and asks before deleting: the counts to create must be the backup's (step 1). `--replace-all` also empties tables the backup does not have (one added since). Stored files: those in the backup that production no longer has are uploaded again; none is deleted.
+7. **Re-apply what happened since the backup** (Joshua; the pre-restore ZIP holds it, never open it in an agent session): every suppression and accepted removal or objection (R8) and every erasure done since the backup's time must be done again — re-enter them through the broker (`/dashboard/requests`); listing requests submitted since then are in the pre-restore ZIP's `listingRequests` (rows with a later `_creationTime`), answer them from there. What retention deleted by age goes again with the next `retention-daily` (04:15 UTC); listings, events and talks come back with the next harvest; then `sudo -u camsocs -H bash -lc 'cd /opt/camsocs && pixi run pipeline -- --env prod derive'`.
+8. **Clean up:** `shred -u /root/restore.env`; delete the `camsocs-restore-<date>` key in the dashboard; `shred -u /root/pre-restore-*.zip` once step 7 is done; the timers on again (`systemctl enable --now` the five from step 3) and a fresh backup, `systemctl start camsocs-backup.service`. Record the restore in the breach log if personal data was lost or exposed (docs/compliance/breach-procedure.md).
+
+**From a Convex dashboard backup instead:** Production → Backups → "Backup now" first (the current state), then the chosen backup's menu → Restore (into Production); then steps 3, 7 and 8 as above. **A single table** (`convex import --table <name> --replace`) is untested: try it on a local backend first (step 2's command shows how one is started).
 
 ## CPU protection: training crawlers and anonymous data (2026-11-01)
 

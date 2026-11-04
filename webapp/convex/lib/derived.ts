@@ -301,10 +301,62 @@ const CRSID_LOCAL = /^[a-z]{2,5}[0-9]{1,5}$/
  * services. A CRSid there names a person just as on cam.ac.uk. */
 const CRSID_MAIL_DOMAINS = new Set(["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"])
 
-/** The alumni forwarding services, which also give members a name-shaped
- * address (`jane.smith@cantab.net`): such an address names its person. */
-const CANTAB_DOMAINS = new Set(["cantab.ac.uk", "cantab.net"])
+/** Alumni addresses: the forwarding services (Cambridge's cantab.ac.uk and
+ * cantab.net, Oxford's oxon.org) and any `alumni.` / `alum.` host
+ * (alumni.cam.ac.uk, alum.example.edu). Each address there is one
+ * graduate's, whatever its shape (`jane.smith2@`, `janesmith@`,
+ * `anna.lena.van.berg@`, `jane+chess@`), unless it is named after a post. */
+const ALUMNI_DOMAINS = new Set(["cantab.ac.uk", "cantab.net", "oxon.org"])
+
+function isAlumniDomain(domain: string): boolean {
+  return (
+    ALUMNI_DOMAINS.has(domain) ||
+    domain.split(".").some((label) => label === "alumni" || label === "alum")
+  )
+}
+
+/** Words that make an alumni address a post's or an office's
+ * (`president@cantab.net`, `development@alumni.cam.ac.uk`); mirrored in
+ * pipeline/.../sources/links.py `_POST_WORDS`. */
+const POST_WORDS = new Set([
+  "president",
+  "secretary",
+  "treasurer",
+  "sponsorship",
+  "events",
+  "publicity",
+  "welfare",
+  "captain",
+  "chair",
+  "info",
+  "contact",
+  "enquiries",
+  "hello",
+  "admin",
+  "office",
+  "committee",
+  "society",
+  "club",
+  "association",
+  "team",
+  "members",
+  "membership",
+  "webmaster",
+  "development",
+  "alumni",
+  "news",
+])
+
+/** A name-shaped local part: two or three plain words (`jane.smith`). */
 const NAME_SHAPED_LOCAL = /^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$/
+
+/** Whether an alumni address is named after a post: one of its words (runs
+ * of letters) is a post word, and it is not name-shaped (`jane.president@`
+ * still names Jane). */
+function isPostAddress(local: string): boolean {
+  if (NAME_SHAPED_LOCAL.test(local)) return false
+  return local.split(/[^a-z]+/).some((word) => POST_WORDS.has(word))
+}
 
 /**
  * What kind of address an email is (`EMAIL_TYPES`). Derived on the server from
@@ -324,7 +376,8 @@ export function classifyEmail(email: string): EmailType {
   if ((camDomain || CRSID_MAIL_DOMAINS.has(domain)) && CRSID_LOCAL.test(local)) {
     return "personal_crsid"
   }
-  if (CANTAB_DOMAINS.has(domain) && NAME_SHAPED_LOCAL.test(local)) return "personal_crsid"
+  // An alumni address is one person's unless it is named after a post.
+  if (isAlumniDomain(domain) && !isPostAddress(local)) return "personal_crsid"
   if (/(^|\.)cusu\./.test(domain) || domain === "cusu.org") return "legacy_cusu"
   if (domain === "cambridgesu.co.uk" || domain.endsWith(".cambridgesu.co.uk")) return "cambridgesu"
   if (domain === "lists.cam.ac.uk") return "lists_cam"

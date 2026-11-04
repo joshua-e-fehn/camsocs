@@ -60,7 +60,7 @@ export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-11-03"
+export const PRIVACY_NOTICE_UPDATED = "2026-11-04"
 
 /** When the terms of use (`/terms`) last changed in substance, `YYYY-MM-DD`. */
 export const TERMS_UPDATED = "2026-11-03"

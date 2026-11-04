@@ -754,6 +754,14 @@ export const personFields = {
   seenAt: v.number(),
   publicLinks: v.array(v.object({ platform: v.string(), url: v.string() })),
   consentBasis: literalUnion(CONSENT_BASES),
+  /**
+   * How the person's explicit consent was recorded, for `consentBasis:
+   * consent`: the date and where the record is kept ("their email of 4 Nov
+   * 2026, admin@ inbox"). Required before an officer of a sensitive society
+   * (lib/broker/sensitive.ts) is held on consent, which R5 never deletes
+   * (DPIA-lite §5, ENG-42). Set only in the dashboard.
+   */
+  consentRecord: v.optional(v.object({ recordedOn: v.string(), evidence: v.string() })),
   /** `parser` / `llm` rows are pipeline-owned; `manual` rows are never overwritten by it. */
   method: literalUnion(CLAIM_METHODS),
   notes: v.optional(v.string()),
