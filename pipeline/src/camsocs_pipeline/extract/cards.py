@@ -31,16 +31,24 @@
    (`extract.when.term_of_dates`) — dates computed from that inferred term are
    claimed ``inferred``. A card that gives none of these keeps only its events
    with calendar dates: it may be last term's.
-5. Events are **public** (the society published the card), or
+5. **A row without a time of day is all day** (`untimed`, ENG-37): the
+   model may fill a row the card prints without a time as 00:00–23:59, or
+   as 00:00 alone; such a row is read as if it gave no time (all day from
+   London midnight, as `extract.when` files any untimed event). 00:00 with
+   a time on the card's words for it ("midnight", "12am", "00:00") stays;
+   a dotted date ("Sa, 07.11.") is no time. A termcard that is an HTML page
+   is read the same way (`sources.websites.events.llm_events`).
+6. Events are **public** (the society published the card), or
    ``members_only`` where the card says so, organised by the card's
    organisation, with external ids ``<org key>:<date>:<title slug>``.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from camsocs_pipeline.events.checks import is_booking
 from camsocs_pipeline.events.common import Tally
@@ -63,7 +71,13 @@ from camsocs_pipeline.extract.events import (
 from camsocs_pipeline.extract.images import render_pdf, vision_image
 from camsocs_pipeline.extract.llm import LLMClient, assert_llm_source_allowed
 from camsocs_pipeline.extract.memo import LLMMemo
-from camsocs_pipeline.extract.when import TermCalendar, london_date, term_of_dates, week_anchor
+from camsocs_pipeline.extract.when import (
+    TermCalendar,
+    london_date,
+    parse_hhmm,
+    term_of_dates,
+    week_anchor,
+)
 from camsocs_pipeline.models.observation import EventObservation, FetchInfo
 from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE
 from camsocs_pipeline.sources.termcards import (
@@ -80,6 +94,15 @@ PROMPT = "image_events_v1"
 MAX_CARD_PAGES = 12
 #: A named term's dates run from its Week 0 to a week after Full Term.
 _TERM_TAIL = timedelta(days=7)
+#: Words that give a time of day: "19:30", "7.30", "7pm", "12 am", "midnight".
+#: A dotted pair inside a dotted date ("Sa, 07.11.", "13.11.2026") is a date.
+_TIME_OF_DAY = re.compile(
+    r"\b\d{1,2}:\d{2}\b|(?<![.\d])\d{1,2}\.\d{2}(?![.\d])"
+    r"|\b\d{1,2}\s*[ap]\.?m\b|\b(?:midnight|noon|midday)\b",
+    re.IGNORECASE,
+)
+#: The ends of a whole day the model may give (`parse_hhmm` drops "24:00").
+_DAY_ENDS = {"23:59", "23:59:59", "24:00", "00:00", "0:00"}
 
 
 @dataclass(frozen=True)
@@ -133,6 +156,20 @@ def _dated(events: Sequence[LlmEvent]) -> list[date]:
         except ValueError:
             continue
     return days
+
+
+def untimed(event: LlmEvent) -> LlmEvent:
+    """`event` without its times when they are no time of day (module
+    docstring, step 5): 00:00 to the day's end, or 00:00 alone while the
+    card's words for it give no time."""
+    if parse_hhmm(event.start_time) != time(0):
+        return event
+    end = (event.end_time or "").strip()
+    if end and end not in _DAY_ENDS:
+        return event
+    if not end and _TIME_OF_DAY.search(event.when_quote or ""):
+        return event
+    return event.model_copy(update={"start_time": None, "end_time": None})
 
 
 def _dropped(reason: str) -> str:
@@ -227,7 +264,7 @@ def card_events(
     )
     left_out: list[str] = []
     kept: list[LlmEvent] = []
-    for event in extracted.events:
+    for event in map(untimed, extracted.events):
         if is_booking(event.title):
             left_out.append("a room booking, not an event")
         elif not card_dated_quote(event):
@@ -294,4 +331,5 @@ __all__ = [
     "CardHints",
     "card_events",
     "card_fetch_info",
+    "untimed",
 ]

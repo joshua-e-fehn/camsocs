@@ -93,6 +93,8 @@ describe("activity counts", () => {
     expect(countsAsActivity(row({ visibility: "members_only" }), removed)).toBe(false)
     expect(countsAsActivity(row({ eventKey: "evt-gone" }), removed)).toBe(false)
     expect(countsAsActivity(row({ cancelled: true }), removed)).toBe(false)
+    // Superseded by another source's event of the same evening (ENG-47).
+    expect(countsAsActivity(row({ superseded: true }), removed)).toBe(false)
     // A row from before the copy: not known to be cancelled.
     expect(countsAsActivity(row({ cancelled: undefined }), removed)).toBe(true)
   })

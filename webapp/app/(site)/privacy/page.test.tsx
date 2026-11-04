@@ -102,6 +102,13 @@ describe("Privacy notice", () => {
     expect(rights).toContain("Article 20")
   })
 
+  test("database backups have their retention, as retention.md R14 sets it (ENG-44)", async () => {
+    const retention = section(await render(<PrivacyPage />), "retention")
+    expect(retention).toContain("Backups of our database")
+    expect(retention).toContain("14 nights")
+    expect(retention).toContain("we delete again whatever had been deleted since it was made")
+  })
+
   test("the sources name the University's events programme and Meta Business Discovery", async () => {
     const what = section(await render(<PrivacyPage />), "what")
     expect(what).toContain("public events programme (What’s On, the Cambridge Festival")
@@ -119,9 +126,16 @@ describe("Privacy notice", () => {
     expect(sharing).toContain("ChatGPT subscription")
     expect(sharing).toContain("cliproxy")
     expect(sharing).toContain("We have no data processing agreement with OpenAI")
-    // Its contracting company and transfer safeguard are unchecked
-    // (record-of-processing, transfers): the notice must not claim either way.
+    // ENG-44 (record-of-processing, transfers): OpenAI's Europe terms give a
+    // UK resident's subscription to OpenAI OpCo and an EEA resident's to
+    // OpenAI Ireland; which holds the operator's is unconfirmed, so both are
+    // named. OpenAI's own SCCs are not a safeguard we hold, and the notice
+    // must not claim one under the subscription.
+    expect(sharing).toContain("OpenAI OpCo, LLC")
+    expect(sharing).toContain("OpenAI Ireland Ltd")
     expect(sharing).toContain("not yet confirmed")
+    expect(sharing).toContain("give us no safeguard of our own")
+    expect(sharing).toContain("OpenAI is the exception")
     expect(sharing).not.toMatch(/offer none|in the United\s+States, under/)
     // What the VPS holds includes list mail, not only page copies.
     expect(sharing).toContain("mailing-list messages being processed")

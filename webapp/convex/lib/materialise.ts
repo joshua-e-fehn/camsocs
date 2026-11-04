@@ -4,6 +4,7 @@ import { type EntityType, REGISTRATION_BODIES } from "../../lib/vocab"
 import {
   classifyEmail,
   deriveOrgStatus,
+  eventStreamOf,
   missingFields,
   orgSearchText,
   sweepGroupOf,
@@ -231,6 +232,10 @@ function derive(
         sourceUrl: row.sourceUrl as string | undefined,
       }),
       termWeekLabel: termWeekLabel(row.startsAt as number, context.terms),
+      // `assemble` carried the organiser keys over from the stored row.
+      stream: eventStreamOf(
+        row as { source: string; organiserKeys: string[]; coHostKeys: string[] },
+      ),
       confidence: confidences.length > 0 ? Math.min(...confidences) : 0.5,
       lastSeenAt: seen.length > 0 ? Math.max(...seen) : context.now,
     }

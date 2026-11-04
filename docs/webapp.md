@@ -337,7 +337,10 @@ matched on those three paths (and the rest of the talks pillar, for its AI-agent
 (`lib/missing-listing.ts`): a malformed key (`isOrgSlug` / `isEventKey` / `isTalkKey`) is missing
 without a Convex call; a well-formed one costs one anonymous indexed query (`orgs.exists`,
 `events.locate`, `talks.exists`, which share their test with `getBySlug` / `get`); a talks.cam-derived
-event is answered with a 308 to `/talks/events/<key>` (see "The talks boundary"). A missing listing
+event is answered with a 308 to `/talks/events/<key>` (see "The talks boundary"), and a superseded
+event key (ENG-47) with a 308 to the page of the event that took it over (`/talks/events/<survivor>`
+when that one is talks.cam-derived; from either prefix, never back, since it is always another key;
+`lib/missing-listing.ts` `eventListingState`). A missing listing
 is rewritten to a path no route matches, so Next renders `app/not-found.tsx` with status 404: the
 site's not-found page in the (site) frame, which becomes the talks not-found page in the browser
 for a talk's address (`app/not-found-variant.tsx`; deciding on the server would need a request
@@ -348,7 +351,8 @@ Static siblings (`/talks/departments`, or a metadata file such as `opengraph-ima
 the unit test fails on a new one not listed) and non-GET requests pass unchecked. A failed check, or
 one slower than 800 ms, lets the page answer, so an outage never 404s a real listing. A found
 listing is remembered per instance for as long as a page is cached (`FOUND_TTL_MS`, 300 s;
-missing ones never), so repeat views skip the round
+missing ones and a superseded key's redirect never: a later load can swap two keys' roles, and a
+stale redirect beside a fresh one would loop), so repeat views skip the round
 trip. A `cam_only` event exists for everyone: a visitor still gets its "not available, sign in"
 page (200); see data-model §7. The pages keep their own `notFound()` as the fallback for a listing
 hidden since the check. A client-side navigation to a missing listing becomes a full page load (the
@@ -699,11 +703,11 @@ readings, each with its source) — show both; `missing` comes with `missingReas
 
 | Function | Args | Returns |
 |---|---|---|
-| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university?, talksCam? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default); `talksCam` (`exclude` by default, `only`, `include`): talks.cam-derived events (see "The talks boundary" below). `university` filters after the per-tier index reads (`.take(1000)` starting, `.take(200)` spanning, no index on `fromUniversity`), so a window holding more than 1,000 events of a tier can drop its later days from either view without a sign; safe for What's On (about 100 rows in 10 weeks), not for a Cambridge Festival window: store the flag with an index (widen, backfill, switch) or page past the cap before the Festival's events are loaded (ENG-24 follow-up). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`) |
-| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn) |
+| `events.list` | `{ from, to, categories?, eventTypes?, orgKey?, q?, collegeKeys?, includeTakingPart?, university?, talksCam? }` (epoch ms, `to` exclusive, window ≤ 186 days) | `EventListItem[]` by start time (≤ 1000), gated by the viewer: events starting in the window and multi-day events still running in it; `q` keeps titles holding every word; `categories` / `collegeKeys` match the organisers' or co-hosts' (so never a University listing, which has none); `includeTakingPart: false` leaves out events societies only take part in (`hosting: takes_part`, decision D6; included by default); `university: "hide"` leaves out the University's own listings (`fromUniversity`, ENG-24) and `"only"` lists nothing else (both kinds by default); `talksCam` (`exclude` by default, `only`, `include`): talks.cam-derived events (see "The talks boundary" below). The window is read per tier and per stream (`events.stream`, ENG-31: indexes `by_stream_visibility_startsAt` and `by_stream_visibility_spanEndsAt`); `university` picks the streams read. The streams of one tier share one read budget, the bound from before ENG-31: 1,000 starting and 200 spanning rows, society events first, then rows not yet backfilled, then the University's in what is left (`events.ts` `tierRows`). A list therefore reads at most 1,200 events per tier, 2,400 for a signed-in viewer's two (~11.5 MB at the 4.8 KB mean measured on dev 2026-11-04, inside Convex's 16 MiB read limit per function), and University listings never take a society event's room. The 1,000-row cap is then applied society events first: every society event of the window up to the cap, then the University's listings in the room left, earliest first — a Cambridge Festival window of University listings can drop only its own later days, never a society's event, and the University view has the whole cap. Only when filters (`q`, `eventTypes`, talks.cam) drop society rows read can the University get fewer rows than the cap's room, as with any filter applied after the read. Rows written before `stream` existed are read through the `stream`-unset range and classified in memory until the backfill has run (data-model §2 `stream`; above 1,000 events a tier they compete by start time as before ENG-31, so production backfills straight after the deploy, deploy.md). Never: events whose every host is hidden, withdrawn events (data-model §2 `sweepGroup`), superseded events (data-model §2 `supersededBy`, ENG-47) |
+| `events.get` | `{ key }` | `EventPublic \| null` (null also when the viewer may not see it, every host is hidden, or it was withdrawn or superseded) |
 | `events.requestLabel` | `{ key }` | `{ title: string \| null }`: the title `get` would show this viewer, null when it shows nothing or for a talks.cam-derived event (G1); for the request form at `/request?event=`, so no talks.cam text reaches it |
 | `events.exists` | `{ key }` | `boolean`: whether `get` would return the event to a verified @cam.ac.uk viewer (so `cam_only` is true for everyone; `members_only`, withdrawn, suppressed or every host hidden is false); for the 404 gate in `proxy.ts` |
-| `events.locate` | `{ key }` | `"missing" \| "event" \| "talks"`: `missing` when `exists` is false, `talks` for a talks.cam-derived event (its page is `/talks/events/<key>`); for the gate in `proxy.ts` |
+| `events.locate` | `{ key }` | `"missing" \| "event" \| "talks" \| { supersededBy, talks }`: `missing` when `exists` is false, `talks` for a talks.cam-derived event (its page is `/talks/events/<key>`), `{ supersededBy, talks }` for a key another source's event took over (ENG-47, data-model §2 `supersededBy`: the survivor's key, following at most 3 retirements, and whether its page is under /talks; `missing` when the chain loops or ends at nothing shown); for the gate in `proxy.ts` |
 | `events.restrictedCount` | same args as `events.list` | `{ camOnly }`: how many `cam_only` events are hidden from this viewer in the whole London weeks around `from`–`to` (at least one week, four with `orgKey`; `q`, types, categories and colleges ignored; talks.cam-derived events count unless `talksCam: "exclude"`, which a society profile passes) — a coarse count for the "N Cambridge-only events in these weeks, sign in" note, never an oracle (data-model §7). 0 when they can see them |
 
 `EventPublic` (`events.get`, the details sheet): `key, title, description?, startsAt, endsAt?,
@@ -722,8 +726,9 @@ and its "Include taking part" toggle (`?external=show`) lists them.
 `fromUniversity` (ENG-24) marks the University's own listings: read from the University of
 Cambridge's public events programme (`source: uni_events_api`) and credited to no student group
 as organiser or co-host. It is derived in the projection (`convex/lib/derived.ts`
-`isUniversityListing`), never stored, so there is no index or migration behind it; an event of
-the programme that names exactly one society is that society's and is not `fromUniversity`.
+`isUniversityListing`) at every read; its stored, indexed copy `events.stream` (ENG-31) only
+selects rows for `events.list`. An event of the programme that names exactly one society is
+that society's and is not `fromUniversity`.
 `fromUniversity` says only that no student group is linked here, not who runs the event (a
 department, a college, a museum, two societies): the UI says "listed by" the University, never
 that no society runs it. The UI names the University in words ("University of Cambridge", the "University" badge with a
@@ -755,8 +760,9 @@ session; a Cambridge-only event's file is `private, no-store`). `/events.ics` is
 the next 60 days' public events, "Cambridge events · CAMsocs": societies' and the University's
 own listings, as the calendar's default (`?org=<slug>` for one society's, named for it),
 edge-cached an hour, and the calendar and event pages advertise their `.ics` as a
-`text/calendar` alternate. It reads `events.list` once, so the 1,000-per-tier cap there applies
-to both kinds together.
+`text/calendar` alternate. It reads `events.list` once, so the cap there applies: society
+events first (ENG-31), so in a Cambridge Festival window the feed can lose only the
+University's later days; `university: "hide"` would read the society stream alone.
 
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
@@ -859,7 +865,7 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 | Module | Functions |
 |---|---|
 | `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
-| `broker/people` | `list`, `create`, `update` (the row becomes `manual`), `setArchived` |
+| `broker/people` | `list` (each row with `sensitiveBecause` and `sensitiveProblem`, why a stored row breaks the sensitive-society rules), `rules({orgKey})` (what a manual entry there may hold: `sensitiveBecause`, `website`, `staleAfterLimit`), `create`, `update` (the row becomes `manual`; `sourceUrl`, `consentRecord`; checked as it would be after the edit), `setArchived`. Both writes refuse a suppressed person (key, or a suppressed name anywhere in the typed name) or listing and, for sensitive societies (`lib/broker/sensitive.ts`, DPIA-lite §5), a source off the society's own website, links, notes, a later `staleAfter` and unrecorded consent, as `ConvexError`s the form shows; stored rows that break those rules are counted, without names, by the internal `coverage.sensitiveOfficers` (post-deploy check) |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
 | `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
@@ -937,6 +943,7 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
 | `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |
 | `events/remove` | `{keys, confirm: "REMOVE-EVENTS"}` (events only, ≤ 25 a call) → `{removed, missing}`: deletes events as `ingest/purge:removeEntity` does (docs/deploy.md §7) |
+| `events/superseded` | `{events: [{key, by}]}` (≤ 500) → `{updated, unchanged, unknown, rejected}`: each event key whose reading this load folded into another source's event `by`, or an LLM stage dropped as that event's (ENG-47, `convex/ingest/superseded.ts`); sets `supersededBy` on an existing old event, counts a key or survivor the deployment lacks as `unknown` (the load's note shows the count). The load posts it after the organiser sets; a 404 (route not deployed yet) is a warning, not a failure |
 | `runs/start`, `runs/finish` | the run log |
 
 ## Inbound mail webhook

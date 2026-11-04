@@ -278,6 +278,18 @@ class TestEmails:
         assert alumni.kind == "personal" and email_type("jane.example@cantab.net") == (
             "personal_crsid"
         )
+        # Any alumni address not named after a post is a person's (ENG-37):
+        # one word, digits, four words, a plus tag, an alumni. host.
+        for address in (
+            "janeexample@cantab.net",
+            "jane.example2@cantab.ac.uk",
+            "anna.lena.van.example@cantab.net",
+            "jane+quokka@cantab.net",
+            "jane.example@alumni.cam.ac.uk",
+        ):
+            reading = classify_email(address, name_tokens("Quokka Society"), labelled=True)
+            assert reading.kind == "personal", address
+        assert classify_email("secretary@cantab.ac.uk", labelled=True).kept
         # Mailboxes named after the society or a post are not people.
         own = name_tokens("Cambridge University Malaysian Society", "CUMaS")
         for address in (

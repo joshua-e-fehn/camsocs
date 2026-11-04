@@ -5,7 +5,7 @@
 # It never touches Docker, Mya's container or cliproxy.
 #
 #   install.sh --revision SHA [--deploy-key FILE] [--pipeline-env FILE]
-#              [--prod-env FILE] [--enable | --no-enable] [--diff]
+#              [--prod-env FILE] [--backup-env FILE] [--enable | --no-enable] [--diff]
 #   install.sh --refresh-alert-env
 #
 #   --revision SHA       the full 40-character commit of main to install the
@@ -22,13 +22,20 @@
 #   --prod-env FILE      installed as /opt/camsocs/pipeline/.env.prod: production's
 #                        CONVEX_HTTP_URL and PIPELINE_API_KEY (and the PostHog
 #                        values: run telemetry, and the monitor's personal key).
+#   --backup-env FILE    installed as /etc/camsocs/backup.env (0600 root): one
+#                        line, CONVEX_DEPLOY_KEY=prod:cheerful-bandicoot-511|…,
+#                        the production deploy key the nightly backup exports
+#                        with (ENG-44; docs/ops-vps.md §10). Nothing else may
+#                        be in it.
 #   --enable             turn the timers on (and start them): the two harvests'
-#                        and the hourly monitor's.
+#                        and the hourly monitor's, and the backup's two when
+#                        /etc/camsocs/backup.env exists.
 #   --no-enable          on a first install, leave the timers off.
 #                        Without either, a first install turns them on and a
 #                        later run turns on only a timer it installs for the
-#                        first time (the monitor's, on an upgrade), leaving
-#                        each other timer as the operator left it.
+#                        first time (the monitor's, on an upgrade; the
+#                        backup's two once backup.env exists), leaving each
+#                        other timer as the operator left it.
 #   --diff               show what installing SHA would change, change nothing.
 #   --refresh-alert-env  copy the three Slack values from Mya's env file into
 #                        /etc/camsocs/alert.env again (after Mya's token
@@ -61,6 +68,11 @@
 #      else each as it was
 #  11. `pixi install --locked` as camsocs, holding the harvest lock (it waits up
 #      to 10 minutes for a running harvest), so the first run starts warm
+#  12. the backup (ENG-44), when the revision has one: /etc/camsocs/backup.env
+#      from --backup-env (0600 root); the Convex CLI's toolchain root-owned in
+#      /usr/local/lib/camsocs-ops/backup/ (node by `pixi install --locked`, the
+#      CLI by `npm ci --ignore-scripts`, both from the revision's lock files);
+#      the pinned convex-local-backend for the restore test, its sha256 checked
 set -euo pipefail
 
 REPO_URL="git@github.com:joshua-e-fehn/camsocs.git"
@@ -82,6 +94,21 @@ ROOT_KEY="$ETC_DIR/deploy_key"
 ROOT_KNOWN_HOSTS="$ETC_DIR/known_hosts"
 MIRROR="/var/lib/camsocs-ops/camsocs.git"
 OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py install.sh)
+# The backup (ENG-44): its script and toolchain, installed when the revision
+# has them (an earlier revision, installed for a rollback, has not).
+BACKUP_SCRIPT="camsocs-backup.py"
+BACKUP_FILES=(pixi.toml pixi.lock package.json package-lock.json)
+BACKUP_TOOLS="$OPS_DIR/backup"
+BACKUP_ENV="$ETC_DIR/backup.env"
+BACKUP_TIMERS=(camsocs-backup.timer camsocs-restore-test.timer)
+BACKUP_DEPLOYMENT="cheerful-bandicoot-511"
+# The restore test's throwaway backend: the release the Convex CLI would
+# download for `convex dev --local`, pinned (2026-10-22, the latest
+# non-prerelease on 2026-11-04) with the sha256 GitHub publishes for the asset.
+CONVEX_BACKEND_RELEASE="precompiled-2026-10-22-1447815"
+CONVEX_BACKEND_ASSET="convex-local-backend-x86_64-unknown-linux-gnu.zip"
+CONVEX_BACKEND_SHA256="7be627d8a8c9175b66a55cf6c4ab63c5f6bde1c412f59fbbe93f64a24a11bd13"
+CONVEX_BACKEND_URL="https://github.com/get-convex/convex-backend/releases/download/$CONVEX_BACKEND_RELEASE/$CONVEX_BACKEND_ASSET"
 ALERT_KEYS="SLACK_BOT_TOKEN|SLACK_HOME_CHANNEL|SLACK_ALLOWED_USERS"
 
 PIXI_VERSION="0.73.0"
@@ -105,7 +132,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,63p' "$0"
+  sed -n '2,75p' "$0"
   exit 0
 }
 
@@ -192,6 +219,12 @@ show_diff() {
     compare_file "$OPS_DIR/$file" "$REV_DIR/$file" || changed=1
   done
   compare_file /etc/logrotate.d/camsocs "$REV_DIR/logrotate/camsocs" || changed=1
+  if [[ -f "$REV_DIR/$BACKUP_SCRIPT" ]]; then
+    compare_file "$OPS_DIR/$BACKUP_SCRIPT" "$REV_DIR/$BACKUP_SCRIPT" || changed=1
+    for file in "${BACKUP_FILES[@]}"; do
+      compare_file "$BACKUP_TOOLS/$file" "$REV_DIR/backup/$file" || changed=1
+    done
+  fi
   for file in "$REV_DIR"/systemd/*; do
     compare_file "$UNIT_DIR/$(basename "$file")" "$file" || changed=1
   done
@@ -200,9 +233,107 @@ show_diff() {
   fi
 }
 
+# A backup key file holds exactly one setting, production's deploy key:
+# `CONVEX_DEPLOY_KEY=prod:<deployment>|…` (comments and blank lines aside).
+# Anything else (a dev or preview key, CONVEX_DEPLOYMENT, a self-hosted URL)
+# would back up another deployment. Prints nothing of the value.
+check_backup_env() {
+  local settings
+  settings="$(grep -Ev '^[[:space:]]*(#|$)' "$1" || true)"
+  [[ "$(printf '%s\n' "$settings" | grep -c .)" == 1 ]] &&
+    printf '%s\n' "$settings" | grep -Eq "^(export[[:space:]]+)?CONVEX_DEPLOY_KEY=[\"']?prod:${BACKUP_DEPLOYMENT}[|]."
+}
+
+# ShellCheck 0.11 reports say/die here as defined later (SC2218), as for
+# install_runner below; they are defined at the top.
+# shellcheck disable=SC2218
+# Step 12: the backup's key, its Convex CLI (node + the npm package, from the
+# revision's lock files) and the restore test's local backend, all root-owned;
+# then its two timers. Skipped for a revision from before ENG-44.
+install_backup() {
+  if [[ ! -f "$REV_DIR/$BACKUP_SCRIPT" || ! -d "$REV_DIR/backup" ]]; then
+    say "the revision has no backup (ENG-44): skipped"
+    return 0
+  fi
+  if [[ -n "$backup_env" ]]; then
+    [[ -r "$backup_env" ]] || die "cannot read $backup_env"
+    check_backup_env "$backup_env" ||
+      die "$backup_env must hold one line, CONVEX_DEPLOY_KEY=prod:$BACKUP_DEPLOYMENT|… (production's deploy key), and nothing else"
+    if [[ -f "$BACKUP_ENV" ]] && cmp -s "$backup_env" "$BACKUP_ENV"; then
+      say "$BACKUP_ENV is up to date"
+    else
+      install -m 0600 -o root -g root "$backup_env" "$BACKUP_ENV"
+      say "installed $BACKUP_ENV (0600 root: the backup's deploy key)"
+    fi
+  elif [[ -f "$BACKUP_ENV" ]] && ! check_backup_env "$BACKUP_ENV"; then
+    warn "$BACKUP_ENV is not one CONVEX_DEPLOY_KEY=prod:$BACKUP_DEPLOYMENT|… line: the backup will refuse it"
+  fi
+
+  install -d -m 0755 -o root -g root "$BACKUP_TOOLS"
+  local stamp file node="$BACKUP_TOOLS/.pixi/envs/default/bin/node"
+  stamp="$(cd "$REV_DIR/backup" && sha256sum "${BACKUP_FILES[@]}" | sha256sum | cut -d' ' -f1)"
+  if [[ "$(cat "$BACKUP_TOOLS/.installed" 2>/dev/null || true)" == "$stamp" && -x "$node" &&
+    -f "$BACKUP_TOOLS/node_modules/convex/bin/main.js" ]]; then
+    say "the backup's Convex CLI is installed"
+  else
+    say "installing the backup's Convex CLI → $BACKUP_TOOLS (pixi install --locked, npm ci --ignore-scripts)"
+    rm -f "$BACKUP_TOOLS/.installed"
+    for file in "${BACKUP_FILES[@]}"; do
+      install -m 0644 -o root -g root "$REV_DIR/backup/$file" "$BACKUP_TOOLS/$file"
+    done
+    (cd "$BACKUP_TOOLS" && timeout --kill-after=1m 30m /usr/local/bin/pixi install --locked --manifest-path "$BACKUP_TOOLS/pixi.toml") ||
+      die "pixi install of the backup's node failed"
+    (cd "$BACKUP_TOOLS" && env PATH="$(dirname "$node"):/usr/bin:/bin" HOME="$WORK" \
+      timeout --kill-after=1m 30m npm ci --ignore-scripts --no-audit --no-fund --cache "$WORK/npm-cache") ||
+      die "npm ci of the backup's Convex CLI failed"
+    local want have
+    want="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["dependencies"]["convex"])' "$BACKUP_TOOLS/package.json")"
+    have="$("$node" "$BACKUP_TOOLS/node_modules/convex/bin/main.js" --version)"
+    [[ "$have" == "$want" ]] || die "the backup's Convex CLI is $have, not the pinned $want"
+    chown -R root:root "$BACKUP_TOOLS"
+    chmod -R go-w "$BACKUP_TOOLS"
+    printf '%s\n' "$stamp" >"$BACKUP_TOOLS/.installed"
+  fi
+
+  if [[ -x "$BACKUP_TOOLS/convex-local-backend" &&
+    "$(cat "$BACKUP_TOOLS/convex-local-backend.sha256" 2>/dev/null || true)" == "$CONVEX_BACKEND_SHA256" ]]; then
+    say "the restore test's local backend ($CONVEX_BACKEND_RELEASE) is installed"
+  else
+    say "installing the restore test's local backend $CONVEX_BACKEND_RELEASE from $CONVEX_BACKEND_URL"
+    curl --proto '=https' --tlsv1.2 -fsSL --max-time 900 -o "$WORK/$CONVEX_BACKEND_ASSET" "$CONVEX_BACKEND_URL" ||
+      die "could not download $CONVEX_BACKEND_ASSET"
+    local actual
+    actual="$(sha256sum "$WORK/$CONVEX_BACKEND_ASSET" | cut -d' ' -f1)"
+    [[ "$actual" == "$CONVEX_BACKEND_SHA256" ]] ||
+      die "$CONVEX_BACKEND_ASSET sha256 $actual is not the pinned $CONVEX_BACKEND_SHA256"
+    mkdir -p "$WORK/backend"
+    python3 -I -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract("convex-local-backend", sys.argv[2])' \
+      "$WORK/$CONVEX_BACKEND_ASSET" "$WORK/backend" || die "$CONVEX_BACKEND_ASSET has no convex-local-backend"
+    install -m 0755 -o root -g root "$WORK/backend/convex-local-backend" "$BACKUP_TOOLS/convex-local-backend"
+    printf '%s\n' "$CONVEX_BACKEND_SHA256" >"$WORK/backend.sha256"
+    install -m 0644 -o root -g root "$WORK/backend.sha256" "$BACKUP_TOOLS/convex-local-backend.sha256"
+  fi
+
+  # On with the key: on --enable, when this run installed the key, and for a
+  # timer new to this host; otherwise each stays as the operator left it.
+  local timer
+  if [[ ! -f "$BACKUP_ENV" ]]; then
+    say "no $BACKUP_ENV yet: the backup's timers stay off until install.sh --backup-env FILE (docs/ops-vps.md §10)"
+  elif [[ "$enable" != "no" ]]; then
+    for timer in "${BACKUP_TIMERS[@]}"; do
+      if [[ "$enable" == "yes" || -n "$backup_env" || " ${NEW_BACKUP_TIMERS[*]} " == *" $timer "* ]]; then
+        systemctl enable --now "$timer"
+      fi
+    done
+  fi
+  for timer in "${BACKUP_TIMERS[@]}"; do
+    say "$timer: $(systemctl is-enabled "$timer" 2>/dev/null || true)"
+  done
+}
+
 parse_args() {
   ORIGINAL_ARGS=("$@")
-  revision="" deploy_key="" pipeline_env="" prod_env="" enable="auto" diff_only=0 refresh_only=0
+  revision="" deploy_key="" pipeline_env="" prod_env="" backup_env="" enable="auto" diff_only=0 refresh_only=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --revision)
@@ -219,6 +350,10 @@ parse_args() {
         ;;
       --prod-env)
         prod_env="${2:?--prod-env needs a file}"
+        shift 2
+        ;;
+      --backup-env)
+        backup_env="${2:?--backup-env needs a file}"
         shift 2
         ;;
       --enable)
@@ -422,6 +557,9 @@ install_runner() {
     [[ "$file" == *.py ]] && mode=0644
     install -m "$mode" -o root -g root "$REV_DIR/$file" "$OPS_DIR/$file"
   done
+  if [[ -f "$REV_DIR/$BACKUP_SCRIPT" ]]; then
+    install -m 0644 -o root -g root "$REV_DIR/$BACKUP_SCRIPT" "$OPS_DIR/$BACKUP_SCRIPT"
+  fi
   printf '%s\n' "$revision" >"$WORK/REVISION"
   install -m 0644 -o root -g root "$WORK/REVISION" "$OPS_DIR/REVISION"
   install -m 0644 -o root -g root "$REV_DIR/logrotate/camsocs" /etc/logrotate.d/camsocs
@@ -434,6 +572,10 @@ install_runner() {
     else
       new_timers+=("$timer")
     fi
+  done
+  NEW_BACKUP_TIMERS=()
+  for timer in "${BACKUP_TIMERS[@]}"; do
+    [[ -f "$UNIT_DIR/$timer" ]] || NEW_BACKUP_TIMERS+=("$timer")
   done
   say "installing systemd units"
   local unit
@@ -478,6 +620,9 @@ install_runner() {
     75) warn "a harvest held the lock for 10 minutes: pixi install skipped (the next run installs)" ;;
     *) warn "pixi install failed (exit $code): the next run tries again and alerts if it fails" ;;
   esac
+
+  # --- 12. the backup (ENG-44) -------------------------------------------------------------
+  install_backup
 
   say "done (${revision:0:12}). First run: systemctl start --no-block camsocs-harvest@full.service; journalctl -fu camsocs-harvest@full"
   systemctl list-timers --all 'camsocs-*' --no-pager || true

@@ -6,12 +6,14 @@ import {
   PencilIcon,
   PlusIcon,
   SearchIcon,
+  ShieldAlertIcon,
   UsersIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { useDeferredValue, useMemo, useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import { OrgPicker, type Party } from "@/components/molecules/party-picker"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,7 +32,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import {
@@ -57,8 +59,10 @@ import {
   runWithToast,
   useBrokerPeople,
   useBrokerPeopleMutations,
+  useBrokerPersonRules,
 } from "@/hooks/convex/broker"
-import { formatDate, humanize, urlHost } from "@/lib/broker/format"
+import { formatDate, humanize, todayIso, urlHost } from "@/lib/broker/format"
+import { sensitiveOfficerProblem } from "@/lib/broker/sensitive"
 import { CONSENT_BASES, type ConsentBasis } from "@/lib/vocab"
 
 type Scope = "current" | "stale" | "archived" | "all"
@@ -66,7 +70,10 @@ type Scope = "current" | "stale" | "archived" | "all"
 /**
  * Named committee members — private to /dashboard, from public sources or the
  * broker's own dealings, and stale after each handover. Editing a row the
- * pipeline wrote makes it the broker's (`manual`).
+ * pipeline wrote makes it the broker's (`manual`). Officers of sensitive
+ * societies (faith, political, LGBTQ+ and other identity societies) carry a
+ * "sensitive" badge, and the form holds them to what convex/broker/people.ts
+ * enforces (lib/broker/sensitive.ts, DPIA-lite §5).
  */
 export function BrokerPeople() {
   const people = useBrokerPeople()
@@ -178,6 +185,20 @@ export function BrokerPeople() {
                             <Badge variant="outline">stale</Badge>
                           )}
                           {person.archived && <Badge variant="ghost">archived</Badge>}
+                          {person.sensitiveBecause.length > 0 && (
+                            <Badge
+                              variant="outline"
+                              title={`Sensitive society: ${person.sensitiveBecause.join(", ")}. Name and role from its own website only.`}
+                            >
+                              <ShieldAlertIcon />
+                              sensitive
+                            </Badge>
+                          )}
+                          {person.sensitiveProblem && (
+                            <Badge variant="destructive" title={person.sensitiveProblem}>
+                              needs review
+                            </Badge>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {person.role} · {person.academicYear}
@@ -277,14 +298,43 @@ function PersonDialog({
   const [consentBasis, setConsentBasis] = useState<ConsentBasis>(
     existing?.consentBasis ?? "legitimate_interest",
   )
-  const [sourceUrl, setSourceUrl] = useState("")
+  // A pipeline row's source is its page; a manual one's is "manual:broker".
+  const initialSource = existing?.sourceUrl.startsWith("http") ? existing.sourceUrl : ""
+  const [sourceUrl, setSourceUrl] = useState(initialSource)
   const [notes, setNotes] = useState(existing?.notes ?? "")
+  const [consentOn, setConsentOn] = useState(existing?.consentRecord?.recordedOn ?? "")
+  const [consentEvidence, setConsentEvidence] = useState(existing?.consentRecord?.evidence ?? "")
   const [saving, setSaving] = useState(false)
+
+  const rules = useBrokerPersonRules(org?.orgKey)
+  const sensitive = (rules?.sensitiveBecause.length ?? 0) > 0
+  // The form has no editor for profile links, so saving drops them there.
+  const dropsLinks = sensitive && (existing?.publicLinks.length ?? 0) > 0
+  const consentRecord =
+    consentOn && consentEvidence.trim()
+      ? { recordedOn: consentOn, evidence: consentEvidence }
+      : undefined
+  const problem = rules
+    ? sensitiveOfficerProblem(
+        { name: rules.name, website: rules.website, because: rules.sensitiveBecause },
+        {
+          sourceUrl: sourceUrl.trim(),
+          staleAfter: staleAfter || rules.staleAfterLimit,
+          consentBasis,
+          consentRecord,
+          publicLinks: dropsLinks ? [] : (existing?.publicLinks ?? []),
+          notes: notes.trim() || undefined,
+        },
+        rules.staleAfterLimit,
+        existing?.staleAfter,
+      )
+    : null
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!org?.orgKey) return
+    if (!org?.orgKey || problem) return
     setSaving(true)
+    const source = sourceUrl.trim()
     const done = existing
       ? await runWithToast(
           update({
@@ -293,7 +343,10 @@ function PersonDialog({
             name,
             role,
             staleAfter: staleAfter || undefined,
+            sourceUrl: source !== initialSource ? source : undefined,
             consentBasis,
+            consentRecord: consentRecord ?? (existing.consentRecord ? null : undefined),
+            publicLinks: dropsLinks ? [] : undefined,
             notes,
           }).then(() => true),
           "Saved",
@@ -305,7 +358,8 @@ function PersonDialog({
             role,
             staleAfter: staleAfter || undefined,
             consentBasis,
-            sourceUrl: sourceUrl.trim() || undefined,
+            consentRecord,
+            sourceUrl: source || undefined,
             notes,
           }).then(() => true),
           "Added",
@@ -329,6 +383,20 @@ function PersonDialog({
               <FieldLabel htmlFor="person-org">Organisation</FieldLabel>
               <OrgPicker id="person-org" value={org} onChange={setOrg} />
             </Field>
+            {rules && sensitive && (
+              <Alert>
+                <ShieldAlertIcon />
+                <AlertTitle>Sensitive society: {rules.sensitiveBecause.join(", ")}</AlertTitle>
+                <AlertDescription>
+                  Its officers can reveal belief, politics, sexuality, origin or health, so only the
+                  name and role its own website lists are kept: the source must be a page of{" "}
+                  {rules.website ? urlHost(rules.website) : "its website (none on record)"}, no
+                  notes or profile links, stale no later than {formatDate(rules.staleAfterLimit)},
+                  and consent only when recorded.
+                  {dropsLinks && " Saving drops the profile links this row has."}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="person-name">Name</FieldLabel>
@@ -355,6 +423,7 @@ function PersonDialog({
                   id="person-stale"
                   type="date"
                   value={staleAfter}
+                  max={sensitive ? rules?.staleAfterLimit : undefined}
                   onChange={(e) => setStaleAfter(e.target.value)}
                 />
               </Field>
@@ -377,18 +446,43 @@ function PersonDialog({
                 </Select>
               </Field>
             </div>
-            {!existing && (
-              <Field>
-                <FieldLabel htmlFor="person-source">Public source (optional)</FieldLabel>
-                <Input
-                  id="person-source"
-                  type="url"
-                  value={sourceUrl}
-                  onChange={(e) => setSourceUrl(e.target.value)}
-                  placeholder="https://… where the organisation names them"
-                />
-              </Field>
+            {consentBasis === "consent" && (
+              <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
+                <Field>
+                  <FieldLabel htmlFor="person-consent-on">Consent given on</FieldLabel>
+                  <Input
+                    id="person-consent-on"
+                    type="date"
+                    value={consentOn}
+                    max={todayIso()}
+                    onChange={(e) => setConsentOn(e.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="person-consent-evidence">Where it is recorded</FieldLabel>
+                  <Input
+                    id="person-consent-evidence"
+                    value={consentEvidence}
+                    onChange={(e) => setConsentEvidence(e.target.value)}
+                    placeholder="Their email, admin@ inbox"
+                    maxLength={300}
+                  />
+                </Field>
+              </div>
             )}
+            <Field>
+              <FieldLabel htmlFor="person-source">
+                {sensitive ? "Source: the society's own page" : "Public source (optional)"}
+              </FieldLabel>
+              <Input
+                id="person-source"
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://… where the organisation names them"
+                required={sensitive}
+              />
+            </Field>
             <Field>
               <FieldLabel htmlFor="person-notes">Notes</FieldLabel>
               <Textarea
@@ -396,14 +490,26 @@ function PersonDialog({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
+                disabled={sensitive && !notes}
               />
+              {sensitive && (
+                <FieldDescription>Not kept for officers of this society.</FieldDescription>
+              )}
             </Field>
+            {problem && (
+              <p role="alert" className="text-sm text-destructive">
+                {problem}
+              </p>
+            )}
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !org?.orgKey || !name.trim() || !role.trim()}>
+            <Button
+              type="submit"
+              disabled={saving || !org?.orgKey || !name.trim() || !role.trim() || Boolean(problem)}
+            >
               {saving && <Spinner />}
               {existing ? "Save" : "Add"}
             </Button>

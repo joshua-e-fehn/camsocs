@@ -34,6 +34,7 @@ import type * as ingest_orgInternal from "../ingest/orgInternal.js";
 import type * as ingest_purge from "../ingest/purge.js";
 import type * as ingest_relationships from "../ingest/relationships.js";
 import type * as ingest_sources from "../ingest/sources.js";
+import type * as ingest_superseded from "../ingest/superseded.js";
 import type * as ingest_suppressions from "../ingest/suppressions.js";
 import type * as ingest_talks from "../ingest/talks.js";
 import type * as ingest_termDates from "../ingest/termDates.js";
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   "ingest/purge": typeof ingest_purge;
   "ingest/relationships": typeof ingest_relationships;
   "ingest/sources": typeof ingest_sources;
+  "ingest/superseded": typeof ingest_superseded;
   "ingest/suppressions": typeof ingest_suppressions;
   "ingest/talks": typeof ingest_talks;
   "ingest/termDates": typeof ingest_termDates;

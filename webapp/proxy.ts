@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { refusesAiAgent } from "@/lib/crawlers"
 import {
+  eventListingState,
   FOUND_TTL_MS,
   type ListingLookup,
   listingGate,
@@ -17,7 +18,9 @@ import {
  * site's not-found page rendered on the server (ENG-20; why it cannot happen
  * in the page: lib/missing-listing.ts), and a talks.cam-derived society event
  * is sent to its page under /talks with a 308 (owner decision G1,
- * lib/talks-boundary.ts) before anything of it is rendered outside /talks.
+ * lib/talks-boundary.ts) before anything of it is rendered outside /talks,
+ * and an event key another source's event superseded (ENG-47) is sent to that
+ * event's page with a 308.
  * On the talks pillar it also refuses AI agents with a 403 (lib/crawlers.ts
  * `refusesAiAgent`): robots.txt asks them to stay out, and not every
  * user-triggered fetcher reads it.
@@ -62,17 +65,16 @@ export function boundaryRedirect(from: { href: string }, path: string): NextResp
  * (and, for an event, which side of the talks boundary it lives on) is the
  * same for every viewer. A slow answer counts as a failed one (the page
  * answers), and a found listing is remembered per instance for as long as
- * its page is cached at the edge (`FOUND_TTL_MS`). */
+ * its page is cached at the edge (`FOUND_TTL_MS`); a superseded key's
+ * redirect is asked afresh every time (`rememberFound`). */
 const listingLookup: ListingLookup = rememberFound(
   withTimeout(async ({ kind, key }) => {
     try {
       switch (kind) {
         case "society":
           return (await fetchQuery(api.orgs.exists, { slug: key })) ? "found" : "missing"
-        case "event": {
-          const where = await fetchQuery(api.events.locate, { key })
-          return where === "event" ? "found" : where
-        }
+        case "event":
+          return eventListingState(await fetchQuery(api.events.locate, { key }))
         case "talk":
           return (await fetchQuery(api.talks.exists, { key })) ? "found" : "missing"
       }
