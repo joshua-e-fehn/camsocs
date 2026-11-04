@@ -30,7 +30,8 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
  * everyone; `cam_only` (mailing-list events) only for a verified @cam.ac.uk
  * viewer or the broker; `members_only` never. An event whose every organiser
  * and co-host is hidden (a remove / object request) is not shown either, nor
- * a future event its listing no longer shows (lib/derived.ts `isWithdrawn`).
+ * a future event its listing no longer shows (lib/derived.ts `isWithdrawn`),
+ * nor one another source's event superseded (`supersededBy`, ENG-47).
  *
  * The talks boundary (owner decision G1, lib/talks-boundary.ts): a
  * talks.cam-derived society event is left out of `list` unless the caller
@@ -355,19 +356,60 @@ export const exists = query({
     (await shownEvent(ctx, args.key, ["public", "cam_only"], orgRefCache(ctx))) !== null,
 })
 
+/** Retirements `locate` follows from a superseded key to the event shown in
+ * its place (a page folded into a feed, the feed into the University's
+ * listing); a longer chain, or a loop, is a 404. */
+const MAX_SUPERSEDED_HOPS = 3
+
+/**
+ * The event shown in place of a superseded key (ENG-47,
+ * convex/ingest/superseded.ts), or null: the key's event must exist, be one
+ * that a verified @cam.ac.uk viewer could see and not be suppressed, and the
+ * chain of `supersededBy` must end at an event `shownEvent` shows.
+ */
+async function survivorOf(
+  ctx: QueryCtx,
+  key: string,
+  tiers: readonly EventVisibility[],
+  lookup: ReturnType<typeof orgRefCache>,
+): Promise<Doc<"events"> | null> {
+  const event = await eventByKey(ctx, key)
+  if (!event?.supersededBy || !tiers.includes(event.visibility)) return null
+  if ((await loadSuppressedEvents(ctx)).has(event.key)) return null
+  const visited = new Set([event.key])
+  let next: string | undefined = event.supersededBy
+  for (let hop = 0; hop < MAX_SUPERSEDED_HOPS && next && !visited.has(next); hop++) {
+    const shown = await shownEvent(ctx, next, tiers, lookup)
+    if (shown) return shown
+    visited.add(next)
+    next = (await eventByKey(ctx, next))?.supersededBy
+  }
+  return null
+}
+
 /**
  * Where `/events/<key>` should answer, for the request-time gate in
  * `proxy.ts` (ENG-20, owner decision G1): `missing` (a real 404, as
  * `exists` is false), `talks` (a talks.cam-derived event, whose page is
- * `/talks/events/<key>`: a 308 there), else `event`. Viewer-independent, as
- * `exists`.
+ * `/talks/events/<key>`: a 308 there), `{ supersededBy, talks }` (a key a
+ * higher-ranked source took over, ENG-47: a 308 to the survivor's page, under
+ * /talks when `talks`), else `event`. Viewer-independent, as `exists`.
  */
 export const locate = query({
   args: { key: v.string() },
-  returns: v.union(v.literal("missing"), v.literal("event"), v.literal("talks")),
+  returns: v.union(
+    v.literal("missing"),
+    v.literal("event"),
+    v.literal("talks"),
+    v.object({ supersededBy: v.string(), talks: v.boolean() }),
+  ),
   handler: async (ctx, args) => {
-    const event = await shownEvent(ctx, args.key, ["public", "cam_only"], orgRefCache(ctx))
-    if (!event) return "missing" as const
-    return isTalksDerived(event) ? ("talks" as const) : ("event" as const)
+    const tiers = ["public", "cam_only"] as const
+    const lookup = orgRefCache(ctx)
+    const event = await shownEvent(ctx, args.key, tiers, lookup)
+    if (event) return isTalksDerived(event) ? ("talks" as const) : ("event" as const)
+    const survivor = await survivorOf(ctx, args.key, tiers, lookup)
+    if (!survivor) return "missing" as const
+    return { supersededBy: survivor.key, talks: isTalksDerived(survivor) }
   },
 })

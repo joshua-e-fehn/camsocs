@@ -114,8 +114,28 @@ export function isPrefetch(headers: Headers): boolean {
 export const FOUND_TTL_MS = 300_000
 
 /** What a listing check answers: `found`, `missing`, or — an event only —
- * `talks`, a talks.cam-derived event whose page is under /talks (G1). */
-export type ListingState = "found" | "missing" | "talks"
+ * `talks`, a talks.cam-derived event whose page is under /talks (G1), or
+ * `movedTo`, the site-relative page of the event that superseded this key
+ * (ENG-47). */
+export type ListingState = "found" | "missing" | "talks" | { movedTo: string }
+
+/** What `events.locate` answers (convex/events.ts). */
+export type EventLocation = "missing" | "event" | "talks" | { supersededBy: string; talks: boolean }
+
+/**
+ * `events.locate`'s answer as the gate's state: a superseded key (ENG-47)
+ * moves to its survivor's own page — under /talks for a talks.cam-derived
+ * survivor (G1), so the reader takes one hop, not two. A survivor that is not
+ * an event key is treated as missing rather than redirected to.
+ */
+export function eventListingState(where: EventLocation): ListingState {
+  if (typeof where === "object") {
+    if (!isEventKey(where.supersededBy)) return "missing"
+    const key = where.supersededBy
+    return { movedTo: where.talks ? talksEventPath(key) : `/events/${key}` }
+  }
+  return where === "event" ? "found" : where
+}
 
 export type ListingLookup = (listing: { kind: ListingKind; key: string }) => Promise<ListingState>
 
@@ -131,7 +151,9 @@ const NEXT: ListingGate = { action: "next" }
 /**
  * The proxy's decision for one request: a 404 for a missing listing, a 308
  * from `/events/<key>` to `/talks/events/<key>` for a talks.cam-derived
- * event (G1), or let it through to the page.
+ * event (G1), a 308 from a superseded event key, under either prefix, to the
+ * page of the event that took it over (ENG-47: always another key, so no
+ * loop), or let it through to the page.
  *
  * - A malformed key is missing, without asking Convex.
  * - A prefetch is let through unchecked: the directory and calendar prefetch
@@ -157,6 +179,7 @@ export async function listingGate(
     return NEXT
   }
   if (state === "missing") return { action: "missing", kind: listing.kind }
+  if (typeof state === "object") return { action: "redirect", path: state.movedTo }
   if (listing.kind === "event" && state === "talks" && !listing.underTalks) {
     return { action: "redirect", path: talksEventPath(listing.key) }
   }
