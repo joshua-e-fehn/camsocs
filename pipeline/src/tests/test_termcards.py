@@ -314,6 +314,78 @@ def test_a_card_takes_its_term_from_its_own_dated_rows() -> None:
     assert trip["startsAt"].value_raw == "Week 2 Wednesday 7pm"
 
 
+def test_a_card_row_without_a_time_of_day_is_all_day() -> None:
+    # ENG-37: the model has filled a row the card prints without a time as
+    # 00:00–23:59, or as 00:00 alone; neither is a time the card states.
+    reply = {**TERMCARD_REPLY}
+    reply["events"] = [
+        {
+            "title": "Planetarium trip",
+            "term_week": 2,
+            "weekday": "wednesday",
+            "start_time": "00:00",
+            "end_time": "23:59",
+            "when_quote": "Week 2 Wednesday",
+        },
+        {
+            "title": "Telescope night",
+            "term_week": 3,
+            "weekday": "thursday",
+            "start_time": "00:00",
+            "when_quote": "Week 3 Thursday",
+        },
+        # A card that prints midnight means midnight.
+        {
+            "title": "Meteor watch",
+            "term_week": 5,
+            "weekday": "friday",
+            "start_time": "00:00",
+            "when_quote": "Week 5 Friday, midnight",
+        },
+    ]
+    by_title, _notes = _read(reply)
+    fields = {title: {f.field: f.value for f in e.fields} for title, e in by_title.items()}
+    # London midnight of the day, all day, no end.
+    assert fields["Planetarium trip"]["startsAt"] == _ms(2026, 10, 20, 23, 0)
+    assert fields["Planetarium trip"]["allDay"] is True
+    assert "endsAt" not in fields["Planetarium trip"]
+    assert fields["Telescope night"]["startsAt"] == _ms(2026, 10, 21, 23, 0)
+    assert fields["Telescope night"]["allDay"] is True
+    assert fields["Meteor watch"]["startsAt"] == _ms(2026, 11, 6, 0, 0)
+    assert fields["Meteor watch"]["allDay"] is False
+
+
+@pytest.mark.parametrize(
+    ("times", "quote", "kept"),
+    [
+        (("00:00", "23:59"), "Week 2 Wednesday", False),
+        (("00:00", "24:00"), "Sat 7 Nov", False),
+        (("00:00", "00:00"), "Sat 7 - Sun 8 Nov", False),
+        (("00:00", None), "Sat 7 Nov", False),
+        (("00:00", None), "Sat 7 Nov, 12am", True),
+        (("00:00", None), "Sat 7 Nov 00:00", True),
+        (("00:00", "23:59:59"), "Sat 7 Nov", False),
+        # A dotted date is no time of day; a dotted time is.
+        (("00:00", None), "Sa, 07.11.", False),
+        (("00:00", None), "Fri 13.11.2026", False),
+        (("00:00", None), "Sat 7 Nov, 00.00", True),
+        (("00:00", "02:00"), "Sat 7 Nov", True),  # a club night: midnight to 2am
+        (("19:00", "23:59"), "Sat 7 Nov", True),
+        ((None, None), "Sat 7 Nov", False),
+    ],
+)
+def test_untimed_clears_only_times_that_are_no_time_of_day(
+    times: tuple[str | None, str | None], quote: str, kept: bool
+) -> None:
+    from camsocs_pipeline.extract.cards import untimed
+    from camsocs_pipeline.extract.events import LlmEvent
+
+    start, end = times
+    event = LlmEvent(title="Social", start_time=start, end_time=end, when_quote=quote)
+    read = untimed(event)
+    assert (read.start_time, read.end_time) == (times if kept else (None, None))
+
+
 def test_a_long_pdf_is_read_four_pages_a_call() -> None:
     from tests.fakes import make_pdf_pages
 
@@ -454,6 +526,11 @@ def test_the_stage_stages_new_events_and_drops_known_ones(make_settings, net) ->
     staged = store.read_latest("termcard")
     titles = [next(f.value for f in e.fields if f.field == "title") for e in staged]
     assert titles == ["Orrery building"]
+    # The dropped row is kept with Camdram's reading: had an earlier run
+    # loaded it under its own key, the load retires that key (ENG-47).
+    (pair,) = store.read_shadowed("termcard")
+    assert pair.event_source == "termcard" and pair.organiser == ORRERY_KEY
+    assert (pair.by_source, pair.by_external_id) == ("camdram", "show-1")
 
     # A cam_only copy from list mail never hides the public termcard event.
     store.write(
@@ -483,6 +560,7 @@ def test_the_stage_stages_new_events_and_drops_known_ones(make_settings, net) ->
     assert second.ok and llm.call_count == 1
     # This run itself kept the event: it was not deduplicated away.
     assert second.stages[0].notes[0] == "1 termcards known, 1 read, 1 events"
+    assert store.read_shadowed("termcard") == [pair]
 
 
 def test_no_termcards_and_dry_runs_are_quiet(make_settings) -> None:
@@ -561,6 +639,66 @@ def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
     assert {e.event_source for e in events} == {"termcard"}
     assert by_title["Orrery building"].visibility == "members_only"
     assert llm.calls[0]["tier"] == "bulk" and llm.calls[0]["version"] == "website_events_v1"
+
+
+def test_a_termcard_page_row_without_a_time_of_day_is_all_day(tmp_path, net) -> None:
+    # ENG-37 on a term card that is an HTML page: read by the website prompt,
+    # its rows are still a card's.
+    from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+    from camsocs_pipeline.stages.termcards import page_events
+
+    net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
+    html = (
+        "<html><head><title>Term card</title></head><body><main>"
+        "<h1>Michaelmas 2026 term card</h1>"
+        "<p>Friday 6 November 2026: Orrery building</p>"
+        "<p>Saturday 7 November 2026, 7pm: Planetarium trip</p>"
+        "</main></body></html>"
+    )
+    net.get(CARD_PAGE).mock(
+        return_value=httpx.Response(200, text=html, headers={"content-type": "text/html"})
+    )
+    reply = {
+        "events": [
+            {
+                "title": "Orrery building",
+                "date": "2026-11-06",
+                "start_time": "00:00",
+                "end_time": "23:59",
+                "when_quote": "Friday 6 November 2026",
+            },
+            {
+                "title": "Planetarium trip",
+                "date": "2026-11-07",
+                "start_time": "19:00",
+                "when_quote": "Saturday 7 November 2026, 7pm",
+            },
+        ]
+    }
+    with client(tmp_path) as polite:
+        fetch_termcard(polite, CARD_PAGE, SOCIETY_WEBSITE)
+        events = page_events(
+            polite,
+            CARD_PAGE,
+            SOCIETY_WEBSITE,
+            org_key=ORRERY_KEY,
+            org_name="CU Orrery Club",
+            now=datetime(2026, 10, 9, 12, tzinfo=UTC),
+            llm=FakeLLM(lambda _text, _tier: reply),
+            memo=None,
+            calendar=TermCalendar.default(),
+        )
+    assert events is not None
+    fields = {
+        title: {f.field: f.value for f in e.fields}
+        for e in events
+        for title in [next(f.value for f in e.fields if f.field == "title")]
+    }
+    assert fields["Orrery building"]["startsAt"] == _ms(2026, 11, 6, 0, 0)
+    assert fields["Orrery building"]["allDay"] is True
+    assert "endsAt" not in fields["Orrery building"]
+    assert fields["Planetarium trip"]["startsAt"] == _ms(2026, 11, 7, 19, 0)
+    assert fields["Planetarium trip"]["allDay"] is False
 
 
 def test_a_card_last_modified_before_this_academic_year_is_old() -> None:

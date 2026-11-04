@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { checkAndCapture, expect, test } from "./fixtures"
 
 /**
@@ -202,8 +203,8 @@ test("events already running fold into one row that opens @dark", async ({ page 
   await checkAndCapture(page, testInfo, "events-ongoing", { fullPage: false })
 })
 
-test("the request form submits (mocked, nothing is written)", async ({ page, guard }, testInfo) => {
-  guard.mock("listingRequests:submit", { key: "req-e2e-mocked" })
+/** Opens the request form for the JCR, filled in, with the send button ready. */
+async function fillRequestForm(page: Page) {
   await page.goto(`/request?kind=claim&org=${PROFILES["profile-jcr"]}`)
   // The button is enabled once React has hydrated the form; typing before
   // that would be reset by hydration.
@@ -213,10 +214,47 @@ test("the request form submits (mocked, nothing is written)", async ({ page, gua
   await page
     .getByLabel("Message")
     .fill("End-to-end test of the request form. This submission is mocked and never sent.")
-  await send.click()
-  await expect(page.getByText("Request received")).toBeVisible()
+  return send
+}
+
+test("the request form submits (mocked, nothing is written)", async ({ page, guard }, testInfo) => {
+  guard.answerRequestForm(200, { key: "req-e2e-mocked" })
+  const send = await fillRequestForm(page)
+  // From the keyboard, as the focus move is for keyboard and screen-reader users.
+  await send.focus()
+  await page.keyboard.press("Enter")
+  const received = page.getByRole("status").filter({ hasText: "Request received" })
+  await expect(received).toBeVisible()
   await expect(page.getByText("req-e2e-mocked")).toBeVisible()
+  // The outcome takes focus, rather than leaving it on <body> (ENG-37).
+  await expect(received).toBeFocused()
   await checkAndCapture(page, testInfo, "request-submitted")
+})
+
+test("a refused request says why, and that takes focus", async ({
+  page,
+  guard,
+  problems,
+}, testInfo) => {
+  guard.answerRequestForm(422, {
+    error: "Too many requests from this address; please try again in an hour",
+  })
+  const send = await fillRequestForm(page)
+  await send.focus()
+  await page.keyboard.press("Enter")
+  const refused = page.getByRole("alert").filter({ hasText: "Not sent" })
+  await expect(refused).toContainText("please try again in an hour")
+  await expect(refused).toBeFocused()
+  // The form stays as it was, ready to send again.
+  await expect(page.getByLabel("Your email")).toHaveValue("e2e-test@example.com")
+  await checkAndCapture(page, testInfo, "request-refused")
+  // Chromium logs the route's 422 as a console error; that answer is this test's point.
+  const answered = /status of 422\b/
+  problems.console.splice(
+    0,
+    problems.console.length,
+    ...problems.console.filter((line) => !answered.test(line)),
+  )
 })
 
 test("robots.txt, the sitemap and the share image are served", async ({ request }) => {

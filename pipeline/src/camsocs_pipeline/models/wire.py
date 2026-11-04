@@ -276,6 +276,20 @@ class EventOrganisersBatch(WireModel):
     events: list[EventOrganiserSet]
 
 
+class SupersededEvent(WireModel):
+    """An event key retired to another source's event (ENG-47,
+    convex/ingest/superseded.ts): this load folded the reading behind `key`
+    into the event `by` (`events.duplicates`), so `key` is never posted again
+    and would otherwise keep showing beside it until its date passed."""
+
+    key: str
+    by: str
+
+
+class SupersededEventsBatch(WireModel):
+    events: list[SupersededEvent]
+
+
 # --- broker -------------------------------------------------------------------------------
 
 
@@ -621,6 +635,8 @@ __all__ = [
     "ScannedEvent",
     "SourceInput",
     "SourcesBatch",
+    "SupersededEvent",
+    "SupersededEventsBatch",
     "SuppressedField",
     "SuppressionList",
     "TermDate",

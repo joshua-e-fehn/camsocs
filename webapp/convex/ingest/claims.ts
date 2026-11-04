@@ -31,6 +31,7 @@ import { materialise, requiredFields } from "../lib/materialise"
 import { baseConfidence, type Resolution, resolveField, storedStatus } from "../lib/resolve"
 import { loadSuppressionIndex, suppressedClaim } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
+import { revive } from "./superseded"
 
 /**
  * `POST /api/pipeline/claims` — the one way field values reach the entity
@@ -173,6 +174,16 @@ export const ingest = internalMutation({
         const outcome = await appendClaim(ctx, claim.row, seen)
         result[outcome]++
         if (outcome !== "unchanged") touched.add(claim.input.field)
+      }
+      // The event's own identity claims: this load read it as a primary, so
+      // a key retired to another source's event is live again (ENG-47,
+      // convex/ingest/superseded.ts). Folded readings never claim `externalId`.
+      if (
+        entityType === "event" &&
+        existing &&
+        claims.some((claim) => claim.input.field === "externalId" && claim.row.value !== undefined)
+      ) {
+        await revive(ctx, existing as Doc<"events">, now)
       }
       if (existing && touched.size === 0) {
         result.entities.unchanged++

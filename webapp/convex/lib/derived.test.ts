@@ -6,6 +6,7 @@ import {
   classifyEmail,
   DAY_MS,
   deriveOrgStatus,
+  eventStreamOf,
   isUniversityListing,
   londonIsoDate,
   londonOffsetMs,
@@ -252,5 +253,14 @@ describe("isUniversityListing (ENG-24)", () => {
     expect(isUniversityListing({ ...listing, coHostKeys: ["org-chess"] })).toBe(false)
     expect(isUniversityListing({ ...listing, source: "ics" })).toBe(false)
     expect(isUniversityListing({ ...listing, source: "talks_cam" })).toBe(false)
+  })
+
+  test("its stored stream (ENG-31) says the same", () => {
+    expect(eventStreamOf(listing)).toBe("university")
+    expect(eventStreamOf({ ...listing, coHostKeys: ["org-chess"] })).toBe("society")
+    // A sponsor alone does not make it a society's event.
+    const sponsored = { ...listing, sponsorKeys: ["org-bank"] }
+    expect(eventStreamOf(sponsored)).toBe("university")
+    expect(eventStreamOf({ ...listing, source: "ics" })).toBe("society")
   })
 })

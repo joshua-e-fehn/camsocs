@@ -28,7 +28,15 @@ bulk model (replies cached by the input's sha256) and deterministic checks.
 A dry run uses cached replies and the deterministic rule only.
 
 Event readings another source already lists are merged into that source's
-event (`events.duplicates`); the notes say how many, from which sources.
+event (`events.duplicates`); the notes say how many, from which sources. Each
+such reading's own key is retired to that event (`events/superseded`,
+ENG-47): an event posted under it before the other source listed the evening
+is hidden and its page redirects to the survivor. So is the key of each
+reading the LLM stages dropped as another source's (`shadowed.json` beside
+their staging files): an Instagram post's or a card's event loaded before a
+calendar listed the evening. The note on that route counts the pairs naming a
+key or survivor the deployment lacks as `unknown` (most folded readings never
+had an event of their own).
 
 After a successful post, the public pages whose claims changed and that the
 site's sitemaps list are pinged to IndexNow (`camsocs_pipeline.indexnow`,
@@ -73,6 +81,8 @@ def run(ctx: StageContext) -> None:
     ordered = [name for name in directories if name == RESOLVED]
     ordered += [name for name in directories if name != RESOLVED]
     records = [record for name in ordered for record in ctx.staging.read_latest(name)]
+    # Readings the LLM stages dropped as another source's (ENG-47).
+    shadowed = [reading for name in ordered for reading in ctx.staging.read_shadowed(name)]
     total = len(records)
     # A harvest directory keeps its unkeyed originals after resolve has
     # written their keyed copies to `_resolved`; only an original with no
@@ -97,7 +107,12 @@ def run(ctx: StageContext) -> None:
     ctx.loader.file_cache = cache
     try:
         report = ctx.loader.post_observations(
-            records, run_key=ctx.run.run_key, media=media, redactor=redactor, noise=noise
+            records,
+            run_key=ctx.run.run_key,
+            media=media,
+            redactor=redactor,
+            noise=noise,
+            shadowed=shadowed,
         )
     finally:
         media.close()
@@ -138,6 +153,11 @@ def run(ctx: StageContext) -> None:
         ctx.report.metrics["eventNoticesDropped"] = sum(report.noise.dropped.values())
         ctx.report.metrics["eventsTakingPart"] = sum(report.noise.external.values())
     ctx.report.notes.extend(report.merged)
+    if report.superseded_skipped:
+        ctx.report.notes.append(
+            f"{report.superseded_skipped} event keys folded into another source's event were "
+            "not retired: the deployment lacks events/superseded (the next run retires them)"
+        )
     if ctx.loader.suppressions_note:
         ctx.report.notes.append(ctx.loader.suppressions_note)
     if report.suppressed:
@@ -183,7 +203,13 @@ def run(ctx: StageContext) -> None:
 
 def _describe(item: object) -> str:
     if isinstance(item, dict):
-        return f"{item.get('entityKey')}.{item.get('field')}: {item.get('reason')}"
+        # Claims name an entity and a field; `events/superseded` names a key.
+        where = (
+            f"{item.get('entityKey')}.{item.get('field')}"
+            if "entityKey" in item
+            else str(item.get("key"))
+        )
+        return f"{where}: {item.get('reason')}"
     return f"not found: {item}"
 
 

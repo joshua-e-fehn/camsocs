@@ -146,6 +146,14 @@ description = "JS tests (bun test, incl. convex-test suites)."
 depends-on = ["test-python", "test-web"]
 description = "Run all tests (Python + JS)."
 
+[tasks.a11y]
+cmd = "bun run e2e:a11y"
+cwd = "webapp"
+# A browser and a server, so never part of `test`. Starts `next dev` against
+# .env.local's deployment; with E2E_SERVER=start it serves a finished
+# `pixi run build` instead (CI's accessibility job).
+description = "axe-core over the main public pages (e2e/a11y.spec.ts, ENG-37); needs `bun run e2e:install` once."
+
 [tasks.install-web]
 cmd = "bun install"
 cwd = "webapp"

@@ -50,6 +50,7 @@ const appModules = {
   "./ingest/purge.ts": () => import("../ingest/purge"),
   "./ingest/relationships.ts": () => import("../ingest/relationships"),
   "./ingest/sources.ts": () => import("../ingest/sources"),
+  "./ingest/superseded.ts": () => import("../ingest/superseded"),
   "./ingest/suppressions.ts": () => import("../ingest/suppressions"),
   "./ingest/talks.ts": () => import("../ingest/talks"),
   "./ingest/termDates.ts": () => import("../ingest/termDates"),

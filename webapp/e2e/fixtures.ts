@@ -21,6 +21,12 @@ import { test as base, expect, type Page, type TestInfo } from "@playwright/test
  *    the server would send it, and the submit flow runs to its success state
  *    while nothing is written.
  *
+ * The request form is the exception that reaches Convex over HTTP: it posts
+ * to the site's own `POST /api/request`, whose server calls the mutation
+ * (lib/request-submit.ts, ENG-37). The guard blocks that route too, unless a
+ * test called `guard.answerRequestForm(status, body)` first; the page then
+ * gets that answer as the route would send it.
+ *
  * A successful mutation resolves on the page only once the client has seen a
  * query-set transition at or after the mutation's timestamp
  * (convex/browser `RequestManager.removeCompleted`), so the mock answers with
@@ -48,8 +54,11 @@ type SyncMessage = {
 export type Guard = {
   /** Mutations, actions and auth writes the page tried; they never left the browser. */
   blocked: string[]
-  /** Answer calls to `udfPath` (e.g. `listingRequests:submit`) with a successful `result`. */
+  /** Answer calls to `udfPath` with a successful `result`. */
   mock: (udfPath: string, result: unknown) => void
+  /** Answer the request form's `POST /api/request` with `status` and a JSON `body`
+   * (`{ key }` stored, `{ error }` refused). */
+  answerRequestForm: (status: number, body: unknown) => void
 }
 
 function text(raw: string | Buffer): string {
@@ -67,6 +76,7 @@ function parse(raw: string | Buffer): SyncMessage | null {
 async function installGuard(page: Page): Promise<Guard> {
   const blocked: string[] = []
   const mocks = new Map<string, unknown>()
+  let requestForm: { status: number; body: unknown } | null = null
 
   await page.routeWebSocket(CONVEX_SYNC, (ws) => {
     const server = ws.connectToServer()
@@ -146,7 +156,26 @@ async function installGuard(page: Page): Promise<Guard> {
     await route.abort("blockedbyclient")
   })
 
-  return { blocked, mock: (udfPath, result) => mocks.set(udfPath, result) }
+  await page.route("**/api/request", async (route) => {
+    if (route.request().method() === "GET") return route.continue()
+    if (!requestForm) {
+      blocked.push("http:/api/request")
+      return route.abort("blockedbyclient")
+    }
+    await route.fulfill({
+      status: requestForm.status,
+      contentType: "application/json",
+      body: JSON.stringify(requestForm.body),
+    })
+  })
+
+  return {
+    blocked,
+    mock: (udfPath, result) => mocks.set(udfPath, result),
+    answerRequestForm: (status, body) => {
+      requestForm = { status, body }
+    },
+  }
 }
 
 /** Errors the page logged or threw while the test ran. */
@@ -306,16 +335,24 @@ export async function overflowingElements(page: Page): Promise<string[]> {
 /** WCAG 2.1 A/AA and axe's best practices (heading order, landmarks, …). */
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]
 
+/** One axe-core violation, as "rule (impact): targets" (selectors only, never page text). */
+export type Violation = { impact: string; summary: string }
+
+/** axe-core violations on the page as it is now, every impact. */
+export async function axeViolations(page: Page): Promise<Violation[]> {
+  const result = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  return result.violations.map((violation) => ({
+    impact: violation.impact ?? "unknown",
+    summary: `${violation.id} (${violation.impact}): ${violation.nodes
+      .slice(0, 3)
+      .map((node) => node.target.join(" "))
+      .join(" | ")}`,
+  }))
+}
+
 /** axe-core violations on the page as it is now, as "rule (impact): targets". */
 export async function accessibilityViolations(page: Page): Promise<string[]> {
-  const result = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
-  return result.violations.map(
-    (violation) =>
-      `${violation.id} (${violation.impact}): ${violation.nodes
-        .slice(0, 3)
-        .map((node) => node.target.join(" "))
-        .join(" | ")}`,
-  )
+  return (await axeViolations(page)).map((violation) => violation.summary)
 }
 
 /**

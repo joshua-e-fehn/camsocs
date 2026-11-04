@@ -626,8 +626,33 @@ def email_domain(email: str) -> str:
 
 #: The alumni forwarding services also give name-shaped addresses
 #: (``jane.smith@cantab.net``): such an address names its person.
-_CANTAB_DOMAINS = frozenset({"cantab.ac.uk", "cantab.net"})
+#: Alumni addresses (`classifyEmail`'s `ALUMNI_DOMAINS`): the forwarding
+#: services and any ``alumni.`` / ``alum.`` host. Each address there is one
+#: graduate's, whatever its shape, unless it is named after a post.
+_ALUMNI_DOMAINS = frozenset({"cantab.ac.uk", "cantab.net", "oxon.org"})
 _NAME_SHAPED = re.compile(r"^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$")
+#: Words that make an alumni address a post's (`classifyEmail`'s `POST_WORDS`).
+_POST_WORDS = frozenset(
+    """
+    president secretary treasurer sponsorship events publicity welfare captain chair
+    info contact enquiries hello admin office committee society club association team
+    members membership webmaster development alumni news
+    """.split()  # noqa: SIM905 (a word list reads better as text)
+)
+
+
+def _is_alumni_domain(domain: str) -> bool:
+    return domain in _ALUMNI_DOMAINS or any(
+        label in ("alumni", "alum") for label in domain.split(".")
+    )
+
+
+def _is_post_address(local: str) -> bool:
+    """An alumni address named after a post: a post word among its words, and
+    not name-shaped (``jane.president@`` still names Jane)."""
+    if _NAME_SHAPED.match(local):
+        return False
+    return any(word in _POST_WORDS for word in re.split(r"[^a-z]+", local))
 
 
 def email_type(email: str) -> EmailType:
@@ -639,7 +664,8 @@ def email_type(email: str) -> EmailType:
     domain = address[at + 1 :]
     if is_crsid_address(local, domain):
         return "personal_crsid"
-    if domain in _CANTAB_DOMAINS and _NAME_SHAPED.match(local):
+    # An alumni address is one person's unless it is named after a post.
+    if _is_alumni_domain(domain) and not _is_post_address(local):
         return "personal_crsid"
     if re.search(r"(^|\.)cusu\.", domain) or domain == "cusu.org":
         return "legacy_cusu"

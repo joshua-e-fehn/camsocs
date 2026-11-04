@@ -1,6 +1,6 @@
 # Deploying CAMsocs (T14)
 
-How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Nothing here has been run yet; these are Joshua's steps (PLAN.md J1, J2), checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
+How the production site goes live: a **Convex production deployment** (separate from dev, `hushed-rhinoceros-215`, with its own data), the **Vercel project** that builds `webapp/` and deploys Convex as part of its build, and the **pipeline** pointed at production with its own env file. Production has run this way since 2026-10-10 (public at camsocs.uk since 2026-11-01); the steps below are kept for a rebuild and were checked against the installed CLIs on 2026-10-09 (Convex 1.46.0: `bunx convex deploy --help`, `deployment create --help`, `deployment token create --help`, `env --help`).
 
 **Secrets.** Never paste a value into a chat, a commit or a log. Each one goes in exactly one place: Convex env, Vercel env or `pipeline/.env.prod`. `bunx convex env set NAME` without a value prompts for it, which keeps it out of the shell history.
 
@@ -69,6 +69,9 @@ Every command runs in `webapp/` after `unset CONVEX_DEPLOY_KEY`; `.env.local` na
    | `POSTHOG_PROJECT_ID` | the PostHog project id | unset | For the source map upload at build time (ENG-6, `next.config.ts`) |
    | `POSTHOG_PERSONAL_API_KEY` | the personal API key (`phx_…`), **sensitive** | **never** | For the source map upload only (ENG-6); scoped to the camsocs project, with error tracking write access (checked by a real upload on 2026-11-01). The upload runs only when both PostHog variables are set **and** `VERCEL_ENV` is `production`; otherwise the build skips it. A wrong or under-scoped key fails the production build (Turbopack), so rotate it with care. (The same key configures the VPS monitor in `pipeline/.env.prod`, §4, and the dashboards script reads it from the shell, "Dashboards" below; rotate all three together) |
 
+   | `REQUEST_FORM_SECRET` | a random secret, **sensitive** (`openssl rand -hex 32`) | unset | Server-only (never `NEXT_PUBLIC_`). Sent by `/api/request` to `listingRequests.submit`; the same value on Convex production makes the mutation refuse every other caller (ENG-37, "Request form bot check" below). Read at run time, but Vercel applies a changed value only to new deployments: redeploy after setting it. 1Password Mya vault, item `CAMsocs request form secret` |
+   | `REQUEST_BOT_CHECK` | unset | unset | `off` switches BotID's server check off for `/api/request` (an escape hatch, should it ever turn people away); unset = on, on Vercel only |
+
    Previews read the dev deployment through public queries only; sign-in does not work there (dev's `SITE_URL` is localhost), which is fine for reviewing pages.
 3. Deploy: push to `main` (or `vercel --prod` from `webapp/`). The build log shows `▸ CONVEX_DEPLOY_KEY found — deploying Convex…`, then `▸ Convex URLs set — building against the configured deployment`.
 
@@ -88,6 +91,7 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `PIPELINE_API_KEY` | `/api/pipeline/*` | `openssl rand -hex 32` — a new one; the same value goes into `pipeline/.env.prod` |
 | `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3) | optional; both unset = the option shows as off |
 | `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS`, `INBOUND_EMAIL_SECRET` | forwarded list mail (J3, J4) | optional; see `docs/setup/inbox-instagram.md`. Point the Resend webhook at the **production** site URL (`https://<prod>.convex.site/api/inbound/email`) once production is the one that should receive mail |
+| `REQUEST_FORM_SECRET` | the request form's route as the only way in (ENG-37) | the **same** value as Vercel's `REQUEST_FORM_SECRET`; set it **last**, after a production deploy that sends it ("Request form bot check" below). Unset = the mutation accepts any caller, as before. Never on dev |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog counts from Convex (`listing_request_received`, ENG-7, `convex/analytics.ts`) | the project token (`phc_…`) and `https://eu.i.posthog.com`; set on **production only**, so dev never sends events. Either unset = nothing is sent. Their events carry `environment: production`; `POSTHOG_ENV=development` (optional, never on production) tags a test deployment's events so the project's filter hides them |
 
 `bunx convex env list --prod` prints values; use `bunx convex env list --prod --names-only` to check what is set.
@@ -212,14 +216,39 @@ For a production that already holds societies and events, deployed before the ta
 4. **Never seed production with demo talks.** `talks-demo-seed` is for dev only and refuses any `--env`.
 5. **Check** (§5): `/talks`, `/talks/departments` and `/talks.ics` (200, `text/calendar`) render; an unknown `/talks/talk-00000000000000000000` is a 404; `/robots.txt` disallows `/talks` for the AI crawlers. The smoke suite covers these.
 
+### Upgrading production to the indexed event stream (ENG-31)
+
+`events.stream` (`society` / `university`, data-model §2) and its two indexes ship widen-only: the field is optional, and `events.list` reads the `stream`-unset rows through their own index range and classifies them in memory. While a window holds fewer than 1,000 events per visibility tier, the calendar is the same before, during and after the backfill. Above that it is not: before the backfill every row is in the unset range, read by start time as before ENG-31, so a Festival of University listings can still push society events out of "All" and "Hide University"; part-way through, a backfilled society event can show while an earlier one not yet reached is left out, with no sign (`universityEvents.test.ts`, "before the backfill"). The daily walk alone could leave that state for up to a day, so step 2 is required straight after the deploy, and before any Cambridge Festival programme is loaded.
+
+1. **Deploy** (§1–§2). Convex builds the indexes `by_stream_visibility_startsAt` and `by_stream_visibility_spanEndsAt` during the deploy (the push waits for them). New and re-read events get `stream` on write from then on.
+2. **Backfill, straight after the deploy (required).** The daily derive walk (`derive-daily`, 03:30 UTC) would fill it in by itself, but not before the next 03:30; run it now, from `webapp/` with the Convex CLI logged in (never with `CONVEX_DEPLOY_KEY` exported):
+
+   ```bash
+   bunx convex run --prod derive:recomputeEvents '{}'
+   ```
+
+   The walk pages through every event (300 a transaction, rescheduling itself) and patches only rows whose derived fields differ; it is the same mutation the cron runs, so a second run is harmless. `pixi run pipeline -- --env prod derive` (all three walks) does it too.
+3. **Check**, read-only, once the scheduled pages have finished (seconds to a minute):
+
+   ```bash
+   bunx convex run --prod derive:streamBackfill '{}'   # want {"unset": 0, "atLeast": false}
+   ```
+
+   `atLeast: true` means at least 500 rows are still unset: wait and run it again.
+4. **Narrow (later, optional).** With `unset: 0` on production, a follow-up may make `stream` required in `schema.ts` and drop the `undefined` range from `events.list` (`convex/events.ts` `matchingEvents`) and `derive.streamBackfill`. Until then the empty range costs one index seek per tier.
+
 ## 6. Rolling back
 
-- Site: Vercel → Deployments → the last good one → Promote to Production (instant; Convex is untouched).
-- Functions: redeploy the last good commit (Vercel → Redeploy, which runs `convex deploy` again). Schema changes that removed fields need a widen-migrate-narrow plan first; never roll a schema back past data written under the newer one.
+The runbook is `docs/rollback.md` (site, Convex functions and schema, the VPS harvester, data and backups). In short:
+
+- Site: Vercel instant rollback to the last good production deployment (Convex is untouched); afterwards new deployments are not assigned the domain until one is promoted.
+- Functions: revert on `main` and let the production build run `convex deploy`; Convex has no one-click function rollback, and refuses a schema that existing documents no longer match, so never roll a schema back past data written under the newer one.
+- Data: restore a backup (§8).
+- Keys: `docs/key-rotation.md`; plans and spend caps: `docs/platform-limits.md`.
 
 ## 7. After the next deploy: cleaning what the review fixes left behind (operator)
 
-The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Not run yet; these are Joshua's steps.
+The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles are redacted (D1). Corrected readers restate only what they still read — the events stages read nothing older than a week — so production keeps, until removed: pre-D6 notices (a past "PR closed to sisters …", "MSt students in residence"), past CTFs stored as the society's own (they count towards its `lastActiveAt`), titles an earlier redaction wrote ("I someone", "A chat with someone") that no reader restates, and future events of cards that a page no longer shows (each card file was swept on its own before). `camsocs clean-events` finds them (`pipeline/.../cleanup.py`) and removes them through a guarded route (`POST /api/pipeline/events/remove`: events only, by key, `confirm: "REMOVE-EVENTS"`, 25 a call; `convex/ingest/cleanup.ts`). Applied on 2026-10-10 (11 notices removed); the latest dry run and what is left are in `docs/data-quality.md` "J9". These are Joshua's steps.
 
 1. **Deploy** (§1–§2): the routes `events/scan` and `events/remove` ship with the functions, and the new `eventOrganisers.hosting` copy with the schema (optional, additive).
 2. **Harvest** production once with the new pipeline (`pixi run harvest -- --env prod`, or the VPS's full run), then re-derive: `pixi run pipeline -- --env prod derive`. Current events are restated by their readers (titles restored, notices withdrawn, hosting claimed); what is left is what no reader restates.
@@ -239,6 +268,55 @@ The review of 2026-10-10 corrected the calendar-noise rules (D6) and how titles 
 
    It prints how many were removed and how many were already gone. Run the dry run again: it should list nothing. Once the VPS timers are on, run it on the host instead (`sudo -u camsocs -H bash -lc 'cd /opt/camsocs && flock -n /var/lib/camsocs/harvest.lock pixi run pipeline -- --env prod clean-events'`), never next to a harvest.
 
+
+## 8. Backups and restoring production (ENG-44)
+
+Production's data is backed up in two places (docs/ops-vps.md §10): **Convex's own backups** (dashboard → camsocs → Production → Backups) and **the VPS host's nightly export** (`/var/lib/camsocs-backup/`, the newest 14, restore-tested every Monday into a throwaway local backend). A backup holds every table (the Better Auth component's too) and stored files; not the functions (git has them), not the environment variables (§3 lists them) and not pending scheduled functions. Dev (`hushed-rhinoceros-215`) is never a restore target: it holds only invented talks.
+
+### Convex's own backups (plan-dependent)
+
+- **Which plan:** <https://dashboard.convex.dev> → team `joshua-fehn` → Settings → Billing. On Free/Starter: "Backup now" only, at most two stored per deployment, each kept 7 days. On Pro: also "Backup automatically", daily (kept 7 days) or weekly (kept 14), with or without file storage. Both read every document (database bandwidth) and, with files, every file (file bandwidth).
+- **The VPS backup and the plan:** each nightly `convex export` is a snapshot export of the deployment, the kind of object the dashboard lists under Backups. Whether it counts towards Free/Starter's two stored backups is unconfirmed (2026-11-04); if it does, the VPS backup fails from the third night on that plan, because its key may not delete backups. docs/ops-vps.md §10 "Install" step 4 (plan gate) tests it after the first run; record the result here: _not yet tested_.
+- **Recommendation:** the VPS backups are the routine layer. If the team is on Pro anyway, turn on a daily periodic backup with file storage as well (Production → Backups → "Backup automatically" → Daily, a time such as 03:00, "Include file storage"): it restores from the dashboard in two clicks and does not depend on the host. On Free/Starter, use "Backup now" before anything risky.
+- **Before anything risky** (a migration's narrow step, a bulk mutation, `clean-events --apply`, a `--replace` import): take a fresh backup — "Backup now" in the dashboard, or on the host `systemctl start camsocs-backup.service` (a manual run counts towards the 14 kept).
+
+### Restoring production from a VPS backup
+
+For data lost or corrupted in production (a bad migration, a wrong mutation, a mass deletion — the backup's shrink alert, exit 24, may be the first sign). Joshua's steps, on the host as root unless marked; nothing here is automated, and nothing restores without the confirmation the CLI asks for.
+
+1. **Choose the backup:** the newest from before the damage, `ls -l /var/lib/camsocs-backup/` (names carry the UTC time), with its counts: `python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py inspect /var/lib/camsocs-backup/convex-prod-<stamp>.zip` (table names and counts only).
+2. **Prove it restores** (the weekly test covers only the newest), as the backup's own user, into a throwaway local backend:
+
+   ```bash
+   systemd-run --wait --pipe -p DynamicUser=yes -p User=camsocs-backup -p StateDirectory=camsocs-backup \
+     -p CacheDirectory=camsocs-backup -p PrivateTmp=yes -p IPAddressDeny=any -p IPAddressAllow=localhost \
+     --setenv=CAMSOCS_BACKUP_DIR=/var/lib/camsocs-backup --setenv=CAMSOCS_RESTORE_WORK=/tmp \
+     --setenv=HOME=/var/cache/camsocs-backup \
+     /usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-backup.py restore-test /var/lib/camsocs-backup/convex-prod-<stamp>.zip
+   ```
+
+3. **Stop the writers:** `systemctl disable --now camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer camsocs-backup.timer camsocs-restore-test.timer`; a running harvest: `systemctl stop 'camsocs-harvest@*'`. (The site stays up; a request submitted during the restore is lost with the rest of what happened since the backup, step 7.)
+4. **A restore key (Joshua, dashboard):** Production → Settings → Deploy keys → Generate, name `camsocs-restore-<date>`, permissions `deployment:view`, `deployment:data:view`, `deployment:data:write`, `deployment:backups:create`, `deployment:backups:download`, `deployment:backups:import`. The backup's own key cannot restore, by design. On the host, without the shell history: `read -rs KEY && (umask 077 && printf 'CONVEX_DEPLOY_KEY=%s\n' "$KEY" >/root/restore.env); unset KEY`.
+5. **Keep what is there now** (the damaged state still holds everything since the backup):
+
+   ```bash
+   cd /usr/local/lib/camsocs-ops/backup
+   .pixi/envs/default/bin/node node_modules/convex/bin/main.js export --env-file /root/restore.env \
+     --include-file-storage --path "/root/pre-restore-$(date -u +%Y%m%dT%H%M%SZ).zip"
+   ```
+
+6. **Restore:**
+
+   ```bash
+   .pixi/envs/default/bin/node node_modules/convex/bin/main.js import --env-file /root/restore.env \
+     --replace-all /var/lib/camsocs-backup/convex-prod-<stamp>.zip
+   ```
+
+   It prints, per table, what it will create and delete, and asks before deleting: the counts to create must be the backup's (step 1). `--replace-all` also empties tables the backup does not have (one added since). Stored files: those in the backup that production no longer has are uploaded again; none is deleted.
+7. **Re-apply what happened since the backup** (Joshua; the pre-restore ZIP holds it, never open it in an agent session): every suppression and accepted removal or objection (R8) and every erasure done since the backup's time must be done again — re-enter them through the broker (`/dashboard/requests`); listing requests submitted since then are in the pre-restore ZIP's `listingRequests` (rows with a later `_creationTime`), answer them from there. What retention deleted by age goes again with the next `retention-daily` (04:15 UTC); listings, events and talks come back with the next harvest; then `sudo -u camsocs -H bash -lc 'cd /opt/camsocs && pixi run pipeline -- --env prod derive'`.
+8. **Clean up:** `shred -u /root/restore.env`; delete the `camsocs-restore-<date>` key in the dashboard; `shred -u /root/pre-restore-*.zip` once step 7 is done; the timers on again (`systemctl enable --now` the five from step 3) and a fresh backup, `systemctl start camsocs-backup.service`. Record the restore in the breach log if personal data was lost or exposed (docs/compliance/breach-procedure.md).
+
+**From a Convex dashboard backup instead:** Production → Backups → "Backup now" first (the current state), then the chosen backup's menu → Restore (into Production); then steps 3, 7 and 8 as above. **A single table** (`convex import --table <name> --replace`) is untested: try it on a local backend first (step 2's command shows how one is started).
 
 ## CPU protection: training crawlers and anonymous data (2026-11-01)
 
@@ -447,3 +525,43 @@ accepts both). A function next to its database pays one short hop per Convex rea
 would pay a transatlantic round trip per read, several per page. UK readers are served from the
 edge cache instead (docs/webapp.md "Caching"). Revisit only if production moves to a Convex EU
 deployment: then `"regions": ["lhr1"]` (or `dub1`) belongs in `webapp/vercel.json`.
+
+## Request form bot check (ENG-37)
+
+The request form posts to `POST /api/request` (`webapp/app/api/request/route.ts`,
+`webapp/lib/request-submit.ts`), which runs Vercel BotID's `checkBotId()` on Vercel and then calls
+`listingRequests.submit` with `REQUEST_FORM_SECRET`. BotID's Basic check needs nothing switched on
+in the dashboard; `withBotId` in `next.config.ts` adds its rewrites. Its server check reads the
+project's OIDC token, which Vercel issues when **Settings → Security → Secure Backend Access with
+OIDC Federation** is on (the default for new projects). Without it the check throws, the route
+fails open and logs `[request] BotID check failed (…); accepting the request`: look for that line in
+the runtime logs after the first production submission. Any other throw from the check (Vercel's
+answer unreadable, its API down) fails closed: the visitor sees the generic sentence with the
+contact address (503) and the log says `[request] BotID check errored (…); refusing the request`.
+Several of those in a row mean BotID itself is failing; `REQUEST_BOT_CHECK=off` plus a redeploy
+keeps the form open meanwhile.
+
+Rollout, in this order (a different order rejects real requests):
+
+1. Generate the secret once: `openssl rand -hex 32`; keep it in 1Password (Mya vault,
+   `CAMsocs request form secret`).
+2. Vercel → camsocs → Settings → Environment Variables: add `REQUEST_FORM_SECRET`, **Production**
+   only, marked Sensitive.
+3. Deploy the ENG-37 change to production (merge to main), or redeploy if it is already live, so
+   the running functions have the variable.
+4. Send one real request through `https://camsocs.uk/request` (kind "Correct something", a test
+   message) and check it arrives at `/dashboard/requests`; close it there. The runtime logs show no
+   `BotID check failed` line for it (if they do, turn on OIDC as above and redeploy).
+5. Only now: `cd webapp && bunx convex env set --prod REQUEST_FORM_SECRET` with the same value.
+   From here a direct call of the mutation answers "Please send your request through the form on
+   our site". Send a second test request through the form to confirm it still arrives.
+
+Rolling back: `bunx convex env remove --prod REQUEST_FORM_SECRET` reopens the mutation at once;
+`REQUEST_BOT_CHECK=off` on Vercel (and a redeploy) stops the bot check. **Before an Instant Rollback
+or promotion of any Vercel deployment built before ENG-37**, run that `convex env remove` first:
+the older form calls `listingRequests.submit` straight from the browser without the secret, and
+Convex code and environment do not roll back with Vercel, so with the secret still set every real
+request (removals and objections included) is refused. Set it again (step 5) once ENG-37 is live
+again. Optional, at a cost per
+check: **Firewall → Configure → Vercel BotID Deep Analysis** (Pro), which the route needs no change
+for.

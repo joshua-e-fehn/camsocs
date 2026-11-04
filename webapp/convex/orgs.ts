@@ -419,7 +419,14 @@ async function hasPublicEvents(
       .query("events")
       .withIndex("by_key", (i) => i.eq("key", row.eventKey))
       .unique()
-    if (event && event.visibility === "public" && !isTalksDerivedEvent(event)) return true
+    if (
+      event &&
+      event.visibility === "public" &&
+      event.supersededBy === undefined &&
+      !isTalksDerivedEvent(event)
+    ) {
+      return true
+    }
   }
   return false
 }

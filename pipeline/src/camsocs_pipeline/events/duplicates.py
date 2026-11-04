@@ -55,6 +55,19 @@ is a representation of "no time given", not a competing start, and a reading
 whose title is unlike the primary's (matched by its start or by naming it)
 adds no `title` to compete with the primary's. Their organisers are added
 (`merge`), never replacing the primary's set.
+
+**The key a reading would have had** — retired (ENG-47). A reading that is
+folded here may have been posted under its own key by an earlier load, before
+the higher-ranked source listed the evening (a society's page, then the
+University's programme, ENG-24). Nothing posts under that key again, so it
+would keep showing beside its primary until its date passed: the load posts
+each folded reading's own key with its primary's (`events/superseded`), and
+the server hides the old event and sends its page to the survivor. A later
+load in which that reading is primary again posts its identity claims, which
+bring the old key back. A reading an LLM stage dropped before staging
+(`extract.dedupe`) never reaches this module; the stage keeps it with the
+reading that has the evening (`ShadowedReading`), and the load retires its
+key to that reading's primary (`pipeline.load.plan_observations`).
 """
 
 from __future__ import annotations

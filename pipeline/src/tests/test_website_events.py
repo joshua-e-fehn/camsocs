@@ -196,6 +196,42 @@ def test_structured_events_are_read_by_a_parser() -> None:
     assert open_day.ends_at == datetime(2026, 10, 19, tzinfo=LONDON)  # endDate is inclusive
 
 
+@pytest.mark.parametrize(
+    ("start", "end", "all_day", "ends_at"),
+    [
+        # The Events Calendar's "all day" event (the German Society, ENG-37).
+        ("2026-11-07T00:00:00+00:00", "2026-11-07T23:59:59+00:00", True, (2026, 11, 8)),
+        ("2026-10-24T00:00:00+01:00", "2026-10-24T23:59:00+01:00", True, (2026, 10, 25)),
+        ("2026-11-07T00:00:00+00:00", "2026-11-09T00:00:00+00:00", True, (2026, 11, 9)),
+        ("2026-11-07T00:00", "2026-11-08T23:59", True, (2026, 11, 9)),  # no zone: London
+        # A date-only endDate is the inclusive last day.
+        ("2026-11-07T00:00:00+00:00", "2026-11-09", True, (2026, 11, 10)),
+        ("2026-11-07T00:00:00+00:00", "2026-11-07", True, (2026, 11, 8)),
+        ("2026-11-07T19:00:00+00:00", "2026-11-07", False, None),
+        # Midnight to a real time is a time of day; so is a start alone.
+        ("2026-11-07T00:00:00+00:00", "2026-11-07T02:00:00+00:00", False, None),
+        ("2026-11-07T00:00:00+00:00", None, False, None),
+        ("2026-11-07T19:00:00+00:00", "2026-11-07T23:59:00+00:00", False, None),
+        # 00:00 UTC in summer is 01:00 in London: not a whole London day.
+        ("2026-10-10T00:00:00Z", "2026-10-10T23:59:00Z", False, None),
+    ],
+)
+def test_a_structured_span_of_whole_london_days_is_all_day(
+    start: str, end: str | None, all_day: bool, ends_at: tuple[int, int, int] | None
+) -> None:
+    item = {"@type": "Event", "name": "Club night", "startDate": start}
+    if end:
+        item["endDate"] = end
+    draft = website.structured_draft(item, QUOKKAS)
+    assert draft is not None and draft.all_day is all_day
+    if ends_at is not None:
+        midnight = datetime(*ends_at, tzinfo=LONDON)
+        assert draft.ends_at == midnight  # exclusive: 00:00 after the last day
+        assert draft.starts_at == datetime.fromisoformat(start[:10] + "T00:00").replace(
+            tzinfo=LONDON
+        )
+
+
 # --- the model's reading -------------------------------------------------------------------
 
 

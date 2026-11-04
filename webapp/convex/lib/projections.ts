@@ -262,7 +262,11 @@ export type OrgPublic = Infer<typeof orgPublicValidator>
 
 export async function orgPublic(ctx: QueryCtx, org: Doc<"organisations">): Promise<OrgPublic> {
   const meta = publicMeta(org.meta)
-  const personal = org.email !== undefined && org.emailType === "personal_crsid"
+  // Classified afresh as well as by the stored `emailType`, so a rule
+  // tightened since the row was last materialised (alumni addresses, ENG-37)
+  // hides an address at once rather than at the next claim.
+  const personal =
+    org.email !== undefined && (org.emailType === "personal_crsid" || isPersonalEmail(org.email))
   if (personal) meta.email = { status: "missing", missingReason: "not_published" }
   const logoUrl = await fileUrl(ctx, org.logo?.storageId)
   return {
