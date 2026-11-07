@@ -367,14 +367,19 @@ These are never returned by public queries.
   | Field | Type |
   |---|---|
   | runKey | string |
-  | mode | |
-  | stages | string[] |
-  | startedAt / finishedAt | number |
+  | command | string (the CLI command, e.g. `sync --group events`) |
+  | requestedStages | string[] |
+  | pipelineVersion | string |
+  | group? | string (the `sync --group` that ran) |
+  | revision? | string (git sha or `CAMSOCS_REVISION`) |
   | status | `running \| success \| partial \| failed` |
-  | counts | Record |
-  | warnings, failedUrls | string[] |
+  | startedAt | number |
+  | finishedAt | number \| null |
+  | stages | stage result[] |
+  | warnings | string[] |
+  | error | string \| null |
 
-  Each stage's result is `{name, status, inserted, updated, unchanged, skipped, error, notes, metrics?}`; `metrics` holds named counts beyond the four (the resolve stage's quarantine: `quarantineHeld`, `quarantineDropped`, `quarantineReview`, which the broker overview shows; the report stage's `listed`, `upcomingEvents`). A stage that stages observations counts them as `inserted`; `load` counts what reached Convex. Rows are deleted after a year (R10).
+  `group` and `revision` are optional (widen-only, deploy.md §5): absent means "not recorded", and a blank posted value is stored as absent. Readers get a run's group from `runGroup` (`convex/runs.ts`), which falls back to parsing `sync --group <g>` from `command` for older rows and returns null for an ad-hoc `--stages` run. Each stage's result is `{name, status, inserted, updated, unchanged, skipped, error, notes, metrics?, durationMs?}`; `durationMs` is the stage's wall-clock time in milliseconds, absent when not recorded; `metrics` holds named counts beyond the four (the resolve stage's quarantine: `quarantineHeld`, `quarantineDropped`, `quarantineReview`, which the broker overview shows; the report stage's `listed`, `upcomingEvents`). A stage that stages observations counts them as `inserted`; `load` counts what reached Convex. Rows are deleted after a year (R10).
 - **inboundEmails**: forwarded society list mail.
 
   | Field | Type |
