@@ -749,3 +749,14 @@ class TestUniversityProgramme:
         assert field_of(kept, "hosting").value == "hosts"
         [call] = llm.calls
         assert "the University of Cambridge's public events programme" in call["text"]
+
+
+def test_the_other_university_rule_drops_a_campus_own_token() -> None:
+    """Built from `campuses.OTHER_UNIVERSITY_TOKENS` less the campus's own
+    (decision D8): Cambridge drops none, an Oxford campus would drop Oxford."""
+    from camsocs_pipeline.events.noise import other_university_pattern
+
+    assert other_university_pattern(frozenset()).search("Oxford Chess Social")
+    assert not other_university_pattern(frozenset({"oxford"})).search("Oxford Chess Social")
+    assert other_university_pattern(frozenset({"oxford"})).search("KCL Chess Social")
+    assert other_university_pattern(frozenset()) is other_university_pattern(frozenset())

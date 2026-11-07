@@ -513,3 +513,12 @@ def test_an_escaped_address_is_checked_as_the_reader_sees_it() -> None:
     assert "jane" not in (withhold_personal_contacts("RSVP jane\\.smith@cantab.net") or "")
     # Entities are never decoded (AGENTS.md): the renderer shows them as written.
     assert unescape_addresses("ab123&#64;cam.ac.uk") == "ab123&#64;cam.ac.uk"
+
+
+def test_cambridge_is_not_strict_about_other_universities() -> None:
+    """The member rule is the active campus's (decision D8). Cambridge's
+    `strict_foreign_academic` is False: another university's address is not
+    judged personal by its domain alone (byte-identical)."""
+    assert email_type("chess@elsewhere.ac.uk") == "role_own_domain"
+    assert email_type("ab123@elsewhere.ac.uk") == "role_own_domain"
+    assert not is_personal_crsid("jane.doe@elsewhere.ac.uk")

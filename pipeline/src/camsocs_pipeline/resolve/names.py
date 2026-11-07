@@ -8,9 +8,10 @@ identifies the group and drops what every Cambridge group says about itself:
 1. fold to ASCII lower case (`fold`): NFKD, the key transliteration, ``&`` →
    ``and``, apostrophes and hyphens deleted ("Queens'" → ``queens``,
    "Inter-Collegiate" → ``intercollegiate``);
-2. drop the University qualifiers ("Cambridge University", "University of
-   Cambridge", "Cambridge", a ``CU`` token anywhere, "(CU)" included), the
-   group words ("Society", "Soc", "Club") and small stopwords;
+2. drop the University qualifiers (the active campus's
+   `NameRules.university_sequences`; Cambridge: "Cambridge University",
+   "University of Cambridge", "Cambridge", a ``CU`` token anywhere, "(CU)"
+   included), the group words ("Society", "Soc", "Club") and small stopwords;
 3. keep gender and team qualifiers ("men", "women", "mixed"): the three
    Lacrosse clubs stay three;
 4. replace a college named in the name by one ``c:<id>`` token
@@ -26,7 +27,8 @@ A signature with nothing left ("The Society") matches nothing.
 **Websites** become a *site identity* (`site_identity`): the host without
 ``www.``, plus the first path segment(s) on hosts that many groups share
 (``sites.google.com/view/x``, ``linktr.ee/x``, a page under a college's
-``*.cam.ac.uk`` site). Hosts that identify no group (social networks, the SU
+``*.cam.ac.uk`` site: any subdomain of `KNOWN_UNIVERSITY_DOMAINS` or of the
+active campus's own university domains). Hosts that identify no group (social networks, the SU
 and Sport directories, Camdram, form builders) have no identity.
 """
 
@@ -35,9 +37,13 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from camsocs_pipeline.resolve.colleges import alias_table
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.campuses.profile import CampusProfile
 
 _TRANSLITERATION = {
     "ß": "ss",
@@ -54,7 +60,8 @@ _APOSTROPHES = re.compile("['`" + chr(0x2019) + chr(0x2018) + chr(0x02BC) + "]")
 _HYPHENS = re.compile("[-" + chr(0x2010) + chr(0x2011) + chr(0x2013) + chr(0x2014) + "]")
 _TOKEN = re.compile(r"[a-z0-9]+")
 
-#: Token sequences meaning "of the University of Cambridge", removed anywhere.
+#: Token sequences meaning "of the University of Cambridge", removed anywhere
+#: (Cambridge's `NameRules.university_sequences`; names read the active campus's).
 _UNIVERSITY_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("university", "of", "cambridge"),
     ("uoc",),
@@ -77,6 +84,14 @@ _GENDER = {
 
 #: A college token in a signature.
 COLLEGE_PREFIX = "c:"
+
+
+def _campus() -> CampusProfile:
+    """The active campus. Imported here, not at the top: the campus profiles
+    are built from this module's constants."""
+    from camsocs_pipeline.campuses import active
+
+    return active()
 
 
 def fold(text: str) -> str:
@@ -158,7 +173,7 @@ def name_parts(name: str, *, find_colleges: bool = True) -> NameParts:
     not to be college-level, where "Darwin" or "Trinity" in a name is not a
     college."""
     words = tokens(name)
-    words = _remove_sequences(words, _UNIVERSITY_SEQUENCES)
+    words = _remove_sequences(words, _campus().names.university_sequences)
     colleges: set[str] = set()
     if find_colleges:
         words, colleges = _extract_colleges(words)
@@ -317,6 +332,18 @@ NO_IDENTITY_HOSTS = frozenset(
     }
 )
 #: Hosts shared by many groups: the identity includes the first path segment(s).
+#: Universities whose college and department sites hold many groups' pages
+#: (`site_identity`), whichever campus runs; a campus adds its own
+#: `university_domains`.
+KNOWN_UNIVERSITY_DOMAINS: tuple[str, ...] = ("cam.ac.uk", "ox.ac.uk")
+
+
+def _page_hosts(profile: CampusProfile) -> tuple[str, ...]:
+    """``.<domain>`` suffixes under which the page, not the host, is a site's identity."""
+    domains = dict.fromkeys((*KNOWN_UNIVERSITY_DOMAINS, *profile.university_domains))
+    return tuple(f".{domain}" for domain in domains)
+
+
 SHARED_HOSTS: dict[str, int] = {
     "sites.google.com": 2,
     "linktr.ee": 1,
@@ -350,7 +377,7 @@ def site_identity(url: str | None) -> str | None:
         return None
     segments = [segment.lower() for segment in path.split("/") if segment]
     depth = SHARED_HOSTS.get(host)
-    if depth is None and (host.endswith(".cam.ac.uk") or host.endswith(".ox.ac.uk")):
+    if depth is None and host.endswith(_page_hosts(_campus())):
         # A group's page under a college or department site: the page is the identity.
         depth = len(segments)
     if depth:
@@ -392,7 +419,8 @@ def email_site(domain: str | None) -> str | None:
     host = domain.strip().lower().lstrip("@")
     if host.startswith("www."):
         host = host[4:]
-    if not host or host in SHARED_EMAIL_DOMAINS or host.endswith(".cam.ac.uk"):
+    own = tuple(f".{domain}" for domain in _campus().university_domains)
+    if not host or host in SHARED_EMAIL_DOMAINS or host.endswith(own):
         return None
     return site_identity(host)
 

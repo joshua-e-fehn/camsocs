@@ -229,3 +229,16 @@ def test_unreadable_input_is_an_error() -> None:
 def test_window_months_cover_every_month_touched() -> None:
     window = EventWindow(london(2026, 9, 30, 0, 0), london(2026, 12, 16, 0, 0))
     assert window.months() == [(2026, 9), (2026, 10), (2026, 11), (2026, 12)]
+
+
+def test_a_bogus_zone_is_kept_where_the_location_is_another_town() -> None:
+    """The location rule is the active campus's town (decision D8):
+    Cambridge's is the word or a CB postcode, so another town keeps its zone."""
+    parsed = parse_ics(
+        calendar(
+            "UID:t\nSUMMARY:Meet\nDTSTART;TZID=Asia/Dhaka:20261021T180000\n"
+            "LOCATION:Testford Town Hall"
+        ),
+        WINDOW,
+    )
+    assert parsed.events[0].zone_corrected is None

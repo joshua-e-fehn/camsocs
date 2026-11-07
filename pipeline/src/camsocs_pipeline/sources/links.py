@@ -23,10 +23,15 @@ address (``facebook.com/profile.php?id=…``, WeChat articles).
 URLs are never stored, not even inside free text: `withhold_chat_invites`);
 `mailing_list_link` recognises a published sign-up link.
 
-**Emails.** One CRSid rule (`CRSID_PATTERN`, `is_crsid_address`): a
-CRSid-shaped local part on cam.ac.uk or a subdomain (not lists.cam.ac.uk), or
-on SRCF (``srcf.net``, ``srcf.ucam.org``) and the alumni forwarding services
-(``cantab.ac.uk``, ``cantab.net``), which issue addresses by CRSid.
+**Emails.** One member-id rule (`is_crsid_address`), the active campus's
+`MemberIdRule` (decision D8). Cambridge's is the CRSid rule (`CRSID_PATTERN`):
+a CRSid-shaped local part on cam.ac.uk or a subdomain (not lists.cam.ac.uk),
+or on SRCF (``srcf.net``, ``srcf.ucam.org``) and the alumni forwarding
+services (``cantab.ac.uk``, ``cantab.net``), which issue addresses by CRSid.
+A campus without id-shaped addresses treats a name-shaped local part on its
+member domains as a person's, and a campus with `strict_foreign_academic`
+treats every unfamiliar ``*.ac.uk`` address as a person's
+(webapp/lib/campus/member-email.ts, rule for rule).
 
 - `email_type` mirrors `classifyEmail` in webapp/convex/lib/derived.ts (the
   server derives `emailType` with it); both are asserted against
@@ -47,12 +52,16 @@ on SRCF (``srcf.net``, ``srcf.ucam.org``) and the alumni forwarding services
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urljoin, urlsplit, urlunsplit
 
 from camsocs_pipeline.keys import slugify
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.campuses.profile import CampusProfile
 
 # --- URLs -----------------------------------------------------------------------------
 
@@ -588,20 +597,66 @@ _CRSID_LOCAL = re.compile(rf"^{CRSID_PATTERN}$")
 
 #: Domains outside cam.ac.uk that give every member an address at their
 #: CRSid: SRCF user mail (``<crsid>@srcf.net``) and the alumni forwarding
-#: services. A CRSid there names a person just as on cam.ac.uk.
+#: services. A CRSid there names a person just as on cam.ac.uk. (Cambridge's
+#: `MemberIdRule.forwarding_domains`; the rule reads the active campus's.)
 _CRSID_MAIL_DOMAINS = frozenset({"srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"})
 
 
+def _campus() -> CampusProfile:
+    """The active campus. Imported here, not at the top: the campus profiles
+    are built from this module's constants."""
+    from camsocs_pipeline.campuses import active
+
+    return active()
+
+
+@functools.cache
+def member_local_regex(pattern: str | None) -> re.Pattern[str]:
+    """A campus's member-id local part, anchored and compiled once (Cambridge:
+    `_CRSID_LOCAL`); no id pattern: a name-shaped local part (`_NAME_SHAPED`)."""
+    return re.compile(rf"^{pattern}$") if pattern is not None else _NAME_SHAPED
+
+
+def _at_or_under(domain: str, base: str) -> bool:
+    return domain == base or domain.endswith("." + base)
+
+
+def _is_member_domain(domain: str, profile: CampusProfile) -> bool:
+    """A member domain or one of its subdomains, not an excluded list host."""
+    rule = profile.member_ids
+    return domain not in rule.excluded and any(_at_or_under(domain, d) for d in rule.domains)
+
+
+def _is_familiar_academic(domain: str, profile: CampusProfile) -> bool:
+    """The campus's own academic domains, or ones it knows the rules of."""
+    rule = profile.member_ids
+    return (
+        any(_at_or_under(domain, d) for d in (*rule.domains, *profile.university_domains))
+        or domain in rule.forwarding_domains
+        or domain in rule.alumni_domains
+    )
+
+
 def is_crsid_address(local: str, domain: str) -> bool:
-    """`classifyEmail`'s ``personal_crsid`` rule (webapp/convex/lib/derived.ts):
-    a CRSid-shaped local part on cam.ac.uk or a subdomain (not
-    lists.cam.ac.uk), or on a domain that issues addresses by CRSid."""
+    """`classifyEmail`'s ``personal_crsid`` member rule (webapp/convex/lib/derived.ts,
+    `classifyMemberEmail` in webapp/lib/campus/member-email.ts) under the
+    active campus. Cambridge: a CRSid-shaped local part on cam.ac.uk or a
+    subdomain (not lists.cam.ac.uk), or on a domain that issues addresses by
+    CRSid. A campus without a member-id pattern: a name-shaped local part on
+    its member domains. With `strict_foreign_academic`: also any address on
+    an unfamiliar ``*.ac.uk`` domain, whatever its shape."""
     local = local.strip().lower()
     domain = domain.strip().lower().rstrip(".")
-    on_cam = (domain == "cam.ac.uk" or domain.endswith(".cam.ac.uk")) and (
-        domain != "lists.cam.ac.uk"
+    profile = _campus()
+    rule = profile.member_ids
+    on_member = _is_member_domain(domain, profile) or domain in rule.forwarding_domains
+    if on_member and member_local_regex(rule.pattern).match(local):
+        return True
+    return (
+        rule.strict_foreign_academic
+        and domain.endswith(".ac.uk")
+        and not _is_familiar_academic(domain, profile)
     )
-    return (on_cam or domain in _CRSID_MAIL_DOMAINS) and bool(_CRSID_LOCAL.match(local))
 
 
 def _split(address: str) -> tuple[str, str]:
@@ -629,6 +684,7 @@ def email_domain(email: str) -> str:
 #: Alumni addresses (`memberEmail.alumni` in webapp/lib/campus): the forwarding
 #: services and any ``alumni.`` / ``alum.`` host. Each address there is one
 #: graduate's, whatever its shape, unless it is named after a post.
+#: (Cambridge's `MemberIdRule.alumni_domains`; the rule reads the active campus's.)
 _ALUMNI_DOMAINS = frozenset({"cantab.ac.uk", "cantab.net", "oxon.org"})
 _NAME_SHAPED = re.compile(r"^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$")
 #: Words that make an alumni address a post's (`classifyEmail`'s `POST_WORDS`).
@@ -642,7 +698,7 @@ _POST_WORDS = frozenset(
 
 
 def _is_alumni_domain(domain: str) -> bool:
-    return domain in _ALUMNI_DOMAINS or any(
+    return domain in _campus().member_ids.alumni_domains or any(
         label in ("alumni", "alum") for label in domain.split(".")
     )
 
@@ -657,7 +713,10 @@ def _is_post_address(local: str) -> bool:
 
 def email_type(email: str) -> EmailType:
     """What kind of address `email` is — `classifyEmail` in
-    webapp/convex/lib/derived.ts, rule for rule."""
+    webapp/convex/lib/derived.ts, rule for rule, under the active campus:
+    its member rule, its excluded list hosts (``lists_cam``) and its member
+    subdomains (``college_domain``). The SU, CUSU and SRCF kinds are
+    Cambridge hosts and stay global: no other campus's address is one."""
     address = email.strip().lower()
     at = address.rfind("@")
     local = address[:at]
@@ -671,11 +730,12 @@ def email_type(email: str) -> EmailType:
         return "legacy_cusu"
     if domain == "cambridgesu.co.uk" or domain.endswith(".cambridgesu.co.uk"):
         return "cambridgesu"
-    if domain == "lists.cam.ac.uk":
+    rule = _campus().member_ids
+    if domain in rule.excluded:
         return "lists_cam"
     if re.search(r"(^|\.)srcf\.(net|ucam\.org)$", domain):
         return "srcf"
-    if domain.endswith(".cam.ac.uk"):
+    if any(domain.endswith("." + base) for base in rule.domains):
         return "college_domain"
     if domain in WEBMAIL_DOMAINS:
         return "webmail"
