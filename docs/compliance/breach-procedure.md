@@ -6,7 +6,7 @@ A personal data breach is a breach of security that leads to personal data being
 
 ## Security contact
 
-- **camsocs@joshua-fehn.de** (`SECURITY_CONTACT_EMAIL`, `webapp/lib/site.ts`; the same alias as the privacy contact). Published on `/about#security`, in `/privacy` ("Who is responsible") and in `/.well-known/security.txt` (RFC 9116: the static `webapp/public/.well-known/security.txt`, held equal to `webapp/lib/security-txt.ts` by its test).
+- **security@camsocs.uk** (`SECURITY_CONTACT_EMAIL`, `webapp/lib/site.ts`; an alias in the same camsocs.uk mailbox as the privacy contact, D11). Published on `/about#security`, in `/privacy` ("Who is responsible") and in `/.well-known/security.txt` (RFC 9116: the static `webapp/public/.well-known/security.txt`, held equal to `webapp/lib/security-txt.ts` by its test).
 - ⚠ `security.txt` carries `Expires` (`SECURITY_TXT_EXPIRES`, now 2027-09-01). Renew it in the July review, before it lapses.
 - A report that arrives through the request form, a GitHub issue or a Slack message counts the same: the clock below starts when Joshua knows.
 
@@ -23,7 +23,7 @@ The camsocs-specific cases, most likely first. The data at risk is listed in `re
 | A batch of the Art 14 / outreach email (J7) goes to the wrong addresses, or with addresses visible to each other (To/Cc instead of Bcc or one by one) | Recipients' addresses, the organisations they act for | The sent folder |
 | The VPS host (Hostinger, `srv1608974`) is compromised, or Mya's agent reaches the harvest's files | `var/cache`, `var/staging` (pages with names, list mail for 30 days), `pipeline/.env.prod` | `docs/ops-vps.md` §6, the journal, `last` |
 | The laptop is lost or stolen | `var/`, `pipeline/.env`, `webapp/.env.local`, browser sessions | — |
-| An account is taken over: GitHub, Vercel, Convex, Google, PostHog, 1Password, the joshua-fehn.de mailbox | Everything that account reaches | The provider's security log |
+| An account is taken over: GitHub, Vercel, Convex, Google, PostHog, 1Password, the camsocs.uk Google Workspace (joshua@camsocs.uk) or the joshua-fehn.de mailbox | Everything that account reaches | The provider's security log |
 | Data is deleted or changed without meaning to (a wrong migration, a wrong `clean-events --apply`, an unintended purge) | Listings, requests, suppressions (a lost suppression can re-publish something someone asked to remove) | Convex dashboard, logs |
 | A processor tells us of a breach on its side (Convex, Vercel, Hostinger, Resend, PostHog, Google), or OpenAI on its side | Whatever it holds for us | Its notice |
 
@@ -62,7 +62,7 @@ Rate the risk to people's rights and freedoms: **none / unlikely**, **risk**, or
 - **Notify** the Information Commission (the Information Commissioner's Office, ICO, until 30 September 2026) unless the breach is **unlikely** to result in a risk to anyone's rights and freedoms. When in doubt, notify.
 - **Deadline:** within 72 hours of becoming aware (step 1). If the facts are not all known, report what is known and add the rest later (Art 33(4)). If it is late, say why.
 - **How:** its online breach report form on ico.org.uk, or its helpline (0303 123 1113), as the controller, as an individual controller with no data protection fee registration (none is payable, PLAN.md J6).
-- **What to give** (Art 33(3)): what happened and when; the categories and rough numbers of people and records; the contact (camsocs@joshua-fehn.de); the likely consequences; what was done and will be done to contain it and limit harm.
+- **What to give** (Art 33(3)): what happened and when; the categories and rough numbers of people and records; the contact (privacy@camsocs.uk); the likely consequences; what was done and will be done to contain it and limit harm.
 - Unlikely-to-risk examples, which need only the log: a key leaked and rotated within minutes with logs showing no use; a role address published by its own society shown once more.
 
 ## 5. Tell the people affected (Art 34)

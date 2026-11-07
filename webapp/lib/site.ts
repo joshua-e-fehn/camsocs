@@ -56,9 +56,9 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || campus.origin).repl
 export const CONTROLLER_NAME = "Joshua Fehn"
 
 /** Contact address for privacy requests, takedowns and complaints, beside the
- * request form (D4: an alias Joshua creates; it forwards to him). The pages
- * fall back to the form alone if this is empty. */
-export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
+ * request form (D4, moved by D11 to an alias in CAMsocs' own Google Workspace
+ * on camsocs.uk). The pages fall back to the form alone if this is empty. */
+export const CONTACT_EMAIL = "privacy@camsocs.uk"
 
 /** The data protection fee registration number from the Information
  * Commission (the ICO until 30 September 2026). Empty: no fee is payable
@@ -66,16 +66,16 @@ export const CONTACT_EMAIL = "camsocs@joshua-fehn.de"
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-11-04"
+export const PRIVACY_NOTICE_UPDATED = "2026-11-07"
 
 /** When the terms of use (`/terms`) last changed in substance, `YYYY-MM-DD`. */
 export const TERMS_UPDATED = "2026-11-03"
 
 /** Where security problems and personal data breaches are reported (in
  * `public/.well-known/security.txt`, written from lib/security-txt.ts; what
- * happens next: docs/compliance/breach-procedure.md). The same alias as
- * CONTACT_EMAIL. */
-export const SECURITY_CONTACT_EMAIL = CONTACT_EMAIL
+ * happens next: docs/compliance/breach-procedure.md). An alias in the same
+ * camsocs.uk mailbox as CONTACT_EMAIL (D11). */
+export const SECURITY_CONTACT_EMAIL = "security@camsocs.uk"
 
 /** When `/.well-known/security.txt` stops being valid (RFC 9116 §2.5.5: under
  * a year ahead). ⚠ Renew it in the July review, before it lapses. */

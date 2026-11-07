@@ -85,11 +85,11 @@ function harness(
       flush: () => {},
     },
     Session: {
-      getEffectiveUser: () => ({ getEmail: () => opts.me ?? "admin@joshua-fehn.de" }),
-      getActiveUser: () => ({ getEmail: () => opts.me ?? "admin@joshua-fehn.de" }),
+      getEffectiveUser: () => ({ getEmail: () => opts.me ?? "joshua@camsocs.uk" }),
+      getActiveUser: () => ({ getEmail: () => opts.me ?? "joshua@camsocs.uk" }),
     },
     GmailApp: {
-      getAliases: () => opts.aliases ?? ["camsocs@joshua-fehn.de"],
+      getAliases: () => opts.aliases ?? ["privacy@camsocs.uk"],
       sendEmail: (to: string, subject: string, body: string, options: Record<string, string>) => {
         quota--
         sent.push({ to, subject, body, options })
@@ -140,9 +140,9 @@ describe("art14-mail-merge.gs", () => {
     )
     expect(first.body).toStartWith("Hello Bridge Club,")
     expect(first.options).toEqual({
-      from: "camsocs@joshua-fehn.de",
+      from: "privacy@camsocs.uk",
       name: "Joshua Fehn (CAMsocs)",
-      replyTo: "camsocs@joshua-fehn.de",
+      replyTo: "privacy@camsocs.uk",
     })
     expect(h.value(2, "sent_on")).toBe(TODAY)
     expect(h.value(3, "sent_on")).toBe(TODAY)
@@ -164,7 +164,7 @@ describe("art14-mail-merge.gs", () => {
     const h = harness(rows, { aliases: [] })
     expect(() => h.fn.sendNext_(10)).toThrow(/not a "Send mail as" address/)
     expect(h.sent).toHaveLength(0)
-    const own = harness(rows, { aliases: [], me: "camsocs@joshua-fehn.de" })
+    const own = harness(rows, { aliases: [], me: "privacy@camsocs.uk" })
     own.fn.sendNext_(1)
     expect(own.sent[0].options.from).toBeUndefined()
   })

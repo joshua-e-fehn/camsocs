@@ -24,7 +24,7 @@ One of four end states, reached by **31 August 2027**:
 | University events API (D3a) | permission given to Joshua for camsocs by UIS and the Office of External Affairs and Communications | does not pass to a successor: ask again, or stop reading it (docs/ops-vps.md "Revoking the University events permission") |
 | camsocs.uk | IONOS, registrant Joshua; expires **31 Oct 2027** | transfer (Nominet registrant change), keep or let lapse |
 | Admin sign-in | Google Workspace admin@joshua-fehn.de (Internal OAuth app) | a successor needs its own OAuth client and `BROKER_EMAILS` |
-| Contact address `camsocs@joshua-fehn.de` | Joshua's Workspace | stays reachable whatever happens, until the data is gone |
+| Contact addresses `privacy@`, `security@`, `hello@`, `requests@camsocs.uk` | CAMsocs' own Google Workspace (camsocs.uk, Business Starter, Joshua's card; admin joshua@camsocs.uk) | stays reachable whatever happens, until the data is gone; the whole Workspace can be handed to a successor. The old `camsocs@joshua-fehn.de` forwards there until at least November 2027 |
 | `@cam.ac.uk` mailbox | his University account | only the list-mail inbox (J4, not set up) would depend on it; the account closes some time after the course (ask UIS for the date) |
 | PostHog (EU, free plan) | Joshua's organisation | not transferred; delete or leave to age out (R12, one year) |
 | GitHub `joshua-e-fehn/camsocs` (public) | Joshua | transfer, fork, or archive |
@@ -33,7 +33,7 @@ One of four end states, reached by **31 August 2027**:
 
 These stay Joshua's under every option until a successor has formally taken over (A) or the data is deleted (C):
 
-1. **Rights requests** (access, objection, erasure, rectification) through `/request` and `camsocs@joshua-fehn.de`, answered within one month; accepted removals become suppressions (retention.md R8).
+1. **Rights requests** (access, objection, erasure, rectification) through `/request` and `privacy@camsocs.uk`, answered within one month; accepted removals become suppressions (retention.md R8).
 2. **Breach procedure** (docs/compliance/breach-procedure.md): 72 hours to the Information Commission where the test says so.
 3. **The annual review in July 2027** (retention.md "Annual review", DPIA-lite and record of processing, `security.txt` `Expires` renewed) — it falls inside the handover window, so it is done as part of whichever option runs.
 4. **Retention keeps running** while Convex runs: R3 events at a year, R5 people 30 days past 30 June (so the CRM's 2026-27 committee members are deleted by **30 July 2027** whatever is chosen), R11 talks at 30 days, R4 mail.
@@ -114,5 +114,5 @@ Joshua's current expectation (2026-11-04). Everything in "What the site depends 
 1. **Data that depends on being a student.** The University events API permission (D3a) was given for camsocs, not for a student: ask UIS and the Office of External Affairs and Communications to confirm it continues after the course. The `@cam.ac.uk` list-mail inbox (J4) cannot continue once his University account closes.
 2. **Costs.** About $45 a month (Vercel Pro, Convex Professional) plus the LLM subscription, on his card: keep the spend caps in `docs/platform-limits.md`.
 3. **Freshness.** The harvest keeps running on the VPS. The yearly turnover of committees (R5 deletes people 30 days after 30 June) and the October rush of new events need the July annual review and a check in early October.
-4. **Contact.** `camsocs@joshua-fehn.de` and `/request` stay the route for rights requests; the privacy notice needs no change unless the controller's contact details change.
+4. **Contact.** `privacy@camsocs.uk` and `/request` stay the route for rights requests; the privacy notice needs no change unless the controller's contact details change.
 5. **Review each July** (retention.md "Annual review"): is the site still used (PostHog), still accurate (T15 sample), still lawful (DPIA-lite)? If not, fall back to B or C.
