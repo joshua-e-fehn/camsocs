@@ -820,8 +820,8 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     assert '"$enable" == "auto" && $first_install -eq 1' in text
     # … but turns on one it installs for the first time (the monitor's).
     assert (
-        "TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer)"
-        in text
+        "TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer"
+        " camsocs-notify.timer)" in text
     )
     assert '"$enable" == "auto" && ${#new_timers[@]} -gt 0' in text
     assert 'systemctl enable --now "${new_timers[@]}"' in text
@@ -830,7 +830,10 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     assert 'systemctl is-enabled --quiet "$timer"' in text
     assert "new timers left off (the harvest timers are off)" in text
     # The monitor runs from the checkout as camsocs: no script of its own for root.
-    assert "OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py install.sh)" in text
+    assert (
+        "OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py camsocs-notify.py"
+        " install.sh)" in text
+    )
     # Names only, never values, for the monitor's optional key.
     assert "for name in POSTHOG_PERSONAL_API_KEY POSTHOG_PROJECT_ID; do" in text
     # The warm-up waits for, and holds, the harvest's lock.

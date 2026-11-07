@@ -5,12 +5,12 @@ import { isEmail } from "../../lib/syntax"
 import { LISTING_REQUEST_STATUSES, ORGANISATION_FIELDS, SUPPRESSION_SCOPES } from "../../lib/vocab"
 import { internal } from "../_generated/api"
 import type { Doc } from "../_generated/dataModel"
-import { action, type MutationCtx, mutation, query } from "../_generated/server"
+import { type MutationCtx, mutation, query } from "../_generated/server"
 import type { ClaimInput } from "../ingest/claims"
 import { requireBrokerUser } from "../lib/auth"
 import { brokerOrgRefs, orgRefValidator } from "../lib/brokerRows"
 import { withoutSystemFields } from "../lib/ingest"
-import { channelSummary, notifyConfig } from "../lib/requestNotify"
+import { emailConfig, RELAY_STALE_MS } from "../lib/requestNotify"
 import { createSuppression } from "../lib/suppressionEffects"
 import {
   contactHash,
@@ -20,7 +20,8 @@ import {
   type SuppressionTarget,
 } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
-import { listingRequestFields } from "../schema"
+import { relayState, resend, startTest } from "../notifications"
+import { listingRequestFields, requestNotificationValidator } from "../schema"
 
 /**
  * The inbox of claim / correct / remove / object / add requests from the
@@ -99,50 +100,66 @@ export const openCount = query({
   },
 })
 
-/** Which notification channels are switched on (ENG-104); no secrets. */
+/** Where new requests are announced (ENG-104): email from Convex when Resend
+ * is set up, Slack and WhatsApp through the VPS relay (Mya) when it has
+ * called recently. No secrets. */
 export const notificationChannels = query({
   args: {},
   returns: v.object({
-    slack: v.boolean(),
     email: v.boolean(),
-    whatsapp: v.union(v.null(), v.literal("meta"), v.literal("callmebot")),
+    relay: v.union(
+      v.null(),
+      v.object({
+        channels: v.array(v.union(v.literal("slack"), v.literal("whatsapp"))),
+        lastSeenAt: v.number(),
+        stale: v.boolean(),
+      }),
+    ),
   }),
   handler: async (ctx) => {
     await requireBrokerUser(ctx)
-    return channelSummary(notifyConfig())
+    const relay = await relayState(ctx)
+    return {
+      email: emailConfig() !== null,
+      relay: relay ? { ...relay, stale: Date.now() - relay.lastSeenAt > RELAY_STALE_MS } : null,
+    }
   },
 })
 
-/** Sends a request's notification again on every configured channel. */
+/** Sends a request's notification again on every channel. */
 export const notifyAgain = mutation({
   args: { key: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireBrokerUser(ctx)
-    const row = await findRequest(ctx, args.key)
-    await ctx.scheduler.runAfter(0, internal.notifications.listingRequest, {
-      key: row.key,
-      force: true,
-    })
+    await resend(ctx, await findRequest(ctx, args.key))
     return null
   },
 })
 
-type TestDelivery = { channel: "slack" | "email" | "whatsapp"; ok: boolean; error?: string }
-
-/** A synthetic request on every configured channel; nothing is stored. */
-export const sendTestNotification = action({
+/** Queues a synthetic request for every channel; returns its key, whose
+ * outcomes `notificationTest` reads as they arrive (the relay sends within
+ * about a minute). Nothing is stored as a request. */
+export const sendTestNotification = mutation({
   args: {},
-  returns: v.array(
-    v.object({
-      channel: v.union(v.literal("slack"), v.literal("email"), v.literal("whatsapp")),
-      ok: v.boolean(),
-      error: v.optional(v.string()),
-    }),
-  ),
-  handler: async (ctx): Promise<TestDelivery[]> => {
+  returns: v.string(),
+  handler: async (ctx) => {
     await requireBrokerUser(ctx)
-    return await ctx.runAction(internal.notifications.test, {})
+    return await startTest(ctx)
+  },
+})
+
+/** A test's outcomes so far, per channel. */
+export const notificationTest = query({
+  args: { key: v.string() },
+  returns: v.union(v.null(), v.array(requestNotificationValidator)),
+  handler: async (ctx, { key }) => {
+    await requireBrokerUser(ctx)
+    const row = await ctx.db
+      .query("notificationTests")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique()
+    return row ? row.notifications : null
   },
 })
 

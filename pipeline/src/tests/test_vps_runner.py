@@ -378,6 +378,7 @@ OPS_FILES = (
     "camsocs-harvest.sh",
     "camsocs-alert.py",
     "camsocs-status.py",
+    "camsocs-notify.py",
     "install.sh",
     "logrotate/camsocs",
     "systemd/camsocs-harvest@.service",

@@ -201,6 +201,10 @@ readRoute("coverage/events", internal.coverage.eventsPage)
 // Maintenance: re-derive everything now; reset the dev deployment.
 ingestionRoute("derive", internal.derive.daily)
 ingestionRoute("purge", internal.ingest.purge.purge)
+// Request notifications through Mya (ENG-104, ops/vps/camsocs-notify.py):
+// what to send on Slack / WhatsApp now, and how each send went.
+ingestionRoute("notify/pending", internal.notifications.relayPending)
+ingestionRoute("notify/ack", internal.notifications.relayAck)
 // Events a corrected reader will never restate (`camsocs clean-events`,
 // convex/ingest/cleanup.ts): read them all; remove some, by key, confirmed.
 readRoute("events/scan", internal.ingest.cleanup.eventsPage)
