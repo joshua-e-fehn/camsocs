@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import functools
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urljoin, urlsplit, urlunsplit
@@ -61,8 +62,6 @@ from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urljoin, urlsp
 from camsocs_pipeline.keys import slugify
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from camsocs_pipeline.campuses.profile import CampusProfile
 
 # --- URLs -----------------------------------------------------------------------------
@@ -713,28 +712,30 @@ def _is_post_address(local: str) -> bool:
     return any(word in _POST_WORDS for word in re.split(r"[^a-z]+", local))
 
 
-#: A campus's own domain kinds, in `classifyEmail`'s order: mirrors
-#: `emailDomainTypes` in webapp/lib/campus/profiles/<id>.ts. A campus not
-#: listed has none (``zz``: ``ab123@srcf.net`` is ``role_own_domain`` there).
-EMAIL_DOMAIN_TYPES: dict[str, tuple[tuple[EmailType, Callable[[str], bool]], ...]] = {
-    "cam": (
-        (
-            "legacy_cusu",
-            lambda domain: bool(re.search(r"(^|\.)cusu\.", domain)) or domain == "cusu.org",
-        ),
-        (
-            "cambridgesu",
-            lambda domain: domain == "cambridgesu.co.uk" or domain.endswith(".cambridgesu.co.uk"),
-        ),
-        ("srcf", lambda domain: bool(re.search(r"(^|\.)srcf\.(net|ucam\.org)$", domain))),
+#: An email kind a campus's own domains carry, and the test on the domain.
+EmailDomainType = tuple[EmailType, Callable[[str], bool]]
+
+#: Cambridge's own domain kinds (`CampusProfile.email_domain_types`), in
+#: `classifyEmail`'s order: mirrors `emailDomainTypes` in
+#: webapp/lib/campus/profiles/cam.ts. A campus that states none has none
+#: (``zz``: ``ab123@srcf.net`` is ``role_own_domain`` there).
+CAMBRIDGE_EMAIL_DOMAIN_TYPES: tuple[EmailDomainType, ...] = (
+    (
+        "legacy_cusu",
+        lambda domain: bool(re.search(r"(^|\.)cusu\.", domain)) or domain == "cusu.org",
     ),
-}
+    (
+        "cambridgesu",
+        lambda domain: domain == "cambridgesu.co.uk" or domain.endswith(".cambridgesu.co.uk"),
+    ),
+    ("srcf", lambda domain: bool(re.search(r"(^|\.)srcf\.(net|ucam\.org)$", domain))),
+)
 
 
 def email_type(email: str) -> EmailType:
     """What kind of address `email` is — `classifyEmail` in
     webapp/convex/lib/derived.ts, rule for rule, under the active campus:
-    its member rule, its own domain kinds (`EMAIL_DOMAIN_TYPES`; Cambridge:
+    its member rule, its own domain kinds (`CampusProfile.email_domain_types`; Cambridge:
     legacy CUSU, the SU, SRCF), its excluded list hosts (``lists_cam``) and
     its member subdomains (``college_domain``)."""
     address = email.strip().lower()
@@ -747,7 +748,7 @@ def email_type(email: str) -> EmailType:
     if _is_alumni_domain(domain) and not _is_post_address(local):
         return "personal_crsid"
     campus = _campus()
-    for kind, matches in EMAIL_DOMAIN_TYPES.get(campus.id, ()):
+    for kind, matches in campus.email_domain_types:
         if matches(domain):
             return kind
     rule = campus.member_ids
@@ -1385,6 +1386,7 @@ def has_obfuscated_emails(html: str) -> bool:
 
 
 __all__ = [
+    "CAMBRIDGE_EMAIL_DOMAIN_TYPES",
     "CRSID_PATTERN",
     "EMAIL_PATTERN",
     "GENERIC_LOCALS",
@@ -1394,6 +1396,7 @@ __all__ = [
     "WITHHELD",
     "ChatPlatform",
     "Contacts",
+    "EmailDomainType",
     "EmailReading",
     "EmailType",
     "SocialPlatform",

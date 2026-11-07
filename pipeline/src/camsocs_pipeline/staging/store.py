@@ -42,7 +42,9 @@ a writer, the shadowed readings — is checked against that stage's declared
 `writes` (`stages/__init__.py`): a directory named exactly (a source type,
 a ``<type>.events`` directory, ``_resolved``) or covered by
 ``@all_observations`` (any source type or ``<type>.events`` directory, never
-``_resolved``). A directory outside them is a `StagingGuardError` when
+``_resolved`` or the talks pillar's ``talks``). A stage that writes its own
+file beside them (the talks pillar's `TALKS`) checks it with `guard_write`.
+A directory outside them is a `StagingGuardError` when
 ``CAMSOCS_STRICT_STAGING=1`` (the test suite sets it) and a logged warning
 otherwise: production keeps running until a full run is warning-free.
 """
@@ -70,6 +72,13 @@ logger = logging.getLogger(__name__)
 
 #: The resolve stage's output directory (not a source type).
 RESOLVED = "_resolved"
+
+#: The talks pillar's own staging directory (`talks/stage.py`, decision D7):
+#: one file of the talks it posted per run, beside the observation
+#: directories. Not a source type: no reader of observations sees it, and
+#: this store neither reads nor writes it; the talks stage declares it
+#: (``writes=(TALKS,)``) and checks it with `StagingStore.guard_write`.
+TALKS = "talks"
 
 #: Between the run key and the part in a staging file name.
 PART_SEPARATOR = "--"
@@ -156,8 +165,9 @@ def declares_write(writes: Iterable[str], directory: str) -> bool:
     if directory in declared:
         return True
     # The wildcard covers every source type and ``<type>.events`` directory
-    # (classify restates them all), never the resolver's output.
-    return ALL_OBSERVATIONS in declared and directory != RESOLVED
+    # (classify restates them all), never the resolver's output nor a
+    # directory beside them (`TALKS`).
+    return ALL_OBSERVATIONS in declared and directory != RESOLVED and _is_directory_name(directory)
 
 
 class StagingWriter:
@@ -219,6 +229,12 @@ class StagingStore:
         if (stage.name, directory) not in self._warned:
             self._warned.add((stage.name, directory))
             logger.warning("staging guard: %s", message)
+
+    def guard_write(self, directory: str) -> None:
+        """The write guard for a file a stage writes itself, beside the
+        observation directories (the talks pillar's `TALKS`): the stage must
+        declare `directory` in its `writes`."""
+        self._guard(directory)
 
     def path(self, directory: str, run_key: str, part: str | None = None) -> Path:
         name = _check_run_key(run_key)

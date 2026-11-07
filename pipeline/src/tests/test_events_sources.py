@@ -1185,6 +1185,16 @@ class TestCalendarFeeds:
         assert embed.call_count == 0
         assert any("disallowed_by_robots" in n for n in ctx.report.notes)
 
+    def test_the_seed_feeds_are_cambridges_alone(self) -> None:
+        # An engine stage: another campus reads only its own organisations' feeds.
+        empty = OrgLookup.from_records([])
+        seeded = {feed.url for feed in calendar_feeds.collect_feeds(empty, campus="cam")}
+        assert seeded == {
+            calendar_feeds.feed_url(seed.kind, seed.value) for seed in calendar_feeds.FEED_SEEDS
+        }
+        assert seeded
+        assert calendar_feeds.collect_feeds(empty, campus="zz") == []
+
     def test_the_university_programme_is_never_read_as_a_society_feed(
         self, ctx: StageContext, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1213,7 +1223,7 @@ class TestCalendarFeeds:
         allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
         programme = net.get(url__startswith=f"{UNI_API}/").respond(200, content=UNI_ICS)
 
-        assert calendar_feeds.collect_feeds(OrgLookup.for_stage(ctx)) == []
+        assert calendar_feeds.collect_feeds(OrgLookup.for_stage(ctx), campus="cam") == []
         calendar_feeds.run(ctx, window=WINDOW, now=NOW)
 
         assert programme.call_count == 0

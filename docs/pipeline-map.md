@@ -81,24 +81,29 @@ flowchart LR
     dir_mailing_list_email[("mailing_list_email")]
     dir_instagram_api[("instagram_api")]
     dir_termcard[("termcard")]
+    dir_talks[("talks")]
   end
   sel_org_lookup{{"@org_lookup"}}
   sel_event_index{{"@event_index"}}
   sel_all_observations{{"@all_observations"}}
   subgraph convex["Convex /api/pipeline"]
     sink_termDates[/"termDates"/]
+    sink_crosswalk[/"crosswalk"/]
     sink_inbound_pending[/"inbound/pending"/]
     sink_inbound_file[/"inbound/file"/]
-    sink_inbound_mark[/"inbound/mark"/]
-    sink_claims[/"claims"/]
+    sink_suppressions[/"suppressions"/]
     sink_sources[/"sources"/]
+    sink_files[/"files"/]
+    sink_claims[/"claims"/]
     sink_orgInternal[/"orgInternal"/]
     sink_relationships[/"relationships"/]
     sink_eventOrganisers[/"eventOrganisers"/]
     sink_events_superseded[/"events/superseded"/]
-    sink_files[/"files"/]
+    sink_brokerInferences[/"brokerInferences"/]
+    sink_inbound_mark[/"inbound/mark"/]
     sink_talks_departments[/"talks/departments"/]
     sink_talks_batch[/"talks/batch"/]
+    sink_talks_sweep[/"talks/sweep"/]
     sink_talks_runs[/"talks/runs"/]
     sink_coverage[/"coverage"/]
     sink_coverage_events[/"coverage/events"/]
@@ -117,6 +122,7 @@ flowchart LR
   stage_colleges --> dir_society_website
   sel_all_observations -.-> stage_resolve
   stage_resolve --> dir__resolved
+  sink_crosswalk -.-> stage_resolve
   dir__resolved -.-> stage_enrich
   stage_enrich --> dir_society_website
   stage_enrich --> dir_linktree
@@ -145,24 +151,38 @@ flowchart LR
   stage_inbox --> dir_mailing_list_email
   sink_inbound_pending -.-> stage_inbox
   sink_inbound_file -.-> stage_inbox
+  sink_suppressions -.-> stage_inbox
+  stage_inbox ==> sink_sources
+  stage_inbox ==> sink_files
+  stage_inbox ==> sink_claims
+  stage_inbox ==> sink_orgInternal
+  stage_inbox ==> sink_relationships
+  stage_inbox ==> sink_eventOrganisers
+  stage_inbox ==> sink_events_superseded
+  stage_inbox ==> sink_brokerInferences
   stage_inbox ==> sink_inbound_mark
   sel_org_lookup -.-> stage_instagram
   sel_event_index -.-> stage_instagram
   stage_instagram --> dir_instagram_api
+  stage_instagram ==> sink_files
   sel_org_lookup -.-> stage_termcards
   sel_event_index -.-> stage_termcards
   stage_termcards --> dir_termcard
   stage_resolve -. requires .-> stage_load
   sel_all_observations -.-> stage_load
-  stage_load ==> sink_claims
+  sink_suppressions -.-> stage_load
   stage_load ==> sink_sources
+  stage_load ==> sink_files
+  stage_load ==> sink_claims
   stage_load ==> sink_orgInternal
   stage_load ==> sink_relationships
   stage_load ==> sink_eventOrganisers
   stage_load ==> sink_events_superseded
-  stage_load ==> sink_files
+  stage_load ==> sink_brokerInferences
+  stage_talks --> dir_talks
   stage_talks ==> sink_talks_departments
   stage_talks ==> sink_talks_batch
+  stage_talks ==> sink_talks_sweep
   stage_talks ==> sink_talks_runs
   sink_coverage -.-> stage_report
   sink_coverage_events -.-> stage_report
@@ -182,7 +202,7 @@ flowchart LR
 | 7 | `colleges` | harvest | societies | cam/societies | full | yes | no | [§8](source-research.md#8-colleges-and-jcrmcr) |
 | 8 | `resolve` | resolve | societies | engine/societies | full | no | no | – |
 | 9 | `enrich` | enrich | societies | engine/societies | full | yes | yes | [§13](source-research.md#13-linktree), [§14](source-research.md#14-society-websites) |
-| 10 | `classify` | classify | societies | engine/societies | full | no | yes | – |
+| 10 | `classify` | classify | societies | engine/societies | full | yes | yes | – |
 | 11 | `camdram_events` | events | events | cam/events | events, full | yes | no | [§5](source-research.md#5-camdram) |
 | 12 | `talks_cam` (talks.cam lists (G1)) | events | events | cam/events | events, full | yes | no | [§6](source-research.md#6-talkscam) |
 | 13 | `cucbc_events` | events | events | cam/events | events, full | yes | no | [§7](source-research.md#7-cucbc) |

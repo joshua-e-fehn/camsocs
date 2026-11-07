@@ -19,7 +19,8 @@ graph also checks the registry, and raises `GraphError` when
   checked the same way against the campus's own research doc
   (`campus_docs`);
 - a stage reads or writes something that is not a staging directory
-  (`SOURCE_TYPES`, ``<type>.events``, ``_resolved``) or a selector;
+  (`SOURCE_TYPES`, ``<type>.events``, ``_resolved``, the talks pillar's
+  ``talks``) or a selector;
 - a group's stages read a directory none of them writes and the group does
   not list in `needs` (``derived_needs() ⊄ needs``);
 - the source manifest names an unknown stage, source type or event source,
@@ -46,7 +47,7 @@ from camsocs_pipeline.models.vocab import EVENT_SOURCES, SOURCE_TYPES
 from camsocs_pipeline.pipeline.context import PHASES, PILLARS, SELECTORS, Stage, StageGroup
 from camsocs_pipeline.stages import groups as campus_groups
 from camsocs_pipeline.stages import registry
-from camsocs_pipeline.staging.store import RESOLVED, events_directory
+from camsocs_pipeline.staging.store import RESOLVED, TALKS, events_directory
 
 SCHEMA = "camsocs.pipeline-graph/1"
 SOURCES_SCHEMA = "camsocs.campus-sources/1"
@@ -68,17 +69,10 @@ PERMISSIONS: tuple[str | None, ...] = ("robots", "D3", "D3a", None)
 #: A display name where the stage name alone would mislead.
 STAGE_LABELS: Mapping[str, str] = {"talks_cam": "talks.cam lists (G1)"}
 
-#: A stage's ``sinks=`` name that is not itself one Convex route
-#: (``webapp/convex/http.ts``) → the routes the stage actually calls. Every
-#: other name is one route of that name. Each sink node is one real route.
-SINK_ROUTES: Mapping[str, tuple[str, ...]] = {
-    "events": ("eventOrganisers", "events/superseded"),
-    "inbound": ("inbound/pending", "inbound/file", "inbound/mark"),
-    "coverage": ("coverage", "coverage/events"),
-}
-
 #: The Convex pipeline routes a stage reads back from (``readRoute`` and the
 #: ``inbound/file`` download); a stage *reads* these and *posts* to the rest.
+#: Every ``sinks=`` entry is one real route (``webapp/convex/http.ts``), by
+#: its exact name, so each sink node is one route.
 READ_ROUTES: frozenset[str] = frozenset(
     {
         "inbound/pending",
@@ -181,7 +175,7 @@ def campus_docs(campus_id: str) -> str:
 
 def staging_directories() -> frozenset[str]:
     """Every directory a stage may read or write in staging."""
-    return frozenset({*SOURCE_TYPES, *(events_directory(t) for t in SOURCE_TYPES), RESOLVED})
+    return frozenset({*SOURCE_TYPES, *(events_directory(t) for t in SOURCE_TYPES), RESOLVED, TALKS})
 
 
 def _check_registry(stages: Sequence[Stage], group_map: Mapping[str, StageGroup]) -> None:
@@ -417,13 +411,12 @@ def build_graph(
         for entry in stage.writes:
             edges.append({"from": stage_id, "to": endpoint(entry), "kind": "writes"})
         for sink in stage.sinks:
-            for route in SINK_ROUTES.get(sink, (sink,)):
-                sinks.setdefault(route)
-                sink_id = _ref("sink", campus, route)
-                if route in READ_ROUTES:
-                    edges.append({"from": sink_id, "to": stage_id, "kind": "reads"})
-                else:
-                    edges.append({"from": stage_id, "to": sink_id, "kind": "posts"})
+            sinks.setdefault(sink)
+            sink_id = _ref("sink", campus, sink)
+            if sink in READ_ROUTES:
+                edges.append({"from": sink_id, "to": stage_id, "kind": "reads"})
+            else:
+                edges.append({"from": stage_id, "to": sink_id, "kind": "posts"})
 
     for row in group_rows:
         group_id = _ref("group", campus, row["key"])
@@ -432,7 +425,7 @@ def build_graph(
             edges.append({"from": endpoint(need), "to": group_id, "kind": "needs"})
 
     for directory in directories:
-        source_type = None if directory == RESOLVED else directory.removesuffix(".events")
+        source_type = None if directory in (RESOLVED, TALKS) else directory.removesuffix(".events")
         nodes.append(
             {
                 "id": _ref("dir", campus, directory),
@@ -671,7 +664,6 @@ __all__ = [
     "MERMAID_PATH",
     "READ_ROUTES",
     "SCHEMA",
-    "SINK_ROUTES",
     "GraphError",
     "build_graph",
     "campus_docs",

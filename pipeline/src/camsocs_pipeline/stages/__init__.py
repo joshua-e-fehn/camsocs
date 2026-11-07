@@ -42,8 +42,12 @@ and `groups` give a campus its stages and scheduled runs; Cambridge's are
      ``@event_index``, ``@all_observations``); a group's `needs` must cover
      what its stages read and none of them writes;
    - ``docs=`` — the governing ``"source-research§N"``;
-   - and, when true, ``network=True`` (real network use), ``llm=True`` and
-     ``sinks=`` (the Convex routes it posts to).
+   - and, when true, ``network=True`` (real network use, a robots.txt check
+     included), ``llm=True`` and ``sinks=``: every ``/api/pipeline/<route>``
+     it calls on a real run, by its exact route name in
+     ``webapp/convex/http.ts`` (``claims``, ``inbound/mark``…), the routes it
+     reads back from (``crosswalk``, ``suppressions``…) included; the graph
+     tells the two apart (`graph.READ_ROUTES`).
 5. A stage that reads public sources says ``fetches=True`` (offline runner
    tests leave it out). Order matters only *between* phases; within the harvest phase, stages are
    independent. Use ``requires=(...)`` only when your stage cannot run on the
@@ -109,7 +113,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from camsocs_pipeline.pipeline.context import PHASES, Stage, StageGroup
-from camsocs_pipeline.staging.store import RESOLVED
+from camsocs_pipeline.staging.store import RESOLVED, TALKS
 
 if TYPE_CHECKING:
     from camsocs_pipeline.campuses.profile import CampusProfile
@@ -222,6 +226,7 @@ STAGES: list[Stage] = [
         pillar="societies",
         reads=(_ALL,),
         writes=(RESOLVED,),
+        sinks=("crosswalk",),
     ),
     #
     # ── enrich (T5): websites, Linktree; writes keyed observations ────────────
@@ -249,6 +254,9 @@ STAGES: list[Stage] = [
         pillar="societies",
         reads=(_ALL,),
         writes=(_ALL,),
+        # A real run reads general sources' robots.txt for AI opt-outs
+        # (`extract.ai_gate`); a dry run fetches nothing.
+        network=True,
         llm=True,
     ),
     #
@@ -324,7 +332,8 @@ STAGES: list[Stage] = [
         docs=("source-research§10",),
     ),
     #
-    # Society ICS / Luma / Google feeds (§11).
+    # Society ICS / Luma / Google feeds (§11). An engine stage: Cambridge's
+    # seed feed (`events/seeds.FEED_SEEDS`) is read for cam only.
     Stage(
         "calendar_feeds",
         fetches=True,
@@ -366,25 +375,40 @@ STAGES: list[Stage] = [
     ),
     #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
-    # Forwarded mailing-list mail (§16).
+    # Forwarded mailing-list mail (§16): reads the pending mails and their
+    # attachments, posts what it read as `load` does, then marks the mails.
     Stage(
         "inbox",
         phase="inbox",
         pillar="events",
         reads=(_ORGS, _EVENTS),
         writes=("mailing_list_email",),
-        sinks=("inbound",),
+        sinks=(
+            "inbound/pending",
+            "inbound/file",
+            "suppressions",
+            "sources",
+            "files",
+            "claims",
+            "orgInternal",
+            "relationships",
+            "eventOrganisers",
+            "events/superseded",
+            "brokerInferences",
+            "inbound/mark",
+        ),
         llm=True,
         docs=("source-research§16", "source-research§20"),
     ),
     #
-    # Instagram Business Discovery (§17).
+    # Instagram Business Discovery (§17); stores post images itself.
     Stage(
         "instagram",
         phase="inbox",
         pillar="events",
         reads=(_ORGS, _EVENTS),
         writes=("instagram_api",),
+        sinks=("files",),
         network=True,
         llm=True,
         docs=("source-research§17",),
@@ -410,15 +434,26 @@ STAGES: list[Stage] = [
         phase="load",
         pillar="shared",
         reads=(_ALL,),
-        sinks=("claims", "sources", "orgInternal", "relationships", "events", "files"),
+        sinks=(
+            "suppressions",
+            "sources",
+            "files",
+            "claims",
+            "orgInternal",
+            "relationships",
+            "eventOrganisers",
+            "events/superseded",
+            "brokerInferences",
+        ),
     ),
     #
     # ── talks (D7): the academic talks pillar; posts its own tables ───────────
     # talks.cam API + department sites → talks/* routes (talks-redesign-spec §2–§4).
     # After load: it needs nothing load does, and a slow talks.cam day must
     # never keep the day's events from reaching Convex before the time limit.
-    # Campus `cam` until its talks.cam aggregator step is split off. Its own
-    # ``var/staging/talks/`` file is not a source directory (no `writes`).
+    # Campus `cam` until its talks.cam aggregator step is split off. It
+    # stages its own ``var/staging/talks/`` file (`TALKS`): beside the source
+    # directories, never read as observations.
     Stage(
         "talks",
         fetches=True,
@@ -426,7 +461,8 @@ STAGES: list[Stage] = [
         phase="talks",
         pillar="talks",
         campus="cam",
-        sinks=("talks/departments", "talks/batch", "talks/runs"),
+        writes=(TALKS,),
+        sinks=("talks/departments", "talks/batch", "talks/sweep", "talks/runs"),
         network=True,
         docs=("talks-redesign-spec",),
     ),
@@ -438,7 +474,7 @@ STAGES: list[Stage] = [
         description="coverage → var/reports/coverage-<date>.md (read-only)",
         phase="report",
         pillar="shared",
-        sinks=("coverage",),
+        sinks=("coverage", "coverage/events"),
     ),
 ]
 

@@ -404,7 +404,7 @@
       "description": "orgType, level, categories, activities, audiences, languages, tags",
       "requires": [],
       "groups": ["full"],
-      "network": false,
+      "network": true,
       "llm": true,
       "fetchesInDryRun": false,
       "label": null,
@@ -923,6 +923,13 @@
       "events": false
     },
     {
+      "id": "dir:cam:talks",
+      "kind": "staging",
+      "name": "talks",
+      "sourceType": null,
+      "events": false
+    },
+    {
       "id": "sel:cam:org_lookup",
       "kind": "selector",
       "name": "org_lookup",
@@ -950,6 +957,12 @@
       "route": "/api/pipeline/termDates"
     },
     {
+      "id": "sink:cam:crosswalk",
+      "kind": "sink",
+      "name": "crosswalk",
+      "route": "/api/pipeline/crosswalk"
+    },
+    {
       "id": "sink:cam:inbound/pending",
       "kind": "sink",
       "name": "inbound/pending",
@@ -962,22 +975,28 @@
       "route": "/api/pipeline/inbound/file"
     },
     {
-      "id": "sink:cam:inbound/mark",
+      "id": "sink:cam:suppressions",
       "kind": "sink",
-      "name": "inbound/mark",
-      "route": "/api/pipeline/inbound/mark"
-    },
-    {
-      "id": "sink:cam:claims",
-      "kind": "sink",
-      "name": "claims",
-      "route": "/api/pipeline/claims"
+      "name": "suppressions",
+      "route": "/api/pipeline/suppressions"
     },
     {
       "id": "sink:cam:sources",
       "kind": "sink",
       "name": "sources",
       "route": "/api/pipeline/sources"
+    },
+    {
+      "id": "sink:cam:files",
+      "kind": "sink",
+      "name": "files",
+      "route": "/api/pipeline/files"
+    },
+    {
+      "id": "sink:cam:claims",
+      "kind": "sink",
+      "name": "claims",
+      "route": "/api/pipeline/claims"
     },
     {
       "id": "sink:cam:orgInternal",
@@ -1004,10 +1023,16 @@
       "route": "/api/pipeline/events/superseded"
     },
     {
-      "id": "sink:cam:files",
+      "id": "sink:cam:brokerInferences",
       "kind": "sink",
-      "name": "files",
-      "route": "/api/pipeline/files"
+      "name": "brokerInferences",
+      "route": "/api/pipeline/brokerInferences"
+    },
+    {
+      "id": "sink:cam:inbound/mark",
+      "kind": "sink",
+      "name": "inbound/mark",
+      "route": "/api/pipeline/inbound/mark"
     },
     {
       "id": "sink:cam:talks/departments",
@@ -1020,6 +1045,12 @@
       "kind": "sink",
       "name": "talks/batch",
       "route": "/api/pipeline/talks/batch"
+    },
+    {
+      "id": "sink:cam:talks/sweep",
+      "kind": "sink",
+      "name": "talks/sweep",
+      "route": "/api/pipeline/talks/sweep"
     },
     {
       "id": "sink:cam:talks/runs",
@@ -1110,6 +1141,11 @@
       "from": "stage:cam:resolve",
       "to": "dir:cam:_resolved",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:resolve",
+      "kind": "reads"
     },
     {
       "from": "dir:cam:_resolved",
@@ -1252,6 +1288,51 @@
       "kind": "reads"
     },
     {
+      "from": "sink:cam:suppressions",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:sources",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:files",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:claims",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:orgInternal",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:relationships",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:eventOrganisers",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:events/superseded",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:brokerInferences",
+      "kind": "posts"
+    },
+    {
       "from": "stage:cam:inbox",
       "to": "sink:cam:inbound/mark",
       "kind": "posts"
@@ -1270,6 +1351,11 @@
       "from": "stage:cam:instagram",
       "to": "dir:cam:instagram_api",
       "kind": "writes"
+    },
+    {
+      "from": "stage:cam:instagram",
+      "to": "sink:cam:files",
+      "kind": "posts"
     },
     {
       "from": "sel:cam:org_lookup",
@@ -1297,13 +1383,23 @@
       "kind": "reads"
     },
     {
-      "from": "stage:cam:load",
-      "to": "sink:cam:claims",
-      "kind": "posts"
+      "from": "sink:cam:suppressions",
+      "to": "stage:cam:load",
+      "kind": "reads"
     },
     {
       "from": "stage:cam:load",
       "to": "sink:cam:sources",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:files",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:claims",
       "kind": "posts"
     },
     {
@@ -1328,8 +1424,13 @@
     },
     {
       "from": "stage:cam:load",
-      "to": "sink:cam:files",
+      "to": "sink:cam:brokerInferences",
       "kind": "posts"
+    },
+    {
+      "from": "stage:cam:talks",
+      "to": "dir:cam:talks",
+      "kind": "writes"
     },
     {
       "from": "stage:cam:talks",
@@ -1339,6 +1440,11 @@
     {
       "from": "stage:cam:talks",
       "to": "sink:cam:talks/batch",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:talks",
+      "to": "sink:cam:talks/sweep",
       "kind": "posts"
     },
     {

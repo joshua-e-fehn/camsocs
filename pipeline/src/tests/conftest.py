@@ -13,8 +13,10 @@ Two safety properties hold for every test:
   `requests`, which respx cannot see; its transport is refused outright, and
   telemetry tests inject a fake client instead.
 - **No real configuration.** Every variable the pipeline reads is removed from
-  the environment, and `settings()` builds `Settings` with `_env_file=None`, so
-  `pipeline/.env` (real keys) is never read by a test.
+  the environment (`ENV_VARS`, the campus `CAMSOCS_CAMPUS` and systemd's
+  `INVOCATION_ID` included), and `settings()` builds `Settings` with
+  `_env_file=None`, so `pipeline/.env` (real keys) is never read by a test.
+  The active campus profile is reset after every test.
 - **No telemetry carried over.** A test that starts a run makes its telemetry
   the process's active one (LLM generations go there); it is cleared after
   every test, and so is any active fetch-statistics collector.
@@ -32,9 +34,11 @@ from typing import Any
 import pytest
 import respx
 
+from camsocs_pipeline import campuses
 from camsocs_pipeline.config import Settings, get_settings
 
 ENV_VARS = (
+    "CAMSOCS_CAMPUS",
     "CONVEX_URL",
     "CONVEX_HTTP_URL",
     "PIPELINE_API_KEY",
@@ -64,6 +68,7 @@ ENV_VARS = (
     "CAMSOCS_REVISION",
     "CAMSOCS_TIME_LIMIT_S",
     "CAMSOCS_PAYLOAD_DIGEST",
+    "INVOCATION_ID",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
@@ -77,6 +82,7 @@ def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+    campuses.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)
