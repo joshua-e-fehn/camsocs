@@ -1,0 +1,1619 @@
+{
+  "schema": "camsocs.pipeline-graph/1",
+  "campus": {
+    "id": "cam",
+    "name": "Cambridge",
+    "site": "https://camsocs.uk",
+    "docs": "docs/source-research.md"
+  },
+  "pillars": ["societies", "events", "talks", "shared"],
+  "phases": [
+    {
+      "key": "seed",
+      "order": 0
+    },
+    {
+      "key": "harvest",
+      "order": 1
+    },
+    {
+      "key": "resolve",
+      "order": 2
+    },
+    {
+      "key": "enrich",
+      "order": 3
+    },
+    {
+      "key": "classify",
+      "order": 4
+    },
+    {
+      "key": "events",
+      "order": 5
+    },
+    {
+      "key": "inbox",
+      "order": 6
+    },
+    {
+      "key": "load",
+      "order": 7
+    },
+    {
+      "key": "talks",
+      "order": 8
+    },
+    {
+      "key": "report",
+      "order": 9
+    }
+  ],
+  "lanes": [
+    {
+      "id": "cam/societies",
+      "campus": "cam",
+      "pillar": "societies"
+    },
+    {
+      "id": "cam/events",
+      "campus": "cam",
+      "pillar": "events"
+    },
+    {
+      "id": "cam/talks",
+      "campus": "cam",
+      "pillar": "talks"
+    },
+    {
+      "id": "engine/societies",
+      "campus": null,
+      "pillar": "societies"
+    },
+    {
+      "id": "engine/events",
+      "campus": null,
+      "pillar": "events"
+    },
+    {
+      "id": "engine/shared",
+      "campus": null,
+      "pillar": "shared"
+    }
+  ],
+  "groups": [
+    {
+      "key": "events",
+      "description": "daily: every events source, then load and the coverage report",
+      "stages": [
+        "term_dates",
+        "camdram_events",
+        "talks_cam",
+        "cucbc_events",
+        "playwaze",
+        "uni_events",
+        "calendar_feeds",
+        "su_whatson",
+        "website_events",
+        "inbox",
+        "instagram",
+        "termcards",
+        "load",
+        "talks",
+        "report"
+      ],
+      "needs": ["_resolved", "society_website", "su_profile"],
+      "staleAfterDays": 8,
+      "derive": false,
+      "schedule": "daily 04:30 Europe/London"
+    },
+    {
+      "key": "full",
+      "description": "weekly: every stage in registry order, then the re-derivation",
+      "stages": [
+        "term_dates",
+        "su_directory",
+        "proctors_register",
+        "sport_clubs",
+        "sport_guide_pdf",
+        "camdram_societies",
+        "cucbc_clubs",
+        "colleges",
+        "resolve",
+        "enrich",
+        "classify",
+        "camdram_events",
+        "talks_cam",
+        "cucbc_events",
+        "playwaze",
+        "uni_events",
+        "calendar_feeds",
+        "su_whatson",
+        "website_events",
+        "inbox",
+        "instagram",
+        "termcards",
+        "load",
+        "talks",
+        "report"
+      ],
+      "needs": [],
+      "staleAfterDays": null,
+      "derive": true,
+      "schedule": "weekly Sun 02:00 Europe/London"
+    },
+    {
+      "key": "talks",
+      "description": "the talks pillar alone: talks.cam + department sites → talks/*",
+      "stages": ["talks"],
+      "needs": [],
+      "staleAfterDays": null,
+      "derive": false,
+      "schedule": null
+    }
+  ],
+  "nodes": [
+    {
+      "id": "stage:cam:term_dates",
+      "kind": "stage",
+      "name": "term_dates",
+      "order": 0,
+      "phase": "seed",
+      "pillar": "shared",
+      "campus": null,
+      "lane": "engine/shared",
+      "description": "Full Term dates → termDates",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": false,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "19",
+          "anchor": "19-university-full-term-dates"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:su_directory",
+      "kind": "stage",
+      "name": "su_directory",
+      "order": 1,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": "SU directory + every profile → staging",
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "1",
+          "anchor": "1-cambridge-su-find-a-society"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:proctors_register",
+      "kind": "stage",
+      "name": "proctors_register",
+      "order": 2,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": "Proctors' register → staging",
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "2",
+          "anchor": "2-proctors-register"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:sport_clubs",
+      "kind": "stage",
+      "name": "sport_clubs",
+      "order": 3,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": null,
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "3",
+          "anchor": "3-sport-cambridge-az-and-club-pages"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:sport_guide_pdf",
+      "kind": "stage",
+      "name": "sport_guide_pdf",
+      "order": 4,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": null,
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "4",
+          "anchor": "4-sports-club-guide-2026-27-pdf"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:camdram_societies",
+      "kind": "stage",
+      "name": "camdram_societies",
+      "order": 5,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": null,
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "5",
+          "anchor": "5-camdram"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:cucbc_clubs",
+      "kind": "stage",
+      "name": "cucbc_clubs",
+      "order": 6,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": null,
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "7",
+          "anchor": "7-cucbc"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:colleges",
+      "kind": "stage",
+      "name": "colleges",
+      "order": 7,
+      "phase": "harvest",
+      "pillar": "societies",
+      "campus": "cam",
+      "lane": "cam/societies",
+      "description": null,
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "8",
+          "anchor": "8-colleges-and-jcrmcr"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:resolve",
+      "kind": "stage",
+      "name": "resolve",
+      "order": 8,
+      "phase": "resolve",
+      "pillar": "societies",
+      "campus": null,
+      "lane": "engine/societies",
+      "description": "staged identities → organisation keys + quarantine",
+      "requires": [],
+      "groups": ["full"],
+      "network": false,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": []
+    },
+    {
+      "id": "stage:cam:enrich",
+      "kind": "stage",
+      "name": "enrich",
+      "order": 9,
+      "phase": "enrich",
+      "pillar": "societies",
+      "campus": null,
+      "lane": "engine/societies",
+      "description": "websites + Linktree → keyed enrichment observations",
+      "requires": [],
+      "groups": ["full"],
+      "network": true,
+      "llm": true,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "13",
+          "anchor": "13-linktree"
+        },
+        {
+          "doc": "docs/source-research.md",
+          "section": "14",
+          "anchor": "14-society-websites"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:classify",
+      "kind": "stage",
+      "name": "classify",
+      "order": 10,
+      "phase": "classify",
+      "pillar": "societies",
+      "campus": null,
+      "lane": "engine/societies",
+      "description": "orgType, level, categories, activities, audiences, languages, tags",
+      "requires": [],
+      "groups": ["full"],
+      "network": false,
+      "llm": true,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": []
+    },
+    {
+      "id": "stage:cam:camdram_events",
+      "kind": "stage",
+      "name": "camdram_events",
+      "order": 11,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "Camdram diary → performance events",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "5",
+          "anchor": "5-camdram"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:talks_cam",
+      "kind": "stage",
+      "name": "talks_cam",
+      "order": 12,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "talks.cam lists → talks (parser only)",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": "talks.cam lists (G1)",
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "6",
+          "anchor": "6-talkscam"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:cucbc_events",
+      "kind": "stage",
+      "name": "cucbc_events",
+      "order": 13,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "CUCBC calendar, Bumps, timetable → events",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "7",
+          "anchor": "7-cucbc"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:playwaze",
+      "kind": "stage",
+      "name": "playwaze",
+      "order": 14,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "Playwaze college leagues → matches",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "9",
+          "anchor": "9-playwaze-college-leagues-and-bucs"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:uni_events",
+      "kind": "stage",
+      "name": "uni_events",
+      "order": 15,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "University events programme → public events",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "10",
+          "anchor": "10-university-events-programme-read-with-permission"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:calendar_feeds",
+      "kind": "stage",
+      "name": "calendar_feeds",
+      "order": 16,
+      "phase": "events",
+      "pillar": "events",
+      "campus": null,
+      "lane": "engine/events",
+      "description": "society ICS / Luma / Google feeds → events",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "11",
+          "anchor": "11-calendar-feeds-that-societies-publish"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:su_whatson",
+      "kind": "stage",
+      "name": "su_whatson",
+      "order": 17,
+      "phase": "events",
+      "pillar": "events",
+      "campus": "cam",
+      "lane": "cam/events",
+      "description": "SU What's On → student-group events",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "12",
+          "anchor": "12-su-whats-on"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:website_events",
+      "kind": "stage",
+      "name": "website_events",
+      "order": 18,
+      "phase": "events",
+      "pillar": "events",
+      "campus": null,
+      "lane": "engine/events",
+      "description": "society websites' events pages → events (structured data, then LLM)",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": true,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "14",
+          "anchor": "14-society-websites"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:inbox",
+      "kind": "stage",
+      "name": "inbox",
+      "order": 19,
+      "phase": "inbox",
+      "pillar": "events",
+      "campus": null,
+      "lane": "engine/events",
+      "description": null,
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": false,
+      "llm": true,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "16",
+          "anchor": "16-mailing-list-inbox"
+        },
+        {
+          "doc": "docs/source-research.md",
+          "section": "20",
+          "anchor": "20-sympa-public-list-search"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:instagram",
+      "kind": "stage",
+      "name": "instagram",
+      "order": 20,
+      "phase": "inbox",
+      "pillar": "events",
+      "campus": null,
+      "lane": "engine/events",
+      "description": null,
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": true,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "17",
+          "anchor": "17-meta-instagram-business-discovery"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:termcards",
+      "kind": "stage",
+      "name": "termcards",
+      "order": 21,
+      "phase": "inbox",
+      "pillar": "events",
+      "campus": null,
+      "lane": "engine/events",
+      "description": null,
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": true,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "21",
+          "anchor": "21-termcards"
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:load",
+      "kind": "stage",
+      "name": "load",
+      "order": 22,
+      "phase": "load",
+      "pillar": "shared",
+      "campus": null,
+      "lane": "engine/shared",
+      "description": "staged observations → Convex",
+      "requires": ["resolve"],
+      "groups": ["events", "full"],
+      "network": false,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": []
+    },
+    {
+      "id": "stage:cam:talks",
+      "kind": "stage",
+      "name": "talks",
+      "order": 23,
+      "phase": "talks",
+      "pillar": "talks",
+      "campus": "cam",
+      "lane": "cam/talks",
+      "description": "talks.cam + department sites → talks (parser only, posts itself)",
+      "requires": [],
+      "groups": ["events", "full", "talks"],
+      "network": true,
+      "llm": false,
+      "fetchesInDryRun": true,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/talks-redesign-spec.md",
+          "section": null,
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "id": "stage:cam:report",
+      "kind": "stage",
+      "name": "report",
+      "order": 24,
+      "phase": "report",
+      "pillar": "shared",
+      "campus": null,
+      "lane": "engine/shared",
+      "description": "coverage → var/reports/coverage-<date>.md (read-only)",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": false,
+      "llm": false,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": []
+    },
+    {
+      "id": "group:cam:events",
+      "kind": "group",
+      "name": "events"
+    },
+    {
+      "id": "group:cam:full",
+      "kind": "group",
+      "name": "full"
+    },
+    {
+      "id": "group:cam:talks",
+      "kind": "group",
+      "name": "talks"
+    },
+    {
+      "id": "dir:cam:su_directory",
+      "kind": "staging",
+      "name": "su_directory",
+      "sourceType": "su_directory",
+      "events": false
+    },
+    {
+      "id": "dir:cam:su_profile",
+      "kind": "staging",
+      "name": "su_profile",
+      "sourceType": "su_profile",
+      "events": false
+    },
+    {
+      "id": "dir:cam:proctors_register",
+      "kind": "staging",
+      "name": "proctors_register",
+      "sourceType": "proctors_register",
+      "events": false
+    },
+    {
+      "id": "dir:cam:sport_az",
+      "kind": "staging",
+      "name": "sport_az",
+      "sourceType": "sport_az",
+      "events": false
+    },
+    {
+      "id": "dir:cam:sport_club_page",
+      "kind": "staging",
+      "name": "sport_club_page",
+      "sourceType": "sport_club_page",
+      "events": false
+    },
+    {
+      "id": "dir:cam:sport_guide_pdf",
+      "kind": "staging",
+      "name": "sport_guide_pdf",
+      "sourceType": "sport_guide_pdf",
+      "events": false
+    },
+    {
+      "id": "dir:cam:camdram",
+      "kind": "staging",
+      "name": "camdram",
+      "sourceType": "camdram",
+      "events": false
+    },
+    {
+      "id": "dir:cam:cucbc",
+      "kind": "staging",
+      "name": "cucbc",
+      "sourceType": "cucbc",
+      "events": false
+    },
+    {
+      "id": "dir:cam:college_list",
+      "kind": "staging",
+      "name": "college_list",
+      "sourceType": "college_list",
+      "events": false
+    },
+    {
+      "id": "dir:cam:society_website",
+      "kind": "staging",
+      "name": "society_website",
+      "sourceType": "society_website",
+      "events": false
+    },
+    {
+      "id": "dir:cam:_resolved",
+      "kind": "staging",
+      "name": "_resolved",
+      "sourceType": null,
+      "events": false
+    },
+    {
+      "id": "dir:cam:linktree",
+      "kind": "staging",
+      "name": "linktree",
+      "sourceType": "linktree",
+      "events": false
+    },
+    {
+      "id": "dir:cam:camdram.events",
+      "kind": "staging",
+      "name": "camdram.events",
+      "sourceType": "camdram",
+      "events": true
+    },
+    {
+      "id": "dir:cam:talks_list.events",
+      "kind": "staging",
+      "name": "talks_list.events",
+      "sourceType": "talks_list",
+      "events": true
+    },
+    {
+      "id": "dir:cam:cucbc.events",
+      "kind": "staging",
+      "name": "cucbc.events",
+      "sourceType": "cucbc",
+      "events": true
+    },
+    {
+      "id": "dir:cam:playwaze.events",
+      "kind": "staging",
+      "name": "playwaze.events",
+      "sourceType": "playwaze",
+      "events": true
+    },
+    {
+      "id": "dir:cam:uni_events_api.events",
+      "kind": "staging",
+      "name": "uni_events_api.events",
+      "sourceType": "uni_events_api",
+      "events": true
+    },
+    {
+      "id": "dir:cam:ics_feed.events",
+      "kind": "staging",
+      "name": "ics_feed.events",
+      "sourceType": "ics_feed",
+      "events": true
+    },
+    {
+      "id": "dir:cam:luma.events",
+      "kind": "staging",
+      "name": "luma.events",
+      "sourceType": "luma",
+      "events": true
+    },
+    {
+      "id": "dir:cam:su_whatson.events",
+      "kind": "staging",
+      "name": "su_whatson.events",
+      "sourceType": "su_whatson",
+      "events": true
+    },
+    {
+      "id": "dir:cam:society_website.events",
+      "kind": "staging",
+      "name": "society_website.events",
+      "sourceType": "society_website",
+      "events": true
+    },
+    {
+      "id": "dir:cam:mailing_list_email",
+      "kind": "staging",
+      "name": "mailing_list_email",
+      "sourceType": "mailing_list_email",
+      "events": false
+    },
+    {
+      "id": "dir:cam:instagram_api",
+      "kind": "staging",
+      "name": "instagram_api",
+      "sourceType": "instagram_api",
+      "events": false
+    },
+    {
+      "id": "dir:cam:termcard",
+      "kind": "staging",
+      "name": "termcard",
+      "sourceType": "termcard",
+      "events": false
+    },
+    {
+      "id": "sel:cam:org_lookup",
+      "kind": "selector",
+      "name": "org_lookup",
+      "selector": "@org_lookup",
+      "description": "the organisations known so far: _resolved and the crosswalk"
+    },
+    {
+      "id": "sel:cam:event_index",
+      "kind": "selector",
+      "name": "event_index",
+      "selector": "@event_index",
+      "description": "the events already staged"
+    },
+    {
+      "id": "sel:cam:all_observations",
+      "kind": "selector",
+      "name": "all_observations",
+      "selector": "@all_observations",
+      "description": "every source directory at once"
+    },
+    {
+      "id": "sink:cam:termDates",
+      "kind": "sink",
+      "name": "termDates",
+      "route": "/api/pipeline/termDates"
+    },
+    {
+      "id": "sink:cam:inbound/pending",
+      "kind": "sink",
+      "name": "inbound/pending",
+      "route": "/api/pipeline/inbound/pending"
+    },
+    {
+      "id": "sink:cam:inbound/file",
+      "kind": "sink",
+      "name": "inbound/file",
+      "route": "/api/pipeline/inbound/file"
+    },
+    {
+      "id": "sink:cam:inbound/mark",
+      "kind": "sink",
+      "name": "inbound/mark",
+      "route": "/api/pipeline/inbound/mark"
+    },
+    {
+      "id": "sink:cam:claims",
+      "kind": "sink",
+      "name": "claims",
+      "route": "/api/pipeline/claims"
+    },
+    {
+      "id": "sink:cam:sources",
+      "kind": "sink",
+      "name": "sources",
+      "route": "/api/pipeline/sources"
+    },
+    {
+      "id": "sink:cam:orgInternal",
+      "kind": "sink",
+      "name": "orgInternal",
+      "route": "/api/pipeline/orgInternal"
+    },
+    {
+      "id": "sink:cam:relationships",
+      "kind": "sink",
+      "name": "relationships",
+      "route": "/api/pipeline/relationships"
+    },
+    {
+      "id": "sink:cam:eventOrganisers",
+      "kind": "sink",
+      "name": "eventOrganisers",
+      "route": "/api/pipeline/eventOrganisers"
+    },
+    {
+      "id": "sink:cam:events/superseded",
+      "kind": "sink",
+      "name": "events/superseded",
+      "route": "/api/pipeline/events/superseded"
+    },
+    {
+      "id": "sink:cam:files",
+      "kind": "sink",
+      "name": "files",
+      "route": "/api/pipeline/files"
+    },
+    {
+      "id": "sink:cam:talks/departments",
+      "kind": "sink",
+      "name": "talks/departments",
+      "route": "/api/pipeline/talks/departments"
+    },
+    {
+      "id": "sink:cam:talks/batch",
+      "kind": "sink",
+      "name": "talks/batch",
+      "route": "/api/pipeline/talks/batch"
+    },
+    {
+      "id": "sink:cam:talks/runs",
+      "kind": "sink",
+      "name": "talks/runs",
+      "route": "/api/pipeline/talks/runs"
+    },
+    {
+      "id": "sink:cam:coverage",
+      "kind": "sink",
+      "name": "coverage",
+      "route": "/api/pipeline/coverage"
+    },
+    {
+      "id": "sink:cam:coverage/events",
+      "kind": "sink",
+      "name": "coverage/events",
+      "route": "/api/pipeline/coverage/events"
+    }
+  ],
+  "edges": [
+    {
+      "from": "stage:cam:term_dates",
+      "to": "sink:cam:termDates",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:su_directory",
+      "to": "dir:cam:su_directory",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:su_directory",
+      "to": "dir:cam:su_profile",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:proctors_register",
+      "to": "dir:cam:proctors_register",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:sport_clubs",
+      "to": "dir:cam:sport_az",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:sport_clubs",
+      "to": "dir:cam:sport_club_page",
+      "kind": "writes"
+    },
+    {
+      "from": "dir:cam:sport_club_page",
+      "to": "stage:cam:sport_guide_pdf",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:sport_guide_pdf",
+      "to": "dir:cam:sport_guide_pdf",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:camdram_societies",
+      "to": "dir:cam:camdram",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:cucbc_clubs",
+      "to": "dir:cam:cucbc",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:colleges",
+      "to": "dir:cam:college_list",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:colleges",
+      "to": "dir:cam:society_website",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:all_observations",
+      "to": "stage:cam:resolve",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:resolve",
+      "to": "dir:cam:_resolved",
+      "kind": "writes"
+    },
+    {
+      "from": "dir:cam:_resolved",
+      "to": "stage:cam:enrich",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:enrich",
+      "to": "dir:cam:society_website",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:enrich",
+      "to": "dir:cam:linktree",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:all_observations",
+      "to": "stage:cam:classify",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:classify",
+      "to": "sel:cam:all_observations",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:camdram_events",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:camdram_events",
+      "to": "dir:cam:camdram.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:talks_cam",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:talks_cam",
+      "to": "dir:cam:talks_list.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:cucbc_events",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:cucbc_events",
+      "to": "dir:cam:cucbc.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:playwaze",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:playwaze",
+      "to": "dir:cam:playwaze.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:uni_events",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:uni_events",
+      "to": "dir:cam:uni_events_api.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:calendar_feeds",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:calendar_feeds",
+      "to": "dir:cam:ics_feed.events",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:calendar_feeds",
+      "to": "dir:cam:luma.events",
+      "kind": "writes"
+    },
+    {
+      "from": "dir:cam:su_profile",
+      "to": "stage:cam:su_whatson",
+      "kind": "reads"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:su_whatson",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:su_whatson",
+      "to": "dir:cam:su_whatson.events",
+      "kind": "writes"
+    },
+    {
+      "from": "dir:cam:society_website",
+      "to": "stage:cam:website_events",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:website_events",
+      "to": "dir:cam:society_website.events",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "sel:cam:event_index",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "dir:cam:mailing_list_email",
+      "kind": "writes"
+    },
+    {
+      "from": "sink:cam:inbound/pending",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:inbound/file",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:inbox",
+      "to": "sink:cam:inbound/mark",
+      "kind": "posts"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:instagram",
+      "kind": "reads"
+    },
+    {
+      "from": "sel:cam:event_index",
+      "to": "stage:cam:instagram",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:instagram",
+      "to": "dir:cam:instagram_api",
+      "kind": "writes"
+    },
+    {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:termcards",
+      "kind": "reads"
+    },
+    {
+      "from": "sel:cam:event_index",
+      "to": "stage:cam:termcards",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:termcards",
+      "to": "dir:cam:termcard",
+      "kind": "writes"
+    },
+    {
+      "from": "stage:cam:resolve",
+      "to": "stage:cam:load",
+      "kind": "requires"
+    },
+    {
+      "from": "sel:cam:all_observations",
+      "to": "stage:cam:load",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:claims",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:sources",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:orgInternal",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:relationships",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:eventOrganisers",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:events/superseded",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:files",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:talks",
+      "to": "sink:cam:talks/departments",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:talks",
+      "to": "sink:cam:talks/batch",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:talks",
+      "to": "sink:cam:talks/runs",
+      "kind": "posts"
+    },
+    {
+      "from": "sink:cam:coverage",
+      "to": "stage:cam:report",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:coverage/events",
+      "to": "stage:cam:report",
+      "kind": "reads"
+    },
+    {
+      "from": "dir:cam:_resolved",
+      "to": "group:cam:events",
+      "kind": "needs"
+    },
+    {
+      "from": "dir:cam:society_website",
+      "to": "group:cam:events",
+      "kind": "needs"
+    },
+    {
+      "from": "dir:cam:su_profile",
+      "to": "group:cam:events",
+      "kind": "needs"
+    }
+  ],
+  "sources": [
+    {
+      "key": "term_dates",
+      "label": "University Full Term dates (verified seed)",
+      "stage": "term_dates",
+      "pillar": "shared",
+      "sourceTypes": [],
+      "eventSources": [],
+      "section": "19",
+      "anchor": "19-university-full-term-dates",
+      "permission": null
+    },
+    {
+      "key": "su_directory",
+      "label": "Cambridge SU society directory and profiles",
+      "stage": "su_directory",
+      "pillar": "societies",
+      "sourceTypes": ["su_directory", "su_profile"],
+      "eventSources": [],
+      "section": "1",
+      "anchor": "1-cambridge-su-find-a-society",
+      "permission": "D3"
+    },
+    {
+      "key": "proctors_register",
+      "label": "Proctors' register of societies",
+      "stage": "proctors_register",
+      "pillar": "societies",
+      "sourceTypes": ["proctors_register"],
+      "eventSources": [],
+      "section": "2",
+      "anchor": "2-proctors-register",
+      "permission": "robots"
+    },
+    {
+      "key": "sport_clubs",
+      "label": "Sport Cambridge A–Z and club pages",
+      "stage": "sport_clubs",
+      "pillar": "societies",
+      "sourceTypes": ["sport_az", "sport_club_page"],
+      "eventSources": [],
+      "section": "3",
+      "anchor": "3-sport-cambridge-az-and-club-pages",
+      "permission": "robots"
+    },
+    {
+      "key": "sport_guide_pdf",
+      "label": "Sports Club Guide (PDF)",
+      "stage": "sport_guide_pdf",
+      "pillar": "societies",
+      "sourceTypes": ["sport_guide_pdf"],
+      "eventSources": [],
+      "section": "4",
+      "anchor": "4-sports-club-guide-2026-27-pdf",
+      "permission": "robots"
+    },
+    {
+      "key": "camdram_societies",
+      "label": "Camdram societies",
+      "stage": "camdram_societies",
+      "pillar": "societies",
+      "sourceTypes": ["camdram"],
+      "eventSources": [],
+      "section": "5",
+      "anchor": "5-camdram",
+      "permission": "robots"
+    },
+    {
+      "key": "cucbc_clubs",
+      "label": "CUCBC clubs",
+      "stage": "cucbc_clubs",
+      "pillar": "societies",
+      "sourceTypes": ["cucbc"],
+      "eventSources": [],
+      "section": "7",
+      "anchor": "7-cucbc",
+      "permission": "D3"
+    },
+    {
+      "key": "colleges",
+      "label": "College and JCR/MCR society lists",
+      "stage": "colleges",
+      "pillar": "societies",
+      "sourceTypes": ["college_list", "society_website"],
+      "eventSources": [],
+      "section": "8",
+      "anchor": "8-colleges-and-jcrmcr",
+      "permission": "D3"
+    },
+    {
+      "key": "linktree",
+      "label": "Linktree pages",
+      "stage": "enrich",
+      "pillar": "societies",
+      "sourceTypes": ["linktree"],
+      "eventSources": [],
+      "section": "13",
+      "anchor": "13-linktree",
+      "permission": "D3"
+    },
+    {
+      "key": "society_websites",
+      "label": "Society websites",
+      "stage": "enrich",
+      "pillar": "societies",
+      "sourceTypes": ["society_website"],
+      "eventSources": [],
+      "section": "14",
+      "anchor": "14-society-websites",
+      "permission": "D3"
+    },
+    {
+      "key": "camdram_events",
+      "label": "Camdram diary",
+      "stage": "camdram_events",
+      "pillar": "events",
+      "sourceTypes": ["camdram"],
+      "eventSources": ["camdram"],
+      "section": "5",
+      "anchor": "5-camdram",
+      "permission": "robots"
+    },
+    {
+      "key": "talks_cam",
+      "label": "talks.cam lists (G1)",
+      "stage": "talks_cam",
+      "pillar": "events",
+      "sourceTypes": ["talks_list"],
+      "eventSources": ["talks_cam"],
+      "section": "6",
+      "anchor": "6-talkscam",
+      "permission": "robots"
+    },
+    {
+      "key": "cucbc_events",
+      "label": "CUCBC calendar, Bumps and timetable",
+      "stage": "cucbc_events",
+      "pillar": "events",
+      "sourceTypes": ["cucbc"],
+      "eventSources": ["cucbc"],
+      "section": "7",
+      "anchor": "7-cucbc",
+      "permission": "robots"
+    },
+    {
+      "key": "playwaze",
+      "label": "Playwaze college leagues",
+      "stage": "playwaze",
+      "pillar": "events",
+      "sourceTypes": ["playwaze"],
+      "eventSources": ["playwaze"],
+      "section": "9",
+      "anchor": "9-playwaze-college-leagues-and-bucs",
+      "permission": "robots"
+    },
+    {
+      "key": "uni_events",
+      "label": "University events programme",
+      "stage": "uni_events",
+      "pillar": "events",
+      "sourceTypes": ["uni_events_api"],
+      "eventSources": ["uni_events_api"],
+      "section": "10",
+      "anchor": "10-university-events-programme-read-with-permission",
+      "permission": "D3a"
+    },
+    {
+      "key": "calendar_feeds",
+      "label": "Society calendar feeds (ICS, Google Calendar, Luma)",
+      "stage": "calendar_feeds",
+      "pillar": "events",
+      "sourceTypes": ["ics_feed", "luma"],
+      "eventSources": ["ics", "google_calendar", "luma"],
+      "section": "11",
+      "anchor": "11-calendar-feeds-that-societies-publish",
+      "permission": "D3"
+    },
+    {
+      "key": "su_whatson",
+      "label": "SU What's On",
+      "stage": "su_whatson",
+      "pillar": "events",
+      "sourceTypes": ["su_whatson"],
+      "eventSources": ["su_whatson"],
+      "section": "12",
+      "anchor": "12-su-whats-on",
+      "permission": "D3"
+    },
+    {
+      "key": "website_events",
+      "label": "Society websites' events pages",
+      "stage": "website_events",
+      "pillar": "events",
+      "sourceTypes": ["society_website"],
+      "eventSources": ["website", "termcard"],
+      "section": "14",
+      "anchor": "14-society-websites",
+      "permission": "D3"
+    },
+    {
+      "key": "inbox",
+      "label": "Forwarded mailing-list mail",
+      "stage": "inbox",
+      "pillar": "events",
+      "sourceTypes": ["mailing_list_email"],
+      "eventSources": ["mailing_list"],
+      "section": "16",
+      "anchor": "16-mailing-list-inbox",
+      "permission": null
+    },
+    {
+      "key": "instagram",
+      "label": "Instagram Business Discovery API",
+      "stage": "instagram",
+      "pillar": "events",
+      "sourceTypes": ["instagram_api"],
+      "eventSources": ["instagram_api"],
+      "section": "17",
+      "anchor": "17-meta-instagram-business-discovery",
+      "permission": null
+    },
+    {
+      "key": "termcards",
+      "label": "Termcards",
+      "stage": "termcards",
+      "pillar": "events",
+      "sourceTypes": ["termcard"],
+      "eventSources": ["termcard"],
+      "section": "21",
+      "anchor": "21-termcards",
+      "permission": "D3"
+    },
+    {
+      "key": "talks",
+      "label": "talks.cam API and department sites (talks pillar)",
+      "stage": "talks",
+      "pillar": "talks",
+      "sourceTypes": [],
+      "eventSources": [],
+      "section": null,
+      "anchor": null,
+      "permission": "robots"
+    }
+  ]
+}
