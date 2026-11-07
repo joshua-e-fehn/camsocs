@@ -690,6 +690,15 @@ export const listingRequestOutcomeValidator = v.object({
   acceptedAt: v.number(),
 })
 
+/** Where a request's notification went (convex/notifications.ts, ENG-104):
+ * each configured channel's last outcome. No message text, no address. */
+export const requestNotificationValidator = v.object({
+  channel: v.union(v.literal("slack"), v.literal("email"), v.literal("whatsapp")),
+  ok: v.boolean(),
+  error: v.optional(v.string()),
+  at: v.number(),
+})
+
 export const listingRequestFields = {
   key: v.string(),
   orgKey: v.optional(v.string()),
@@ -707,6 +716,8 @@ export const listingRequestFields = {
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
   outcome: v.optional(listingRequestOutcomeValidator),
+  /** The new-request notification's delivery, per channel (ENG-104). */
+  notifications: v.optional(v.array(requestNotificationValidator)),
   /** When the retention job reduced an accepted correction its owner claims
    * cite (`request:<key>`) to a stub: key, kind, listing, role, outcome and
    * dates stay; the submitter's address, message and fields are gone (R8). */
