@@ -152,6 +152,10 @@ export const harvestStageResult = v.object({
    * stage's quarantine (`quarantineHeld`, `quarantineDropped`,
    * `quarantineReview`), read by the broker overview. Omitted when none. */
   metrics: v.optional(v.record(v.string(), v.number())),
+  /** Wall-clock time the stage took, in milliseconds. Optional (widen-only,
+   * deploy.md §5): rows and posts from before it was recorded omit it, and
+   * readers treat it as "not recorded". */
+  durationMs: v.optional(v.number()),
 })
 export type HarvestStageResult = Infer<typeof harvestStageResult>
 
@@ -168,6 +172,13 @@ export const harvestRunFields = {
   requestedStages: v.array(v.string()),
   /** `camsocs_pipeline.__version__` of the code that ran. */
   pipelineVersion: v.string(),
+  /** The stage group that ran (`events`, `full`, `talks`), when the run was a
+   * `sync --group`. Optional (widen-only, deploy.md §5): absent on older rows
+   * and ad-hoc runs; readers then fall back to parsing `command`. */
+  group: v.optional(v.string()),
+  /** The code revision that ran (a git commit sha, or `CAMSOCS_REVISION`).
+   * Optional (widen-only): absent means "not recorded". */
+  revision: v.optional(v.string()),
   status: literalUnion(HARVEST_RUN_STATUSES),
   startedAt: v.number(),
   /** null until `runs.finish`. */
