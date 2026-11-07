@@ -1,5 +1,6 @@
 import { currentCampus } from "./campus"
 import { CATEGORIES_PATH, categoryHubPath } from "./directory-hubs"
+import { GUIDES, GUIDES_PATH } from "./guides"
 import { CONTACT_EMAIL, DISCLAIMER, SITE_NAME, SITE_URL } from "./site"
 import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
 
@@ -46,12 +47,6 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "all 31 colleges with their JCR, MCR, boat club, societies and formal hall rules",
   },
   {
-    path: "/guides/formal-hall",
-    name: "Formal hall guide",
-    about:
-      "how formal hall works and how to go to another college's formal, every fact linked to its source",
-  },
-  {
     path: "/about",
     name: `About ${SITE_NAME}`,
     about: "who runs it, where every fact comes from and how the data is collected",
@@ -86,6 +81,13 @@ export function llmsTxt(): string {
     ...CATEGORIES.map(
       (category) => `- [${CATEGORY_LABELS[category]}](${SITE_URL}${categoryHubPath(category)})`,
     ),
+    "",
+    // The guides (lib/guides.ts): unofficial summaries of what colleges,
+    // clubs and the University publish, each fact linked to its source.
+    "## Guides",
+    "",
+    `- [All guides](${SITE_URL}${GUIDES_PATH})`,
+    ...GUIDES.map((entry) => `- [${entry.title}](${SITE_URL}${entry.path}): ${entry.summary}`),
     "",
     `## Citing ${SITE_NAME}`,
     "",

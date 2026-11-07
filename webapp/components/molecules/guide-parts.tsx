@@ -9,15 +9,19 @@ import type { GuideSource } from "@/lib/guides"
 
 /** An inline citation: the publisher, linking the source. */
 export function Cite({ source }: { source: GuideSource }) {
+  // The space sits outside the unbreakable part, so a run of citations can
+  // wrap between them on a phone.
   return (
-    <span className="text-xs whitespace-nowrap">
+    <>
       {" "}
-      [
-      <ExternalLink href={source.url} icon={false} className="text-brand-text">
-        {source.publisher}
-      </ExternalLink>
-      ]
-    </span>
+      <span className="text-xs whitespace-nowrap">
+        [
+        <ExternalLink href={source.url} icon={false} className="text-brand-text">
+          {source.publisher}
+        </ExternalLink>
+        ]
+      </span>
+    </>
   )
 }
 

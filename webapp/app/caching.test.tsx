@@ -71,6 +71,7 @@ describe("public pages", () => {
     ...pages,
     "lib/event-page.ts",
     "lib/term-dates.ts",
+    "lib/sport-events.ts",
     "lib/sign-in-options.ts",
   ]) {
     test(`${file} reads no request and only cached, anonymous data`, () => {
