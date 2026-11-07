@@ -2,7 +2,10 @@
 PostHog's query API and two status checks of the site, each `ok`, `failed`
 or `unknown`, and a count of new listing requests. Only a failure that was
 not already paged for, a site check's recovery or a new request exits
-non-zero, and a PostHog outage never does.
+non-zero, and a PostHog outage never does. Every query is scoped to the
+run's campus (D8); the scraper-health checks run in shadow (D9): printed,
+never in the status file, never paging (canned rows: one breach and one pass
+each).
 
 A fake query client stands in for PostHog in the check tests; the HTTP client
 and the command are tested against respx routes (never the network).
@@ -24,12 +27,14 @@ import respx
 from click.testing import CliRunner
 
 from camsocs_pipeline import monitor
+from camsocs_pipeline.campuses import CAMBRIDGE
 from camsocs_pipeline.cli import cli
-from camsocs_pipeline.config import ConfigError
+from camsocs_pipeline.config import ConfigError, Settings
 from camsocs_pipeline.models.vocab import LISTING_REQUEST_KINDS
 from camsocs_pipeline.monitor import (
     CHECK_NAMES,
     ERROR_SPIKE_MAX,
+    NOT_DRY_RUN,
     NOT_INTERNAL,
     REALERT_AFTER,
     REQUESTS_FIRST_WINDOW,
@@ -39,19 +44,26 @@ from camsocs_pipeline.monitor import (
     SITE_CHECK_NAMES,
     SITE_CHECKS,
     ZERO_RESULT_MIN_SEARCHES,
+    Check,
     CheckResult,
     PostHogQueryClient,
     QueryFailed,
     RequestCount,
     assess,
+    camel,
+    campus_filter,
     check_site,
     check_sites,
+    checks_for,
     count_requests,
     requests_query,
     requests_window,
     run_checks,
+    run_shadow_checks,
+    shadow_checks_for,
     site_client,
 )
+from tests.campus_zz import ZZ, registered
 
 HOST = "https://eu.posthog.test"
 PROJECT = "4242"
@@ -77,13 +89,30 @@ def requests_row(total: int, **kinds: int) -> Callable[[str], list[list[Any]]]:
 
 
 #: Rows that pass every check: 3 exceptions, 1 recent harvest (2 h ago),
-#: 40 searches of which 4 found nothing, 120 pageviews, no new request.
+#: 40 searches of which 4 found nothing, 120 pageviews, no new request; and
+#: every shadow check (D9) healthy: a daily stage yielding as usual, fetching
+#: cleanly, a run well inside its limit, few model errors and fallbacks.
 HEALTHY: dict[str, Rows] = {
     "error_spike": [[3]],
     "stale_harvest": [[1, 120]],
     "zero_result_rate": [[40, 4]],
     "pageview_heartbeat": [[120]],
     "listing_requests": requests_row(0),
+    "stale_harvest_events": [[1, 120]],
+    "stale_harvest_full": [[1, 3000]],
+    "yield_drop": [
+        ["calendar_feeds", 60, 100],
+        ["calendar_feeds", 1500, 90],
+        ["calendar_feeds", 2900, 110],
+        ["calendar_feeds", 4300, 100],
+    ],
+    "stage_freshness": [["calendar_feeds", 600]],
+    "fetch_error_rate": [["calendar_feeds", 100, 3]],
+    "rate_limited": [["calendar_feeds", 2]],
+    "robots_block_jump": [["calendar_feeds", 60, 1], ["calendar_feeds", 1500, 1]],
+    "run_duration": [["events", 1800]],
+    "llm_error_rate": [[100, 2]],
+    "llm_fallback_rate": [[80, 5]],
 }
 
 
@@ -756,3 +785,335 @@ def test_the_site_checks_run_in_order(net: respx.MockRouter) -> None:
         found = check_sites(client, pause=no_pause)
     assert [r.name for r in found] == list(SITE_CHECK_NAMES)
     assert [str(call.request.url) for call in net.calls] == [HOME, SOCIETIES]
+
+
+# --- one campus per run (D8) -------------------------------------------------------------------
+
+
+CAM_CLAUSE = " AND ifNull(properties.campus, 'cam') = 'cam'"
+
+
+def all_queries(profile=CAMBRIDGE) -> dict[str, str]:
+    queries = {c.name: c.query for c in (*checks_for(profile), *shadow_checks_for(profile))}
+    queries["listing_requests"] = requests_query(NOW - timedelta(hours=1), NOW, profile.id)
+    return queries
+
+
+def test_cambridges_paging_queries_are_the_old_ones_with_the_campus_clause() -> None:
+    """The four paging checks count exactly what they counted before the
+    seam: the only change is the campus clause, true of every event so far."""
+    production = " AND properties.environment = 'production'"
+    before = {
+        "error_spike": "SELECT count() FROM events WHERE event = '$exception'"
+        + production + NOT_INTERNAL
+        + " AND timestamp > now() - INTERVAL 60 MINUTE",
+        "stale_harvest": "SELECT countIf(timestamp > now() - INTERVAL 26 HOUR),"
+        " if(count() = 0, NULL, dateDiff('minute', max(timestamp), now()))"
+        " FROM events WHERE event = 'harvest_run_finished'" + production
+        + " AND properties.status IN ('success', 'partial')"
+        " AND ifNull(toString(properties.dryRun), '') != 'true'"
+        " AND timestamp > now() - INTERVAL 30 DAY",
+        "zero_result_rate": "SELECT countIf(event = 'search_performed'),"
+        " countIf(event = 'search_zero_results')"
+        " FROM events WHERE event IN ('search_performed', 'search_zero_results')"
+        + production + NOT_INTERNAL + " AND timestamp > now() - INTERVAL 24 HOUR",
+        "pageview_heartbeat": "SELECT count() FROM events WHERE event = '$pageview'"
+        + production + NOT_INTERNAL + " AND timestamp > now() - INTERVAL 48 HOUR",
+    }  # fmt: skip
+    for check in cambridge_checks():
+        assert check.query.replace(CAM_CLAUSE, "", 1) == before[check.name], check.name
+        assert check.query.count(CAM_CLAUSE) == 1
+
+
+def cambridge_checks() -> tuple[Check, ...]:
+    """`monitor.CHECKS`, after checking it is Cambridge's paging checks."""
+    assert checks_for(CAMBRIDGE) == monitor.CHECKS
+    return monitor.CHECKS
+
+
+def test_the_paging_checks_are_unchanged_and_the_new_ones_are_all_shadow() -> None:
+    assert CHECK_NAMES == ("error_spike", "stale_harvest", "zero_result_rate", "pageview_heartbeat")
+    assert [c.name for c in checks_for(CAMBRIDGE)] == list(CHECK_NAMES)
+    assert not any(c.shadow for c in checks_for(CAMBRIDGE))
+    shadow = shadow_checks_for(CAMBRIDGE)
+    assert tuple(c.name for c in shadow) == monitor.SHADOW_CHECKS
+    assert set(monitor.SHADOW_CHECKS) == {
+        "stale_harvest_events", "stale_harvest_full", "yield_drop", "stage_freshness",
+        "fetch_error_rate", "rate_limited", "robots_block_jump", "run_duration",
+        "llm_error_rate", "llm_fallback_rate",
+    }  # fmt: skip
+    assert all(c.shadow for c in shadow)
+
+
+def test_every_query_is_scoped_to_the_campus_and_every_harvest_query_leaves_out_dry_runs() -> None:
+    for name, query in all_queries().items():
+        assert query.count(CAM_CLAUSE) == 1, name
+        assert "properties.environment = 'production'" in query, name
+        if "harvest_" in query or "$ai_generation" in query:
+            assert NOT_DRY_RUN in query, name
+
+
+def test_a_second_campus_queries_its_own_events_and_checks_its_own_site() -> None:
+    with registered():
+        queries = all_queries(ZZ)
+        for name, query in queries.items():
+            assert " AND ifNull(properties.campus, 'cam') = 'zz'" in query, name
+            assert "= 'cam'" not in query, name
+        # zz schedules both groups, so both stale checks exist for it too.
+        assert {"stale_harvest_events", "stale_harvest_full"} <= set(queries)
+    assert ZZ.branding.monitor_urls == (("site_home", "https://zz.localhost/"),)
+
+
+@pytest.mark.parametrize("campus", ["CAM", "c", "cam'--", "toolongname", ""])
+def test_a_campus_id_of_any_other_shape_never_reaches_a_query(campus: str) -> None:
+    with pytest.raises(ConfigError):
+        campus_filter(campus)
+
+
+def test_the_status_file_names_the_campus_and_its_site() -> None:
+    verdict = assess(
+        run_checks(FakeQueryClient({})), {}, now=NOW, campus="cam", site="https://camsocs.uk"
+    )
+    payload = verdict.status_payload()
+    assert payload["campus"] == "cam" and payload["site"] == "https://camsocs.uk"
+    # The alert builds the inbox link from `site`: the same as Cambridge's.
+    assert f"{payload['site']}/dashboard/requests" == CAMBRIDGE.branding.requests_inbox
+    assert f"{ZZ.branding.site_url}/dashboard/requests" == ZZ.branding.requests_inbox
+
+
+# --- shadow checks (D9) ---------------------------------------------------------------------
+
+
+def shadow(**answers: Rows | Exception) -> dict[str, CheckResult]:
+    client = FakeQueryClient(answers)
+    return {r.name: r for r in run_shadow_checks(client, shadow_checks_for(CAMBRIDGE))}
+
+
+def runs(stage: str, *pairs: tuple[float, float | None]) -> list[list[Any]]:
+    """`(minutes ago, number)` runs of one stage as the query returns them."""
+    return [[stage, minutes, number] for minutes, number in pairs]
+
+
+DAY = 24 * 60
+
+
+def test_healthy_numbers_pass_every_shadow_check() -> None:
+    found = shadow()
+    assert list(found) == list(monitor.SHADOW_CHECKS)
+    assert {r.status for r in found.values()} == {"ok"}, {
+        n: r.line() for n, r in found.items() if r.status != "ok"
+    }
+    assert all(r.shadow for r in found.values())
+
+
+@pytest.mark.parametrize(
+    "name, rows, detail",
+    [
+        ("stale_harvest_events", [[0, 30 * 60]], {"hoursSinceLastSuccess": 30.0}),
+        ("stale_harvest_full", [[0, None]], {"hoursSinceLastSuccess": None}),
+        # A daily stage's latest yield under a quarter of its median (100).
+        (
+            "yield_drop",
+            runs("calendar_feeds", (60, 10), (DAY, 100), (2 * DAY, 90), (3 * DAY, 110)),
+            {"calendarFeeds": 10},
+        ),
+        # Nothing at all where the median was small but above zero.
+        (
+            "yield_drop",
+            runs("website_events", (60, 0), (DAY, 3), (2 * DAY, 2), (3 * DAY, 3)),
+            {"websiteEvents": 0},
+        ),
+        # A weekly-only stage judged on its 28 days.
+        (
+            "yield_drop",
+            runs("su_directory", (60, 50), (7 * DAY, 400), (14 * DAY, 410), (21 * DAY, 390)),
+            {"suDirectory": 50},
+        ),
+        ("stage_freshness", [["calendar_feeds", 51 * 60]], {"calendarFeeds": 51.0}),
+        ("stage_freshness", [["su_directory", 199 * 60]], {"suDirectory": 199.0}),
+        ("fetch_error_rate", [["calendar_feeds", 100, 31]], {"calendarFeeds": 0.31}),
+        ("rate_limited", [["website_events", 11]], {"websiteEvents": 11}),
+        (
+            "robots_block_jump",
+            runs("enrich", (60, 6), (DAY, 1), (3 * DAY, 2)),
+            {"enrich": 6},
+        ),
+        ("run_duration", [["events", 5761]], {"events": 5761}),
+        ("run_duration", [["full", 21000]], {"full": 21000}),
+        ("llm_error_rate", [[100, 21]], {"generations": 100, "errors": 21}),
+        ("llm_fallback_rate", [[100, 31]], {"bulkGenerations": 100, "fallbacks": 31}),
+    ],
+)
+def test_each_shadow_check_fails_past_its_threshold(name: str, rows: Rows, detail: dict) -> None:
+    found = shadow(**{name: rows})
+    assert [n for n, r in found.items() if r.status == "failed"] == [name]
+    assert dict(found[name].detail) == detail
+    assert found[name].line().endswith("— shadow, never pages")
+
+
+@pytest.mark.parametrize(
+    "name, rows",
+    [
+        ("stale_harvest_events", [[1, 25 * 60]]),
+        # A small median: a low yield that is not zero is not a drop.
+        ("yield_drop", runs("website_events", (60, 1), (DAY, 4), (2 * DAY, 4), (3 * DAY, 4))),
+        # Fewer than three earlier runs in the window: not judged.
+        ("yield_drop", runs("calendar_feeds", (60, 0), (DAY, 100), (2 * DAY, 100))),
+        # A daily stage's runs older than 7 days do not count.
+        (
+            "yield_drop",
+            runs("calendar_feeds", (60, 0), (DAY, 100), (8 * DAY, 100), (9 * DAY, 100)),
+        ),
+        # Exactly a quarter is not below a quarter.
+        (
+            "yield_drop",
+            runs("calendar_feeds", (60, 25), (DAY, 100), (2 * DAY, 100), (3 * DAY, 100)),
+        ),
+        # A stage this campus does not have, or a name of the wrong shape.
+        ("yield_drop", runs("old_stage", (60, 0), (DAY, 100), (2 * DAY, 100), (3 * DAY, 100))),
+        ("stage_freshness", [["Jane Example", 900 * 60]]),
+        # A weekly-only stage may go 198 hours.
+        ("stage_freshness", [["su_directory", 51 * 60]]),
+        ("fetch_error_rate", [["calendar_feeds", 100, 30]]),
+        ("fetch_error_rate", [["calendar_feeds", 19, 19]]),
+        ("fetch_error_rate", [["calendar_feeds", None, None]]),
+        ("rate_limited", [["website_events", 10]]),
+        ("robots_block_jump", runs("enrich", (60, 4), (DAY, 0))),
+        ("robots_block_jump", runs("enrich", (60, 7), (DAY, 3), (2 * DAY, 4))),
+        # The latest run is older than a day: nothing to judge today.
+        ("robots_block_jump", runs("enrich", (2 * DAY, 9), (3 * DAY, 0))),
+        # No earlier run (or only runs before the counters existed).
+        ("robots_block_jump", runs("enrich", (60, 9), (DAY, None))),
+        ("run_duration", [["events", 5760], ["full", 17280], ["talks", 99999]]),
+        ("llm_error_rate", [[19, 19]]),
+        ("llm_fallback_rate", [[19, 19]]),
+        ("llm_fallback_rate", [[100, 30]]),
+    ],
+)
+def test_each_shadow_check_passes_short_of_its_threshold(name: str, rows: Rows) -> None:
+    assert shadow(**{name: rows})[name].status == "ok"
+
+
+def test_a_multi_row_check_counts_breaches_and_names_four_stages_in_registry_order() -> None:
+    stages = ["website_events", "su_directory", "calendar_feeds", "colleges", "enrich", "inbox"]
+    found = shadow(rate_limited=[[stage, 50] for stage in stages])["rate_limited"]
+    assert found.status == "failed" and found.value == 6
+    assert list(found.detail) == ["suDirectory", "colleges", "enrich", "calendarFeeds"]
+    assert all("_" not in key for key in found.detail), "the alert's count names have none"
+
+
+def test_stage_names_are_camelcased_for_the_alert() -> None:
+    assert camel("website_events") == "websiteEvents"
+    assert camel("enrich") == "enrich"
+    assert camel("su_whatson") == "suWhatson"
+
+
+@pytest.mark.parametrize(
+    "answer, reason",
+    [
+        (QueryFailed("HTTP 429"), "HTTP 429"),
+        ([["calendar_feeds", 60]], "malformed answer"),
+        ([["calendar_feeds", "an hour", 3]], "malformed answer"),
+        ([["calendar_feeds", 60, 100]] * (monitor.MAX_ROWS + 1), "malformed answer"),
+        (KeyError("surprise"), "KeyError"),
+    ],
+)
+def test_a_shadow_check_posthog_cannot_answer_is_unknown(answer: Any, reason: str) -> None:
+    found = shadow(yield_drop=answer)["yield_drop"]
+    assert found.status == "unknown" and found.reason == reason
+    assert found.line().startswith("shadow yield_drop: unknown")
+
+
+def test_the_shadow_checks_share_one_time_budget() -> None:
+    ticks = iter(range(0, 10_000, 50))
+    found = run_shadow_checks(
+        FakeQueryClient({}),
+        shadow_checks_for(CAMBRIDGE),
+        budget_s=120,
+        clock=lambda: float(next(ticks)),
+    )
+    # Started at 0; asked at 50 and 100 s; the third would start at 150 s.
+    assert [r.status for r in found[:2]] == ["ok", "ok"]
+    assert {r.reason for r in found[2:]} == {"time budget"}
+    assert len(found) == len(monitor.SHADOW_CHECKS)
+
+
+def test_shadow_results_never_page_and_never_reach_the_status_file() -> None:
+    bad = shadow(stage_freshness=[["calendar_feeds", 99 * 60]], llm_error_rate=QueryFailed("x"))
+    verdict = assess(run_checks(FakeQueryClient({})), {}, now=NOW).with_shadow(list(bad.values()))
+    assert not verdict.page and verdict.result == "ok" and verdict.unknown == []
+    payload = verdict.status_payload()
+    assert "shadowChecks" not in payload
+    assert [c["name"] for c in payload["checks"]] == list(CHECK_NAMES)
+    printed = verdict.json_payload()
+    assert [c["name"] for c in printed["shadowChecks"]] == list(monitor.SHADOW_CHECKS)
+    assert "shadow stage_freshness: failed" in "\n".join(monitor.summary(verdict))
+    # Even passed to `assess` by mistake, a shadow failure does not page.
+    mixed = assess([*run_checks(FakeQueryClient({})), *bad.values()], {}, now=NOW)
+    assert not mixed.page and mixed.failed == []
+
+
+def test_the_command_prints_shadow_checks_but_writes_and_pages_only_the_others(
+    configured, net: respx.MockRouter, tmp_path: Path
+) -> None:
+    net.post(QUERY_URL).mock(
+        side_effect=answer_by_name({"run_duration": [["events", 7000]], "rate_limited": 503})
+    )
+    status = tmp_path / "status-monitor.json"
+
+    result = invoke(configured, "--status-json", str(status))
+
+    assert result.exit_code == 0, result.output
+    assert "monitor: shadow run_duration: failed, 1" in result.output
+    assert "monitor: shadow rate_limited: unknown (HTTP 503" in result.output
+    assert "not checked" not in result.output, "a shadow unknown is no warning"
+    written = json.loads(status.read_text())
+    assert written["result"] == "ok" and written["paged"] is False
+    assert written["campus"] == "cam" and written["site"] == "https://camsocs.uk"
+    assert [c["name"] for c in written["checks"]] == [*CHECK_NAMES, *SITE_CHECK_NAMES]
+    assert "shadowChecks" not in written
+
+
+def test_the_command_prints_json_with_the_shadow_checks(
+    configured, net: respx.MockRouter, tmp_path: Path
+) -> None:
+    net.post(QUERY_URL).mock(side_effect=answer_by_name({"yield_drop": [["inbox", 60, 0]]}))
+    status = tmp_path / "status-monitor.json"
+
+    result = invoke(configured, "--status-json", str(status), "--json")
+
+    assert result.exit_code == 0, result.output
+    printed = json.loads(result.stdout)
+    assert printed["campus"] == "cam" and printed["kind"] == "monitor"
+    assert [c["name"] for c in printed["shadowChecks"]] == list(monitor.SHADOW_CHECKS)
+    assert [c["name"] for c in printed["checks"]] == [*CHECK_NAMES, *SITE_CHECK_NAMES]
+    assert "shadowChecks" not in json.loads(status.read_text())
+    assert KEY not in result.output
+
+
+def test_a_zz_run_checks_its_own_site_and_scopes_its_queries(
+    net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(monitor, "SITE_RETRY_PAUSE", 0)
+    home = net.head("https://zz.localhost/").respond(200)
+    route = net.post(QUERY_URL).mock(side_effect=answer_by_name({}))
+    status = tmp_path / "status-monitor.json"
+    with registered():
+        settings = Settings(
+            _env_file=None,
+            campus="zz",
+            posthog_personal_api_key=KEY,
+            posthog_project_id=PROJECT,
+            posthog_app_host=HOST,
+        )
+        result = invoke(settings, "--status-json", str(status))
+    assert result.exit_code == 0, result.output
+    assert home.call_count == 1
+    assert "site_societies" not in result.output
+    queries = [json.loads(call.request.content)["query"]["query"] for call in route.calls]
+    assert queries and all("ifNull(properties.campus, 'cam') = 'zz'" in q for q in queries)
+    written = json.loads(status.read_text())
+    assert written["campus"] == "zz" and written["site"] == "https://zz.localhost"
+    assert home.calls.last.request.headers["User-Agent"] == (
+        "camsocs-monitor/0.1 (+https://zz.localhost/about)"
+    )
