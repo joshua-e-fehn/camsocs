@@ -22,6 +22,7 @@ from camsocs_pipeline.config import REPO_ROOT
 from camsocs_pipeline.graph import (
     JSON_PATH,
     MERMAID_PATH,
+    READ_ROUTES,
     SCHEMA,
     GraphError,
     build_graph,
@@ -157,7 +158,7 @@ def test_edges_join_existing_nodes(graph: dict) -> None:
     kinds = {node["id"]: node["kind"] for node in graph["nodes"]}
     allowed = {
         "writes": ("stage", {"staging", "selector"}),
-        "reads": ({"staging", "selector"}, "stage"),
+        "reads": ({"staging", "selector", "sink"}, "stage"),
         "requires": ("stage", "stage"),
         "needs": ({"staging"}, "group"),
         "posts": ("stage", "sink"),
@@ -186,14 +187,42 @@ def test_edges_join_existing_nodes(graph: dict) -> None:
     ]
 
 
-def test_every_sink_is_a_pipeline_route_convex_serves(graph: dict) -> None:
+def _convex_routes() -> tuple[set[str], set[str]]:
+    """(every pipeline route webapp/convex/http.ts serves, its ``readRoute``s)."""
     http = (REPO_ROOT / "webapp" / "convex" / "http.ts").read_text(encoding="utf-8")
-    routes = set(re.findall(r'(?:ingestionRoute|readRoute)\("([^"]+)"', http))
-    routes |= {p.removeprefix("/api/pipeline/") for p in re.findall(r'path: "([^"]+)"', http)}
+    reads = set(re.findall(r'readRoute\("([^"]+)"', http))
+    routes = reads | set(re.findall(r'ingestionRoute\("([^"]+)"', http))
+    routes |= {
+        p.removeprefix("/api/pipeline/")
+        for p in re.findall(r'path: "([^"]+)"', http)
+        if p.startswith("/api/pipeline/")
+    }
+    return routes, reads
+
+
+def test_every_sink_is_a_pipeline_route_convex_serves(graph: dict) -> None:
+    routes, _ = _convex_routes()
     for node in _nodes(graph, "sink"):
         assert node["route"] == f"/api/pipeline/{node['name']}"
-        name = node["name"]
-        assert any(route == name or route.startswith(f"{name}/") for route in routes), name
+        assert node["name"] in routes, node["name"]
+
+
+def test_stages_read_the_read_routes_and_post_to_the_rest(graph: dict) -> None:
+    routes, reads = _convex_routes()
+    assert reads | {"inbound/file"} == READ_ROUTES
+    assert routes >= READ_ROUTES
+    for edge in graph["edges"]:
+        if edge["kind"] == "posts":
+            assert edge["to"].split(":", 2)[2] not in READ_ROUTES, edge
+        if edge["kind"] == "reads" and edge["from"].startswith("sink:"):
+            assert edge["from"].split(":", 2)[2] in READ_ROUTES, edge
+    edges = graph["edges"]
+    for route in ("eventOrganisers", "events/superseded", "files"):
+        assert {"from": "stage:cam:load", "to": f"sink:cam:{route}", "kind": "posts"} in edges
+    assert {"from": "sink:cam:inbound/pending", "to": "stage:cam:inbox", "kind": "reads"} in edges
+    assert {"from": "stage:cam:inbox", "to": "sink:cam:inbound/mark", "kind": "posts"} in edges
+    assert {"from": "sink:cam:coverage", "to": "stage:cam:report", "kind": "reads"} in edges
+    assert not any(edge["from"] == "stage:cam:report" for edge in edges)
 
 
 def test_groups_mirror_the_registry_and_the_vps_timers(graph: dict) -> None:
@@ -426,7 +455,7 @@ def test_a_synthetic_campus_gets_its_own_lanes_and_ids() -> None:
         }
         for stage in campus_zz.ZZ.stages
     ] + [
-        {**entry, "key": f"engine_{entry['key']}"}
+        {**entry, "key": f"engine_{entry['key']}", "section": None}
         for entry in load_sources("cam")
         if entry["stage"]
         in {"enrich", "calendar_feeds", "website_events", "inbox", "instagram", "termcards"}
@@ -435,6 +464,7 @@ def test_a_synthetic_campus_gets_its_own_lanes_and_ids() -> None:
     built = build_graph(campus_zz.ZZ, sources=sources)
     assert built["campus"]["id"] == "zz"
     assert built["campus"]["name"] == "Testford"
+    assert built["campus"]["docs"] == "docs/campuses/zz.md"
     lanes = [lane["id"] for lane in built["lanes"]]
     assert lanes[:2] == ["zz/societies", "zz/events"]
     assert not any(lane.startswith("cam/") for lane in lanes)
@@ -442,6 +472,21 @@ def test_a_synthetic_campus_gets_its_own_lanes_and_ids() -> None:
     assert all(row["schedule"] is None for row in built["groups"])
     with pytest.raises(GraphError, match="no source manifest"):
         build_graph(campus_zz.ZZ)
+
+    # A zz manifest section names a § of docs/campuses/zz.md, never of
+    # Cambridge's source-research.md, and the pipeline map links there.
+    zz_doc = "# Testford\n\n## §1 Testford union directory\n"
+    cited = [{**sources[0], "section": "1"}, *sources[1:]]
+    built = build_graph(campus_zz.ZZ, sources=cited, docs={"campuses/zz": zz_doc})
+    row = built["sources"][0]
+    assert (row["section"], row["anchor"]) == ("1", "1-testford-union-directory")
+    assert "[§1](campuses/zz.md#1-testford-union-directory)" in render_mermaid(built)
+    with pytest.raises(GraphError, match=r"docs/campuses/zz\.md §2"):
+        build_graph(
+            campus_zz.ZZ,
+            sources=[{**sources[0], "section": "2"}, *sources[1:]],
+            docs={"campuses/zz": zz_doc, "source-research": "## §2 Cambridge only\n"},
+        )
 
 
 # --- the command ---------------------------------------------------------------------------

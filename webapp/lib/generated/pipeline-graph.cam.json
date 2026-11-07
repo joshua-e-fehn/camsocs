@@ -950,10 +950,22 @@
       "route": "/api/pipeline/termDates"
     },
     {
-      "id": "sink:cam:inbound",
+      "id": "sink:cam:inbound/pending",
       "kind": "sink",
-      "name": "inbound",
-      "route": "/api/pipeline/inbound"
+      "name": "inbound/pending",
+      "route": "/api/pipeline/inbound/pending"
+    },
+    {
+      "id": "sink:cam:inbound/file",
+      "kind": "sink",
+      "name": "inbound/file",
+      "route": "/api/pipeline/inbound/file"
+    },
+    {
+      "id": "sink:cam:inbound/mark",
+      "kind": "sink",
+      "name": "inbound/mark",
+      "route": "/api/pipeline/inbound/mark"
     },
     {
       "id": "sink:cam:claims",
@@ -980,10 +992,16 @@
       "route": "/api/pipeline/relationships"
     },
     {
-      "id": "sink:cam:events",
+      "id": "sink:cam:eventOrganisers",
       "kind": "sink",
-      "name": "events",
-      "route": "/api/pipeline/events"
+      "name": "eventOrganisers",
+      "route": "/api/pipeline/eventOrganisers"
+    },
+    {
+      "id": "sink:cam:events/superseded",
+      "kind": "sink",
+      "name": "events/superseded",
+      "route": "/api/pipeline/events/superseded"
     },
     {
       "id": "sink:cam:files",
@@ -1014,6 +1032,12 @@
       "kind": "sink",
       "name": "coverage",
       "route": "/api/pipeline/coverage"
+    },
+    {
+      "id": "sink:cam:coverage/events",
+      "kind": "sink",
+      "name": "coverage/events",
+      "route": "/api/pipeline/coverage/events"
     }
   ],
   "edges": [
@@ -1218,8 +1242,18 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:inbound/pending",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:inbound/file",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
+    },
+    {
       "from": "stage:cam:inbox",
-      "to": "sink:cam:inbound",
+      "to": "sink:cam:inbound/mark",
       "kind": "posts"
     },
     {
@@ -1284,7 +1318,12 @@
     },
     {
       "from": "stage:cam:load",
-      "to": "sink:cam:events",
+      "to": "sink:cam:eventOrganisers",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:load",
+      "to": "sink:cam:events/superseded",
       "kind": "posts"
     },
     {
@@ -1308,9 +1347,14 @@
       "kind": "posts"
     },
     {
-      "from": "stage:cam:report",
-      "to": "sink:cam:coverage",
-      "kind": "posts"
+      "from": "sink:cam:coverage",
+      "to": "stage:cam:report",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:coverage/events",
+      "to": "stage:cam:report",
+      "kind": "reads"
     },
     {
       "from": "dir:cam:_resolved",

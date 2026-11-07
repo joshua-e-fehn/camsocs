@@ -87,17 +87,21 @@ flowchart LR
   sel_all_observations{{"@all_observations"}}
   subgraph convex["Convex /api/pipeline"]
     sink_termDates[/"termDates"/]
-    sink_inbound[/"inbound"/]
+    sink_inbound_pending[/"inbound/pending"/]
+    sink_inbound_file[/"inbound/file"/]
+    sink_inbound_mark[/"inbound/mark"/]
     sink_claims[/"claims"/]
     sink_sources[/"sources"/]
     sink_orgInternal[/"orgInternal"/]
     sink_relationships[/"relationships"/]
-    sink_events[/"events"/]
+    sink_eventOrganisers[/"eventOrganisers"/]
+    sink_events_superseded[/"events/superseded"/]
     sink_files[/"files"/]
     sink_talks_departments[/"talks/departments"/]
     sink_talks_batch[/"talks/batch"/]
     sink_talks_runs[/"talks/runs"/]
     sink_coverage[/"coverage"/]
+    sink_coverage_events[/"coverage/events"/]
   end
   stage_term_dates ==> sink_termDates
   stage_su_directory --> dir_su_directory
@@ -139,7 +143,9 @@ flowchart LR
   sel_org_lookup -.-> stage_inbox
   sel_event_index -.-> stage_inbox
   stage_inbox --> dir_mailing_list_email
-  stage_inbox ==> sink_inbound
+  sink_inbound_pending -.-> stage_inbox
+  sink_inbound_file -.-> stage_inbox
+  stage_inbox ==> sink_inbound_mark
   sel_org_lookup -.-> stage_instagram
   sel_event_index -.-> stage_instagram
   stage_instagram --> dir_instagram_api
@@ -152,12 +158,14 @@ flowchart LR
   stage_load ==> sink_sources
   stage_load ==> sink_orgInternal
   stage_load ==> sink_relationships
-  stage_load ==> sink_events
+  stage_load ==> sink_eventOrganisers
+  stage_load ==> sink_events_superseded
   stage_load ==> sink_files
   stage_talks ==> sink_talks_departments
   stage_talks ==> sink_talks_batch
   stage_talks ==> sink_talks_runs
-  stage_report ==> sink_coverage
+  sink_coverage -.-> stage_report
+  sink_coverage_events -.-> stage_report
 ```
 
 ## Stages

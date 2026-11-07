@@ -15,7 +15,9 @@ Nothing here runs a stage, reads staging or touches the network. Building the
 graph also checks the registry, and raises `GraphError` when
 
 - a stage cites a docs § (``"source-research§N"``) that has no ``## §N``
-  heading, or a doc that does not exist;
+  heading, or a doc that does not exist; a manifest source's ``section`` is
+  checked the same way against the campus's own research doc
+  (`campus_docs`);
 - a stage reads or writes something that is not a staging directory
   (`SOURCE_TYPES`, ``<type>.events``, ``_resolved``) or a selector;
 - a group's stages read a directory none of them writes and the group does
@@ -65,6 +67,30 @@ PERMISSIONS: tuple[str | None, ...] = ("robots", "D3", "D3a", None)
 
 #: A display name where the stage name alone would mislead.
 STAGE_LABELS: Mapping[str, str] = {"talks_cam": "talks.cam lists (G1)"}
+
+#: A stage's ``sinks=`` name that is not itself one Convex route
+#: (``webapp/convex/http.ts``) → the routes the stage actually calls. Every
+#: other name is one route of that name. Each sink node is one real route.
+SINK_ROUTES: Mapping[str, tuple[str, ...]] = {
+    "events": ("eventOrganisers", "events/superseded"),
+    "inbound": ("inbound/pending", "inbound/file", "inbound/mark"),
+    "coverage": ("coverage", "coverage/events"),
+}
+
+#: The Convex pipeline routes a stage reads back from (``readRoute`` and the
+#: ``inbound/file`` download); a stage *reads* these and *posts* to the rest.
+READ_ROUTES: frozenset[str] = frozenset(
+    {
+        "inbound/pending",
+        "inbound/file",
+        "crosswalk",
+        "worklist",
+        "suppressions",
+        "coverage",
+        "coverage/events",
+        "events/scan",
+    }
+)
 
 SELECTOR_DESCRIPTIONS: Mapping[str, str] = {
     "@org_lookup": "the organisations known so far: _resolved and the crosswalk",
@@ -143,6 +169,13 @@ class _Docs:
         return {"doc": doc, "section": section, "anchor": sections[section]}
 
 
+def campus_docs(campus_id: str) -> str:
+    """The doc a campus's manifest ``section`` numbers refer to, by name
+    (``docs/<name>.md``): Cambridge keeps ``source-research``; any other campus
+    has ``campuses/<id>``."""
+    return "source-research" if campus_id == "cam" else f"campuses/{campus_id}"
+
+
 # --- registry checks ----------------------------------------------------------
 
 
@@ -195,7 +228,7 @@ def load_sources(campus_id: str) -> list[dict[str, Any]]:
 
 
 def _sources(
-    entries: Iterable[Mapping[str, Any]], stages: Sequence[Stage], docs: _Docs
+    entries: Iterable[Mapping[str, Any]], stages: Sequence[Stage], docs: _Docs, research: str
 ) -> list[dict[str, Any]]:
     by_name = {stage.name: stage for stage in stages}
     out: list[dict[str, Any]] = []
@@ -225,7 +258,7 @@ def _sources(
         section = entry["section"]
         anchor = None
         if section is not None:
-            ref = docs.ref(f"source-research§{section}", cited_by=f"{stage.name} (source {key})")
+            ref = docs.ref(f"{research}§{section}", cited_by=f"{stage.name} (source {key})")
             anchor = ref["anchor"]
         out.append(
             {
@@ -302,8 +335,10 @@ def build_graph(
     group_map = campus_groups(profile) if group_map is None else group_map
     _check_registry(stages, group_map)
     reader = _Docs(docs)
-    source_rows = _sources(load_sources(profile.id) if sources is None else sources, stages, reader)
     campus = profile.id
+    research = campus_docs(campus)
+    entries = load_sources(campus) if sources is None else sources
+    source_rows = _sources(entries, stages, reader, research)
 
     member_of: dict[str, list[str]] = {stage.name: [] for stage in stages}
     group_rows = []
@@ -382,8 +417,13 @@ def build_graph(
         for entry in stage.writes:
             edges.append({"from": stage_id, "to": endpoint(entry), "kind": "writes"})
         for sink in stage.sinks:
-            sinks.setdefault(sink)
-            edges.append({"from": stage_id, "to": _ref("sink", campus, sink), "kind": "posts"})
+            for route in SINK_ROUTES.get(sink, (sink,)):
+                sinks.setdefault(route)
+                sink_id = _ref("sink", campus, route)
+                if route in READ_ROUTES:
+                    edges.append({"from": sink_id, "to": stage_id, "kind": "reads"})
+                else:
+                    edges.append({"from": stage_id, "to": sink_id, "kind": "posts"})
 
     for row in group_rows:
         group_id = _ref("group", campus, row["key"])
@@ -428,7 +468,7 @@ def build_graph(
             "id": campus,
             "name": profile.short_name,
             "site": profile.branding.site_url,
-            "docs": "docs/source-research.md" if campus == "cam" else f"docs/campuses/{campus}.md",
+            "docs": f"docs/{research}.md",
         },
         "pillars": list(PILLARS),
         "phases": [{"key": phase, "order": order} for order, phase in enumerate(PHASES)],
@@ -592,7 +632,7 @@ def render_mermaid(graph: Mapping[str, Any]) -> str:
             f"| `{group['key']}` | {group['schedule'] or 'by hand'} | {len(group['stages'])} | "
             f"{needs} | {stale} |"
         )
-    research = "source-research.md"
+    research = campus["docs"].removeprefix("docs/")
     out += [
         "",
         "## Sources",
@@ -629,9 +669,12 @@ def write_outputs(
 __all__ = [
     "JSON_PATH",
     "MERMAID_PATH",
+    "READ_ROUTES",
     "SCHEMA",
+    "SINK_ROUTES",
     "GraphError",
     "build_graph",
+    "campus_docs",
     "describe_calendar",
     "doc_sections",
     "group_schedule",
