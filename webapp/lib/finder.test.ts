@@ -165,3 +165,11 @@ describe("rankTalks", () => {
     expect(talkSchools({}).length).toBe(7)
   })
 })
+
+test("a matched activity reads as what the society does", () => {
+  const s = scoreSociety(card({ key: "c", activityTypes: ["performances", "socials"] }), {
+    interests: ["music"],
+    takePart: ["perform"],
+  })
+  expect(s?.reasons).toEqual(["Music", "performs"])
+})

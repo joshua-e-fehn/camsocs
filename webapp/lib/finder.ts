@@ -92,6 +92,23 @@ const TAKE_PART: Record<string, readonly ActivityType[]> = {
   careers: ["careers_events"],
 }
 
+/** How a matched activity reads as a reason chip. */
+const ACTIVITY_REASONS: Record<ActivityType, string> = {
+  talks: "runs talks",
+  socials: "socials",
+  competitions: "competes",
+  performances: "performs",
+  workshops: "workshops",
+  trips: "trips",
+  training: "regular training",
+  publications: "publishes",
+  volunteering: "volunteering",
+  careers_events: "careers events",
+  formals: "formals",
+  worship: "worship",
+  meetings: "meetings",
+}
+
 export const SOCIETY_QUESTIONS: readonly FinderQuestion[] = [
   interests,
   {
@@ -173,7 +190,7 @@ export function scoreSociety(
   const activities = new Set((answers.takePart ?? []).flatMap((id) => TAKE_PART[id] ?? []))
   const doing = card.activityTypes.filter((a) => activities.has(a))
   score += 2 * Math.min(doing.length, 3)
-  if (doing.length > 0) reasons.push(`${doing.length > 1 ? "things" : "something"} you like doing`)
+  for (const activity of doing.slice(0, 2)) reasons.push(ACTIVITY_REASONS[activity])
 
   const level = first(answers, "level")
   const welcomesBeginners = card.beginnerFriendly === true || card.audiences.includes("beginners")
