@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { api, internal } from "./_generated/api"
 import { newTest } from "./lib/harness.testing"
-import { deriveRunStatus } from "./runs"
+import { deriveRunStatus, runGroup } from "./runs"
 
 const STAGE = {
   name: "fetch",
@@ -142,5 +142,92 @@ describe("runs.lastHarvest (public)", () => {
       error: null,
     })
     expect(await t.query(api.runs.lastHarvest, {})).toEqual(harvested)
+  })
+})
+
+describe("run-log widen (optional group, revision, durationMs)", () => {
+  test("runGroup prefers the recorded group, falls back to the command, else null", () => {
+    expect(runGroup({ group: "talks", command: "sync --group events" })).toBe("talks")
+    expect(runGroup({ command: "sync --group events" })).toBe("events")
+    expect(runGroup({ command: "sync --group full" })).toBe("full")
+    expect(runGroup({ command: "sync" })).toBeNull()
+    expect(runGroup({ command: "sync --group" })).toBeNull()
+    expect(runGroup({ command: "sync --group Events; rm" })).toBeNull()
+  })
+
+  test("an old runs.start payload is still accepted and records neither field", async () => {
+    const t = newTest()
+    await t.mutation(internal.runs.start, startArgs)
+    const [run] = await t.query(internal.runs.latest, {})
+    expect("group" in run).toBe(false)
+    expect("revision" in run).toBe(false)
+    expect(runGroup(run)).toBeNull()
+  })
+
+  test("runs.start stores group and revision when posted", async () => {
+    const t = newTest()
+    await t.mutation(internal.runs.start, {
+      ...startArgs,
+      command: "sync --group events",
+      group: "events",
+      revision: "0123456789abcdef0123456789abcdef01234567",
+    })
+    const [run] = await t.query(internal.runs.latest, {})
+    expect(run.group).toBe("events")
+    expect(run.revision).toBe("0123456789abcdef0123456789abcdef01234567")
+    expect(runGroup(run)).toBe("events")
+  })
+
+  test("a blank group or revision records nothing", async () => {
+    const t = newTest()
+    await t.mutation(internal.runs.start, { ...startArgs, group: "  ", revision: "" })
+    const [run] = await t.query(internal.runs.latest, {})
+    expect("group" in run).toBe(false)
+    expect("revision" in run).toBe(false)
+  })
+
+  test("an old runs.finish payload without durationMs is still accepted", async () => {
+    const t = newTest()
+    await t.mutation(internal.runs.start, startArgs)
+    const result = await t.mutation(internal.runs.finish, {
+      runKey: startArgs.runKey,
+      stages: [STAGE, { ...STAGE, name: "parse", metrics: { quarantineHeld: 2 } }],
+      warnings: [],
+      error: null,
+    })
+    expect(result.status).toBe("success")
+    const [run] = await t.query(internal.runs.latest, {})
+    expect(run.stages.every((stage) => !("durationMs" in stage))).toBe(true)
+  })
+
+  test("durationMs is stored per stage, and a retried finish stays idempotent", async () => {
+    const t = newTest()
+    await t.mutation(internal.runs.start, { ...startArgs, group: "events" })
+    const finish = {
+      runKey: startArgs.runKey,
+      stages: [
+        { ...STAGE, durationMs: 1234.5 },
+        { ...STAGE, name: "parse", durationMs: 0 },
+      ],
+      warnings: [],
+      error: null,
+    }
+    const first = await t.mutation(internal.runs.finish, finish)
+    expect(first.unchanged).toBe(false)
+
+    const [run] = await t.query(internal.runs.latest, {})
+    expect(run.stages.map((stage) => stage.durationMs)).toEqual([1234.5, 0])
+    expect(run.group).toBe("events")
+
+    const again = await t.mutation(internal.runs.finish, finish)
+    expect(again).toEqual({ runKey: startArgs.runKey, status: "success", unchanged: true })
+
+    // A different duration is a different result: the finished record is evidence.
+    await expect(
+      t.mutation(internal.runs.finish, {
+        ...finish,
+        stages: [{ ...STAGE, durationMs: 9999 }, finish.stages[1]],
+      }),
+    ).rejects.toThrow(/already finished/)
   })
 })
