@@ -820,13 +820,14 @@ def test_cambridges_paging_queries_are_the_old_ones_with_the_campus_clause() -> 
         "pageview_heartbeat": "SELECT count() FROM events WHERE event = '$pageview'"
         + production + NOT_INTERNAL + " AND timestamp > now() - INTERVAL 48 HOUR",
     }  # fmt: skip
-    for check in CHECKS_CAM():
+    for check in cambridge_checks():
         assert check.query.replace(CAM_CLAUSE, "", 1) == before[check.name], check.name
         assert check.query.count(CAM_CLAUSE) == 1
 
 
-def CHECKS_CAM() -> tuple[Check, ...]:  # noqa: N802 - reads as the constant it checks
-    assert monitor.CHECKS == checks_for(CAMBRIDGE)
+def cambridge_checks() -> tuple[Check, ...]:
+    """`monitor.CHECKS`, after checking it is Cambridge's paging checks."""
+    assert checks_for(CAMBRIDGE) == monitor.CHECKS
     return monitor.CHECKS
 
 
@@ -964,7 +965,10 @@ def test_each_shadow_check_fails_past_its_threshold(name: str, rows: Rows, detai
             runs("calendar_feeds", (60, 0), (DAY, 100), (8 * DAY, 100), (9 * DAY, 100)),
         ),
         # Exactly a quarter is not below a quarter.
-        ("yield_drop", runs("calendar_feeds", (60, 25), (DAY, 100), (2 * DAY, 100), (3 * DAY, 100))),
+        (
+            "yield_drop",
+            runs("calendar_feeds", (60, 25), (DAY, 100), (2 * DAY, 100), (3 * DAY, 100)),
+        ),
         # A stage this campus does not have, or a name of the wrong shape.
         ("yield_drop", runs("old_stage", (60, 0), (DAY, 100), (2 * DAY, 100), (3 * DAY, 100))),
         ("stage_freshness", [["Jane Example", 900 * 60]]),

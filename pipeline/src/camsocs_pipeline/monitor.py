@@ -1043,9 +1043,7 @@ def site_client(about_url: str = ABOUT_URL) -> httpx.Client:
     failure); its user agent points at the campus's about page (Cambridge's:
     `SITE_USER_AGENT`)."""
     agent = SITE_USER_AGENT if about_url == ABOUT_URL else f"camsocs-monitor/0.1 (+{about_url})"
-    return httpx.Client(
-        timeout=SITE_TIMEOUT, follow_redirects=False, headers={"User-Agent": agent}
-    )
+    return httpx.Client(timeout=SITE_TIMEOUT, follow_redirects=False, headers={"User-Agent": agent})
 
 
 def check_site(

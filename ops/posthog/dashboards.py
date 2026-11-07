@@ -5,14 +5,21 @@
     pixi run posthog-dashboards -- --validate   # run every insight's query once (read-only)
     pixi run posthog-dashboards -- --apply      # create or update the dashboards in PostHog
 
-Four dashboards — Traffic, Content, Search, Reliability — each a list of
-insights in PostHog's query format (research-api §1–2): trends as
+Five dashboards — Traffic, Content, Search, Reliability, Scraper health —
+each a list of insights in PostHog's query format (research-api §1–2): trends as
 ``InsightVizNode`` → ``TrendsQuery``, tables and custom buckets as
 ``DataVisualizationNode`` → ``HogQLQuery``. Every insight excludes internal and
 test traffic: ``filterTestAccounts: true`` on a trends query (the schema's
 default is false), and ``{filters}`` with ``filterTestAccounts`` in HogQL.
 The project's filter drops ``environment = development`` (local runs and
 the dev deployment), Joshua's cohort and the in-app Claude browser.
+
+**Harvest insights** (every insight over a ``harvest_*`` event, and the
+scraper-health ones over the pipeline's ``$ai_*`` events) leave out dry runs
+(``NOT_DRY_RUN``) and break down by campus (decision D8: ``CAMPUS``, where an
+event sent before the property existed is Cambridge's): a trend by a HogQL
+breakdown ``<campus> · <value>``, a table by a ``campus`` column. Their
+names are unchanged, so ``--apply`` updates them in place.
 
 **Idempotent, by name.** ``--apply`` finds each dashboard by its exact name
 (creating it when missing), then each insight by its name among the
@@ -23,7 +30,8 @@ reported, for a person to remove in PostHog. Tiles are placed by PostHog.
 
 **Privacy.** Insights break down by IDs, keys and enums only (``orgKey``,
 ``eventKey``, ``talkKey``, ``feed``, ``kind``, ``surface``, a stage, a model
-id): camsocs resolves names, PostHog never receives them (docs/analytics.md).
+id, a campus id, a host class): camsocs resolves names, PostHog never
+receives them (docs/analytics.md).
 Browser numbers count only visitors who accepted analytics.
 
 **Credentials** come from the environment, never from a file here:
@@ -63,6 +71,21 @@ IDS_ONLY = (
 #: server sends as `camsocs-server` through posthog-node.
 EXCEPTION_SOURCE = (
     "if(distinct_id = 'camsocs-server' OR properties.$lib = 'posthog-node', 'server', 'browser')"
+)
+#: A harvest event's campus (decision D8); one sent before the property
+#: existed is Cambridge's. The monitor scopes its queries the same way.
+CAMPUS = "ifNull(properties.campus, 'cam')"
+#: Leaves out dry runs (`dryRun` is a boolean; PostHog may store it as text),
+#: as the monitor's harvest queries do (`monitor.NOT_DRY_RUN`).
+NOT_DRY_RUN = "ifNull(toString(properties.dryRun), '') != 'true'"
+#: The runner's time limit per group (camsocs-harvest.sh
+#: `CAMSOCS_TIMEOUT_EVENTS` / `_FULL`; `monitor.GROUP_TIME_LIMIT_S`).
+GROUP_TIME_LIMIT_S: Mapping[str, int] = {"events": 7200, "full": 21600}
+#: A stage run's yield: inserted + updated + unchanged (the `yield` property,
+#: computed from the counts for runs sent before it; `monitor.YIELD`).
+YIELD = (
+    "ifNull(toFloat(properties.yield), toFloat(properties.inserted)"
+    " + toFloat(properties.updated) + toFloat(properties.unchanged))"
 )
 
 
@@ -109,8 +132,10 @@ def trends(
     display: str = "ActionsLineGraph",
     formula: tuple[str, str] | None = None,
     axis_format: str | None = None,
+    where: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """An `InsightVizNode` around a `TrendsQuery`, test accounts excluded."""
+    """An `InsightVizNode` around a `TrendsQuery`, test accounts excluded;
+    `where` adds HogQL conditions every event must meet."""
     trends_filter: dict[str, Any] = {"display": display}
     if formula is not None:
         trends_filter["formulaNodes"] = [{"formula": formula[0], "custom_name": formula[1]}]
@@ -124,6 +149,8 @@ def trends(
         "filterTestAccounts": True,
         "trendsFilter": trends_filter,
     }
+    if where:
+        source["properties"] = [{"type": "hogql", "key": condition} for condition in where]
     if breakdown is not None:
         source["breakdownFilter"] = {
             "breakdown": breakdown,
@@ -160,6 +187,38 @@ def sql(
             "yAxis": [{"column": column} for column in y],
         }
     return node
+
+
+def harvest_trends(*series: dict[str, Any], by: str, **options: Any) -> dict[str, Any]:
+    """A trend over harvest events: dry runs left out, broken down by campus
+    and the property `by` (``cam · success``)."""
+    return trends(
+        *series,
+        breakdown=f"concat({CAMPUS}, ' · ', ifNull(toString(properties.{by}), ''))",
+        breakdown_type="hogql",
+        where=(NOT_DRY_RUN,),
+        **options,
+    )
+
+
+def metric(name: str) -> str:
+    """A counter of a stage run (`harvest_stage_completed` `metrics`,
+    fetch_stats.py); NULL when the run fetched nothing or predates it."""
+    return f"toFloat(properties.metrics.{name})"
+
+
+def summed(name: str, alias: str) -> str:
+    """The sum of a stage-run counter, 0 when no run had it."""
+    return f"ifNull(sum({metric(name)}), 0) AS {alias}"
+
+
+def stage_runs(*conditions: str) -> str:
+    """The FROM/WHERE of a table over stage runs: no dry runs, `{filters}`."""
+    extra = "".join(f" AND {condition}" for condition in conditions)
+    return (
+        f" FROM events WHERE event = 'harvest_stage_completed' AND {NOT_DRY_RUN}{extra}"
+        " AND {filters}"
+    )
 
 
 # --- the dashboards -------------------------------------------------------------------------
@@ -329,32 +388,36 @@ RELIABILITY = Dashboard(
         ),
         Insight(
             "Harvest runs by status",
-            "harvest_run_finished per day by status (success, partial, failed), production "
-            "VPS runs. The monitor alerts after 26 h without a success or partial run.",
-            trends(events("harvest_run_finished"), breakdown="status", display="ActionsStackedBar"),
+            "harvest_run_finished per day by campus and status (success, partial, failed), "
+            "production VPS runs, dry runs excluded. The monitor alerts after 26 h without a "
+            "success or partial run.",
+            harvest_trends(
+                events("harvest_run_finished"), by="status", display="ActionsStackedBar"
+            ),
         ),
         Insight(
             "Harvest stage duration per day (average, by stage)",
-            "Average harvest_stage_completed durationS per day and stage, last 30 days.",
-            trends(
+            "Average harvest_stage_completed durationS per day by campus and stage, dry runs "
+            "excluded, last 30 days.",
+            harvest_trends(
                 events("harvest_stage_completed", math="avg", math_property="durationS"),
-                breakdown="stage",
+                by="stage",
                 axis_format="duration",
             ),
         ),
         Insight(
             "Harvest stages (30 days)",
-            "Per stage: runs, failures, runs skipped, and durations (seconds) from "
-            "harvest_stage_completed, last 30 days.",
+            "Per campus and stage: runs, failures, runs skipped, and durations (seconds) from "
+            "harvest_stage_completed, dry runs excluded, last 30 days.",
             sql(
-                "SELECT properties.stage AS stage, count() AS runs,"
+                f"SELECT {CAMPUS} AS campus, properties.stage AS stage, count() AS runs,"
                 " countIf(properties.status = 'failed') AS failed,"
                 " countIf(properties.status = 'not_run') AS not_run,"
                 " round(avg(toFloat(properties.durationS)), 1) AS avg_s,"
                 " round(quantile(0.9)(toFloat(properties.durationS)), 1) AS p90_s,"
                 " round(max(toFloat(properties.durationS)), 1) AS max_s"
-                " FROM events WHERE event = 'harvest_stage_completed' AND {filters}"
-                " GROUP BY stage ORDER BY avg_s DESC LIMIT 100"
+                + stage_runs()
+                + " GROUP BY campus, stage ORDER BY avg_s DESC LIMIT 100"
             ),
         ),
         Insight(
@@ -405,7 +468,225 @@ RELIABILITY = Dashboard(
     ),
 )
 
-DASHBOARDS: tuple[Dashboard, ...] = (TRAFFIC, CONTENT, SEARCH, RELIABILITY)
+#: A run's time limit by its group, in HogQL (`GROUP_TIME_LIMIT_S`).
+_LIMIT = (
+    "multiIf("
+    + ", ".join(
+        f"run_group = '{group}', {seconds}" for group, seconds in GROUP_TIME_LIMIT_S.items()
+    )
+    + ", NULL)"
+)
+
+SCRAPER_HEALTH = Dashboard(
+    "camsocs: Scraper health",
+    "Is each campus's harvest still finding, fetching and finishing? Production runs by "
+    "campus, dry runs excluded; stage names, host classes and counts only. The monitor's "
+    "shadow checks (decision D9, docs/ops-vps.md) judge the same numbers. Managed in code "
+    "(ops/posthog/dashboards.py).",
+    (
+        Insight(
+            "Yield against the 7/28-day median",
+            "Per campus and stage: the latest ok run's yield (inserted + updated + unchanged), "
+            "the median of the ok runs of the last 7 days (28 for a stage with fewer than 3 "
+            "runs in 7, a weekly-only one; the latest included), their ratio and the runs. "
+            "The monitor's yield_drop flags a ratio below 0.25.",
+            sql(
+                "SELECT campus, stage, pillar, latest,"
+                " if(runs_7d >= 3, median_7d, median_28d) AS median,"
+                " if(median > 0, round(latest / median, 2), NULL) AS ratio,"
+                " if(runs_7d >= 3, runs_7d, runs_28d) AS runs"
+                f" FROM (SELECT {CAMPUS} AS campus, toString(properties.stage) AS stage,"
+                " any(toString(properties.pillar)) AS pillar,"
+                f" argMax({YIELD}, timestamp) AS latest,"
+                " countIf(timestamp > now() - INTERVAL 7 DAY) AS runs_7d,"
+                f" quantile(0.5)(if(timestamp > now() - INTERVAL 7 DAY, {YIELD}, NULL))"
+                " AS median_7d,"
+                f" quantile(0.5)({YIELD}) AS median_28d, count() AS runs_28d"
+                + stage_runs("properties.status = 'ok'")
+                + " GROUP BY campus, stage)"
+                " ORDER BY ratio ASC NULLS LAST, campus, stage LIMIT 200",
+                date_from="-28d",
+            ),
+        ),
+        Insight(
+            "Hours since the last productive run",
+            "Per campus and stage: hours since its last ok run with a yield above zero, last "
+            "35 days (a stage with none is not listed). The monitor's stage_freshness flags "
+            "more than 50 h for a daily stage, 198 h for a weekly-only one.",
+            sql(
+                f"SELECT {CAMPUS} AS campus, toString(properties.stage) AS stage,"
+                " any(toString(properties.pillar)) AS pillar,"
+                " dateDiff('hour', max(timestamp), now()) AS hours_since_productive"
+                + stage_runs("properties.status = 'ok'", f"{YIELD} > 0")
+                + " GROUP BY campus, stage ORDER BY hours_since_productive DESC LIMIT 200",
+                date_from="-35d",
+            ),
+        ),
+        Insight(
+            "Fetch outcomes per stage per day",
+            "Per day, campus and stage: requests and how they ended (fetched, unchanged, not "
+            "found, restricted, robots.txt blocked, unreachable, HTTP error) and cache hits, "
+            "from the stage's fetch counters, last 14 days.",
+            sql(
+                f"SELECT toDate(timestamp) AS day, {CAMPUS} AS campus,"
+                " toString(properties.stage) AS stage, "
+                + ", ".join(
+                    summed(name, alias)
+                    for name, alias in (
+                        ("fetchRequests", "requests"),
+                        ("fetchFetched", "fetched"),
+                        ("fetchUnchanged", "unchanged"),
+                        ("fetchNotFound", "not_found"),
+                        ("fetchRestricted", "restricted"),
+                        ("fetchRobotsBlocked", "robots_blocked"),
+                        ("fetchUnreachable", "unreachable"),
+                        ("fetchHttpError", "http_error"),
+                        ("fetchCacheHits", "cache_hits"),
+                    )
+                )
+                + stage_runs()
+                + " GROUP BY day, campus, stage HAVING requests > 0"
+                " ORDER BY day DESC, requests DESC LIMIT 500",
+                date_from="-14d",
+            ),
+        ),
+        Insight(
+            "HTTP status class by host class",
+            "Per campus and host class (registry, university_main_site, society_website, "
+            "linktree, …; never a host): answers by HTTP status class, 429s and unreachable "
+            "requests, from harvest_source_fetched, last 30 days.",
+            sql(
+                f"SELECT {CAMPUS} AS campus, toString(properties.hostClass) AS host_class, "
+                + ", ".join(
+                    f"ifNull(sum(toFloat(properties.{name})), 0) AS {alias}"
+                    for name, alias in (
+                        ("fetchRequests", "requests"),
+                        ("fetchStatus2xx", "status_2xx"),
+                        ("fetchStatus3xx", "status_3xx"),
+                        ("fetchStatus4xx", "status_4xx"),
+                        ("fetchStatus5xx", "status_5xx"),
+                        ("fetchTooMany", "too_many"),
+                        ("fetchUnreachable", "unreachable"),
+                    )
+                )
+                + " FROM events WHERE event = 'harvest_source_fetched'"
+                f" AND {NOT_DRY_RUN} AND {{filters}}"
+                " GROUP BY campus, host_class ORDER BY campus, requests DESC LIMIT 100"
+            ),
+        ),
+        Insight(
+            "Robots blocks and overrides per week",
+            "Per week and campus: fetches robots.txt blocked, recorded overrides (a society's "
+            "own pages, D3; a publisher's recorded permission, D3a) and hosts whose robots.txt "
+            "could not be read, last 13 weeks. The monitor's robots_block_jump watches blocks.",
+            sql(
+                f"SELECT toStartOfWeek(timestamp, 1) AS week, {CAMPUS} AS campus, "
+                + ", ".join(
+                    summed(name, alias)
+                    for name, alias in (
+                        ("fetchRobotsBlocked", "robots_blocked"),
+                        ("fetchOverrideSociety", "override_society"),
+                        ("fetchOverridePermission", "override_permission"),
+                        ("robotsHostsUnreachable", "robots_unreachable"),
+                    )
+                )
+                + stage_runs()
+                + " GROUP BY week, campus ORDER BY week DESC, campus LIMIT 200",
+                date_from="-91d",
+            ),
+        ),
+        Insight(
+            "Retries, 429s and wait",
+            "Per day and campus: request retries, 429 (too many requests) answers, refused "
+            "non-public addresses and minutes spent waiting for a host's turn (Crawl-delay, "
+            "one request in flight per host), last 30 days. The monitor's rate_limited flags "
+            "more than 10 429s in one stage run.",
+            sql(
+                f"SELECT toDate(timestamp) AS day, {CAMPUS} AS campus, "
+                + ", ".join(
+                    summed(name, alias)
+                    for name, alias in (
+                        ("fetchRetries", "retries"),
+                        ("fetchTooMany", "too_many"),
+                        ("fetchAddressRefused", "address_refused"),
+                    )
+                )
+                + f", round(ifNull(sum({metric('fetchWaitS')}), 0) / 60, 1) AS wait_min"
+                + stage_runs()
+                + " GROUP BY day, campus ORDER BY day DESC, campus LIMIT 200"
+            ),
+        ),
+        Insight(
+            "Run duration against the limit by group",
+            "Per run: campus, group, its duration and the runner's time limit for the group "
+            "(events 2 h, full 6 h), and the share used, last 30 days. The monitor's "
+            "run_duration flags more than 0.8; a killed run sends no finish event.",
+            sql(
+                "SELECT finished, campus, run_group, duration_s,"
+                f" {_LIMIT} AS limit_s, round(duration_s / limit_s, 2) AS share"
+                " FROM (SELECT timestamp AS finished,"
+                f" {CAMPUS} AS campus, toString(properties.group) AS run_group,"
+                " round(toFloat(properties.durationS)) AS duration_s"
+                " FROM events WHERE event = 'harvest_run_finished'"
+                f" AND {NOT_DRY_RUN} AND {{filters}})"
+                " ORDER BY finished DESC LIMIT 200"
+            ),
+        ),
+        Insight(
+            "Stage duration p50/p90 weekly",
+            "Per week, campus and stage: median and 90th percentile of the stage's duration "
+            "(seconds) and its runs, from harvest_stage_completed, last 13 weeks.",
+            sql(
+                f"SELECT toStartOfWeek(timestamp, 1) AS week, {CAMPUS} AS campus,"
+                " toString(properties.stage) AS stage,"
+                " round(quantile(0.5)(toFloat(properties.durationS)), 1) AS p50_s,"
+                " round(quantile(0.9)(toFloat(properties.durationS)), 1) AS p90_s,"
+                " count() AS runs"
+                + stage_runs("properties.status != 'not_run'")
+                + " GROUP BY week, campus, stage ORDER BY week DESC, p90_s DESC LIMIT 500",
+                date_from="-91d",
+            ),
+        ),
+        Insight(
+            "LLM generations against cache hits",
+            "Per day and campus: model requests the stages made against answers taken from the "
+            "LLM cache (var/cache/llm), from the stages' counters, and the share served from "
+            "the cache, last 30 days. No prompt or reply is ever sent.",
+            sql(
+                f"SELECT toDate(timestamp) AS day, {CAMPUS} AS campus, "
+                + summed("llmGenerations", "generations")
+                + ", "
+                + summed("llmCacheHits", "cache_hits")
+                + ", if(generations + cache_hits > 0,"
+                " round(cache_hits / (generations + cache_hits), 3), NULL) AS cache_share"
+                + stage_runs()
+                + " GROUP BY day, campus ORDER BY day DESC, campus LIMIT 200"
+            ),
+        ),
+        Insight(
+            "Traces per run",
+            "Per day and campus: harvest runs finished, LLM-analytics traces ($ai_trace, one "
+            "per run key), stage spans and generations; traces per run should be 1. Dry runs "
+            "excluded, last 30 days.",
+            sql(
+                f"SELECT toDate(timestamp) AS day, {CAMPUS} AS campus,"
+                " count(DISTINCT if(event = 'harvest_run_finished', properties.runKey, NULL))"
+                " AS runs,"
+                " count(DISTINCT if(event = '$ai_trace', properties.$ai_trace_id, NULL))"
+                " AS traces,"
+                " if(runs > 0, round(traces / runs, 2), NULL) AS traces_per_run,"
+                " countIf(event = '$ai_span') AS spans,"
+                " countIf(event = '$ai_generation') AS generations"
+                " FROM events WHERE event IN"
+                " ('harvest_run_finished', '$ai_trace', '$ai_span', '$ai_generation')"
+                f" AND {NOT_DRY_RUN} AND {{filters}}"
+                " GROUP BY day, campus ORDER BY day DESC, campus LIMIT 200"
+            ),
+        ),
+    ),
+)
+
+DASHBOARDS: tuple[Dashboard, ...] = (TRAFFIC, CONTENT, SEARCH, RELIABILITY, SCRAPER_HEALTH)
 
 
 # --- payloads -----------------------------------------------------------------------------
