@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { ImageResponse } from "next/og"
+import { currentCampus } from "@/lib/campus"
 import type { CardText } from "@/lib/og-card"
 
 /**
@@ -27,8 +28,10 @@ const SKY = "#E8F2F6"
 const SKY_LINE = "#D2E4EB"
 const APRICOT = "#F29E4C"
 
-const WORDMARK = "CAMsocs"
-const FOOTNOTE = "Unofficial · every fact sourced"
+// The campus's brand (lib/campus, decision D8): "CAMsocs" for Cambridge.
+const BRAND = currentCampus().brand
+const WORDMARK = `${BRAND.wordmark.lead}${BRAND.wordmark.rest}`
+const FOOTNOTE = BRAND.footerLine
 
 /** A logo request may take this long: a stalled one must not hang a render. */
 const FETCH_TIMEOUT_MS = 5_000
@@ -225,7 +228,7 @@ export async function renderCard({
 
 /** The generic card (app/opengraph-image.tsx), also what a listing that may
  * not be drawn gets. */
-export const GENERIC_HEADLINE = ["Everything on in", "Cambridge, in one place."] as const
+export const GENERIC_HEADLINE: readonly [string, string] = BRAND.shareHeadline
 
 export function renderGenericCard(cacheControl?: string): Promise<ImageResponse> {
   return renderCard({
