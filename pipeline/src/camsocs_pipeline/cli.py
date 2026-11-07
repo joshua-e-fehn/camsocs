@@ -18,6 +18,8 @@
     camsocs monitor [--status-json PATH] production checks against PostHog and the site,
                                          new listing requests (ENG-10, ENG-33); exits 1
                                          when it pages (docs/ops-vps.md)
+    camsocs graph [--json PATH] [--mermaid PATH]   the stage registry as a graph (JSON,
+                                         Mermaid); offline (`pixi run pipeline-graph`)
 
 `sync` and `harvest` also take `--env NAME` after the command, as `pixi run
 harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
@@ -752,6 +754,42 @@ def talks_demo_seed(ctx: click.Context, days: int) -> None:
         window = EventWindow(start=start, end=start + timedelta(days=days))
         missing = push.sweep(loader, run_id, window, sources)
     click.echo(f"departments {len(departments)}; {result}; swept {missing}")
+
+
+@cli.command()
+@click.option(
+    "--json",
+    "json_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Write the graph JSON (schema camsocs.pipeline-graph/1) here.",
+)
+@click.option(
+    "--mermaid",
+    "mermaid_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Write the Mermaid pipeline map (Markdown) here.",
+)
+@click.pass_context
+def graph(ctx: click.Context, json_path: Path | None, mermaid_path: Path | None) -> None:
+    """The stage registry as a graph: stages, staging directories, Convex
+    routes, groups and sources (spec §5A). Offline; reads no env file. Without
+    a path, prints the JSON. `pixi run pipeline-graph` regenerates the
+    committed copies."""
+    from camsocs_pipeline.graph import GraphError, build_graph, to_json, write_outputs
+
+    if "settings" in ctx.obj:
+        campus_id = ctx.obj["settings"].campus
+    else:
+        campus_id = ctx.obj.get("campus") or os.environ.get("CAMSOCS_CAMPUS") or "cam"
+    try:
+        built = build_graph(campuses.get_profile(campus_id))
+    except (ConfigError, GraphError) as error:
+        raise click.ClickException(str(error)) from error
+    if json_path is None and mermaid_path is None:
+        click.echo(to_json(built), nl=False)
+        return
+    for path in write_outputs(built, json_path, mermaid_path):
+        click.echo(f"wrote {path}")
 
 
 def main() -> None:
