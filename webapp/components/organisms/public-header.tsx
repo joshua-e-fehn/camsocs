@@ -48,7 +48,7 @@ const memberDomain = campus.facts.memberEmail.domains[0]
  * extra-invocations-per-view). About is a cached page: its prefetch is an
  * edge hit.
  */
-const NAV = [
+export const NAV = [
   { href: "/events", label: "Events", hint: "Socials, shows, matches", prefetch: false },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures", prefetch: false },
   { href: "/societies", label: "Societies", hint: "The directory", prefetch: false },

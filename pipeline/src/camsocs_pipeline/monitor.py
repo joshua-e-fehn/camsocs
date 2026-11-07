@@ -36,6 +36,14 @@ From outside, without PostHog (ENG-33):
   reaches the host, the journal or Slack. A redirect is a failure too. These
   checks also page once when they are `ok` again after a page (`recovered`).
 
+**Google indexing (2026-11-07).** `search_indexing` reads the summary of
+the daily indexing check Convex runs (webapp/convex/indexing.ts, through
+`POST /api/pipeline/indexing/summary`, the pipeline key) and fails when a URL
+our sitemaps list cannot be indexed as it stands, when Google reports a
+sitemap issue, or when the check has not run for `INDEXING_STALE_HOURS`.
+Counts only; the broker overview's "Google indexing" card names the URLs.
+Without `CONVEX_HTTP_URL` and `PIPELINE_API_KEY` it is not run.
+
 **New listing requests (ENG-33).** Not a check: each run counts the
 `listing_request_received` events (Convex sends one per stored claim,
 correction, removal, objection or addition, with its `kind` only) since the
@@ -1094,6 +1102,47 @@ def check_sites(
 
 
 SITE_CHECK_NAMES = tuple(name for name, _url in SITE_CHECKS)
+
+
+# --- Google indexing (2026-11-07) ---------------------------------------------------------
+
+#: The daily indexing check's name (webapp/convex/indexing.ts).
+INDEXING_NAME = "search_indexing"
+#: The check runs at 07:00 UTC; a summary older than this means it stopped.
+INDEXING_STALE_HOURS = 30
+
+
+def check_indexing(read: Callable[[], Mapping[str, Any]], *, now: datetime) -> CheckResult:
+    """`search_indexing` from the summary Convex keeps
+    (`POST /api/pipeline/indexing/summary`): failed when a URL our sitemaps
+    list cannot be indexed as it stands (noindex, blocked, missing,
+    redirected, another canonical), when Google reports a sitemap issue, or
+    when the daily check stopped running. Counts only: the URLs are on the
+    broker overview's "Google indexing" card. `unknown` (never paged) when
+    Convex does not answer or the check has never run."""
+    try:
+        answer = read()
+        run_at = answer.get("runAt")
+        problems = _number(answer.get("problems"))
+        sitemap_issues = _number(answer.get("sitemapIssues"))
+        if run_at is not None:
+            run_at = _number(run_at)
+    except Exception as error:
+        return CheckResult(INDEXING_NAME, "unknown", None, 0, "gt", None, {}, type(error).__name__)
+    if run_at is None:
+        return CheckResult(INDEXING_NAME, "unknown", None, 0, "gt", None, {}, "NeverRan")
+    hours = round((now.timestamp() * 1000 - run_at) / 3_600_000, 1)
+    stale = 1 if hours > INDEXING_STALE_HOURS else 0
+    value = int(problems) + int(sitemap_issues) + stale
+    return CheckResult(
+        INDEXING_NAME,
+        "failed" if value > 0 else "ok",
+        value,
+        0,
+        "gt",
+        None,
+        {"problems": problems, "sitemapIssues": sitemap_issues, "hoursSinceRun": hours},
+    )
 
 
 # --- new listing requests (ENG-33) -------------------------------------------------------

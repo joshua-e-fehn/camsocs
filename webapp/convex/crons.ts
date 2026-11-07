@@ -25,6 +25,10 @@ import { internal } from "./_generated/api"
  *    loaded, submits the sitemap index and `/events.atom` to Search Console
  *    when an event was stored since their last submission, or weekly
  *    (convex/searchConsole.ts); a no-op where the `GSC_*` vars are unset.
+ *  - `indexing-check-daily` (07:00): what Google says about every URL the
+ *    sitemaps list (URL Inspection, ≤ 1,400 a day, key pages daily) and our
+ *    own read of the key pages; the broker overview shows it and the VPS
+ *    monitor pages on its alerts (convex/indexing.ts).
  */
 const crons = cronJobs()
 
@@ -51,5 +55,6 @@ crons.daily(
   internal.searchConsole.resubmit,
   {},
 )
+crons.daily("indexing-check-daily", { hourUTC: 7, minuteUTC: 0 }, internal.indexing.run, {})
 
 export default crons
