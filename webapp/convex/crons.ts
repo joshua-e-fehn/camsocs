@@ -21,6 +21,10 @@ import { internal } from "./_generated/api"
  *  - `traffic-hourly` (:20): the broker overview's website traffic from
  *    PostHog and Search Console (convex/traffic.ts); a no-op read where their
  *    env vars are unset.
+ *  - `sitemaps-resubmit-daily` (06:10): after the 04:30 events harvest has
+ *    loaded, submits the sitemap index and `/events.atom` to Search Console
+ *    when an event was stored since their last submission, or weekly
+ *    (convex/searchConsole.ts); a no-op where the `GSC_*` vars are unset.
  */
 const crons = cronJobs()
 
@@ -41,5 +45,11 @@ crons.daily(
 )
 
 crons.hourly("traffic-hourly", { minuteUTC: 20 }, internal.traffic.refresh, {})
+crons.daily(
+  "sitemaps-resubmit-daily",
+  { hourUTC: 6, minuteUTC: 10 },
+  internal.searchConsole.resubmit,
+  {},
+)
 
 export default crons

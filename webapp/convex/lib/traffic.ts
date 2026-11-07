@@ -156,7 +156,7 @@ export function failureReason(error: unknown): string {
   return error instanceof Error ? error.name : typeof error
 }
 
-async function request(
+export async function request(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
@@ -173,7 +173,7 @@ async function request(
 
 /** `{ detail }` (PostHog) or `{ error: { message } }` / `{ error }` (Google),
  * one line and short; never the whole body. */
-async function errorDetail(response: Response): Promise<string> {
+export async function errorDetail(response: Response): Promise<string> {
   let detail = ""
   try {
     const body = (await response.json()) as Record<string, unknown>
@@ -352,7 +352,7 @@ export function searchConsoleWindow(now: number): { startDate: string; endDate: 
 }
 
 /** A short-lived access token from the stored refresh token. */
-async function accessToken(
+export async function accessToken(
   config: SearchConsoleConfig,
   fetchImpl: typeof fetch,
   timeoutMs: number,

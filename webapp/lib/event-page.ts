@@ -13,6 +13,7 @@ import {
   spokenTitle,
   titleSearchWords,
 } from "./events"
+import { type NextEvent, nextEvents } from "./next-events"
 import { pageMetadata } from "./page-metadata"
 import type { EventPublic } from "./public-api"
 import { publicQuery } from "./public-data"
@@ -73,6 +74,38 @@ export async function loadRepeatsThatDay(event: EventPublic): Promise<boolean> {
   } catch (error) {
     unstable_rethrow(error)
     return false
+  }
+}
+
+/** Days of a society's programme read for "Next from" (`events.list`'s
+ * widest window). */
+const NEXT_WINDOW_DAYS = 180
+/** The University lists many events a day: a shorter look ahead. */
+const NEXT_UNIVERSITY_DAYS = 28
+
+/**
+ * The host's next events after this one (lib/next-events.ts): one anonymous,
+ * cached `events.list` read of its lead society's programme (or the
+ * University's listings) from the event's London day, or from today once it
+ * has passed, so the events of one day share the read. Never for a
+ * talks.cam-derived event (G1). Decoration: a failed read shows none.
+ */
+export async function loadNextEvents(event: EventPublic, now: number): Promise<NextEvent[]> {
+  if (event.talksDerived) return []
+  const lead = event.organisers.find((o) => o.role !== "sponsor")
+  if (!event.fromUniversity && !lead) return []
+  const from = londonMidnight(londonIsoDate(Math.max(event.startsAt, now)))
+  const days = event.fromUniversity ? NEXT_UNIVERSITY_DAYS : NEXT_WINDOW_DAYS
+  try {
+    const listed = await publicQuery(api.events.list, {
+      from,
+      to: londonMidnight(addDays(londonIsoDate(from), days)),
+      ...(event.fromUniversity ? { university: "only" as const } : { orgKey: lead?.key }),
+    })
+    return nextEvents(event, listed, now)
+  } catch (error) {
+    unstable_rethrow(error)
+    return []
   }
 }
 
