@@ -230,6 +230,23 @@ Never show a blank area. Provide:
 - Alternating row shading optional — prefer clean divider lines in dark mode
 - Sortable columns indicated by icon, not just hover
 
+### Node-graph canvas (decision D10 exception)
+
+`@xyflow/react` (React Flow) is the one UI library outside shadcn/ui + Radix, and only for the
+broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx`):
+
+- Pinned exactly (`bun add --exact`) to a release at least two weeks old (12.12.0, published
+  2026-09-24); `package.json` `overrides` hold its d3 dependencies at their pre-November
+  releases for the same reason. Upgrade only to a release that has aged two weeks.
+- Loaded only through `next/dynamic` with `ssr: false` from `pipeline-canvas.tsx`, so it ships in
+  the dashboard chunk alone and never renders on the server. No other file imports it.
+- Imports only `@xyflow/react/dist/base.css` (structure), never its theme sheet; every node is
+  our own token-styled component (`stage-node.tsx`), light only.
+- Status is never colour alone: each state is an icon and a word (ok, failed, not run, not
+  requested, running, yield ↓); counts and durations are `font-mono tabular-nums`.
+- Layout is our own deterministic arithmetic (`lib/pipeline-graph/layout.ts`): no elkjs, no
+  dagre. `/dashboard/graph` keeps `lib/broker/force-layout.ts`.
+
 ---
 
 ## Motion & Animation Patterns
@@ -293,7 +310,7 @@ fake numbers: a pillar without real data renders nothing.
 ## Do NOT
 
 - Use arbitrary color values (`bg-[#1a1a2e]`) in components — always use tokens
-- Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only
+- Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only (the one exception is React Flow on the pipeline canvas, D10 above)
 - Create components outside the Atomic Design structure (`ui/` → `molecules/` → `organisms/`)
 - Add a dark theme or a theme toggle back without a new decision
 - Use University marks, shields or the University's brand colours and fonts (see Branding)
