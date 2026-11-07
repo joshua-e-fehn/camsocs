@@ -808,18 +808,29 @@ class ConvexLoader:
     # -- the run log -------------------------------------------------------------
 
     def start_run(
-        self, run_key: str, *, command: str, stages: Sequence[str], pipeline_version: str
+        self,
+        run_key: str,
+        *,
+        command: str,
+        stages: Sequence[str],
+        pipeline_version: str,
+        group: str | None = None,
+        revision: str | None = None,
     ) -> dict[str, Any]:
-        """`runs.start`: opens the run's row before any data is written."""
-        return self.post(
-            "runs/start",
-            {
-                "runKey": run_key,
-                "command": command,
-                "requestedStages": list(stages),
-                "pipelineVersion": pipeline_version,
-            },
-        )
+        """`runs.start`: opens the run's row before any data is written.
+        `group` (`sync --group <g>`) and `revision` (the commit that runs) are
+        optional on the server and omitted when unknown, never sent as null."""
+        body: dict[str, Any] = {
+            "runKey": run_key,
+            "command": command,
+            "requestedStages": list(stages),
+            "pipelineVersion": pipeline_version,
+        }
+        if group:
+            body["group"] = group
+        if revision:
+            body["revision"] = revision
+        return self.post("runs/start", body)
 
     def finish_run(self, payload: dict[str, Any]) -> dict[str, Any]:
         """`runs.finish`: per-stage results; the server derives the status.

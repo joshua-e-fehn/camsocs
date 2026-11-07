@@ -38,8 +38,13 @@ class StageReport:
     error: str | None = None
     notes: list[str] = field(default_factory=list)
     #: Named counts beyond the four above (`harvestStageResult.metrics`), e.g.
-    #: the resolve stage's quarantine. Sent only when there are some.
-    metrics: dict[str, int] = field(default_factory=dict)
+    #: the resolve stage's quarantine, and the runner's fetch statistics
+    #: (`fetch_stats`; `fetchWaitS` is seconds, a float). Sent only when there
+    #: are some.
+    metrics: dict[str, int | float] = field(default_factory=dict)
+    #: Wall-clock milliseconds the stage ran (`harvestStageResult.durationMs`),
+    #: set by the runner; `None` (omitted) for a stage that did not run.
+    duration_ms: int | None = None
 
     @property
     def ok(self) -> bool:
@@ -51,7 +56,8 @@ class StageReport:
 
     def to_payload(self) -> dict[str, Any]:
         """The `harvestStageResult` shape in webapp/convex/schema.ts. `metrics`
-        is omitted when empty (never null, never an empty object to store)."""
+        is omitted when empty (never null, never an empty object to store),
+        and `durationMs` when not recorded (the field is optional, never null)."""
         payload: dict[str, Any] = {
             "name": self.name,
             "status": self.status,
@@ -64,6 +70,8 @@ class StageReport:
         }
         if self.metrics:
             payload["metrics"] = dict(self.metrics)
+        if self.duration_ms is not None:
+            payload["durationMs"] = self.duration_ms
         return payload
 
     def __str__(self) -> str:

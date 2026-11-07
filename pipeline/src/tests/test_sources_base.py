@@ -569,3 +569,100 @@ def test_the_connection_is_checked_again_when_it_is_made() -> None:
         backend.connect_tcp("soc.example", 443)
     with pytest.raises(httpcore.ConnectError):
         PublicOnlyBackend().connect_tcp("127.0.0.1", 8317)
+
+
+# --- fetch statistics (L6, fetch_stats) -------------------------------------------
+
+
+def _stats_for(stage: str = "probe"):
+    from camsocs_pipeline import fetch_stats
+
+    return fetch_stats.activate(stage)
+
+
+def test_each_fetch_is_counted_once_with_retries_429s_and_waits(tmp_path: Path, net) -> None:
+    allow_all(net, "https://busy.example")
+    net.get("https://busy.example/a").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "1"}),
+            httpx.Response(503),
+            httpx.Response(200, text="ok"),
+        ]
+    )
+    net.get("https://busy.example/b").respond(200, text="b")
+    clock = FakeClock()
+    client = make_client(tmp_path, clock, min_interval=2.0)
+
+    with _stats_for() as stats:
+        assert client.fetch("https://busy.example/a").outcome == "fetched"
+        assert client.fetch("https://busy.example/b").outcome == "fetched"
+
+    metrics = stats.metrics()
+    assert metrics["fetchRequests"] == 2 and metrics["fetchFetched"] == 2
+    assert metrics["fetchRetries"] == 2 and metrics["fetchTooMany"] == 1
+    assert metrics["fetchStatus2xx"] == 2 and metrics["fetchStatus5xx"] == 0
+    assert metrics["hostsContacted"] == 1
+    assert metrics["fetchWaitS"] > 0, "the host slot made the second request wait"
+    assert set(stats.by_host_class()) == {"other"}
+
+
+def test_outcomes_cache_hits_and_overrides_are_counted(tmp_path: Path, net) -> None:
+    from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+
+    net.get("https://soc.example/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
+    net.get("https://soc.example/").respond(200, text="<h1>Chess</h1>")
+    allow_all(net, "https://gone.example")
+    net.get("https://gone.example/old").respond(404)
+    net.get("https://gone.example/wall").respond(403)
+    client = make_client(tmp_path)
+
+    with _stats_for() as stats:
+        client.fetch("https://soc.example/", purpose=SOCIETY_WEBSITE)
+        client.fetch("https://soc.example/", purpose=SOCIETY_WEBSITE, fresh_for=timedelta(days=1))
+        client.fetch("https://soc.example/other")  # general purpose: robots holds
+        client.fetch("https://gone.example/old")
+        client.fetch("https://gone.example/wall")
+
+    metrics = stats.metrics()
+    assert metrics["fetchRequests"] == 5
+    assert metrics["fetchFetched"] == 1 and metrics["fetchUnchanged"] == 1
+    assert metrics["fetchCacheHits"] == 1 and metrics["fetchOverrideSociety"] == 2
+    assert metrics["fetchRobotsBlocked"] == 1
+    assert metrics["fetchNotFound"] == 1 and metrics["fetchRestricted"] == 1
+    assert metrics["fetchStatus4xx"] == 2
+    classes = stats.by_host_class()
+    assert classes["society_website"]["fetchRequests"] == 2
+    assert classes["other"]["fetchRequests"] == 3
+
+
+def test_unreachable_robots_and_refused_addresses_are_counted(tmp_path: Path, net) -> None:
+    net.get("https://down.example/robots.txt").respond(503)
+    page = net.get("https://down.example/x").respond(200)
+    client = make_client(
+        tmp_path,
+        resolve=lambda host, _port: (
+            ["10.0.0.5"] if host == "private.example" else ["93.184.215.14"]
+        ),
+    )
+
+    with _stats_for() as stats:
+        assert client.fetch("https://down.example/x").outcome == "disallowed_by_robots"
+        assert client.fetch("https://private.example/x").outcome == "disallowed_by_robots"
+        client.fetch("https://private.example/y")
+
+    metrics = stats.metrics()
+    assert metrics["robotsHostsUnreachable"] == 1
+    assert metrics["fetchAddressRefused"] == 2, "once per logical fetch, not per check"
+    assert metrics["fetchRobotsBlocked"] == 3 and not page.called
+
+
+def test_without_an_active_stage_nothing_is_collected(tmp_path: Path, net) -> None:
+    from camsocs_pipeline import fetch_stats
+
+    allow_all(net, "https://quiet.example")
+    net.get("https://quiet.example/").respond(200, text="x")
+    assert fetch_stats.current() is None
+    assert make_client(tmp_path).fetch("https://quiet.example/").outcome == "fetched"
+    with _stats_for() as stats:
+        pass
+    assert stats.metrics() == {} and stats.by_host_class() == {}

@@ -9,9 +9,9 @@
 - `run_harvest` is the body of a harvest stage: it opens a polite client,
   runs the source's harvest function (honouring ``--limit``), writes the
   observations to ``var/staging/<source_type>/<run_key>--<stage>.jsonl`` (one
-  file per source type, the stage name as the part) and reports. In a dry
-  run it fetches and stages nothing: a dry run writes nothing and needs no
-  network.
+  file per source type, the stage name as the part) and reports, with the
+  number staged as the ``observationsStaged`` metric. In a dry run it
+  fetches and stages nothing: a dry run writes nothing and needs no network.
 """
 
 from __future__ import annotations
@@ -131,6 +131,9 @@ def run_harvest(ctx: StageContext, source_type: str, harvest: HarvestFn) -> Harv
         written += ctx.staging.write(directory, ctx.run.run_key, records, part=ctx.report.name)
         ctx.report.notes.append(f"{len(records)} {directory} observations staged")
     ctx.report.inserted += written
+    ctx.report.metrics["observationsStaged"] = (
+        ctx.report.metrics.get("observationsStaged", 0) + written
+    )
     ctx.report.skipped += result.failed
     if source_type not in by_type:
         ctx.report.notes.append(f"no {source_type} observations")

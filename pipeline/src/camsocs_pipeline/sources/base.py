@@ -102,6 +102,7 @@ from urllib.parse import urljoin, urlsplit
 import httpcore
 import httpx
 
+from camsocs_pipeline import fetch_stats
 from camsocs_pipeline.sources.policy import (
     GENERAL,
     FetchPurpose,
@@ -496,8 +497,26 @@ class PoliteClient:
         written to (or read from) the raw cache — for a response that carries
         data we must not keep (the University's programme list names staff
         contacts, source-research §10).
+
+        Each call is one logical fetch for the stage's statistics
+        (`camsocs_pipeline.fetch_stats`): its outcome under the host class,
+        never the URL.
         """
         _require_http(url)
+        with fetch_stats.fetch_trace() as trace:
+            result = self._fetch(url, fresh_for, accept, headers, purpose, store)
+        _record(result, url, purpose, trace)
+        return result
+
+    def _fetch(
+        self,
+        url: str,
+        fresh_for: timedelta | None,
+        accept: str,
+        headers: Mapping[str, str] | None,
+        purpose: FetchPurpose,
+        store: bool,
+    ) -> FetchResult:
         refused = never_fetched(url) or self._address_refusal(url)
         if refused is not None:
             return self._result(url, url, "disallowed_by_robots", None, detail=refused)
@@ -630,6 +649,18 @@ class PoliteClient:
         form body. A redirect is not followed: it is reported as `http_error`
         (from a data endpoint it means a sign-in wall)."""
         _require_http(url)
+        with fetch_stats.fetch_trace() as trace:
+            result = self._post_form(url, form, fresh_for, accept)
+        _record(result, url, GENERAL, trace)
+        return result
+
+    def _post_form(
+        self,
+        url: str,
+        form: Mapping[str, str],
+        fresh_for: timedelta | None,
+        accept: str,
+    ) -> FetchResult:
         refused = never_fetched(url) or self._address_refusal(url)
         if refused is not None:
             return self._result(url, url, "disallowed_by_robots", None, detail=refused)
@@ -663,10 +694,14 @@ class PoliteClient:
         key = f"{parts.scheme}://{parts.netloc.lower()}"
         with self._robots_lock:
             if key in self._refusals:
-                return self._refusals[key]
+                refused = self._refusals[key]
+                if refused is not None:
+                    fetch_stats.note_address_refused()
+                return refused
         refused = address_refusal(url, self._resolve or RESOLVE)
         if refused is not None:
             logger.warning("%s — not fetched", refused)
+            fetch_stats.note_address_refused()
         with self._robots_lock:
             self._refusals[key] = refused
         return refused
@@ -691,11 +726,13 @@ class PoliteClient:
             logger.warning(
                 "robots.txt unreachable for %s (%s) — treating as disallow", origin, error
             )
+            fetch_stats.note_robots_unreachable(origin)
             return _RobotsPolicy(None, f"robots.txt unreachable: {error}", 0.0, unreachable=True)
         status = response.status_code
         if status in RESTRICTED_STATUSES:
             return _RobotsPolicy(None, f"robots.txt answered {status}", 0.0)
         if status >= 500 or status == 429:
+            fetch_stats.note_robots_unreachable(origin)
             return _RobotsPolicy(None, f"robots.txt answered {status}", 0.0, unreachable=True)
         if status >= 400:
             # No robots.txt: everything is allowed (RFC 9309 §2.3.1.3).
@@ -728,6 +765,7 @@ class PoliteClient:
             if gate.last_finished is not None:
                 wait = gate.min_interval - (self._clock() - gate.last_finished)
                 if wait > 0:
+                    fetch_stats.note_wait(wait)
                     self._sleep(wait)
             try:
                 yield
@@ -768,6 +806,7 @@ class PoliteClient:
         backoff = INITIAL_BACKOFF
         last_error = "no attempt made"
         with self._slot(host, robots_delay):
+            fetch_stats.note_contacted(url)
             for attempt in range(self.max_retries + 1):
                 try:
                     if form is None:
@@ -783,6 +822,8 @@ class PoliteClient:
                     if response.status_code not in RETRYABLE_STATUSES:
                         return response, None
                     last_error = f"HTTP {response.status_code}"
+                    if response.status_code == 429:
+                        fetch_stats.note_too_many()
                     retry_after = _retry_after_seconds(response, self._now())
                     wait = retry_after if retry_after is not None else _jittered(backoff)
                 if attempt < self.max_retries:
@@ -797,6 +838,7 @@ class PoliteClient:
                         self.max_retries + 1,
                         wait,
                     )
+                    fetch_stats.note_retry()
                     self._sleep(wait)
                     backoff = min(backoff * 2, MAX_BACKOFF)
         return None, last_error
@@ -984,6 +1026,21 @@ class PoliteClient:
 
 
 # --- helpers ------------------------------------------------------------------
+
+
+def _record(
+    result: FetchResult, url: str, purpose: FetchPurpose, trace: fetch_stats.FetchTrace
+) -> None:
+    """One logical fetch into the stage's statistics (counts only)."""
+    fetch_stats.record_fetch(
+        url,
+        purpose.bound_to(url),
+        outcome=result.outcome,
+        status=result.status,
+        from_cache=result.from_cache,
+        override=result.override,
+        trace=trace,
+    )
 
 
 def _from_cache(url: str, meta: dict, body: bytes | None, *, detail: str) -> FetchResult:

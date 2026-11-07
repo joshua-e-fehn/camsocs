@@ -68,6 +68,21 @@ generations. PostHog prices a generation from `$ai_provider` + `$ai_model`;
 cliproxy's models are behind a subscription and match no public price list, so
 any cost PostHog shows for them is indicative at best.
 
+**Campus, pillars, fetches and traces (L6, decision D8).** Every event
+carries `campus` (the process's campus, `campuses.active()`, only an id the
+registry knows). `harvest_stage_completed` adds the stage's `pillar`, its
+`phase` and its `yield` (inserted + updated + unchanged); `harvest_run_started`
+adds `timeLimitS` when the runner states it (`CAMSOCS_TIME_LIMIT_S`). After
+each stage, one `harvest_source_fetched` per host class the stage fetched
+from (`fetch_stats.HOST_CLASSES`: a class, never a host or URL) carries the
+fetch counters. The run is one PostHog trace: `$ai_trace` at its end (the
+run key as `$ai_trace_id`, the group as `$ai_span_name`), one `$ai_span` per
+stage (``<runKey>.<stage>``, parent the run) and each generation's
+`$ai_parent_id` its stage's span. `$ai_input`, `$ai_output_choices`,
+`$ai_input_state` and `$ai_output_state` are never allowed
+(`FORBIDDEN_AI_KEYS`, asserted at import and by the tests): spans carry
+names, ids, latencies and flags only.
+
 The SDK uses `requests`, which respx does not intercept: tests inject a fake
 client (`HarvestTelemetry(client=…)`) and never build a real one, and
 conftest refuses any `requests` transport (tests/conftest.py).
@@ -77,10 +92,12 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
 import re
 import subprocess
 import threading
 import time
+import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Protocol
 
@@ -91,6 +108,7 @@ from camsocs_pipeline.config import (
     REPO_ROOT,
     Settings,
 )
+from camsocs_pipeline.fetch_stats import CLASS_COUNTERS, HOST_CLASSES
 from camsocs_pipeline.pipeline.report import RunReport, StageReport, mint_run_key
 
 logger = logging.getLogger(__name__)
@@ -101,7 +119,36 @@ DISTINCT_ID = "camsocs-harvester"
 RUN_STARTED = "harvest_run_started"
 STAGE_COMPLETED = "harvest_stage_completed"
 RUN_FINISHED = "harvest_run_finished"
+SOURCE_FETCHED = "harvest_source_fetched"
 AI_GENERATION = "$ai_generation"
+AI_SPAN = "$ai_span"
+AI_TRACE = "$ai_trace"
+
+#: PostHog's content properties: never sent, by any event (L6).
+FORBIDDEN_AI_KEYS = frozenset(
+    {"$ai_input", "$ai_output_choices", "$ai_input_state", "$ai_output_state"}
+)
+
+#: The runner's time limit for the run, in seconds (camsocs-harvest.sh).
+TIME_LIMIT_ENV = "CAMSOCS_TIME_LIMIT_S"
+
+#: Mirrors `pipeline.context.PHASES` / `PILLARS` (asserted by the tests;
+#: not imported, to keep this module free of the runner's imports).
+_PHASES = frozenset(
+    {
+        "seed",
+        "harvest",
+        "resolve",
+        "enrich",
+        "classify",
+        "events",
+        "inbox",
+        "load",
+        "talks",
+        "report",
+    }
+)
+_PILLARS = frozenset({"societies", "events", "talks", "shared"})
 
 #: `$ai_provider` on every generation: the OpenAI-compatible local proxy
 #: (`LLM_BASE_URL`) the pipeline talks to, whatever serves it upstream.
@@ -124,26 +171,40 @@ _STATUSES = frozenset({"success", "partial", "failed", "ok", "not_run"})
 _SDK_CONTEXT = ("$os", "$os_version", "$os_distro", "$python_runtime", "$python_version")
 
 #: Properties every event may carry.
-_COMMON = frozenset({"environment", "runKey", "group", "dryRun", "$process_person_profile"})
+_COMMON = frozenset(
+    {"environment", "campus", "runKey", "group", "dryRun", "$process_person_profile"}
+)
 
 #: The only properties each event may send; anything else is dropped (and
 #: logged at debug). Tests assert against this, so widening it is a reviewed
 #: change. Never add `error`, `notes`, `warnings`, titles or URLs.
 ALLOWED: Mapping[str, frozenset[str]] = {
     RUN_STARTED: _COMMON
-    | {"command", "requestedStages", "stageCount", "limit", "pipelineVersion", "revision"},
+    | {
+        "command",
+        "requestedStages",
+        "stageCount",
+        "limit",
+        "pipelineVersion",
+        "revision",
+        "timeLimitS",
+    },
     STAGE_COMPLETED: _COMMON
     | {
         "stage",
         "status",
+        "pillar",
+        "phase",
         "durationS",
         "inserted",
         "updated",
         "unchanged",
         "skipped",
+        "yield",
         "metrics",
         "errorType",
     },
+    SOURCE_FETCHED: _COMMON | {"stage", "pillar", "hostClass", "durationS", *CLASS_COUNTERS},
     RUN_FINISHED: _COMMON
     | {
         "command",
@@ -168,6 +229,8 @@ ALLOWED: Mapping[str, frozenset[str]] = {
     | {
         "$ai_trace_id",
         "$ai_span_name",
+        "$ai_span_id",
+        "$ai_parent_id",
         "$ai_model",
         "$ai_provider",
         "$ai_input_tokens",
@@ -183,13 +246,32 @@ ALLOWED: Mapping[str, frozenset[str]] = {
         "fallback",
         "errorType",
     },
+    # A stage: names, ids, a latency and a flag — never inputs or outputs.
+    AI_SPAN: _COMMON
+    | {
+        "$ai_trace_id",
+        "$ai_span_id",
+        "$ai_parent_id",
+        "$ai_span_name",
+        "$ai_latency",
+        "$ai_is_error",
+        "pillar",
+    },
+    # The run.
+    AI_TRACE: _COMMON | {"$ai_trace_id", "$ai_span_name", "$ai_latency", "$ai_is_error"},
 }
+for _event, _keys in ALLOWED.items():
+    if _keys & FORBIDDEN_AI_KEYS:  # pragma: no cover - a reviewed widening never does this
+        raise AssertionError(f"{_event} allow-lists a forbidden $ai_* property")
 
 _STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 #: A metric or coverage name: camelCase, as the stages write them.
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
 _REVISION = re.compile(r"[0-9a-f]{7,40}")
-_RUN_KEY = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{6}")  # report.mint_run_key
+_RUN_KEY_PATTERN = r"\d{8}T\d{6}Z-[0-9a-f]{6}"  # report.mint_run_key
+_RUN_KEY = re.compile(_RUN_KEY_PATTERN)
+#: A stage span ``<runKey>.<stage>``.
+_SPAN_PATTERN = rf"{_RUN_KEY_PATTERN}\.[a-z][a-z0-9_]{{0,63}}"
 
 #: The shape each string property must have; a string under any other key, or
 #: one that does not match, is dropped. No shape allows a space (beyond the
@@ -208,8 +290,14 @@ _SHAPES: Mapping[str, re.Pattern[str]] = {
     "errorType": re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,79}"),
     "pipelineVersion": re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_\-]{0,39}"),
     "revision": _REVISION,
+    "campus": re.compile(r"[a-z]{2,8}"),
+    "hostClass": re.compile("|".join(HOST_CLASSES)),
     "$ai_trace_id": _RUN_KEY,
     "$ai_span_name": _STAGE,
+    # A stage span, or a generation's own id (uuid4 hex).
+    "$ai_span_id": re.compile(rf"{_SPAN_PATTERN}|[0-9a-f]{{32}}"),
+    # The run (a span's parent) or a stage span (a generation's parent).
+    "$ai_parent_id": re.compile(rf"{_RUN_KEY_PATTERN}|{_SPAN_PATTERN}"),
     # A model id as `extract.llm.assert_model_allowed` admits it, from config.
     "$ai_model": re.compile(r"(?!.*//)[A-Za-z0-9][A-Za-z0-9._:@/\-]{0,99}"),
     "$ai_provider": re.compile(r"[a-z][a-z0-9_\-]{0,31}"),
@@ -233,8 +321,36 @@ def _string_ok(key: str, value: object) -> bool:
         return False
     if key == "status":
         return value in _STATUSES
+    if key == "pillar":
+        return value in _PILLARS
+    if key == "phase":
+        return value in _PHASES
     shape = _SHAPES.get(key)
-    return shape is not None and shape.fullmatch(value) is not None
+    if shape is None or shape.fullmatch(value) is None:
+        return False
+    return key != "campus" or value in _known_campuses()
+
+
+def _known_campuses() -> tuple[str, ...]:
+    # Imported here: campuses imports the stage registry, which this module
+    # must not pull in at import time.
+    from camsocs_pipeline import campuses
+
+    return campuses.known_ids()
+
+
+def _campus() -> str | None:
+    """The process's campus id (`campuses.active()`), or None if unknown."""
+    from camsocs_pipeline import campuses
+
+    campus_id = campuses.active().id
+    return campus_id if campus_id in campuses.known_ids() else None
+
+
+def _time_limit() -> int | None:
+    """`CAMSOCS_TIME_LIMIT_S` as whole seconds, when the runner sets it."""
+    value = os.environ.get(TIME_LIMIT_ENV, "").strip()
+    return int(value) if value.isdigit() and 0 < int(value) < 10**7 else None
 
 
 def _clean_value(key: str, value: object) -> object | None:
@@ -266,7 +382,7 @@ def clean_properties(event: str, properties: Mapping[str, object]) -> dict[str, 
     for key, value in properties.items():
         if value is None:
             continue
-        if key not in allowed:
+        if key not in allowed or key in FORBIDDEN_AI_KEYS:
             logger.debug("telemetry: %s dropped property %s (not allow-listed)", event, key)
             continue
         safe = _clean_value(key, value)
@@ -428,7 +544,8 @@ class HarvestTelemetry:
         if self._client is None:
             return
         cleaned = clean_properties(
-            event, {"environment": self._environment, **self._common, **properties}
+            event,
+            {"environment": self._environment, "campus": _campus(), **self._common, **properties},
         )
         cleaned["$process_person_profile"] = False
         self._client.capture(event, distinct_id=DISTINCT_ID, properties=cleaned)
@@ -458,6 +575,7 @@ class HarvestTelemetry:
                 "limit": limit,
                 "pipelineVersion": __version__,
                 "revision": self._revision,
+                "timeLimitS": _time_limit(),
             },
         )
 
@@ -466,25 +584,77 @@ class HarvestTelemetry:
         """Name the stage that the generations from now on belong to."""
         self._stage = name
 
+    def _run_trace_id(self) -> str:
+        return str(self._common.get("runKey") or self._trace_id)
+
     @_quiet
     def stage_completed(
-        self, stage: StageReport, *, duration_s: float, error_type: str | None = None
+        self,
+        stage: StageReport,
+        *,
+        duration_s: float,
+        error_type: str | None = None,
+        pillar: str | None = None,
+        phase: str | None = None,
     ) -> None:
+        """The stage's `harvest_stage_completed` and its `$ai_span` (a child
+        of the run's trace). `pillar` and `phase` come from the registry."""
         self._stage = None
+        duration = round(duration_s, 3)
         self._capture(
             STAGE_COMPLETED,
             {
                 "stage": stage.name,
                 "status": stage.status,
-                "durationS": round(duration_s, 3),
+                "pillar": pillar,
+                "phase": phase,
+                "durationS": duration,
                 "inserted": stage.inserted,
                 "updated": stage.updated,
                 "unchanged": stage.unchanged,
                 "skipped": stage.skipped,
+                "yield": stage.inserted + stage.updated + stage.unchanged,
                 "metrics": dict(stage.metrics) or None,
                 "errorType": error_type if stage.status == "failed" else None,
             },
         )
+        trace_id = self._run_trace_id()
+        self._capture(
+            AI_SPAN,
+            {
+                "$ai_trace_id": trace_id,
+                "$ai_span_id": f"{trace_id}.{stage.name}",
+                "$ai_parent_id": trace_id,
+                "$ai_span_name": stage.name,
+                "$ai_latency": duration,
+                "$ai_is_error": stage.status == "failed",
+                "pillar": pillar,
+            },
+        )
+
+    @_quiet
+    def sources_fetched(
+        self,
+        stage: str,
+        by_host_class: Mapping[str, Mapping[str, int | float]],
+        *,
+        duration_s: float,
+        pillar: str | None = None,
+    ) -> None:
+        """One `harvest_source_fetched` per host class the stage fetched from
+        (`fetch_stats.StageStats.by_host_class`): counts only, the class
+        never a host. `duration_s` is the stage's."""
+        for host_class, counters in by_host_class.items():
+            self._capture(
+                SOURCE_FETCHED,
+                {
+                    "stage": stage,
+                    "pillar": pillar,
+                    "hostClass": host_class,
+                    "durationS": round(duration_s, 3),
+                    **{name: value for name, value in counters.items() if name in CLASS_COUNTERS},
+                },
+            )
 
     @_quiet
     def run_finished(self, report: RunReport, *, error_type: str | None = None) -> None:
@@ -499,12 +669,14 @@ class HarvestTelemetry:
         coverage = next(
             (dict(s.metrics) for s in stages if s.name == "report" and s.ok and s.metrics), None
         )
+        status = _run_status(report, error_type)
+        elapsed = self._elapsed()
         self._capture(
             RUN_FINISHED,
             {
                 "command": report.command,
-                "status": _run_status(report, error_type),
-                "durationS": self._elapsed(),
+                "status": status,
+                "durationS": elapsed,
                 "stagesOk": sum(1 for s in stages if s.status == "ok"),
                 "stagesFailed": sum(1 for s in stages if s.status == "failed"),
                 "stagesNotRun": sum(1 for s in stages if s.status == "not_run"),
@@ -519,6 +691,15 @@ class HarvestTelemetry:
                 "runError": report.error is not None,
                 "errorType": error_type,
                 "coverage": coverage,
+            },
+        )
+        self._capture(
+            AI_TRACE,
+            {
+                "$ai_trace_id": report.run_key,
+                "$ai_span_name": self._common.get("group") or "sync",
+                "$ai_latency": elapsed,
+                "$ai_is_error": status != "success",
             },
         )
 
@@ -562,10 +743,14 @@ class HarvestTelemetry:
         exception that ended it (never its message); `fallback` marks a strong
         request made because the bulk one failed (ENG-23). Takes no messages,
         reply or error text, so it cannot send them."""
+        trace_id = self._run_trace_id()
         self._capture(
             AI_GENERATION,
             {
-                "$ai_trace_id": self._common.get("runKey") or self._trace_id,
+                "$ai_trace_id": trace_id,
+                "$ai_span_id": uuid.uuid4().hex,
+                # The stage's span (`stage_completed`), when inside one.
+                "$ai_parent_id": f"{trace_id}.{self._stage}" if self._stage else None,
                 "$ai_span_name": self._stage,
                 "stage": self._stage,
                 "$ai_model": model,
@@ -631,13 +816,18 @@ def _run_status(report: RunReport, error_type: str | None) -> str:
 __all__ = [
     "AI_GENERATION",
     "AI_PROVIDER",
+    "AI_SPAN",
+    "AI_TRACE",
     "ALLOWED",
     "CLOSE_TIMEOUT",
     "DISTINCT_ID",
     "FLUSH_TIMEOUT",
+    "FORBIDDEN_AI_KEYS",
     "RUN_FINISHED",
     "RUN_STARTED",
+    "SOURCE_FETCHED",
     "STAGE_COMPLETED",
+    "TIME_LIMIT_ENV",
     "HarvestTelemetry",
     "active_telemetry",
     "clean_properties",

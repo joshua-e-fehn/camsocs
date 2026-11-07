@@ -35,15 +35,26 @@ evening, each with that source's reading (`ShadowedReading`, ENG-47). It is
 one file per directory, replaced by every run of its stage with the full
 current set, and not a staging file: no reader of records sees it. The load
 retires each one's own key to the event that took it over.
+
+**Write guard (advisory).** While the runner has a stage running it sets
+`StagingStore.active_stage` (`pipeline/sync.py`), and every write — a file,
+a writer, the shadowed readings — is checked against that stage's declared
+`writes` (`stages/__init__.py`): a directory named exactly (a source type,
+a ``<type>.events`` directory, ``_resolved``) or covered by
+``@all_observations`` (any source type or ``<type>.events`` directory, never
+``_resolved``). A directory outside them is a `StagingGuardError` when
+``CAMSOCS_STRICT_STAGING=1`` (the test suite sets it) and a logged warning
+otherwise: production keeps running until a full run is warning-free.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Self
+from typing import Protocol, Self
 
 from pydantic import TypeAdapter
 
@@ -118,6 +129,37 @@ def _part_of(path: Path) -> str:
     return part
 
 
+#: Every observation directory at once (`stages/__init__.py` selectors).
+ALL_OBSERVATIONS = "@all_observations"
+
+#: Set to ``1`` to make a guard violation an error (tests/conftest.py).
+STRICT_ENV = "CAMSOCS_STRICT_STAGING"
+
+
+class StagingGuardError(RuntimeError):
+    """A stage wrote a staging directory it does not declare (strict mode)."""
+
+
+class GuardedStage(Protocol):
+    """What the write guard reads of a registry `Stage`."""
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def writes(self) -> tuple[str, ...]: ...
+
+
+def declares_write(writes: Iterable[str], directory: str) -> bool:
+    """Whether a stage declaring `writes` may write `directory`."""
+    declared = set(writes)
+    if directory in declared:
+        return True
+    # The wildcard covers every source type and ``<type>.events`` directory
+    # (classify restates them all), never the resolver's output.
+    return ALL_OBSERVATIONS in declared and directory != RESOLVED
+
+
 class StagingWriter:
     """Appends records to one staging file; publishes it on a clean exit."""
 
@@ -158,6 +200,25 @@ class StagingStore:
 
     def __init__(self, root: Path) -> None:
         self.root = root
+        #: The stage the runner is running, whose `writes` the guard checks;
+        #: `None` (no check) outside a run.
+        self.active_stage: GuardedStage | None = None
+        self._warned: set[tuple[str, str]] = set()
+
+    def _guard(self, directory: str) -> None:
+        """The advisory write guard (module docstring)."""
+        stage = self.active_stage
+        if stage is None or declares_write(stage.writes, directory):
+            return
+        message = (
+            f"stage {stage.name} wrote staging directory {directory}, which its "
+            f"registry entry does not declare (writes={list(stage.writes)})"
+        )
+        if os.environ.get(STRICT_ENV) == "1":
+            raise StagingGuardError(message)
+        if (stage.name, directory) not in self._warned:
+            self._warned.add((stage.name, directory))
+            logger.warning("staging guard: %s", message)
 
     def path(self, directory: str, run_key: str, part: str | None = None) -> Path:
         name = _check_run_key(run_key)
@@ -167,7 +228,9 @@ class StagingStore:
 
     def writer(self, directory: str, run_key: str, part: str | None = None) -> StagingWriter:
         """``with store.writer("su_directory", ctx.run.run_key, ctx.report.name) as out: …``"""
-        return StagingWriter(self.path(directory, run_key, part))
+        path = self.path(directory, run_key, part)
+        self._guard(directory)
+        return StagingWriter(path)
 
     def write(
         self, directory: str, run_key: str, records: Iterable[Record], part: str | None = None
@@ -234,6 +297,7 @@ class StagingStore:
         """Replaces the directory's shadowed readings with `readings` (ENG-47);
         none removes the file. Written to a temporary file and renamed."""
         path = self.root / _check_directory(directory) / SHADOWED_FILE
+        self._guard(directory)
         rows = list(readings)
         if not rows:
             path.unlink(missing_ok=True)
@@ -272,13 +336,17 @@ class StagingStore:
 
 
 __all__ = [
+    "ALL_OBSERVATIONS",
     "EVENTS_SUFFIX",
     "PART_SEPARATOR",
     "RESOLVED",
     "SHADOWED_FILE",
+    "STRICT_ENV",
     "Record",
+    "StagingGuardError",
     "StagingStore",
     "StagingWriter",
+    "declares_write",
     "events_directory",
     "is_events_directory",
 ]

@@ -17,7 +17,10 @@ Two safety properties hold for every test:
   `pipeline/.env` (real keys) is never read by a test.
 - **No telemetry carried over.** A test that starts a run makes its telemetry
   the process's active one (LLM generations go there); it is cleared after
-  every test.
+  every test, and so is any active fetch-statistics collector.
+- **Strict staging guard.** ``CAMSOCS_STRICT_STAGING=1``: a stage run by the
+  runner that writes a staging directory its registry entry does not declare
+  fails the test (`staging/store.py`); production only logs it.
 """
 
 from __future__ import annotations
@@ -58,6 +61,9 @@ ENV_VARS = (
     "POSTHOG_PROJECT_ID",
     "POSTHOG_APP_HOST",
     "INDEXNOW_SITE_URL",
+    "CAMSOCS_REVISION",
+    "CAMSOCS_TIME_LIMIT_S",
+    "CAMSOCS_PAYLOAD_DIGEST",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
@@ -67,6 +73,7 @@ TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
 def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name in ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CAMSOCS_STRICT_STAGING", "1")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -103,9 +110,10 @@ def _no_requests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _no_active_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
-    from camsocs_pipeline import telemetry
+    from camsocs_pipeline import fetch_stats, telemetry
 
     monkeypatch.setattr(telemetry, "_active", None)
+    monkeypatch.setattr(fetch_stats, "_current", None)
 
 
 class ModelReached(BaseException):
