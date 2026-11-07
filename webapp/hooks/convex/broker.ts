@@ -177,6 +177,11 @@ export function useBrokerTraffic() {
   return useQuery(api.broker.overview.traffic)
 }
 
+/** The daily indexing check's latest summary (convex/indexing.ts). */
+export function useIndexingSummary() {
+  return useQuery(api.indexing.summary)
+}
+
 /** Reads the website traffic again on the server now. */
 export function useRefreshTraffic() {
   return useMutation(api.broker.overview.refreshTraffic)

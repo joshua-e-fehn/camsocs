@@ -83,6 +83,8 @@ READ_ROUTES: frozenset[str] = frozenset(
         "coverage",
         "coverage/events",
         "events/scan",
+        # The monitor's indexing check (monitor.py `check_indexing`).
+        "indexing/summary",
     }
 )
 
