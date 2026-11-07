@@ -85,7 +85,7 @@ description = "Regenerate webapp/lib/generated/pipeline-graph.cam.json and docs/
 
 [tasks.posthog-dashboards]
 cmd = "python ops/posthog/dashboards.py"
-# The four PostHog dashboards as code (ENG-10): `-- --dry-run` prints the
+# The five PostHog dashboards as code (ENG-10): `-- --dry-run` prints the
 # JSON, `-- --validate` runs every query once (read-only), `-- --apply`
 # creates or updates them by name. Needs POSTHOG_PERSONAL_API_KEY and
 # POSTHOG_PROJECT_ID in the environment (docs/deploy.md "PostHog").

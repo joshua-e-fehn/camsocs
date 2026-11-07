@@ -64,24 +64,27 @@ ANNOTATIONS: dict[str, tuple] = {
     ),
     "classify": ("classify", "societies", None, (ALL,), (ALL,), (), True, True, ()),
     "camdram_events": (
-        "events", "events", "cam", ("camdram.events",), (ORG,), (), True, False, ("§5",)
+        "events", "events", "cam", ("camdram.events",), (ORG,), ("crosswalk",), True, False, ("§5",)
     ),
     "talks_cam": (
-        "events", "events", "cam", ("talks_list.events",), (ORG,), (), True, False, ("§6",)
+        "events", "events", "cam", ("talks_list.events",), (ORG,), ("crosswalk",), True, False, ("§6",)
     ),
     "cucbc_events": (
-        "events", "events", "cam", ("cucbc.events",), (ORG,), (), True, False, ("§7",)
+        "events", "events", "cam", ("cucbc.events",), (ORG,), ("crosswalk",), True, False, ("§7",)
     ),
-    "playwaze": ("events", "events", "cam", ("playwaze.events",), (ORG,), (), True, False, ("§9",)),
+    "playwaze": (
+        "events", "events", "cam", ("playwaze.events",), (ORG,), ("crosswalk",), True, False,
+        ("§9",),
+    ),
     "uni_events": (
-        "events", "events", "cam", ("uni_events_api.events",), (ORG,), (), True, False, ("§10",)
+        "events", "events", "cam", ("uni_events_api.events",), (ORG,), ("crosswalk",), True, False, ("§10",)
     ),
     "calendar_feeds": (
-        "events", "events", None, ("ics_feed.events", "luma.events"), (ORG,), (), True, False,
+        "events", "events", None, ("ics_feed.events", "luma.events"), (ORG,), ("crosswalk",), True, False,
         ("§11",),
     ),
     "su_whatson": (
-        "events", "events", "cam", ("su_whatson.events",), ("su_profile", ORG), (), True, False,
+        "events", "events", "cam", ("su_whatson.events",), ("su_profile", ORG), ("crosswalk",), True, False,
         ("§12",),
     ),
     "website_events": (
@@ -90,14 +93,17 @@ ANNOTATIONS: dict[str, tuple] = {
     ),
     "inbox": (
         "inbox", "events", None, ("mailing_list_email",), (ORG, EVENTS),
-        ("inbound/pending", "inbound/file", *OBSERVATIONS, "inbound/mark"), False, True,
+        ("crosswalk", "inbound/pending", "inbound/file", *OBSERVATIONS, "inbound/mark"), False, True,
         ("§16", "§20"),
     ),
     "instagram": (
-        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), ("files",), True, True,
+        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), ("crosswalk", "files"), True, True,
         ("§17",),
     ),
-    "termcards": ("inbox", "events", None, ("termcard",), (ORG, EVENTS), (), True, True, ("§21",)),
+    "termcards": (
+        "inbox", "events", None, ("termcard",), (ORG, EVENTS), ("crosswalk",), True, True,
+        ("§21",),
+    ),
     "load": ("load", "shared", None, (), (ALL,), OBSERVATIONS, False, False, ()),
     "talks": (
         "talks", "talks", "cam", (TALKS,), (),
@@ -129,6 +135,14 @@ def test_every_stage_is_annotated_as_reviewed() -> None:
             _docs(stage),
         )
         assert actual == ANNOTATIONS[stage.name], stage.name
+
+
+def test_every_stage_that_reads_the_org_lookup_declares_the_crosswalk() -> None:
+    """`OrgLookup.for_stage` reads `/api/pipeline/crosswalk` on a real run, so
+    every stage that reads `@org_lookup` lists that route in `sinks=`."""
+    for stage in STAGES:
+        if ORG in stage.reads:
+            assert "crosswalk" in stage.sinks, stage.name
 
 
 def test_the_pillars_are_the_three_plus_shared() -> None:

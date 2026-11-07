@@ -536,8 +536,9 @@ def load_settings(
     choice: EnvChoice, environ: Mapping[str, str] | None = None, *, campus: str | None = None
 ) -> Settings:
     """The settings of one environment, with the guards in the module
-    docstring. `campus` is the CLI's `--campus`: it wins over the
-    environment, and may not contradict the campus the env file states."""
+    docstring. `campus` is the CLI's `--campus`: it must agree with an
+    exported `CAMSOCS_CAMPUS` and with the campus the env file states (a
+    contradiction is a `ConfigError`, never a silent override)."""
     environ = os.environ if environ is None else environ
     if choice.is_default:
         settings = _build(choice.path, campus)

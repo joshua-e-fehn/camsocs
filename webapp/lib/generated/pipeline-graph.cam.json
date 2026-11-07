@@ -1183,6 +1183,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:camdram_events",
+      "kind": "reads"
+    },
+    {
       "from": "sel:cam:org_lookup",
       "to": "stage:cam:talks_cam",
       "kind": "reads"
@@ -1191,6 +1196,11 @@
       "from": "stage:cam:talks_cam",
       "to": "dir:cam:talks_list.events",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:talks_cam",
+      "kind": "reads"
     },
     {
       "from": "sel:cam:org_lookup",
@@ -1203,6 +1213,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:cucbc_events",
+      "kind": "reads"
+    },
+    {
       "from": "sel:cam:org_lookup",
       "to": "stage:cam:playwaze",
       "kind": "reads"
@@ -1213,6 +1228,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:playwaze",
+      "kind": "reads"
+    },
+    {
       "from": "sel:cam:org_lookup",
       "to": "stage:cam:uni_events",
       "kind": "reads"
@@ -1221,6 +1241,11 @@
       "from": "stage:cam:uni_events",
       "to": "dir:cam:uni_events_api.events",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:uni_events",
+      "kind": "reads"
     },
     {
       "from": "sel:cam:org_lookup",
@@ -1238,6 +1263,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:calendar_feeds",
+      "kind": "reads"
+    },
+    {
       "from": "dir:cam:su_profile",
       "to": "stage:cam:su_whatson",
       "kind": "reads"
@@ -1251,6 +1281,11 @@
       "from": "stage:cam:su_whatson",
       "to": "dir:cam:su_whatson.events",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:su_whatson",
+      "kind": "reads"
     },
     {
       "from": "dir:cam:society_website",
@@ -1276,6 +1311,11 @@
       "from": "stage:cam:inbox",
       "to": "dir:cam:mailing_list_email",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:inbox",
+      "kind": "reads"
     },
     {
       "from": "sink:cam:inbound/pending",
@@ -1353,6 +1393,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:instagram",
+      "kind": "reads"
+    },
+    {
       "from": "stage:cam:instagram",
       "to": "sink:cam:files",
       "kind": "posts"
@@ -1371,6 +1416,11 @@
       "from": "stage:cam:termcards",
       "to": "dir:cam:termcard",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:termcards",
+      "kind": "reads"
     },
     {
       "from": "stage:cam:resolve",

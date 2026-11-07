@@ -136,7 +136,7 @@ def _configure_logging(verbose: bool) -> None:
     metavar="ID",
     help=(
         "The campus (tenant) this run belongs to: cam (default) or another registered id. "
-        "Overrides CAMSOCS_CAMPUS; may not contradict the campus the env file states."
+        "Must agree with CAMSOCS_CAMPUS in the shell and in the env file."
     ),
 )
 @click.pass_context

@@ -130,25 +130,33 @@ flowchart LR
   stage_classify --> sel_all_observations
   sel_org_lookup -.-> stage_camdram_events
   stage_camdram_events --> dir_camdram__events
+  sink_crosswalk -.-> stage_camdram_events
   sel_org_lookup -.-> stage_talks_cam
   stage_talks_cam --> dir_talks_list__events
+  sink_crosswalk -.-> stage_talks_cam
   sel_org_lookup -.-> stage_cucbc_events
   stage_cucbc_events --> dir_cucbc__events
+  sink_crosswalk -.-> stage_cucbc_events
   sel_org_lookup -.-> stage_playwaze
   stage_playwaze --> dir_playwaze__events
+  sink_crosswalk -.-> stage_playwaze
   sel_org_lookup -.-> stage_uni_events
   stage_uni_events --> dir_uni_events_api__events
+  sink_crosswalk -.-> stage_uni_events
   sel_org_lookup -.-> stage_calendar_feeds
   stage_calendar_feeds --> dir_ics_feed__events
   stage_calendar_feeds --> dir_luma__events
+  sink_crosswalk -.-> stage_calendar_feeds
   dir_su_profile -.-> stage_su_whatson
   sel_org_lookup -.-> stage_su_whatson
   stage_su_whatson --> dir_su_whatson__events
+  sink_crosswalk -.-> stage_su_whatson
   dir_society_website -.-> stage_website_events
   stage_website_events --> dir_society_website__events
   sel_org_lookup -.-> stage_inbox
   sel_event_index -.-> stage_inbox
   stage_inbox --> dir_mailing_list_email
+  sink_crosswalk -.-> stage_inbox
   sink_inbound_pending -.-> stage_inbox
   sink_inbound_file -.-> stage_inbox
   sink_suppressions -.-> stage_inbox
@@ -164,10 +172,12 @@ flowchart LR
   sel_org_lookup -.-> stage_instagram
   sel_event_index -.-> stage_instagram
   stage_instagram --> dir_instagram_api
+  sink_crosswalk -.-> stage_instagram
   stage_instagram ==> sink_files
   sel_org_lookup -.-> stage_termcards
   sel_event_index -.-> stage_termcards
   stage_termcards --> dir_termcard
+  sink_crosswalk -.-> stage_termcards
   stage_resolve -. requires .-> stage_load
   sel_all_observations -.-> stage_load
   sink_suppressions -.-> stage_load
