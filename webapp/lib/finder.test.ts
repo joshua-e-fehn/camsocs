@@ -173,3 +173,10 @@ test("a matched activity reads as what the society does", () => {
   })
   expect(s?.reasons).toEqual(["Music", "performs"])
 })
+
+test("a society with events coming up ranks above a quiet one", () => {
+  const ranked = rankSocieties([card({ key: "quiet" }), card({ key: "busy", upcoming: 4 })], {
+    interests: ["music"],
+  })
+  expect(ranked.map((r) => r.item.key)).toEqual(["busy", "quiet"])
+})

@@ -861,6 +861,9 @@ export const finder = query({
       categories: orgCardPublicValidator.fields.categories,
       collegeKeys: v.array(v.string()),
       reasons: v.array(v.string()),
+      /** Events in the window below; `inTerm` says which window it is. */
+      upcoming: v.number(),
+      inTerm: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -873,7 +876,13 @@ export const finder = query({
         ]),
     )
     const cards = (await candidates(ctx, undefined)).filter((card) => matches(card, selections({})))
+    // Events this term (or the next eight weeks in a vacation), the same
+    // count the directory sorts by: a match that is doing things fills the
+    // student's calendar.
+    const window = activityWindow(await loadTerms(ctx), Date.now())
+    const counts = await windowCounts(ctx, window, await loadSuppressedEvents(ctx))
     const facts: (SocietyFacts & { slug: string })[] = cards.map((card) => ({
+      upcoming: counts.get(card.key) ?? 0,
       key: card.key,
       slug: card.slug,
       name: card.name,
@@ -906,6 +915,8 @@ export const finder = query({
           names,
         ),
         reasons,
+        upcoming: card.upcoming ?? 0,
+        inTerm: window.inTerm,
       }
     })
   },
