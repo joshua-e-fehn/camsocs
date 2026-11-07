@@ -27,6 +27,8 @@ export const PAGE_PATHS = [
   "/talks",
   "/talks/departments",
   "/term-dates",
+  "/finder",
+  "/finder/events",
   "/colleges",
   "/for/beginners",
   "/for/postgraduates",

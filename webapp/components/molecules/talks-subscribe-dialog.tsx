@@ -18,7 +18,7 @@ import { feedSentence } from "@/lib/talks"
 import { type TalksState, talksFeedQuery } from "@/lib/talks-url-state"
 import { cn } from "@/lib/utils"
 
-function CopyField({
+export function CopyField({
   label,
   value,
   onCopied,
@@ -70,7 +70,10 @@ function CopyField({
   )
 }
 
-const STEPS: Record<"google" | "apple" | "outlook", { name: string; steps: React.ReactNode[] }> = {
+export const STEPS: Record<
+  "google" | "apple" | "outlook",
+  { name: string; steps: React.ReactNode[] }
+> = {
   google: {
     name: "Google",
     steps: [

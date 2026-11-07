@@ -1267,6 +1267,17 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_createdAt", ["createdAt"]),
   notifyRelays: defineTable(notifyRelayFields).index("by_name", ["name"]),
+  /** Personal calendar feeds from the Finder (ENG-129): a random id, the
+   * hash of an edit token the browser keeps, and the followed listings. No
+   * personal data. */
+  calendarFeeds: defineTable({
+    feedId: v.string(),
+    editTokenHash: v.string(),
+    orgKeys: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastFetchedAt: v.optional(v.number()),
+  }).index("by_feedId", ["feedId"]),
 
   // internal, written by the inbound webhook and the public form
   inboundEmails: defineTable(inboundEmailFields)

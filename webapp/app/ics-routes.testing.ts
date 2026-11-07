@@ -54,6 +54,8 @@ let eventTalksDerived = false
 /** The arguments of the last `events.list` call. */
 let listArgs: Record<string, unknown> | undefined
 mock.module("convex/nextjs", () => ({
+  // A personal feed notes its read after the response (ENG-129).
+  fetchMutation: async () => null,
   fetchQuery: async (query: unknown, args?: Record<string, unknown>) => {
     if (convexDown) throw new Error("Convex unreachable")
     switch (getFunctionName(query as never)) {

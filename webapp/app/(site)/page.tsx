@@ -343,6 +343,18 @@ export default async function HomePage() {
               )}
             </p>
             <HeroSearch className="mt-5 max-w-[600px] md:mt-[30px]" />
+            <Link
+              href="/finder"
+              className="group mt-3 inline-flex min-h-11 max-w-[600px] items-center gap-3 self-start rounded-full border-2 border-brand/40 bg-accent/40 px-4 py-2 text-sm transition-colors hover:border-brand"
+            >
+              <span aria-hidden className="text-lg transition-transform group-hover:rotate-12">
+                🧭
+              </span>
+              <span>
+                <strong className="font-semibold">New: the Society Finder.</strong> Five questions,
+                your 15 best societies, one calendar.
+              </span>
+            </Link>
             <p className="mt-2 flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
               <span>Try</span>
               {TRY.filter((link) => hasTalks || link.href !== "/talks").map((link, index) => (

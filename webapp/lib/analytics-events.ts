@@ -87,7 +87,7 @@ export const SEARCH_SURFACES = ["societies", "events", "talks", "palette"] as co
 export type SearchSurface = (typeof SEARCH_SURFACES)[number]
 
 /** What a calendar link adds: the talks feed, one event or talk, or (later) an events feed. */
-export const CALENDAR_FEEDS = ["talks", "event", "talk", "events"] as const
+export const CALENDAR_FEEDS = ["talks", "event", "talk", "events", "personal"] as const
 
 /** What kind of page a link off the site goes to (never its address). */
 export const OUTBOUND_KINDS = ["website", "social", "source", "other"] as const

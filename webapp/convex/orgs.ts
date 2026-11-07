@@ -4,6 +4,7 @@ import { londonMidnight } from "../lib/calendar"
 import { isThinListing } from "../lib/directory-indexing"
 import { ORG_SORTS } from "../lib/directory-sort"
 import { withoutTalksCam } from "../lib/directory-talks-guard"
+import { FINDER_RESULTS, rankSocieties, type SocietyFacts } from "../lib/finder"
 import { isTalksCamUrl, isTalksDerivedEvent } from "../lib/talks-boundary"
 import { AUDIENCES, CATEGORIES } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
@@ -839,3 +840,73 @@ async function publicRelationships(
   }
   return out.sort((a, b) => b.lastSeenAt - a.lastSeenAt)
 }
+
+/** A Finder answer list: a few short ids per question. */
+const finderAnswersValidator = v.record(v.string(), v.array(v.string()))
+
+/**
+ * The Society Finder (ENG-128): the listings that best fit a student's quiz
+ * answers, best first, with why each fits (lib/finder.ts `rankSocieties`).
+ * The directory's own rules (no counterparts, nothing archived) and the same
+ * public projection as the hubs. Answers are arguments only, never stored.
+ */
+export const finder = query({
+  args: { answers: finderAnswersValidator, collegeKey: v.optional(v.string()) },
+  returns: v.array(
+    v.object({
+      key: v.string(),
+      slug: v.string(),
+      name: v.string(),
+      shortDescription: v.optional(v.string()),
+      categories: orgCardPublicValidator.fields.categories,
+      collegeKeys: v.array(v.string()),
+      reasons: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const answers = Object.fromEntries(
+      Object.entries(args.answers)
+        .slice(0, 8)
+        .map(([id, values]) => [
+          id.slice(0, 20),
+          values.slice(0, 20).map((value) => value.slice(0, 40)),
+        ]),
+    )
+    const cards = (await candidates(ctx, undefined)).filter((card) => matches(card, selections({})))
+    const facts: (SocietyFacts & { slug: string })[] = cards.map((card) => ({
+      key: card.key,
+      slug: card.slug,
+      name: card.name,
+      categories: card.categories,
+      activityTypes: card.activityTypes,
+      audiences: card.audiences,
+      beginnerFriendly: card.beginnerFriendly,
+      level: card.level,
+      collegeKeys: card.collegeKeys,
+      status: card.status,
+      shortDescription: card.shortDescription,
+      blueStatus: card.sport?.blueStatus,
+    }))
+    const ranked = rankSocieties(facts, answers, args.collegeKey, FINDER_RESULTS)
+    const contacts = await loadContactHashes(ctx)
+    const names = await loadNameHashes(ctx)
+    return ranked.map(({ item, reasons }) => {
+      const card = item as SocietyFacts & { slug: string }
+      return {
+        ...publicCard(
+          {
+            key: card.key,
+            slug: card.slug,
+            name: card.name,
+            shortDescription: card.shortDescription,
+            categories: [...card.categories],
+            collegeKeys: [...card.collegeKeys],
+          },
+          contacts,
+          names,
+        ),
+        reasons,
+      }
+    })
+  },
+})
