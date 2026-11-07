@@ -541,6 +541,28 @@ def _doc_link(ref: Mapping[str, Any]) -> str:
     return f"[§{ref['section']}]({target}#{ref['anchor']})"
 
 
+#: The pillars' display names, as the dashboard's `PILLAR_LABELS`
+#: (webapp/lib/pipeline-graph/graph.ts).
+PILLAR_LABELS: Mapping[str, str] = {
+    "societies": "Societies",
+    "events": "Events",
+    "talks": "Talks",
+    "shared": "Shared",
+}
+
+
+def lane_label(lane: Mapping[str, Any], campus: Mapping[str, Any]) -> str:
+    """`Societies · Cambridge`, `Events · engine`: the canvas's lane label
+    (`laneLabel` in webapp/lib/pipeline-graph/layout.ts)."""
+    if lane["campus"] is None:
+        who = "engine"
+    elif lane["campus"] == campus["id"]:
+        who = campus["name"]
+    else:
+        who = lane["campus"]
+    return f"{PILLAR_LABELS[lane['pillar']]} · {who}"
+
+
 def render_mermaid(graph: Mapping[str, Any]) -> str:
     """`docs/pipeline-map.md`: the flowchart (one subgraph per lane) and the
     stage, group and source tables."""
@@ -571,7 +593,7 @@ def render_mermaid(graph: Mapping[str, Any]) -> str:
         stages_by_lane.setdefault(node["lane"], []).append(node)
     for lane in graph["lanes"]:
         lane_key = re.sub(r"[^A-Za-z0-9_]", "_", lane["id"])
-        out.append(f'  subgraph lane_{lane_key}["{lane["id"]}"]')
+        out.append(f'  subgraph lane_{lane_key}["{lane_label(lane, campus)}"]')
         out.append("    direction TB")
         for node in stages_by_lane.get(lane["id"], []):
             label = node["label"] or node["name"]
@@ -672,6 +694,7 @@ __all__ = [
     "group_schedule",
     "heading_anchor",
     "lane_id",
+    "lane_label",
     "load_sources",
     "render_mermaid",
     "staging_directories",

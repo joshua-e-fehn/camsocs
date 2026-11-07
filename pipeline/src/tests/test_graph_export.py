@@ -29,6 +29,7 @@ from camsocs_pipeline.graph import (
     describe_calendar,
     group_schedule,
     heading_anchor,
+    lane_label,
     load_sources,
     render_mermaid,
     to_json,
@@ -302,7 +303,9 @@ def test_pipeline_map_has_one_subgraph_per_lane(graph: dict) -> None:
     text = render_mermaid(graph)
     assert "```mermaid\nflowchart LR\n" in text
     for lane in graph["lanes"]:
-        assert f'["{lane["id"]}"]' in text
+        assert f'["{lane_label(lane, graph["campus"])}"]' in text
+    # The dashboard's lane labels, so the map and the canvas use one wording.
+    assert '["Societies · Cambridge"]' in text and '["Shared · engine"]' in text
     assert text.count("  subgraph lane_") == len(graph["lanes"])
 
 

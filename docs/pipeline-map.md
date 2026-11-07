@@ -13,7 +13,7 @@ Convex.
 
 ```mermaid
 flowchart LR
-  subgraph lane_cam_societies["cam/societies"]
+  subgraph lane_cam_societies["Societies · Cambridge"]
     direction TB
     stage_su_directory["su_directory · harvest"]
     stage_proctors_register["proctors_register · harvest"]
@@ -23,7 +23,7 @@ flowchart LR
     stage_cucbc_clubs["cucbc_clubs · harvest"]
     stage_colleges["colleges · harvest"]
   end
-  subgraph lane_cam_events["cam/events"]
+  subgraph lane_cam_events["Events · Cambridge"]
     direction TB
     stage_camdram_events["camdram_events · events"]
     stage_talks_cam["talks.cam lists (G1) · events"]
@@ -32,17 +32,17 @@ flowchart LR
     stage_uni_events["uni_events · events"]
     stage_su_whatson["su_whatson · events"]
   end
-  subgraph lane_cam_talks["cam/talks"]
+  subgraph lane_cam_talks["Talks · Cambridge"]
     direction TB
     stage_talks["talks · talks"]
   end
-  subgraph lane_engine_societies["engine/societies"]
+  subgraph lane_engine_societies["Societies · engine"]
     direction TB
     stage_resolve["resolve · resolve"]
     stage_enrich["enrich · enrich"]
     stage_classify["classify · classify"]
   end
-  subgraph lane_engine_events["engine/events"]
+  subgraph lane_engine_events["Events · engine"]
     direction TB
     stage_calendar_feeds["calendar_feeds · events"]
     stage_website_events["website_events · events"]
@@ -50,7 +50,7 @@ flowchart LR
     stage_instagram["instagram · inbox"]
     stage_termcards["termcards · inbox"]
   end
-  subgraph lane_engine_shared["engine/shared"]
+  subgraph lane_engine_shared["Shared · engine"]
     direction TB
     stage_term_dates["term_dates · seed"]
     stage_load["load · load"]

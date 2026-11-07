@@ -19,9 +19,9 @@ CAMsocs was built for Cambridge. This folder holds what it takes to run the same
 
 ### Lanes
 
-**Status (2026-11-07):** no lane has merged yet; wave 0 (L0a, L0b) is in review, and D8–D10 await sign-off. Update this line as lanes land.
+**Status (2026-11-07):** every lane (L0a, L0b, L1–L8, L10–L12) is merged into the integration branch `claude/multi-university`, which reaches `main` as one squash merge; D8–D10 still await Joshua's sign-off. That single merge carries both halves the rollout order separates (the Convex widen of L2 and the pipeline sender of L6), so it goes in under the full §3 procedure of `docs/ops-vps.md`: pin the VPS, merge, confirm `convex deploy` in the Vercel build, then unpin. Update this line when it lands.
 
-One lane is one worktree and one squash PR of at most 20 files; a file has one owner at a time. The full spec (data model, file ownership, verification per lane) is kept outside the repo by the orchestrator; this table is the summary.
+One lane is one worktree and one squash commit of at most 20 files on the integration branch; a file has one owner at a time. The full spec (data model, file ownership, verification per lane) is kept outside the repo by the orchestrator; this table is the summary.
 
 | Wave | Lane | What it delivers | Depends on |
 |---|---|---|---|
@@ -49,7 +49,7 @@ One lane is one worktree and one squash PR of at most 20 files; a file has one o
 6. L7 merges; the operator reinstalls the runner (`install.sh --revision`) and applies the dashboards. Shadow checks run for 14 days before D9 promotion.
 7. L12 merges.
 
-Every pipeline or Convex-coupled merge follows the runbook rule in `docs/ops-vps.md` §3 (pin, merge, confirm the Convex deploy in the Vercel build log, unpin; never 04:00–05:00 or Sunday 01:30–02:30 London time). Rollback is a revert plus the VPS pin; the optional Convex fields stay.
+Every pipeline or Convex-coupled merge follows the runbook rule in `docs/ops-vps.md` §3 (pin, merge, confirm the Convex deploy in the Vercel build log, unpin; and as a backstop avoid 04:00–05:00 and Sunday 01:30–05:30 London time). Rollback is a revert plus the VPS pin; the optional Convex fields stay.
 
 ## Onboarding contract for a new campus
 
