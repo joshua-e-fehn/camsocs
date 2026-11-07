@@ -77,7 +77,7 @@ const stagingNode = z.object({
   id: z.string(),
   kind: z.literal("staging"),
   name: z.string(),
-  /** null for `_resolved`, which is no source type. */
+  /** null for directories that are no source type (`_resolved`, `talks`). */
   sourceType: z.string().nullable(),
   events: z.boolean(),
 })

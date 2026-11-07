@@ -230,32 +230,42 @@ describe("layoutPipeline over the live graph", () => {
     // A directory belongs to its first writer, even when a later stage writes it too.
     expect(owner("dir:cam:society_website")).toBe("stage:cam:colleges")
     expect(owner("dir:cam:_resolved")).toBe("stage:cam:resolve")
-    expect(owner("sink:cam:eventOrganisers")).toBe("stage:cam:load")
+    // A sink belongs to the first stage that touches it: inbox posts the loader's routes
+    // before load does.
+    expect(owner("sink:cam:eventOrganisers")).toBe("stage:cam:inbox")
+    expect(owner("sink:cam:crosswalk")).toBe("stage:cam:resolve")
     expect(owner("sink:cam:talks/runs")).toBe("stage:cam:talks")
     expect(owner("sink:cam:coverage")).toBe("stage:cam:report")
+    expect(layout.ports.some((p) => p.owner === "stage:cam:load")).toBe(false)
     // Ports stack under their stage: directories first, then sinks.
-    const load = layout.ports.filter((p) => p.owner === "stage:cam:load")
-    expect(load.map((p) => p.node.name)).toEqual([
-      "claims",
+    const inbox = layout.ports.filter((p) => p.owner === "stage:cam:inbox")
+    expect(inbox.map((p) => p.node.name)).toEqual([
+      "mailing_list_email",
+      "inbound/pending",
+      "inbound/file",
+      "suppressions",
       "sources",
+      "files",
+      "claims",
       "orgInternal",
       "relationships",
       "eventOrganisers",
       "events/superseded",
-      "files",
+      "brokerInferences",
+      "inbound/mark",
     ])
-    const inbox = layout.ports.filter((p) => p.owner === "stage:cam:inbox")
-    expect(inbox.map((p) => p.node.kind)).toEqual(["staging", "sink", "sink", "sink"])
-    const loadStage = layout.stages.find((s) => s.id === "stage:cam:load")!
-    for (const port of load) {
-      expect(port.x).toBe(loadStage.x + PORT_INDENT)
-      expect(port.y).toBeGreaterThanOrEqual(loadStage.y + NODE_H)
+    expect(inbox.map((p) => p.node.kind)).toEqual(["staging", ...Array(12).fill("sink")])
+    const inboxStage = layout.stages.find((s) => s.id === "stage:cam:inbox")!
+    for (const port of inbox) {
+      expect(port.x).toBe(inboxStage.x + PORT_INDENT)
+      expect(port.y).toBeGreaterThanOrEqual(inboxStage.y + NODE_H)
     }
   })
 
   test("each port is stubbed to its owner; other stages reach it by a routed edge", () => {
     const ids = new Set(layout.edges.map((e) => e.id))
-    expect(ids.has("attach:stage:cam:load->sink:cam:claims")).toBe(true)
+    expect(ids.has("attach:stage:cam:inbox->sink:cam:claims")).toBe(true)
+    expect(ids.has("posts:stage:cam:load->sink:cam:claims")).toBe(true)
     // A sink the stage reads from points back up at it.
     const coverage = layout.edges.find(
       (e) => e.id === "attach:stage:cam:report->sink:cam:coverage",
