@@ -54,7 +54,6 @@ def test_cam_alumni_domains() -> None:
 def test_cam_member_domains_follow_is_crsid_address() -> None:
     member = CAM["memberEmail"]
     assert member["domains"] == ["cam.ac.uk"]
-    assert member["includeSubdomains"] is True
     assert member["excluded"] == ["lists.cam.ac.uk"]
     assert member["strictForeignAcademic"] is False
     # The rule the facts describe is the rule `is_crsid_address` applies.

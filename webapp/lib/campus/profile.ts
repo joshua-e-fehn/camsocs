@@ -32,9 +32,10 @@ export type TermModel = {
  * (`campuses.fixtures.json` `memberEmail`). */
 export type MemberEmailFacts = {
   /** The members' mail domains. The sign-in tier takes exactly these; the
-   * personal-address rule also takes their subdomains (`includeSubdomains`). */
+   * personal-address rule always takes their subdomains too, as the
+   * pipeline's `_is_member_domain` does (no campus may narrow it: a narrower
+   * rule would show members' addresses in the public projection). */
   domains: readonly string[]
-  includeSubdomains: boolean
   /** Hosts under `domains` whose addresses are lists, never a person's. */
   excluded: readonly string[]
   /** A member id local part (Cambridge's CRSid). `null`: the campus has no

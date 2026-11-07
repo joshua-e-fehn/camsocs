@@ -63,14 +63,14 @@ function idPattern(source: string): RegExp {
 
 const isAtOrUnder = (domain: string, base: string) => domain === base || domain.endsWith(`.${base}`)
 
-/** Whether `domain` is a member domain or (with `includeSubdomains`) under
- * one, and not one of the excluded list hosts. */
+/** Whether `domain` is a member domain or under one, and not one of the
+ * excluded list hosts. Always takes subdomains, rule for rule with the
+ * pipeline's `_is_member_domain` (sources/links.py); only the sign-in tier
+ * (`isMemberEmail`) is exact-domain. */
 export function isMemberDomain(domain: string, profile: CampusProfile): boolean {
   const rule = profile.facts.memberEmail
   if (rule.excluded.includes(domain)) return false
-  return rule.domains.some((base) =>
-    rule.includeSubdomains ? isAtOrUnder(domain, base) : domain === base,
-  )
+  return rule.domains.some((base) => isAtOrUnder(domain, base))
 }
 
 /** Whether an academic domain is the campus's own or one it knows. */

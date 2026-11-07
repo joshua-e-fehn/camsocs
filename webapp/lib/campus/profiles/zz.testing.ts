@@ -26,7 +26,6 @@ export const TESTFORD: CampusProfile = {
     },
     memberEmail: {
       domains: ["testford.ac.uk"],
-      includeSubdomains: true,
       excluded: ["lists.testford.ac.uk"],
       idPattern: null,
       forwarding: [],

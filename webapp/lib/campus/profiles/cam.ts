@@ -24,7 +24,6 @@ export const CAMBRIDGE: CampusProfile = {
     },
     memberEmail: {
       domains: ["cam.ac.uk"],
-      includeSubdomains: true,
       excluded: ["lists.cam.ac.uk"],
       idPattern: "^[a-z]{2,5}[0-9]{1,5}$",
       forwarding: ["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"],

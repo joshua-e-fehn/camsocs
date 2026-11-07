@@ -13,8 +13,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useSignInOptions } from "@/hooks/convex"
 import { withSignInMarker } from "@/lib/analytics-events"
 import { authClient } from "@/lib/auth-client"
-import { isCamEmail, normaliseCamEmail } from "@/lib/cam-email"
 import { currentCampus } from "@/lib/campus"
+import { isMemberEmail, normaliseEmail } from "@/lib/campus/member-email"
+import type { CampusProfile } from "@/lib/campus/profile"
 import { focusOnMount } from "@/lib/focus"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +28,16 @@ export type SignInMethod = "cam" | "google"
 const campus = currentCampus()
 const tier = campus.memberTier
 const memberDomain = campus.facts.memberEmail.domains[0]
+
+/**
+ * Whether the member-tier form accepts `email`: the campus's own rule
+ * (`isMemberEmail`), the same one the server gates the sign-in link on
+ * (convex/betterAuth/auth.ts asks `deploymentProfile()`), so the client and
+ * the server never disagree. For Cambridge it is exactly `isCamEmail`.
+ */
+export function acceptsMemberAddress(email: string, profile: CampusProfile = campus): boolean {
+  return isMemberEmail(normaliseEmail(email), profile)
+}
 
 /** `auth.getSignInOptions`: which options this deployment has switched on. */
 export type SignInOptions = { google: boolean; camEmail: boolean }
@@ -183,13 +194,13 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
   const [sending, setSending] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
 
-  const address = normaliseCamEmail(email)
-  const invalid = touched && address !== "" && !isCamEmail(address)
+  const address = normaliseEmail(email)
+  const invalid = touched && address !== "" && !acceptsMemberAddress(address)
 
   const send = async (event: React.FormEvent) => {
     event.preventDefault()
     setTouched(true)
-    if (!isCamEmail(address)) {
+    if (!acceptsMemberAddress(address)) {
       setError(tier.rejectMessage)
       return
     }
