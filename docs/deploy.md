@@ -124,14 +124,14 @@ The variables above are provisioned (2026-11-01). One PostHog project, `camsocs`
 
 The relay is not blocked or cached by the CPU protection below: no firewall rule names `/relay` (its rate limit and the training-crawler rule leave it out; only T4 scrapers and probe paths are denied site-wide, and robots.txt disallows it for every crawler), the anonymous Data Cache covers only public pages' Convex reads (the relay's upstream `fetch` is `cache: "no-store"`), and nothing puts `/relay` responses in a shared cache except what PostHog's own `Cache-Control` allows for its static assets (which the client never loads: `disable_external_dependency_loading`). A consented visitor's `ph_*` cookie does not cost a Convex auth round trip (`lib/auth-server.ts` ignores analytics-only cookies).
 
-**Dashboards (ENG-10).** Four dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item (the VPS monitor uses the same key) — read into the environment without echoing it:
+**Dashboards (ENG-10).** Five dashboards — `camsocs: Traffic`, `camsocs: Content`, `camsocs: Search`, `camsocs: Reliability`, `camsocs: Scraper health` — are defined in code, `ops/posthog/dashboards.py` (standard library; insight queries in PostHog's query format, every one excluding internal and test traffic). Edit them there, not in PostHog: `--apply` overwrites an insight's name, description and query by name, and creates what is missing; it deletes nothing (an insight the code dropped is reported for removal by hand). Run it on the laptop with a personal API key that has `insight:write`, `dashboard:write` and `query:read` on the camsocs project — the one in the 1Password item (the VPS monitor uses the same key) — read into the environment without echoing it:
 
 ```bash
 pixi run posthog-dashboards -- --dry-run          # the JSON it would send; no key needed
 export POSTHOG_PERSONAL_API_KEY="$(mya-op read 'op://Mya/PostHog/personal API key')"
 export POSTHOG_PROJECT_ID="$(mya-op read 'op://Mya/PostHog/project id')"
 pixi run posthog-dashboards -- --validate         # runs every insight's query once, read-only
-pixi run posthog-dashboards -- --apply            # create or update the four dashboards
+pixi run posthog-dashboards -- --apply            # create or update the five dashboards
 unset POSTHOG_PERSONAL_API_KEY
 ```
 
