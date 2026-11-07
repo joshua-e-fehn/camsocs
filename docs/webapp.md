@@ -617,8 +617,10 @@ campus registry, pure TS that Convex and Next both import: `profile.ts` (the sha
 - **Cambridge is byte-identical.** Every Cambridge value is the literal it replaced; copy is
   rendered as one template string per text run, so the server renders the same text nodes as
   before (no `<!-- -->` separators). Checked by building base and branch with
-  `NEXT_PUBLIC_CAMPUS` unset and diffing the served HTML of `/`, `/about`, `/sign-in` and
-  `/llms.txt`.
+  `NEXT_PUBLIC_CAMPUS` unset against the placeholder Convex backend and diffing the served
+  HTML of `/about`, `/sign-in` and `/llms.txt`, plus the shell and error render of `/` (it
+  cannot render its data there, so the home hero was not diffed in a successful render), and
+  by comparing every `lib/site.ts` export with the base literals (all equal).
 - **Still Cambridge-only**, and launch blockers for a second site (`docs/campuses/README.md`):
   legal pages, directory titles and regexes, collegiate facets, category copy and the About
   page's sources.
