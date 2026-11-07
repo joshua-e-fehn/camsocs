@@ -26,9 +26,16 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useSignInOptions, useViewerTier } from "@/hooks/convex"
 import { authClient } from "@/lib/auth-client"
+import { currentCampus } from "@/lib/campus"
 import { linkProps } from "@/lib/crawl-traps"
 import { openPalette } from "@/lib/palette"
 import { cn } from "@/lib/utils"
+
+// The member tier's words come from the campus this build serves (lib/campus,
+// decision D8); for Cambridge they are the literals they replaced. One
+// template string per line of copy, so the server renders one text node.
+const campus = currentCampus()
+const memberDomain = campus.facts.memberEmail.domains[0]
 
 /**
  * The main sections, in the order a student looks for them.
@@ -263,7 +270,7 @@ function AccountMenu({ access, onSignOut }: { access: Access; onSignOut: () => v
               {access.isCamVerified && (
                 <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
                   <BadgeCheckIcon aria-hidden className="size-3.5 text-brand-text" />
-                  Cambridge
+                  {campus.place.name}
                 </span>
               )}
             </DropdownMenuLabel>
@@ -289,7 +296,7 @@ function AccountMenu({ access, onSignOut }: { access: Access; onSignOut: () => v
                 Sign in
               </span>
               <span className="pl-6 text-xs text-muted-foreground">
-                A @cam.ac.uk address also shows Cambridge-only events
+                {`A @${memberDomain} address also shows ${campus.memberTier.tierLabel} events`}
               </span>
             </Link>
           </DropdownMenuItem>
@@ -320,7 +327,7 @@ function AccountLinks({
           {access.isCamVerified && (
             <p className="inline-flex items-center gap-1.5 text-sm">
               <BadgeCheckIcon aria-hidden className="size-4 text-brand-text" />
-              Signed in with a verified @cam.ac.uk address
+              {`Signed in with a verified @${memberDomain} address`}
             </p>
           )}
           {access.isBroker && (
@@ -345,7 +352,7 @@ function AccountLinks({
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground">
-            A @cam.ac.uk address also shows Cambridge-only events.
+            {`A @${memberDomain} address also shows ${campus.memberTier.tierLabel} events.`}
           </p>
         </>
       )}

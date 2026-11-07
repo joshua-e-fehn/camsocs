@@ -1,3 +1,4 @@
+import { currentCampus } from "./campus"
 import { CATEGORIES_PATH, categoryHubPath } from "./directory-hubs"
 import { CONTACT_EMAIL, DISCLAIMER, SITE_NAME, SITE_URL } from "./site"
 import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
@@ -13,9 +14,9 @@ import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
  * holds that. Static: built once, served from the CDN.
  */
 
-/** Its own summary, not SITE_DESCRIPTION, which names the talks pillar. */
-const SUMMARY =
-  "Cambridge student societies and sports clubs and the events they run, in one place. Every fact links to the page it came from."
+/** Its own summary, not SITE_DESCRIPTION, which names the talks pillar (the
+ * campus's `brand.llmsSummary`, lib/campus). */
+const SUMMARY = currentCampus().brand.llmsSummary
 
 const PAGES: { path: string; name: string; about: string }[] = [
   {

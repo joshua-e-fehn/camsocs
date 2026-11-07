@@ -516,7 +516,8 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
   events without an allow-list entry; strips query strings and fragments, titles, element text,
   the user-agent string, the search keyword, campaign parameters, window size, device model and
   previous-page duration (each also as its `$initial_…` / `$session_entry_…` copy); sets
-  `environment` and `$geoip_disable`. A throw drops the event (posthog-js), so it fails closed.
+  `environment`, `campus` (see "Campus profile") and `$geoip_disable`. A throw drops the event
+  (posthog-js), so it fails closed.
   At the source: `save_referrer` and `save_campaign_params` off (no URL in PostHog's cookie),
   `disable_capture_url_hashes`, `disable_scroll_properties`.
 - **For ENG-6**: `getPostHog()` returns the instance only while it may send, else null; call it
@@ -549,7 +550,7 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
 - **Server**: `instrumentation.ts` `onRequestError` (Node.js runtime only) → `reportRequestError`
   in `lib/posthog-server.ts`, which returns at once and sends in the background (`waitUntil`).
   Fixed distinct id `camsocs-server`, no person profile, no GeoIP; only the path without query
-  string, the method, Next's router facts and `environment` go with the exception, and the
+  string, the method, Next's router facts, `environment` and `campus` go with the exception, and the
   client's `before_send` (`sanitizeServerEvent`) drops everything else. Headers are never read.
   Nothing for `/dashboard*` / `/sign-in*` (path or route pattern); at most 10 reports per error
   and route per instance, then one per 10 s; nothing at all without `NEXT_PUBLIC_POSTHOG_KEY`.
@@ -567,7 +568,7 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
 Aggregate PostHog events from server code, without consent (nothing touches the visitor's device;
 record of processing P12). Full table, settings and caveats: `docs/deploy.md` "PostHog
 (monitoring)", "Server counts". Fixed distinct id `camsocs-server`, no person profile, no GeoIP,
-`environment`; IDs and enums only.
+`environment` and `campus`; IDs and enums only.
 
 | Event | Properties | Sender |
 |---|---|---|
@@ -583,6 +584,44 @@ record of processing P12). Full table, settings and caveats: `docs/deploy.md` "P
 - Tests: `lib/ics-telemetry.test.ts`, `app/ics-routes.test.ts` (the route handlers with stubbed
   Convex, `after()` and sender, in their own process), `lib/posthog-server.test.ts`,
   `convex/analytics.test.ts` (convex-test, stubbed `fetch`).
+
+## Campus profile
+
+One deployment serves one campus (decision D8, `docs/campuses/README.md`). `lib/campus/` is the
+campus registry, pure TS that Convex and Next both import: `profile.ts` (the shape),
+`profiles/cam.ts` (Cambridge, today's literals), `index.ts` (`CAMPUS_IDS`, `getCampus`,
+`currentCampus`), `deployment.ts` (Convex's `deploymentCampus()`, from the deployment's
+`CAMSOCS_CAMPUS`), `terms.ts` and `member-email.ts`. The synthetic `zz` profile
+(`profiles/zz.testing.ts`) is for tests only and never registered.
+
+- **Next** reads `currentCampus()`: `NEXT_PUBLIC_CAMPUS`, inlined at build time; unset or empty
+  means `cam`, and an unknown value fails the build. There is no `[campus]` segment, no host
+  routing and no proxy change: each campus is its own Vercel project, so routing, caching and ISR
+  are the same on every host.
+- **Consumers keep their export names**, so their importers are untouched:
+  - `lib/site.ts`: `SITE_NAME`, `SITE_TAGLINE`, `SITE_DESCRIPTION`, `SITE_INTRO`, the `SITE_URL`
+    fallback (`origin`), `BOT_USER_AGENT`, `CAM_SIGN_IN_HREF`, `SHARE_IMAGE_ALT` and `DISCLAIMER`
+    come from `brand`, `origin`, `botUserAgent` and `memberTier`;
+  - `lib/events.ts`: `UNIVERSITY_NAME` and the JSON-LD organiser URL (`university`);
+  - `lib/term-week.ts`: `TERM_NAMES`, `TERM_SHORT`, `TEACHING_WEEKS` and the weekday a week
+    starts on (`terms`, `facts.terms.weekStartJs`);
+  - `lib/llms-txt.ts`: the summary (`brand.llmsSummary`);
+  - `app/_og/card.tsx`: the wordmark, the foot line and `GENERIC_HEADLINE`
+    (`brand.shareHeadline`); `molecules/wordmark.tsx`: `brand.wordmark`;
+  - `organisms/login-form.tsx` and `organisms/public-header.tsx`: the member tier's copy
+    (`memberTier`, `place.name`, the first member domain);
+  - `lib/analytics-client.ts` and `lib/posthog-server.ts`: the `campus` property on every event
+    (the browser's super property, kept by `sanitizeEvent`; pinned by `sanitizeServerEvent`).
+    Convex's sender adds the same from `CAMSOCS_CAMPUS` (`convex/lib/posthog.ts`). PostHog
+    queries read `ifNull(properties.campus,'cam')`, since events before this change have none.
+- **Cambridge is byte-identical.** Every Cambridge value is the literal it replaced; copy is
+  rendered as one template string per text run, so the server renders the same text nodes as
+  before (no `<!-- -->` separators). Checked by building base and branch with
+  `NEXT_PUBLIC_CAMPUS` unset and diffing the served HTML of `/`, `/about`, `/sign-in` and
+  `/llms.txt`.
+- **Still Cambridge-only**, and launch blockers for a second site (`docs/campuses/README.md`):
+  legal pages, directory titles and regexes, collegiate facets, category copy and the About
+  page's sources.
 
 ## Environments
 

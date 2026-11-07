@@ -132,6 +132,7 @@ describe("an onRequestError report", () => {
         "$lib_version",
         "$pathname",
         "$process_person_profile",
+        "campus",
         "environment",
         "nextjs_render_source",
         "nextjs_route_path",
@@ -315,6 +316,7 @@ describe("SERVER_EVENTS (ENG-7)", () => {
         "$lib",
         "$lib_version",
         "$process_person_profile",
+        "campus",
         "environment",
         "feed",
         "key",
@@ -323,6 +325,7 @@ describe("SERVER_EVENTS (ENG-7)", () => {
     expect(props).toMatchObject({
       feed: "event",
       key: "ev-123",
+      campus: "cam",
       environment: "development",
       $process_person_profile: false,
       $geoip_disable: true,
@@ -349,10 +352,23 @@ describe("before_send", () => {
     expect(out?.properties).toEqual({
       feed: "talks",
       environment: "x",
+      campus: "cam",
       $process_person_profile: false,
       $geoip_disable: true,
     })
     expect(sanitizeServerEvent({ distinctId: "x", event: "$pageview" }, {})).toBeNull()
     expect(sanitizeServerEvent({ distinctId: "x", event: "other" }, {})).toBeNull()
+  })
+
+  test("tags every event with the campus this build serves, whatever it was given", () => {
+    // Decision D8: `campus` splits campuses in PostHog (`ifNull(properties.campus,'cam')`).
+    // `NEXT_PUBLIC_CAMPUS` is unset here, so the build serves Cambridge.
+    const out = sanitizeServerEvent(
+      { distinctId: "x", event: "ics_feed_fetched", properties: { feed: "talks", campus: "ox" } },
+      { ics_feed_fetched: ["feed"] },
+    )
+    expect(out?.properties?.campus).toBe("cam")
+    const error = sanitizeServerEvent({ distinctId: "x", event: "$exception", properties: {} })
+    expect(error?.properties?.campus).toBe("cam")
   })
 })

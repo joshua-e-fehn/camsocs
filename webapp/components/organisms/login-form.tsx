@@ -14,10 +14,19 @@ import { useSignInOptions } from "@/hooks/convex"
 import { withSignInMarker } from "@/lib/analytics-events"
 import { authClient } from "@/lib/auth-client"
 import { isCamEmail, normaliseCamEmail } from "@/lib/cam-email"
+import { currentCampus } from "@/lib/campus"
 import { focusOnMount } from "@/lib/focus"
 import { cn } from "@/lib/utils"
 
 export type SignInMethod = "cam" | "google"
+
+// The member tier's words come from the campus this build serves (lib/campus,
+// decision D8); for Cambridge they are the literals they replaced. Each piece
+// of copy is one template string, so the server renders one text node, as
+// before.
+const campus = currentCampus()
+const tier = campus.memberTier
+const memberDomain = campus.facts.memberEmail.domains[0]
 
 /** `auth.getSignInOptions`: which options this deployment has switched on. */
 export type SignInOptions = { google: boolean; camEmail: boolean }
@@ -88,8 +97,8 @@ export function SignInCard({
           {method && (
             <CardDescription>
               {method === "cam"
-                ? "Cambridge members see Cambridge-only events"
-                : "For the CAMsocs administrator"}
+                ? `${campus.place.name} members see ${tier.tierLabel} events`
+                : `For the ${campus.brand.name} administrator`}
             </CardDescription>
           )}
         </CardHeader>
@@ -114,7 +123,7 @@ export function SignInCard({
                 >
                   <ToggleGroupItem value="cam" className="flex-1">
                     <MailIcon />
-                    Cambridge email
+                    {tier.label}
                   </ToggleGroupItem>
                   <ToggleGroupItem value="google" className="flex-1">
                     <ShieldCheckIcon />
@@ -145,8 +154,7 @@ export function SignInCard({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        Browsing the directory needs no account. CAMsocs is unofficial and not affiliated with the
-        University of Cambridge or Cambridge SU.
+        {`Browsing the directory needs no account. ${campus.brand.name} is unofficial and not affiliated with the ${campus.university.name} or ${campus.university.studentUnion}.`}
       </FieldDescription>
     </div>
   )
@@ -159,8 +167,7 @@ function NotOpen({ next }: { next?: string }) {
       <LockKeyholeIcon className="size-12 text-muted-foreground" aria-hidden="true" />
       <p className="font-medium">Sign-in is not open yet</p>
       <p className="text-sm text-muted-foreground">
-        Cambridge email sign-in opens later. Until then Cambridge-only events stay hidden, and
-        everything else can be read without an account.
+        {`${tier.label} sign-in opens later. Until then ${tier.tierLabel} events stay hidden, and everything else can be read without an account.`}
       </p>
       <Button variant="outline" asChild>
         <Link href={next ?? "/events"}>{next ? "Go back" : "See what’s on"}</Link>
@@ -183,7 +190,7 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
     event.preventDefault()
     setTouched(true)
     if (!isCamEmail(address)) {
-      setError("Use your @cam.ac.uk address")
+      setError(tier.rejectMessage)
       return
     }
     setError("")
@@ -193,7 +200,7 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
         email: address,
         // The marker lets the landing page count the sign-in (method only).
         callbackURL: withSignInMarker(next ?? "/", "cam"),
-        errorCallbackURL: "/sign-in?cam=1",
+        errorCallbackURL: tier.signInHref,
       })
       if (result.error) setError(result.error.message ?? "The link could not be sent")
       else setSentTo(address)
@@ -229,13 +236,13 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
   return (
     <form className="flex flex-col gap-4" onSubmit={send} noValidate>
       <Field data-invalid={invalid}>
-        <FieldLabel htmlFor="cam-email">Cambridge email</FieldLabel>
+        <FieldLabel htmlFor="cam-email">{tier.label}</FieldLabel>
         <Input
           id="cam-email"
           type="email"
           inputMode="email"
           autoComplete="email"
-          placeholder="crsid@cam.ac.uk"
+          placeholder={tier.placeholder}
           value={email}
           onChange={(event) => {
             setEmail(event.target.value)
@@ -246,7 +253,7 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
           required
         />
         {invalid ? (
-          <FieldError>Only @cam.ac.uk addresses can sign in here</FieldError>
+          <FieldError>{`Only @${memberDomain} addresses can sign in here`}</FieldError>
         ) : (
           <FieldDescription>We email you a one-time link. No password.</FieldDescription>
         )}

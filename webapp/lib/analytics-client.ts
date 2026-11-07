@@ -1,5 +1,6 @@
 import type { CaptureResult, PostHog, PostHogConfig, Properties } from "posthog-js"
 import { ANALYTICS_EVENTS, allowedProps, type EventRules } from "@/lib/analytics-events"
+import { currentCampus } from "@/lib/campus"
 import { clearAnalyticsStorage, getConsent, isUntrackedPath, onConsentChange } from "@/lib/consent"
 import { scrubExceptionProps } from "@/lib/error-scrub"
 
@@ -55,8 +56,9 @@ export const SDK_EVENTS: readonly string[] = ["$pageview", "$pageleave", "$excep
  */
 export type CustomEventProps = EventRules
 
-/** Properties the SDK needs on every event (`token`: a 401 without it). */
-const REQUIRED_PROPS: readonly string[] = ["token", "distinct_id", "environment"]
+/** Properties every event keeps: what the SDK needs (`token`: a 401 without
+ * it) and our tags (`environment`, `campus`). */
+const REQUIRED_PROPS: readonly string[] = ["token", "distinct_id", "environment", "campus"]
 
 /**
  * The SDK context our own events keep besides their allow-listed properties:
@@ -241,12 +243,13 @@ export function posthogConfig(
   }
 }
 
-/** Super properties: `environment` tags every event; GeoIP stays off so no
- * location is derived from the IP before PostHog discards it. Re-registered
- * after every `reset()`, and set again in `sanitizeEvent` (which no reset
- * can clear, research-js §6). */
+/** Super properties: `environment` and `campus` (the campus this build
+ * serves, decision D8: `cam` unless `NEXT_PUBLIC_CAMPUS` says otherwise) tag
+ * every event; GeoIP stays off so no location is derived from the IP before
+ * PostHog discards it. Re-registered after every `reset()`, and set again in
+ * `sanitizeEvent` (which no reset can clear, research-js §6). */
 function superProperties(environment: string): Properties {
-  return { environment, $geoip_disable: true }
+  return { environment, campus: currentCampus().id, $geoip_disable: true }
 }
 
 // --- before_send ------------------------------------------------------------------------------
@@ -321,7 +324,7 @@ function eventPathname(props: Properties): string {
  *     outside `SDK_EVENTS`, and our own events outside `customEvents`.
  *  2. Our own events are dropped if a required property is missing or fails
  *     its rule, and keep only their allow-listed properties whose values pass
- *     their rules, plus `token`, `distinct_id`, `environment` and the SDK
+ *     their rules, plus `token`, `distinct_id`, `environment`, `campus` and the SDK
  *     context in `SDK_CONTEXT_PROPS` (cleaned below); no person properties.
  *  3. Everywhere: deletes `STRIPPED_PROPS` and campaign parameters; strips
  *     query string and fragment from every URL and every `…pathname`; a
@@ -330,7 +333,7 @@ function eventPathname(props: Properties): string {
  *  4. `$exception…` properties: messages and types lose URLs' query strings
  *     and fragments and email addresses, stack frames keep their file's
  *     path only and lose source lines (lib/error-scrub.ts).
- *  5. Sets `environment` and `$geoip_disable: true`.
+ *  5. Sets `environment`, `campus` and `$geoip_disable: true`.
  */
 export function sanitizeEvent(
   event: CaptureResult | null,

@@ -1,11 +1,14 @@
 import { Crest } from "@/components/molecules/crest"
+import { currentCampus } from "@/lib/campus"
 import { cn } from "@/lib/utils"
+
+const { lead, rest } = currentCampus().brand.wordmark
 
 /**
  * The CAMsocs logo: the Three pillars crest and "CAMsocs" in Young Serif,
  * written exactly so: "CAM" upper case, "socs" lower case. The crest is our own (components/molecules/crest.tsx);
  * nothing in it is the University's arms or styling — the project is
- * unofficial (AGENTS.md).
+ * unofficial (AGENTS.md). The name is the campus's (lib/campus, decision D8).
  */
 export function Wordmark({ className }: { className?: string }) {
   return (
@@ -16,7 +19,8 @@ export function Wordmark({ className }: { className?: string }) {
       )}
     >
       <Crest className="w-[1.3em]" />
-      CAMsocs
+      {/* One string, so the server renders one text node, as before. */}
+      {`${lead}${rest}`}
     </span>
   )
 }
