@@ -220,6 +220,52 @@ describe("summariseStages", () => {
     expect(only([crashed], "load").lastStatus).toBe("not_run")
   })
 
+  test("ungrouped: a full-only stage keeps its own result while newer events runs exist", () => {
+    const full = run(
+      NOW - 2 * DAY,
+      [stage("su_directory", { inserted: 300 }), stage("uni_events", { inserted: 1 })],
+      { command: "sync --group full" },
+    )
+    const events = run(NOW - DAY, [stage("uni_events", { inserted: 2 })])
+    const rows = summariseStages([events, full], { now: NOW })
+    expect(rows.find((r) => r.name === "su_directory")).toMatchObject({
+      lastStatus: "ok",
+      lastRunKey: full.runKey,
+      yield: 300,
+    })
+    expect(rows.find((r) => r.name === "uni_events")).toMatchObject({
+      lastStatus: "ok",
+      lastRunKey: events.runKey,
+    })
+
+    // A failure in the weekly run stays visible behind the daily events runs.
+    const failedFull = run(NOW - 2 * DAY, [stage("su_directory", { status: "failed" })], {
+      group: "full",
+    })
+    const failed = summariseStages([events, failedFull], { now: NOW })
+    expect(failed.find((r) => r.name === "su_directory")).toMatchObject({
+      lastStatus: "failed",
+      failStreak: 1,
+      lastRunKey: failedFull.runKey,
+    })
+  })
+
+  test("ungrouped: a stage left out by a newer run of its own group reads not_requested", () => {
+    const newerFull = run(NOW - 3 * HOUR, [stage("uni_events")], { command: "sync --group full" })
+    const events = run(NOW - HOUR, [stage("uni_events")])
+    const olderFull = run(NOW - 7 * DAY, [stage("old_source"), stage("uni_events")], {
+      command: "sync --group full",
+    })
+    const adHoc = run(NOW - 8 * DAY, [stage("resolve")], { command: "sync --stages resolve" })
+    const rows = summariseStages([events, newerFull, olderFull, adHoc], { now: NOW })
+    expect(rows.find((r) => r.name === "old_source")).toMatchObject({
+      lastStatus: "not_requested",
+      lastRunKey: olderFull.runKey,
+    })
+    // Ad-hoc runs have no group, so no newer run supersedes them.
+    expect(rows.find((r) => r.name === "resolve")?.lastStatus).toBe("ok")
+  })
+
   test("stages follow the newest run's order, then older ones", () => {
     const rows = [
       run(NOW - DAY, [stage("term_dates"), stage("resolve"), stage("load")]),
@@ -271,6 +317,8 @@ describe("broker.pipeline queries", () => {
     await withEnv({ BROKER_EMAILS: BROKER }, async () => {
       const all = await broker.query(api.broker.pipeline.stageStatus, {})
       expect(all.map((r) => r.name)).toEqual(["talks", "camdram_events", "su_directory", "resolve"])
+      // The newest run is the talks run, yet every row reads its own last run.
+      expect(all.map((r) => r.lastStatus)).toEqual(["ok", "ok", "ok", "ok"])
 
       const events = await broker.query(api.broker.pipeline.stageStatus, { group: "events" })
       expect(events.map((r) => r.name)).toEqual(["camdram_events"])

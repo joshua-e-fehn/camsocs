@@ -89,10 +89,12 @@ export type TalkRunSummary = typeof talkRunSummary.type
 
 const stageStatusRow = v.object({
   name: v.string(),
-  /** The stage in the newest run of the window: `running` while that run is
-   * open, its posted result once finished (`not_run` when a finished run
-   * requested the stage but reported nothing for it), `not_requested` when
-   * the newest run did not ask for it. */
+  /** The stage in its own last run (`lastRunKey`): `running` while that run
+   * is open, its posted result once finished, `not_run` when it finished or
+   * was abandoned without reporting the stage. `not_requested` when a newer
+   * run of the same group no longer asks for it (the stage left the group).
+   * Runs of other groups never decide it, so a full-only stage keeps its
+   * weekly result while the daily events runs are newer. */
   lastStatus: literalUnion(STAGE_STATES),
   /** The newest run that requested or reported the stage. */
   lastRunKey: v.union(v.null(), v.string()),
@@ -121,7 +123,8 @@ const stageStatusRow = v.object({
   yieldSamples7d: v.number(),
   yieldSamples28d: v.number(),
   /** The newest result's fetch counters (pipeline fetch_stats); null when it
-   * recorded none. */
+   * recorded none (every result posted before the pipeline sent fetch metrics),
+   * which readers show as "not recorded", never as zeros. */
   fetch: v.union(v.null(), fetchSummary),
   /** For the `talks` stage: the latest `talkRuns` row, counts only. */
   talkRun: v.union(v.null(), talkRunSummary),
@@ -196,6 +199,26 @@ export function isRunning(run: Pick<Run, "finishedAt" | "startedAt">, now: numbe
   return run.finishedAt === null && now - run.startedAt < RUNNING_STALE_MS
 }
 
+/**
+ * The stage's state in `lastRun`, the newest run that requested or reported
+ * it; `newer` are the runs after it, none of which mention the stage.
+ */
+function stageStateIn(
+  lastRun: Run | null,
+  name: string,
+  now: number,
+  newer: readonly Run[],
+): StageState {
+  if (lastRun === null) return "not_requested"
+  const group = runGroup(lastRun)
+  // A newer run of the same group left the stage out: it has left the group.
+  // Ad-hoc `sync --stages …` runs (no group) never supersede one another.
+  if (group !== null && newer.some((run) => runGroup(run) === group)) return "not_requested"
+  const result = lastRun.stages.find((stage) => stage.name === name)
+  if (result && lastRun.finishedAt !== null) return result.status
+  return isRunning(lastRun, now) ? "running" : "not_run"
+}
+
 function talkRunSummaryOf(run: TalkRun): TalkRunSummary {
   return {
     runId: run.runId,
@@ -214,7 +237,8 @@ function talkRunSummaryOf(run: TalkRun): TalkRunSummary {
 }
 
 /**
- * Per-stage status over `runs` (newest first, already filtered to a group).
+ * Per-stage status over `runs` (newest first, filtered to one group or a mix
+ * of every group).
  *
  * Stages are listed in the order the newest run requested them, then any
  * older ones it did not, so a stage that left the group still shows (as
@@ -234,23 +258,22 @@ export function summariseStages(
       names.push(name)
     }
   }
-  const newest = runs[0]
 
   return names.map((name) => {
     // Results newest first, each with the run it came from.
     const results: { run: Run; result: StageResult }[] = []
     let lastRun: Run | null = null
-    for (const run of runs) {
+    let lastIndex = -1
+    for (const [index, run] of runs.entries()) {
       const result = run.stages.find((stage) => stage.name === name)
-      if (lastRun === null && (result || run.requestedStages.includes(name))) lastRun = run
+      if (lastRun === null && (result || run.requestedStages.includes(name))) {
+        lastRun = run
+        lastIndex = index
+      }
       if (result && run.finishedAt !== null) results.push({ run, result })
     }
 
-    let lastStatus: StageState
-    const newestResult = newest.stages.find((stage) => stage.name === name)
-    if (newestResult && newest.finishedAt !== null) lastStatus = newestResult.status
-    else if (!newest.requestedStages.includes(name)) lastStatus = "not_requested"
-    else lastStatus = isRunning(newest, now) ? "running" : "not_run"
+    const lastStatus = stageStateIn(lastRun, name, now, runs.slice(0, Math.max(0, lastIndex)))
 
     const latest = results[0]?.result ?? null
     const ok = results.filter(({ result }) => result.status === "ok")
