@@ -241,6 +241,26 @@ def test_the_campus_flag_configures_the_process(dev_env, zz_campus) -> None:
     campuses.reset_for_tests()
 
 
+def test_status_lists_the_active_campus_stages(dev_env, zz_campus) -> None:
+    from camsocs_pipeline import campuses
+    from camsocs_pipeline.stages import registry
+
+    result = CliRunner().invoke(cli, ["--campus", "zz", "status"], obj={})
+    campuses.reset_for_tests()
+    assert result.exit_code == 0, result.output
+    lines = [line.strip() for line in result.output.splitlines()]
+    stages = next(line for line in lines if line.startswith("Stages:")).split(":", 1)[1].strip()
+    assert stages == ", ".join(s.name for s in registry(zz_campus))
+    assert stages != ", ".join(sync_module.STAGE_ORDER)
+
+
+def test_status_lists_cambridge_stages_unchanged(make_settings) -> None:
+    result = invoke(make_settings(), "status")
+    assert result.exit_code == 0, result.output
+    assert "Stages:" in result.output
+    assert ", ".join(sync_module.STAGE_ORDER) in result.output
+
+
 def test_a_campus_runs_its_own_groups(dev_env, zz_campus) -> None:
     from camsocs_pipeline import campuses
 

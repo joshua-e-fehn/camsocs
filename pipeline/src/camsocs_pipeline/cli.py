@@ -93,6 +93,7 @@ from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
 from camsocs_pipeline.stages import groups as campus_groups
+from camsocs_pipeline.stages import registry
 from camsocs_pipeline.staging.store import StagingStore
 from camsocs_pipeline.telemetry import HarvestTelemetry
 from camsocs_pipeline.worklist import (
@@ -262,7 +263,7 @@ def status(ctx: click.Context) -> None:
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
-        ("Stages", ", ".join(STAGE_ORDER)),
+        ("Stages", ", ".join(s.name for s in registry(_loaded(ctx)["profile"]))),
         ("State file", str(settings.state_path)),
     ]
     state = load_state(settings.state_path)
