@@ -10,6 +10,7 @@ import { buildSignInEmail } from "../../convex/lib/signInEmail"
 import { DAY_MS, isoDateMs, londonIsoDate, londonMidnight, londonOffsetMs } from "../calendar"
 import emailTypes from "../email-types.fixtures.json"
 import { UNIVERSITY_NAME } from "../events"
+import { ICS_UID_DOMAIN } from "../ics"
 import {
   BOT_USER_AGENT,
   CAM_SIGN_IN_HREF,
@@ -80,6 +81,47 @@ describe("profiles", () => {
     expect(CAMBRIDGE.terms.short).toEqual(TERM_SHORT)
     expect(CAMBRIDGE.terms.teachingWeeks).toBe(TEACHING_WEEKS)
     expect(CAMBRIDGE.currentYearRegisters).toEqual(["su", "proctors", "sportsService", "cucbc"])
+    expect(CAMBRIDGE.icsUidDomain).toBe(ICS_UID_DOMAIN)
+  })
+
+  test("cam's other presentation values are pinned as today's literals", () => {
+    // No importable constant holds these yet (card.tsx, llms-txt.ts,
+    // events.ts, event-details.tsx, login-form.tsx keep them module-private
+    // or inline), so the literal is the safety net until L8 reads the profile.
+    // `NOT_CAM_EMAIL` (betterAuth/auth.ts) is `memberTier.rejectMessage`, so
+    // this is the only test pinning the server's refusal text.
+    expect(CAMBRIDGE.brand.wordmark).toEqual({ lead: "CAM", rest: "socs" })
+    expect(CAMBRIDGE.brand.shareHeadline).toEqual(["Everything on in", "Cambridge, in one place."])
+    expect(CAMBRIDGE.brand.footerLine).toBe("Unofficial · every fact sourced")
+    expect(CAMBRIDGE.brand.llmsSummary).toBe(
+      "Cambridge student societies and sports clubs and the events they run, in one place. Every fact links to the page it came from.",
+    )
+    expect(CAMBRIDGE.brand.emailDisclaimer).toBe(
+      "CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.",
+    )
+    expect(CAMBRIDGE.origin).toBe("https://camsocs.uk")
+    expect(CAMBRIDGE.university).toEqual({
+      name: "University of Cambridge",
+      url: "https://www.cam.ac.uk",
+      studentUnion: "Cambridge SU",
+    })
+    expect(CAMBRIDGE.place).toEqual({
+      name: "Cambridge",
+      addressLocality: "Cambridge",
+      addressRegion: "Cambridgeshire",
+      country: "GB",
+      timeZone: "Europe/London",
+      mapsSuffix: ", Cambridge",
+    })
+    expect(CAMBRIDGE.memberTier).toEqual({
+      label: "Cambridge email",
+      placeholder: "crsid@cam.ac.uk",
+      tierLabel: "Cambridge-only",
+      idName: "CRSid",
+      loginSystem: "Raven",
+      signInHref: "/sign-in?cam=1",
+      rejectMessage: "Use your @cam.ac.uk address",
+    })
   })
 })
 
@@ -132,7 +174,8 @@ function legacyTermWeekLabel(ms: number, terms: readonly TermDates[]): string | 
 }
 
 /** The 2026-27 Full Term dates (source-research §19), then synthetic terms
- * starting on every weekday, so the week-start arithmetic is exercised. */
+ * starting on every weekday (Tue, Mon, Thu, Sun, Sat, Wed, Thu, Fri), so each
+ * branch of the week-start arithmetic is exercised. */
 const TERMS: TermDates[] = [
   {
     academicYear: "2026-27",
@@ -173,14 +216,25 @@ const TERMS: TermDates[] = [
     fullTermStart: "2029-04-26",
     fullTermEnd: "2029-06-15",
   },
+  {
+    academicYear: "2029-30",
+    term: "michaelmas",
+    fullTermStart: "2029-10-05",
+    fullTermEnd: "2029-12-07",
+  },
 ]
 
 describe("termWeekLabel", () => {
-  test("cam labels equal today's derived output over three years, every six hours", () => {
+  test("the synthetic terms start on all seven weekdays", () => {
+    const weekdays = new Set(TERMS.map((t) => new Date(isoDateMs(t.fullTermStart)).getUTCDay()))
+    expect([...weekdays].sort()).toEqual([0, 1, 2, 3, 4, 5, 6])
+  })
+
+  test("cam labels equal today's derived output over 3.5 years, every six hours", () => {
     let labelled = 0
     for (
       let ms = london("2026-07-01T00:00:00");
-      ms < london("2029-07-01T00:00:00");
+      ms < london("2030-01-01T00:00:00");
       ms += DAY_MS / 4
     ) {
       const expected = legacyTermWeekLabel(ms, TERMS)
@@ -233,10 +287,18 @@ describe("termWeekLabel", () => {
 // --- member email ------------------------------------------------------------------------------
 
 describe("classifyEmail", () => {
+  test("every emailCases row names a known campus", () => {
+    // Else PROFILES[campus] is undefined and classifyEmail silently falls back
+    // to the deployment profile (cam).
+    for (const { campus } of facts.emailCases) expect(Object.keys(PROFILES)).toContain(campus)
+  })
+
   test.each(
     facts.emailCases.map((c) => [c.campus, c.email, c.type]),
   )("%s: %s → %s", (campus, email, type) => {
-    expect(classifyEmail(email, PROFILES[campus])).toBe(type as never)
+    const profile = PROFILES[campus]
+    if (!profile) throw new Error(`emailCases row names unknown campus ${campus}`)
+    expect(classifyEmail(email, profile)).toBe(type as never)
   })
 
   test("cam through the profile is today's rule for every shared email-type case", () => {
