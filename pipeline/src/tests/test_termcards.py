@@ -47,12 +47,13 @@ def _no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(load.time, "sleep", lambda _seconds: None)
 
 
-def client(tmp_path) -> PoliteClient:
+def client(tmp_path, **kwargs) -> PoliteClient:
     return PoliteClient(
         user_agent="camsocs-test/0.1",
         cache_dir=tmp_path / "cache",
         min_interval=0,
         sleep=lambda _s: None,
+        **kwargs,
     )
 
 
@@ -619,7 +620,10 @@ def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
         ]
     }
     llm = FakeLLM(lambda _text, _tier: reply)
-    with client(tmp_path) as polite:
+    # The page's retrieval time anchors the year of "Wednesday 21 October",
+    # so the client's clock is pinned to the run's `now` (not the wall clock).
+    pinned = datetime(2026, 10, 9, 12, tzinfo=UTC)
+    with client(tmp_path, now=lambda: pinned) as polite:
         skipped = fetch_termcard(polite, CARD_PAGE, SOCIETY_WEBSITE)
         assert isinstance(skipped, Skipped) and skipped.reason == NO_CARD_FILE
         events = page_events(
