@@ -61,6 +61,9 @@ app/                         Next.js App Router pages
                              lib/society-guides.ts), formal-hall, may-balls, rowing, varsity,
                              university-sport, theatre, postgraduates, glossary (lib/guides.ts;
                              ResearchedGuide renders data-driven guides).
+    for/                     /for/beginners, /for/postgraduates, /for/international-students
+                             (lib/audience-hubs.ts): orgs.hub by audience / beginnerFriendly /
+                             category, on the hub layout; noindex if the read fails
                              Researched text lives in lib/data/guides/*.json (paragraphs + source
                              URLs, rendered by GuideSections); rowing/Varsity "coming up" lists are
                              CAMsocs' own sport events (lib/sport-calendar.ts); a college's page

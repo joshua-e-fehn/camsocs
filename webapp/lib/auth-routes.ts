@@ -36,6 +36,7 @@ export const PUBLIC_PATHS = [
   "/term-dates",
   "/colleges",
   "/guides",
+  "/for",
 ] as const
 
 /** Routes that need a session (and, in Convex, a broker account). */

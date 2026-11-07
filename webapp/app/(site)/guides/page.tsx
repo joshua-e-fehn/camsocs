@@ -1,6 +1,7 @@
 import { ArrowRightIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
+import { AUDIENCE_PAGES } from "@/lib/audience-hubs"
 import { GUIDES, GUIDES_DESCRIPTION, GUIDES_PATH, GUIDES_TITLE } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
 import { DISCLAIMER } from "@/lib/site"
@@ -40,6 +41,20 @@ export default function GuidesPage() {
           </li>
         ))}
       </ul>
+      <section aria-labelledby="lists" className="flex flex-col gap-2">
+        <h2 id="lists" className="font-serif text-2xl font-normal tracking-[-0.01em]">
+          Societies for…
+        </h2>
+        <ul className="flex flex-col gap-1">
+          {AUDIENCE_PAGES.map((page) => (
+            <li key={page.slug}>
+              <Link href={page.path} className="underline-offset-4 hover:underline">
+                {page.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
       <p className="text-sm text-muted-foreground">{DISCLAIMER}</p>
     </div>
   )
