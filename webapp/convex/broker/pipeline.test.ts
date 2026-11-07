@@ -87,7 +87,7 @@ describe("median", () => {
 })
 
 describe("fetchSummaryOf", () => {
-  test("null without fetch counters; errors add unreachable, http errors and 5xx", () => {
+  test("null without fetch counters; errors add unreachable and http errors, never 5xx again", () => {
     expect(fetchSummaryOf(undefined)).toBeNull()
     expect(fetchSummaryOf({ quarantineHeld: 2 })).toBeNull()
     expect(
@@ -103,7 +103,8 @@ describe("fetchSummaryOf", () => {
       }),
     ).toEqual({
       requests: 40,
-      errors: 9,
+      // A 5xx is already one of the http errors: 2 + 3, not 2 + 3 + 4.
+      errors: 5,
       status4xx: 6,
       status5xx: 4,
       robotsBlocked: 1,

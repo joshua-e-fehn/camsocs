@@ -115,9 +115,10 @@ alert's count names have no underscore) with their numbers:
   `YIELD_MIN_MEDIAN`, or nothing where the median was above zero;
 - `stage_freshness` — more than `FRESHNESS_HOURS` (50 h daily, 198 h weekly)
   since a stage's last ok run with a yield above zero;
-- `fetch_error_rate` — a stage's latest run in `FETCH_WINDOW_HOURS` had at
-  least `FETCH_MIN_REQUESTS` requests, of which more than
-  `FETCH_ERROR_MAX_RATE` unreachable, HTTP errors or 5xx;
+- `fetch_error_rate` — a stage's latest run in `FETCH_WINDOW_HOURS` that
+  fetched had at least `FETCH_MIN_REQUESTS` requests, of which more than
+  `FETCH_ERROR_MAX_RATE` unreachable or HTTP errors (a 5xx answer is one of
+  the two, never counted again: `fetchUnreachable + fetchHttpError`);
 - `rate_limited` — more than `RATE_LIMITED_MAX` 429 answers in one stage run;
 - `robots_block_jump` — a stage's latest run had at least
   `ROBOTS_JUMP_MIN` robots.txt blocks and more than `ROBOTS_JUMP_FACTOR`
@@ -905,11 +906,15 @@ def _scraper_checks(profile: CampusProfile) -> tuple[Check, ...]:
         ),
         Check(
             "fetch_error_rate",
+            # Both numbers from one row, the newest run that fetched: a run
+            # without counters is left out, so `requests` and `errors` never
+            # come from two runs. Every non-retried 5xx is already an HTTP
+            # error (and a retried one unreachable), so 5xx is not added.
             f"SELECT {STAGE}, argMax({_metric('fetchRequests')}, timestamp),"
             f" argMax(ifNull({_metric('fetchUnreachable')}, 0)"
-            f" + ifNull({_metric('fetchHttpError')}, 0)"
-            f" + ifNull({_metric('fetchStatus5xx')}, 0), timestamp)"
-            f" {stages}{ran}{recent} GROUP BY {STAGE} LIMIT {MAX_ROWS}",
+            f" + ifNull({_metric('fetchHttpError')}, 0), timestamp)"
+            f" {stages}{ran}{recent} AND {_metric('fetchRequests')} IS NOT NULL"
+            f" GROUP BY {STAGE} LIMIT {MAX_ROWS}",
             3,
             _fetch_error_rate(cadence),
             0,

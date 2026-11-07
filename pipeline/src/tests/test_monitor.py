@@ -845,6 +845,16 @@ def test_the_paging_checks_are_unchanged_and_the_new_ones_are_all_shadow() -> No
     assert all(c.shadow for c in shadow)
 
 
+def test_the_fetch_error_rate_counts_each_failed_request_once_from_one_run() -> None:
+    """A non-retried 5xx is an HTTP error and a retried one is unreachable, so
+    adding `fetchStatus5xx` would count it twice; and only runs that fetched
+    are read, so the requests and the errors come from the same run."""
+    query = all_queries()["fetch_error_rate"]
+    assert "fetchStatus5xx" not in query
+    assert "fetchUnreachable" in query and "fetchHttpError" in query
+    assert "AND toFloat(properties.metrics.fetchRequests) IS NOT NULL" in query
+
+
 def test_every_query_is_scoped_to_the_campus_and_every_harvest_query_leaves_out_dry_runs() -> None:
     for name, query in all_queries().items():
         assert query.count(CAM_CLAUSE) == 1, name

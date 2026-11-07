@@ -227,7 +227,7 @@ The `uni_events` stage reads the University's events programme only under the pe
   | `stale_harvest_events`, `stale_harvest_full` | no `success` or `partial` run of that group in 26 h / 198 h | `STALE_GROUP_HOURS` |
   | `yield_drop` | a stage's latest ok run yielded (inserted + updated + unchanged) less than 0.25 × the median of at least 3 earlier ok runs in 7 days (daily stage) or 28 days (weekly-only), that median ≥ 5; or 0 where the median was above 0 | `YIELD_DROP_RATIO`, `YIELD_MIN_RUNS`, `YIELD_MIN_MEDIAN`, `YIELD_WINDOW_DAYS` |
   | `stage_freshness` | more than 50 h (daily) or 198 h (weekly-only) since a stage's last ok run with a yield above 0 (a stage with none in 35 days is not judged) | `FRESHNESS_HOURS`, `FRESHNESS_SCAN_DAYS` |
-  | `fetch_error_rate` | a stage's latest run in 26 h made at least 20 requests and more than 30 % were unreachable, an HTTP error or a 5xx | `FETCH_ERROR_MAX_RATE`, `FETCH_MIN_REQUESTS`, `FETCH_WINDOW_HOURS` |
+  | `fetch_error_rate` | a stage's latest run in 26 h that fetched made at least 20 requests and more than 30 % were unreachable or an HTTP error (a 5xx is one of the two, never counted twice) | `FETCH_ERROR_MAX_RATE`, `FETCH_MIN_REQUESTS`, `FETCH_WINDOW_HOURS` |
   | `rate_limited` | more than 10 `429` answers in one stage run in 26 h | `RATE_LIMITED_MAX` |
   | `robots_block_jump` | a stage's latest run in 26 h had at least 5 robots.txt blocks and more than 2 × the mean of its runs in the 7 days before | `ROBOTS_JUMP_MIN`, `ROBOTS_JUMP_FACTOR`, `ROBOTS_JUMP_DAYS` |
   | `run_duration` | a run in 26 h took more than 0.8 × its group's time limit (events 2 h, full 6 h, mirroring `camsocs-harvest.sh`) | `GROUP_TIME_LIMIT_S`, `RUN_DURATION_SHARE` |

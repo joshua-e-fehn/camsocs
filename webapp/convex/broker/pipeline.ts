@@ -59,8 +59,9 @@ const nullableNumber = v.union(v.null(), v.number())
 
 const fetchSummary = v.object({
   requests: v.number(),
-  /** fetchUnreachable + fetchHttpError + fetchStatus5xx: the monitor's
-   * `fetch_error_rate` numerator (spec §6). */
+  /** fetchUnreachable + fetchHttpError: the monitor's `fetch_error_rate`
+   * numerator. A 5xx is never added again: a non-retried one is already an
+   * HTTP error and a retried one ends unreachable (sources/base.py). */
   errors: v.number(),
   status4xx: v.number(),
   status5xx: v.number(),
@@ -185,7 +186,7 @@ export function fetchSummaryOf(metrics: StageResult["metrics"]): FetchSummary | 
   const n = (name: string) => metrics[name] ?? 0
   return {
     requests: n("fetchRequests"),
-    errors: n("fetchUnreachable") + n("fetchHttpError") + n("fetchStatus5xx"),
+    errors: n("fetchUnreachable") + n("fetchHttpError"),
     status4xx: n("fetchStatus4xx"),
     status5xx: n("fetchStatus5xx"),
     robotsBlocked: n("fetchRobotsBlocked"),
