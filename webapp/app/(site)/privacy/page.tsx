@@ -224,8 +224,12 @@ export default function PrivacyPage() {
           </li>
           <li>
             choosing a calendar link (<InlineCode>calendar_subscribe_clicked</InlineCode>): whether
-            it is for one event, one talk or the talks feed, and that item’s or department’s
-            reference;
+            it is for one event, one talk, the talks feed or your Finder calendar, and that item’s
+            or department’s reference;
+          </li>
+          <li>
+            finishing a Finder quiz (<InlineCode>finder_completed</InlineCode>): which Finder
+            (societies, events or talks) and how many results it showed, never your answers;
           </li>
           <li>
             following a link off the site (<InlineCode>outbound_link_clicked</InlineCode>): its kind

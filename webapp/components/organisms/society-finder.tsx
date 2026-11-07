@@ -6,7 +6,11 @@ import { CalendarPlusIcon, CheckIcon } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { FeedPanel } from "@/components/organisms/feed-panel"
-import { FinderQuiz, type FinderResult } from "@/components/organisms/finder-quiz"
+import {
+  FinderQuiz,
+  type FinderResult,
+  useFinderCompleted,
+} from "@/components/organisms/finder-quiz"
 import { api } from "@/convex/_generated/api"
 import type { CollegeInfo } from "@/lib/colleges"
 import { readStoredFeed, writeStoredFeed } from "@/lib/feed-storage"
@@ -44,6 +48,7 @@ function SocietyMatches({ result }: { result: FinderResult }) {
   const existing = useQuery(api.feeds.get, stored ? { feedId: stored.feedId } : "skip")
   const create = useMutation(api.feeds.create)
   const update = useMutation(api.feeds.update)
+  useFinderCompleted("societies", matches?.length)
 
   if (matches === undefined) {
     return (

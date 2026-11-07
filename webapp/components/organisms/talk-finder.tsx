@@ -6,7 +6,11 @@ import { CalendarSyncIcon } from "lucide-react"
 import Link from "next/link"
 import { useMemo } from "react"
 import { TalksSubscribeDialog } from "@/components/molecules/talks-subscribe-dialog"
-import { FinderQuiz, type FinderResult } from "@/components/organisms/finder-quiz"
+import {
+  FinderQuiz,
+  type FinderResult,
+  useFinderCompleted,
+} from "@/components/organisms/finder-quiz"
 import { api } from "@/convex/_generated/api"
 import { addDays, formatEventWhen, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { rankTalks, TALK_QUESTIONS, talkSchools } from "@/lib/finder"
@@ -72,6 +76,8 @@ function TalkMatches({ result }: { result: FinderResult }) {
     [pages],
   )
   const ranked = useMemo(() => rankTalks(talks, answers, now), [talks, answers, now])
+
+  useFinderCompleted("talks", loading ? undefined : ranked.length)
 
   if (loading) {
     return (

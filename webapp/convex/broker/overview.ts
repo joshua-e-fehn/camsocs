@@ -202,3 +202,37 @@ export const refreshTraffic = mutation({
     return null
   },
 })
+
+/**
+ * The Finder's personal calendars (ENG-133): how many exist, how many were
+ * made in the last 7 and 28 days, how many a calendar app read in the last
+ * 7 days, and the average number of societies followed. Counts only; a feed
+ * holds no personal data anyway (convex/feeds.ts).
+ */
+export const finderFeeds = query({
+  args: {},
+  returns: v.object({
+    total: v.number(),
+    created7: v.number(),
+    created28: v.number(),
+    fetched7: v.number(),
+    averageFollowed: v.number(),
+  }),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const now = Date.now()
+    const feeds = await ctx.db.query("calendarFeeds").take(20_000)
+    const since = (days: number) => now - days * DAY_MS
+    return {
+      total: feeds.length,
+      created7: feeds.filter((f) => f.createdAt >= since(7)).length,
+      created28: feeds.filter((f) => f.createdAt >= since(28)).length,
+      fetched7: feeds.filter((f) => (f.lastFetchedAt ?? 0) >= since(7)).length,
+      averageFollowed:
+        feeds.length === 0
+          ? 0
+          : Math.round((feeds.reduce((sum, f) => sum + f.orgKeys.length, 0) / feeds.length) * 10) /
+            10,
+    }
+  },
+})

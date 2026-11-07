@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
-import { newTest, type TestConvex } from "./lib/harness.testing"
+import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
 
 /**
  * The Finder (ENG-127): `orgs.finder` ranks listings from quiz answers, and
@@ -127,5 +127,27 @@ describe("personal feeds", () => {
     expect(changed.orgKeys).toEqual(["org-chess", "org-choir"])
     const got = await t.query(api.feeds.get, { feedId: made.feedId })
     expect(got?.orgs.map((o) => o.name)).toEqual(["Chess Club", "Chapel Choir"])
+  })
+})
+
+describe("broker.overview.finderFeeds (ENG-133)", () => {
+  test("counts feeds for a broker, and refuses anyone else", async () => {
+    await withEnv({ BROKER_EMAILS: "broker@example.com" }, async () => {
+      const t = newTest()
+      await seed(t)
+      await t.mutation(api.feeds.create, { orgKeys: ["org-choir", "org-chess"] })
+      const made = await t.mutation(api.feeds.create, { orgKeys: ["org-choir"] })
+      await t.mutation(api.feeds.touch, { feedId: made.feedId })
+      const broker = (await signedInAs(t, "broker@example.com")) as unknown as TestConvex
+      const stranger = (await signedInAs(t, "someone@example.com")) as unknown as TestConvex
+      expect(await broker.query(api.broker.overview.finderFeeds, {})).toEqual({
+        total: 2,
+        created7: 2,
+        created28: 2,
+        fetched7: 1,
+        averageFollowed: 1.5,
+      })
+      await expect(stranger.query(api.broker.overview.finderFeeds, {})).rejects.toThrow()
+    })
   })
 })

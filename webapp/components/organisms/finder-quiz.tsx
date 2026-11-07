@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, RotateCcwIcon, SparklesIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CollegeCrest } from "@/components/molecules/college-crest"
+import { track } from "@/lib/analytics"
 import type { CollegeInfo } from "@/lib/colleges"
 import type { FinderAnswers, FinderQuestion } from "@/lib/finder"
 import { cn } from "@/lib/utils"
@@ -314,4 +315,17 @@ export function FinderQuiz({
       </div>
     </div>
   )
+}
+
+/** Sends `finder_completed` once, when a finished quiz has its results (ENG-133). */
+export function useFinderCompleted(
+  finder: "societies" | "events" | "talks",
+  resultCount: number | undefined,
+) {
+  const sent = useRef(false)
+  useEffect(() => {
+    if (resultCount === undefined || sent.current) return
+    sent.current = true
+    track("finder_completed", { finder, resultCount: Math.min(resultCount, 15) })
+  }, [finder, resultCount])
 }
