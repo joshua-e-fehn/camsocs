@@ -697,7 +697,26 @@ export const requestNotificationValidator = v.object({
   ok: v.boolean(),
   error: v.optional(v.string()),
   at: v.number(),
+  /** Tries so far (a failed channel is retried up to three times). */
+  attempts: v.optional(v.number()),
 })
+
+/** A broker's "Send test notification" (convex/notifications.ts): a synthetic
+ * request the relay and the email sender deliver like a real one. */
+export const notificationTestFields = {
+  /** `nt-<hex>`. */
+  key: v.string(),
+  createdAt: v.number(),
+  notifications: v.array(requestNotificationValidator),
+}
+
+/** The VPS relay that sends Slack and WhatsApp through Mya: which channels it
+ * serves and when it last asked for work (one row, `name` "vps"). */
+export const notifyRelayFields = {
+  name: v.string(),
+  channels: v.array(v.union(v.literal("slack"), v.literal("whatsapp"))),
+  lastSeenAt: v.number(),
+}
 
 export const listingRequestFields = {
   key: v.string(),
@@ -1112,6 +1131,11 @@ export default defineSchema({
     .index("by_scope", ["scope"]),
   coverageSnapshots: defineTable(coverageSnapshotFields).index("by_scope", ["scope"]),
   trafficSnapshots: defineTable(trafficSnapshotFields).index("by_scope", ["scope"]),
+  // Request notifications (ENG-104): broker test sends and the VPS relay's heartbeat.
+  notificationTests: defineTable(notificationTestFields)
+    .index("by_key", ["key"])
+    .index("by_createdAt", ["createdAt"]),
+  notifyRelays: defineTable(notifyRelayFields).index("by_name", ["name"]),
 
   // internal, written by the inbound webhook and the public form
   inboundEmails: defineTable(inboundEmailFields)

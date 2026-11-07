@@ -3,7 +3,7 @@
 // `requireBrokerUser`, so they are only mounted inside `BrokerGate`
 // (components/organisms/broker-gate.tsx) — a non-broker would get a thrown
 // query instead of an empty page.
-import { useAction, useMutation, usePaginatedQuery, useQuery } from "convex/react"
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import type { FunctionReturnType } from "convex/server"
 import { ConvexError } from "convex/values"
 import { useEffect } from "react"
@@ -145,13 +145,18 @@ export function useOpenRequestCount(enabled: boolean) {
   return useQuery(api.broker.listingRequests.openCount, enabled ? {} : "skip")
 }
 
-/** Which notification channels are on, the test send and "Notify again". */
+/** Where new requests are announced, the test send and "Notify again". */
 export function useRequestNotifications() {
   return {
     channels: useQuery(api.broker.listingRequests.notificationChannels),
-    sendTest: useAction(api.broker.listingRequests.sendTestNotification),
+    sendTest: useMutation(api.broker.listingRequests.sendTestNotification),
     notifyAgain: useMutation(api.broker.listingRequests.notifyAgain),
   }
+}
+
+/** A test notification's outcomes as they arrive; skipped without a key. */
+export function useNotificationTest(key: string | null) {
+  return useQuery(api.broker.listingRequests.notificationTest, key ? { key } : "skip")
 }
 
 export function useSetListingRequestStatus() {

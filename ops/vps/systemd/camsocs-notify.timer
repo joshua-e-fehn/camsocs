@@ -1,0 +1,12 @@
+# Request notifications through Mya, every minute (ENG-104). /opt/camsocs/docs/ops-vps.md "Request notifications".
+[Unit]
+Description=camsocs request notifications every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=camsocs-notify.service
+
+[Install]
+WantedBy=timers.target

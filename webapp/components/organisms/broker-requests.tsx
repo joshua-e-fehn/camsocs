@@ -15,7 +15,6 @@ import {
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import {
   AcceptCorrectionsDialog,
@@ -49,6 +48,7 @@ import {
   useBrokerOrgMutations,
   useBrokerSuppressions,
   useListingRequestMutations,
+  useNotificationTest,
   useRequestNotifications,
   useSetListingRequestStatus,
 } from "@/hooks/convex/broker"
@@ -178,17 +178,25 @@ function FocusedRequest({
 
 const CHANNEL_LABEL = { slack: "Slack", email: "Email", whatsapp: "WhatsApp" } as const
 
-/** Which channels a new request is announced on (env vars, docs/deploy.md). */
+/** Where a new request is announced (docs/deploy.md "Request notifications"). */
 function NotificationChannels() {
   const { channels } = useRequestNotifications()
   if (!channels) return null
-  const on = [
-    channels.slack && "Slack",
-    channels.email && "email",
-    channels.whatsapp && `WhatsApp (${channels.whatsapp === "meta" ? "Meta" : "CallMeBot"})`,
-  ].filter(Boolean)
+  const relay = channels.relay
+  const via =
+    relay && relay.channels.length > 0
+      ? `${relay.channels.map((c) => CHANNEL_LABEL[c]).join(" and ")} through Mya${
+          relay.stale ? ` (relay silent since ${formatDateTime(relay.lastSeenAt)})` : ""
+        }`
+      : null
+  const on = [via, channels.email && "email"].filter(Boolean)
   return (
-    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+    <p
+      className={cn(
+        "flex items-center gap-2 text-sm text-muted-foreground",
+        relay?.stale && "text-destructive",
+      )}
+    >
       <BellIcon className="size-4" />
       {on.length > 0
         ? `New requests are announced on ${on.join(", ")}.`
@@ -199,30 +207,45 @@ function NotificationChannels() {
 
 function TestNotificationButton() {
   const { channels, sendTest } = useRequestNotifications()
-  const [busy, setBusy] = useState(false)
-  const any = channels && (channels.slack || channels.email || channels.whatsapp)
+  const [testKey, setTestKey] = useState<string | null>(null)
+  const results = useNotificationTest(testKey)
+  const expected = [
+    ...(channels?.relay && !channels.relay.stale ? channels.relay.channels : []),
+    ...(channels?.email ? (["email"] as const) : []),
+  ]
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={!any || busy}
-      title={any ? "Sends a marked test request on every channel" : "No channel is set up"}
-      onClick={async () => {
-        setBusy(true)
-        const results = await runWithToast(sendTest({}))
-        setBusy(false)
-        if (!results) return
-        const failed = results.filter((r) => !r.ok)
-        const summary = results
-          .map((r) => `${CHANNEL_LABEL[r.channel]} ${r.ok ? "✓" : `✗ (${r.error})`}`)
-          .join(" · ")
-        if (failed.length > 0) toast.error(`Test notification: ${summary}`)
-        else toast.success(`Test notification sent: ${summary}`)
-      }}
-    >
-      <BellRingIcon />
-      Send test notification
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={expected.length === 0}
+        title={
+          expected.length > 0
+            ? "Sends a marked test request on every channel"
+            : "No channel is set up"
+        }
+        onClick={async () => {
+          const key = await runWithToast(
+            sendTest({}),
+            "Test queued: Slack and WhatsApp send within a minute",
+          )
+          if (key) setTestKey(key)
+        }}
+      >
+        <BellRingIcon />
+        Send test notification
+      </Button>
+      {testKey && (
+        <span className="text-xs text-muted-foreground">
+          {expected
+            .map((channel) => {
+              const r = results?.find((d) => d.channel === channel)
+              return `${CHANNEL_LABEL[channel]} ${r ? (r.ok ? "✓" : `✗ ${r.error ?? ""}`) : "…"}`
+            })
+            .join(" · ")}
+        </span>
+      )}
+    </div>
   )
 }
 

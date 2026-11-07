@@ -1,115 +1,68 @@
 import { RESEND_ENDPOINT } from "./signInEmail"
 
 /**
- * New listing request → the broker, on every channel that is configured
- * (ENG-104). Each channel is off until its env vars are set on the deployment,
- * and nothing else is needed (docs/deploy.md "Request notifications"):
+ * New listing request → the broker (ENG-104). Two senders:
  *
- *   Slack     SLACK_REQUESTS_WEBHOOK_URL   an incoming webhook (a Slack app of
- *                                          its own, one channel; never Mya's bot)
- *   Email     RESEND_API_KEY + RESEND_FROM (shared with the sign-in email)
- *             REQUEST_NOTIFY_EMAIL         where to (comma-separated)
- *   WhatsApp  either Meta's Cloud API with an approved template:
- *               WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_TO,
- *               WHATSAPP_TEMPLATE (default camsocs_listing_request),
- *               WHATSAPP_TEMPLATE_LANG (default en)
- *             or CallMeBot (one personal number, a third-party relay):
- *               CALLMEBOT_PHONE, CALLMEBOT_APIKEY
+ *  - **Slack and WhatsApp go through Mya**, the Hermes agent on the VPS: the
+ *    root-owned `camsocs-notify` timer (ops/vps/camsocs-notify.py) asks
+ *    `POST /api/pipeline/notify/pending` every minute, sends each item with
+ *    Mya's Slack bot and her WhatsApp bridge, and reports back on
+ *    `/api/pipeline/notify/ack`. Convex cannot reach the VPS, so the VPS
+ *    pulls. The relay names the channels it serves on every call; the
+ *    dashboard shows them with the time it last called.
+ *  - **Email is sent from here**, through Resend (shared with the sign-in
+ *    email): `RESEND_API_KEY` + `RESEND_FROM`, and `REQUEST_NOTIFY_EMAIL`
+ *    (comma-separated) for where to.
  *
- * What goes where. The request's text is the public's and unverified, so:
- *
- *  - **email** carries everything the inbox shows (the submitter's address,
- *    role, message, proposed field names), quoted and marked unverified;
- *  - **Slack** a short, flattened, mention-proof preview of the message and
- *    only the submitter's domain: the channel may be read by tools, and a
- *    request must never be able to ping or address anyone there;
- *  - **WhatsApp** no free text at all: the kind, the listing's name (ours,
- *    public on the site) and the link. CallMeBot relays the text through a
- *    third party, which is why nothing personal is in it.
+ * What goes where. The request's text is the public's and unverified, so the
+ * relay gets **facts, not formatting**: the kind, the listing's name (ours),
+ * the role, the submitter's *domain*, the proposed field names and a
+ * flattened preview of at most `RELAY_PREVIEW` characters; the relay checks
+ * each one's shape and escapes it for Slack. Email carries everything the
+ * inbox shows, escaped and marked unverified.
  *
  * Every message links to the request itself on the broker dashboard
  * (`/dashboard/requests?request=<key>`), behind the broker sign-in.
  *
- * ⚠ Never log a webhook URL, token, key or a message body: errors carry the
- * channel and HTTP status only.
+ * ⚠ Never log a key or a message body: errors carry the channel and an HTTP
+ * status or error type only.
  */
 
 export const NOTIFY_CHANNELS = ["slack", "email", "whatsapp"] as const
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number]
+/** The channels the VPS relay can serve. */
+export const RELAY_CHANNELS = ["slack", "whatsapp"] as const
+export type RelayChannel = (typeof RELAY_CHANNELS)[number]
 
-/** How long one channel's request may take before it is abandoned. */
+/** How long the email request may take before it is abandoned. */
 export const NOTIFY_TIMEOUT_MS = 10_000
-export const DEFAULT_WHATSAPP_TEMPLATE = "camsocs_listing_request"
-export const DEFAULT_WHATSAPP_LANG = "en"
-export const WHATSAPP_GRAPH_VERSION = "v23.0"
-export const CALLMEBOT_ENDPOINT = "https://api.callmebot.com/whatsapp.php"
-/** Message preview lengths (characters). */
-export const SLACK_PREVIEW = 280
+/** Relay preview length (characters, after flattening). */
+export const RELAY_PREVIEW = 280
 export const EMAIL_MESSAGE_MAX = 5_000
+/** Tries per channel before a request stops being offered to the relay. */
+export const MAX_ATTEMPTS = 3
+/** Wait between two tries of the same channel. */
+export const RETRY_AFTER_MS = 2 * 60 * 1000
+/** Requests older than this are no longer offered (a relay switched on later
+ * announces the open requests of the last two weeks, then only new ones). */
+export const RELAY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+/** A relay that has not called for this long is shown as down. */
+export const RELAY_STALE_MS = 5 * 60 * 1000
 
 type Env = Record<string, string | undefined>
 
-export type WhatsAppConfig =
-  | {
-      provider: "meta"
-      token: string
-      phoneNumberId: string
-      to: string
-      template: string
-      lang: string
-    }
-  | { provider: "callmebot"; phone: string; apiKey: string }
+export type EmailConfig = { apiKey: string; from: string; to: string[] }
 
-export type NotifyConfig = {
-  slack: { webhookUrl: string } | null
-  email: { apiKey: string; from: string; to: string[] } | null
-  whatsapp: WhatsAppConfig | null
-}
-
-const trimmed = (value: string | undefined) => value?.trim() || undefined
-
-/** Each channel's settings, or null where it is off. Read per call, so setting
- * an env var takes effect without a deploy. */
-export function notifyConfig(env: Env = process.env): NotifyConfig {
-  const webhookUrl = trimmed(env.SLACK_REQUESTS_WEBHOOK_URL)
-  const slack = webhookUrl?.startsWith("https://hooks.slack.com/") === true ? { webhookUrl } : null
-
-  const apiKey = trimmed(env.RESEND_API_KEY)
-  const from = trimmed(env.RESEND_FROM)
+/** The email sender, or null where it is off. Read per call, so setting an env
+ * var takes effect without a deploy. */
+export function emailConfig(env: Env = process.env): EmailConfig | null {
+  const apiKey = env.RESEND_API_KEY?.trim()
+  const from = env.RESEND_FROM?.trim()
   const to = (env.REQUEST_NOTIFY_EMAIL ?? "")
     .split(",")
     .map((address) => address.trim())
     .filter((address) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
-  const email = apiKey && from && to.length > 0 ? { apiKey, from, to } : null
-
-  let whatsapp: WhatsAppConfig | null = null
-  const token = trimmed(env.WHATSAPP_TOKEN)
-  const phoneNumberId = trimmed(env.WHATSAPP_PHONE_NUMBER_ID)
-  const waTo = trimmed(env.WHATSAPP_TO)?.replace(/[^\d]/g, "")
-  if (token && phoneNumberId && waTo) {
-    whatsapp = {
-      provider: "meta",
-      token,
-      phoneNumberId,
-      to: waTo,
-      template: trimmed(env.WHATSAPP_TEMPLATE) ?? DEFAULT_WHATSAPP_TEMPLATE,
-      lang: trimmed(env.WHATSAPP_TEMPLATE_LANG) ?? DEFAULT_WHATSAPP_LANG,
-    }
-  } else {
-    const phone = trimmed(env.CALLMEBOT_PHONE)?.replace(/[^\d+]/g, "")
-    const cmbKey = trimmed(env.CALLMEBOT_APIKEY)
-    if (phone && cmbKey) whatsapp = { provider: "callmebot", phone, apiKey: cmbKey }
-  }
-  return { slack, email, whatsapp }
-}
-
-/** Which channels are on, for the broker page (no secrets). */
-export function channelSummary(config: NotifyConfig) {
-  return {
-    slack: config.slack !== null,
-    email: config.email !== null,
-    whatsapp: config.whatsapp?.provider ?? null,
-  }
+  return apiKey && from && to.length > 0 ? { apiKey, from, to } : null
 }
 
 /** What a notification says about one request. */
@@ -155,45 +108,35 @@ export function flatten(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat
 }
 
-/** Slack mrkdwn escaping (`&`, `<`, `>`): no link, mention or `<!channel>` can
- * be formed from the text, and `@` becomes the full-width "＠" so a bare
- * "@here" cannot notify anyone either. */
-export function slackEscape(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "＠")
-}
-
 export function emailDomain(address: string): string {
   const at = address.lastIndexOf("@")
   return at >= 0 ? address.slice(at + 1).toLowerCase() : "?"
 }
 
-function headline(notice: RequestNotice): string {
-  const what = kindLabel(notice.kind)
-  const listing =
+/** The listing as a message names it. */
+export function listingLabel(notice: Pick<RequestNotice, "orgName" | "kind" | "eventKey">) {
+  return (
     notice.orgName ?? (notice.kind === "add" ? "a new listing" : notice.eventKey ? "an event" : "—")
-  return `${notice.test ? "[TEST] " : ""}${what}: ${listing}`
+  )
 }
 
-/** Slack incoming-webhook body. Pure. */
-export function buildSlack(notice: RequestNotice, site: string) {
-  const link = requestLink(site, notice.key)
-  const role = notice.role ? `${slackEscape(flatten(notice.role, 60))}, ` : ""
-  const preview = slackEscape(flatten(notice.message, SLACK_PREVIEW))
-  const title = slackEscape(flatten(headline(notice), 160))
-  const lines = [
-    `*New CAMsocs request* · ${title}`,
-    `From ${role}someone at ${slackEscape(emailDomain(notice.submitterEmail))} (address unverified)`,
-    notice.fieldNames.length > 0
-      ? `Proposed fields: ${slackEscape(flatten(notice.fieldNames.join(", "), 200))}`
-      : null,
-    `> ${preview}`,
-    `<${link}|Open the request>`,
-  ].filter((line): line is string => line !== null)
+function headline(notice: RequestNotice): string {
+  return `${notice.test ? "[TEST] " : ""}${kindLabel(notice.kind)}: ${listingLabel(notice)}`
+}
+
+/** What the VPS relay is given for one request: facts, each flattened and
+ * capped, never the submitter's address. Pure. */
+export function relayFacts(notice: RequestNotice) {
   return {
-    text: `New CAMsocs request: ${title}`,
-    blocks: [{ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } }],
-    unfurl_links: false,
-    unfurl_media: false,
+    id: notice.key,
+    test: notice.test === true,
+    kind: notice.kind,
+    listing: flatten(listingLabel(notice), 120),
+    role: notice.role ? flatten(notice.role, 60) : null,
+    fromDomain: flatten(emailDomain(notice.submitterEmail), 100),
+    fields: notice.fieldNames.slice(0, 10).map((name) => flatten(name, 40)),
+    preview: flatten(notice.message, RELAY_PREVIEW),
+    createdAt: notice.createdAt,
   }
 }
 
@@ -232,7 +175,7 @@ export function buildEmail(
   ]
   const text = [
     notice.test ? "This is a test notification from the broker dashboard.\n" : "",
-    `A new request came in through the CAMsocs listing form.`,
+    "A new request came in through the CAMsocs listing form.",
     "",
     ...facts.map(([label, value]) => `${label}: ${value}`),
     "",
@@ -248,7 +191,7 @@ export function buildEmail(
     notice.test
       ? '<p style="color:#a14a00"><strong>Test notification</strong> from the broker dashboard.</p>'
       : "",
-    `<p>A new request came in through the CAMsocs listing form.</p>`,
+    "<p>A new request came in through the CAMsocs listing form.</p>",
     '<table style="border-collapse:collapse;font-size:14px">',
     ...facts.map(
       ([label, value]) =>
@@ -264,123 +207,73 @@ export function buildEmail(
   return { from, to, subject, text, html }
 }
 
-/** WhatsApp text: kind, listing, link — never the submitter's words. Pure. */
-export function whatsAppText(notice: RequestNotice, site: string): string {
-  return `${headline(notice)}\n${requestLink(site, notice.key)}`
-}
-
-/** Meta Cloud API template message. The template has three body parameters:
- * {{1}} kind, {{2}} listing, {{3}} link (docs/deploy.md). Pure. */
-export function buildWhatsAppTemplate(
-  notice: RequestNotice,
-  site: string,
-  config: Extract<WhatsAppConfig, { provider: "meta" }>,
-) {
-  const listing = notice.orgName ?? (notice.kind === "add" ? "a new listing" : "—")
-  const param = (text: string) => ({ type: "text", text: flatten(text, 200) })
-  return {
-    messaging_product: "whatsapp",
-    to: config.to,
-    type: "template",
-    template: {
-      name: config.template,
-      language: { code: config.lang },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            param(`${notice.test ? "[TEST] " : ""}${kindLabel(notice.kind)}`),
-            param(listing),
-            param(requestLink(site, notice.key)),
-          ],
-        },
-      ],
-    },
-  }
-}
-
 export type DeliveryResult = { channel: NotifyChannel; ok: boolean; error?: string }
 
-async function timed(fetchImpl: typeof fetch, url: string, init: RequestInit): Promise<Response> {
-  return await fetchImpl(url, { ...init, signal: AbortSignal.timeout(NOTIFY_TIMEOUT_MS) })
-}
-
-/** A failure message safe to store and log: status and error type only. */
-function failure(channel: NotifyChannel, error: unknown): DeliveryResult {
-  const reason =
-    error instanceof Response
-      ? `HTTP ${error.status}`
-      : error instanceof Error
-        ? error.name === "TimeoutError" || error.name === "AbortError"
-          ? "timeout"
-          : error.name
-        : "error"
-  return { channel, ok: false, error: reason }
-}
-
-async function expectOk(response: Response): Promise<void> {
-  if (!response.ok) throw response
-}
-
-/** Sends `notice` on one channel. Never throws. */
-export async function sendOn(
-  channel: NotifyChannel,
-  config: NotifyConfig,
+/** Sends `notice` by email. Never throws; null when email is off. */
+export async function sendEmail(
+  config: EmailConfig | null,
   notice: RequestNotice,
   site: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DeliveryResult | null> {
+  if (!config) return null
   try {
-    if (channel === "slack") {
-      if (!config.slack) return null
-      await expectOk(
-        await timed(fetchImpl, config.slack.webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(buildSlack(notice, site)),
-        }),
-      )
-    } else if (channel === "email") {
-      if (!config.email) return null
-      const { apiKey, from, to } = config.email
-      await expectOk(
-        await timed(fetchImpl, RESEND_ENDPOINT, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify(buildEmail(notice, site, from, to)),
-        }),
-      )
-    } else {
-      const wa = config.whatsapp
-      if (!wa) return null
-      if (wa.provider === "meta") {
-        await expectOk(
-          await timed(
-            fetchImpl,
-            `https://graph.facebook.com/${WHATSAPP_GRAPH_VERSION}/${encodeURIComponent(wa.phoneNumberId)}/messages`,
-            {
-              method: "POST",
-              headers: { Authorization: `Bearer ${wa.token}`, "Content-Type": "application/json" },
-              body: JSON.stringify(buildWhatsAppTemplate(notice, site, wa)),
-            },
-          ),
-        )
-      } else {
-        const url = new URL(CALLMEBOT_ENDPOINT)
-        url.searchParams.set("phone", wa.phone)
-        url.searchParams.set("text", whatsAppText(notice, site))
-        url.searchParams.set("apikey", wa.apiKey)
-        const response = await timed(fetchImpl, url.toString(), { method: "GET" })
-        await expectOk(response)
-        // CallMeBot can answer 200 with a page that says it refused.
-        const body = (await response.text()).toLowerCase()
-        if (body.includes("apikey is invalid") || body.includes("not allowed")) {
-          return { channel, ok: false, error: "refused" }
-        }
-      }
-    }
-    return { channel, ok: true }
+    const response = await fetchImpl(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildEmail(notice, site, config.from, config.to)),
+      signal: AbortSignal.timeout(NOTIFY_TIMEOUT_MS),
+    })
+    if (!response.ok) return { channel: "email", ok: false, error: `HTTP ${response.status}` }
+    return { channel: "email", ok: true }
   } catch (error) {
-    return failure(channel, error)
+    const name = error instanceof Error ? error.name : "error"
+    return {
+      channel: "email",
+      ok: false,
+      error: name === "TimeoutError" || name === "AbortError" ? "timeout" : name,
+    }
   }
+}
+
+/** One channel's stored outcome on a request or test. */
+export type Delivery = {
+  channel: NotifyChannel
+  ok: boolean
+  error?: string
+  at: number
+  attempts?: number
+}
+
+/** Whether the relay should be given `channel` for something with these
+ * deliveries now: never delivered, tries left, and the last try old enough. */
+export function relayDue(deliveries: readonly Delivery[], channel: RelayChannel, now: number) {
+  const entry = deliveries.find((d) => d.channel === channel)
+  if (!entry) return true
+  if (entry.ok) return false
+  return (entry.attempts ?? 1) < MAX_ATTEMPTS && now - entry.at >= RETRY_AFTER_MS
+}
+
+/** `deliveries` with `results` merged in: the latest outcome per channel,
+ * counting tries. */
+export function mergeDeliveries(
+  deliveries: readonly Delivery[],
+  results: readonly { channel: NotifyChannel; ok: boolean; error?: string }[],
+  at: number,
+): Delivery[] {
+  const byChannel = new Map(deliveries.map((d) => [d.channel, d]))
+  for (const result of results) {
+    const previous = byChannel.get(result.channel)
+    byChannel.set(result.channel, {
+      channel: result.channel,
+      ok: result.ok,
+      ...(result.error ? { error: result.error.slice(0, 80) } : {}),
+      at,
+      attempts: (previous?.attempts ?? (previous ? 1 : 0)) + 1,
+    })
+  }
+  return NOTIFY_CHANNELS.flatMap((channel) => {
+    const entry = byChannel.get(channel)
+    return entry ? [entry] : []
+  })
 }
