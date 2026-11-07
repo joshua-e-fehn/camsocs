@@ -31,7 +31,9 @@ reading group), otherwise ``other``.
 
 **Elsewhere** (`is_elsewhere`): an item whose venue names another city or
 country (London, Antalya, Johannesburg …) and not Cambridge or online is
-not a Cambridge talk and is dropped.
+not a Cambridge talk and is dropped. "Cambridge" is the active campus's
+location (`NameRules.location_pattern`, decision D8): the word or a CB
+postcode for Cambridge.
 
 **Cancelled** (`is_cancelled`): a title starting or bracketing
 "Cancelled"/"Postponed", or a status the source states. **Online**
@@ -41,6 +43,7 @@ or an attendance mode the source states.
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Iterable
 
@@ -120,7 +123,14 @@ _ELSEWHERE = re.compile(
     r"japan|germany|france|italy|spain|canada|australia)\b",
     re.IGNORECASE,
 )
-#: ...and Cambridge venues whose names hold one of those places.
+#: ...and venues that are online, or Cambridge venues whose names hold one of
+#: those places. The campus's own location comes first (`here_regex`).
+_HERE_TAIL = (
+    r"|\bonline\b|\bzoom\b|\bvirtual\b"
+    r"|\bancient india\b|\bedinburgh building\b|\bbrooklands avenue\b"
+)
+#: Cambridge's venue rule: `here_regex` of its location pattern is this
+#: regex byte for byte (tests/test_cam_patterns_frozen.py).
 _HERE = re.compile(
     r"\bcambridge\b|\bCB\d{1,2}\b|\bonline\b|\bzoom\b|\bvirtual\b"
     r"|\bancient india\b|\bedinburgh building\b|\bbrooklands avenue\b",
@@ -128,10 +138,22 @@ _HERE = re.compile(
 )
 
 
+@functools.cache
+def here_regex(location_pattern: str) -> re.Pattern[str]:
+    """Venues that are here: the campus's location, online, or a Cambridge
+    venue named after somewhere else; compiled once per campus."""
+    return re.compile(location_pattern + _HERE_TAIL, re.I)
+
+
 def is_elsewhere(venue: str | None) -> bool:
-    """Whether a venue names a place other than Cambridge (and not online).
-    "St John's College" or "Hoyle Lecture Theatre" name no place: kept."""
-    return bool(venue and _ELSEWHERE.search(venue) and not _HERE.search(venue))
+    """Whether a venue names a place other than the active campus's town
+    (Cambridge) and not online. "St John's College" or "Hoyle Lecture
+    Theatre" name no place: kept."""
+    if not venue or not _ELSEWHERE.search(venue):
+        return False
+    from camsocs_pipeline.campuses import active
+
+    return not here_regex(active().names.location_pattern).search(venue)
 
 
 def is_cancelled(title: str, text: str | None = None) -> bool:

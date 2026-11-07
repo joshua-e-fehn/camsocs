@@ -72,6 +72,7 @@ page.
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping
@@ -237,11 +238,36 @@ _GATHERING = re.compile(
     r"|trophy|challenger|doubles|singles|invitational)\b)"
     r"|\b[A-Z][\w']+\s+Open\b(?!\s+(?:Mic|Day|Evening|Night|Session|Training|House|Meeting|Shoot))",
 )
+#: Cambridge's "another university" title regex. The rule reads the active
+#: campus's (`_other_university`): `campuses.OTHER_UNIVERSITY_TOKENS` less the
+#: campus's own (`NameRules.self_tokens`), which for Cambridge is this regex
+#: byte for byte (tests/test_cam_patterns_frozen.py). A campus that is itself
+#: one of those universities must name it in `self_tokens` before it loads,
+#: or every event of its own would read as someone else's.
 _OTHER_UNIVERSITY = re.compile(
     r"\b(?:oxford|ou[a-z]{2,8}soc|kcl|ucl|lse|imperial|warwick|durham|edinburgh|bristol"
     r"|manchester|nottingham|st\s+andrews|king's\s+college\s+london|anglia\s+ruskin|aru)\b",
     re.IGNORECASE,
 )
+
+
+@functools.cache
+def other_university_pattern(self_tokens: frozenset[str]) -> re.Pattern[str]:
+    """The "another university" regex of a campus whose own tokens are
+    `self_tokens`, compiled once per campus."""
+    from camsocs_pipeline.campuses import OTHER_UNIVERSITY_TOKENS
+
+    tokens = [token for token in OTHER_UNIVERSITY_TOKENS if token not in self_tokens]
+    return re.compile(r"\b(?:" + "|".join(tokens) + r")\b", re.IGNORECASE)
+
+
+def _other_university() -> re.Pattern[str]:
+    """The active campus's "another university" regex (Cambridge: `_OTHER_UNIVERSITY`)."""
+    from camsocs_pipeline.campuses import active
+
+    return other_university_pattern(active().names.self_tokens)
+
+
 _FIXTURE = re.compile(r"\b(?:vs?\.?|versus|varsity|against)\b", re.IGNORECASE)
 _DEADLINE_LIKE = re.compile(r"\b(?:opens|closes|released|due)\b", re.IGNORECASE)
 _WHO_IS_US = re.compile(r"^(?:us|our\b|the\s+committee|committee|members?)", re.IGNORECASE)
@@ -538,7 +564,7 @@ def _signals(text: EventText) -> list[str]:
         signals.append("events platform")
     if _GATHERING.search(text.title):
         signals.append("gathering")
-    if _OTHER_UNIVERSITY.search(text.title):
+    if _other_university().search(text.title):
         signals.append("another university")
     plain = _plain(text.title)
     if _PLACEHOLDER.fullmatch(plain):

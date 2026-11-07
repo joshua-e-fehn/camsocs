@@ -61,6 +61,7 @@ alone.
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 from collections import Counter, defaultdict
@@ -273,7 +274,35 @@ _COLLEGES = re.compile(
     r"selwyn|sidney sussex|trinity|wolfson",
     re.IGNORECASE,
 )
+#: A page naming Cambridge: the word, or "Cantab". This predates the campus
+#: profile and is not its location pattern (no postcode; "Cantab" added), so
+#: Cambridge keeps it byte for byte (tests/test_cam_patterns_frozen.py); any
+#: other campus uses its `NameRules.location_pattern` (`_names_campus`).
 _CAMBRIDGE = re.compile(r"\bcambridge\b|\bcantab", re.IGNORECASE)
+#: Campuses whose page-mention rule is not their location pattern.
+_CAMPUS_MENTIONS: dict[str, tuple[re.Pattern[str], str]] = {"cam": (_CAMBRIDGE, "cambridge")}
+
+
+@functools.cache
+def _campus_mention(
+    campus_id: str, location_pattern: str, town: str
+) -> tuple[re.Pattern[str], str]:
+    """A campus's page-mention regex and the town word a host may carry."""
+    return _CAMPUS_MENTIONS.get(campus_id) or (re.compile(location_pattern, re.IGNORECASE), town)
+
+
+def _names_campus(text: str, host: str) -> bool:
+    """Whether a page's text or host names the active campus's town
+    (Cambridge: the word or "Cantab" in the text, "cambridge" in the host)."""
+    from camsocs_pipeline.campuses import active
+
+    profile = active()
+    pattern, town = _campus_mention(
+        profile.id, profile.names.location_pattern, profile.short_name.lower()
+    )
+    return bool(pattern.search(text)) or town in host
+
+
 #: Words of a name too common to show a host is the society's.
 _COMMON_WORDS = frozenset(
     {
@@ -325,7 +354,7 @@ def own_site(target: Target, page: Page) -> bool:
         return False
     if any(host == d or host.endswith("." + d) for d in _SOCIETY_HOSTS) or "/cam.ac.uk/" in url:
         return True
-    if _CAMBRIDGE.search(f"{page.title} {page.text[:20_000]}") or "cambridge" in host:
+    if _names_campus(f"{page.title} {page.text[:20_000]}", host):
         return True
     if _COLLEGES.search(f"{page.title} {page.text[:20_000]} {host}"):
         return True
