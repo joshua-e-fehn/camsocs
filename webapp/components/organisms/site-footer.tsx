@@ -16,6 +16,7 @@ export const COLUMNS = [
       { href: "/societies", label: "Societies and clubs" },
       { href: "/talks/departments", label: "Departments" },
       { href: "/term-dates", label: "Term dates" },
+      { href: "/finder", label: "Society Finder" },
       { href: "/colleges", label: "Colleges" },
       { href: "/guides", label: "Guides" },
       { href: "/guides/join-a-society", label: "Joining a society" },

@@ -42,6 +42,12 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "Full Term dates and the week of term, from the University's published dates",
   },
   {
+    path: "/finder",
+    name: "Society Finder",
+    about:
+      "a five-question quiz that suggests the 15 best-fitting societies and follows them in one calendar feed",
+  },
+  {
     path: "/colleges",
     name: "Colleges",
     about: "all 31 colleges with their JCR, MCR, boat club, societies and formal hall rules",

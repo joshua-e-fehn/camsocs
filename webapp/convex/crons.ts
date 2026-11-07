@@ -34,6 +34,7 @@ const crons = cronJobs()
 
 crons.daily("derive-daily", { hourUTC: 3, minuteUTC: 30 }, internal.derive.daily, {})
 crons.daily("retention-daily", { hourUTC: 4, minuteUTC: 15 }, internal.retention.daily, {})
+crons.daily("feeds-prune-daily", { hourUTC: 4, minuteUTC: 20 }, internal.feeds.prune, {})
 crons.daily("coverage-daily", { hourUTC: 4, minuteUTC: 45 }, internal.coverage.recompute, {})
 crons.daily(
   "talks-retention-daily",

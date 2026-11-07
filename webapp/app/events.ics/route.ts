@@ -1,5 +1,5 @@
-import { fetchQuery } from "convex/nextjs"
-import type { NextRequest } from "next/server"
+import { fetchMutation, fetchQuery } from "convex/nextjs"
+import { after, type NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import { eventsCalendar } from "@/lib/ics"
@@ -40,7 +40,12 @@ function plain(body: string, status: number): Response {
   })
 }
 
+/** A personal feed's id (ENG-129, convex/feeds.ts): 25 of a-z0-9. */
+const FEED_ID = /^[a-z0-9]{25}$/
+
 export async function GET(request: NextRequest): Promise<Response> {
+  const feedId = request.nextUrl.searchParams.get("f") ?? undefined
+  if (feedId !== undefined) return personalFeed(feedId)
   const slug = request.nextUrl.searchParams.get("org") ?? undefined
   if (slug !== undefined && !isOrgSlug(slug)) return plain("Not a society.", 400)
   const now = Date.now()
@@ -93,4 +98,53 @@ async function readFeed(from: number, to: number, slug: string | undefined) {
     events,
     venues: new Map(venues.map((venue) => [venue.key, venue.name])),
   }
+}
+
+/**
+ * A Finder feed (`?f=<id>`, ENG-129): the followed listings' public events of
+ * the next 60 days, named "My CAMsocs calendar". Same caching and rules as
+ * the site feed; the fetch is counted without the id, and the feed's
+ * `lastFetchedAt` is noted after the response (at most hourly).
+ */
+async function personalFeed(feedId: string): Promise<Response> {
+  if (!FEED_ID.test(feedId)) return plain("Not a feed.", 400)
+  const now = Date.now()
+  const from = londonMidnight(londonIsoDate(now))
+  const to = from + WINDOW_DAYS * DAY_MS
+  let events: Awaited<ReturnType<typeof fetchQuery<typeof api.events.feed>>>
+  let venues: Awaited<ReturnType<typeof fetchQuery<typeof api.venues.list>>>
+  try {
+    ;[events, venues] = await Promise.all([
+      fetchQuery(api.events.feed, { feedId, from, to }),
+      fetchQuery(api.venues.list, {}),
+    ])
+  } catch {
+    return plain("The events could not be read just now. Try again later.", 503)
+  }
+  if (events === null) return plain("No such feed.", 404)
+  const names = new Map(venues.map((venue) => [venue.key, venue.name]))
+  const body = eventsCalendar(
+    events
+      .filter((event) => event.visibility === "public" && !event.talksDerived)
+      .map((event) => ({
+        ...event,
+        venueText: event.venueText ?? (event.venueKey ? names.get(event.venueKey) : undefined),
+      })),
+    { name: "My CAMsocs calendar", now, pageUrl: (key) => `${SITE_URL}/events/${key}` },
+  )
+  countIcsFetch("personal")
+  after(async () => {
+    try {
+      await fetchMutation(api.feeds.touch, { feedId })
+    } catch {
+      // Counting a read never fails the feed.
+    }
+  })
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": 'inline; filename="my-camsocs-calendar.ics"',
+      "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+    },
+  })
 }

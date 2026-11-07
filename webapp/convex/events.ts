@@ -307,6 +307,48 @@ export const list = query({
   },
 })
 
+/**
+ * A personal feed's events (ENG-129, `/events.ics?f=<id>`): the public
+ * events of every listing the feed follows in the window, by start time,
+ * through the same per-organisation read and the same rules as `list`
+ * (never talks.cam-derived, never "taking part" only, suppressed ones out).
+ * Null for an unknown feed.
+ */
+export const feed = query({
+  args: { feedId: v.string(), from: v.number(), to: v.number() },
+  returns: v.union(v.null(), v.array(eventListItemValidator)),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("calendarFeeds")
+      .withIndex("by_feedId", (i) => i.eq("feedId", args.feedId))
+      .unique()
+    if (!row) return null
+    const tiers = visibleEventTiers(await getViewer(ctx))
+    const lookup = orgRefCache(ctx)
+    const byKey = new Map<string, Doc<"events">>()
+    for (const orgKey of row.orgKeys) {
+      const events = await matchingEvents(
+        ctx,
+        { from: args.from, to: args.to, orgKey, includeTakingPart: false },
+        tiers,
+        lookup,
+      )
+      for (const event of events) byKey.set(event.key, event)
+    }
+    const [contacts, names, removed] = await Promise.all([
+      loadContactHashes(ctx),
+      loadNameHashes(ctx),
+      loadSuppressedEvents(ctx),
+    ])
+    const out: EventListItem[] = []
+    for (const event of [...byKey.values()].sort((a, b) => a.startsAt - b.startsAt)) {
+      if (removed.has(event.key)) continue
+      out.push(scrubAddresses(await eventListItem(event, lookup), contacts, names))
+    }
+    return out
+  },
+})
+
 /** The coarsest window `restrictedCount` answers for: whole London weeks
  * (Monday first), at least one — four with an organisation — and never more
  * than `MAX_WINDOW_MS`. */

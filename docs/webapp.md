@@ -61,6 +61,12 @@ app/                         Next.js App Router pages
                              lib/society-guides.ts), formal-hall, may-balls, rowing, varsity,
                              university-sport, theatre, postgraduates, glossary (lib/guides.ts;
                              ResearchedGuide renders data-driven guides).
+    finder/                  Finder quizzes (ENG-127): /finder (societies, orgs.finder scores in
+                             Convex), /finder/events (events.list + rankEvents in the browser),
+                             /finder/calendar (a browser's feed, noindex); /talks/finder lives in
+                             the talks pillar (talks.list in the browser). Questions and scoring
+                             in lib/finder.ts. Follow → convex/feeds.ts (calendarFeeds) →
+                             /events.ics?f=<id> (events.feed); unused feeds pruned after a year
     for/                     /for/beginners, /for/postgraduates, /for/international-students
                              (lib/audience-hubs.ts): orgs.hub by audience / beginnerFriendly /
                              category, on the hub layout; noindex if the read fails

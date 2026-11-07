@@ -26,6 +26,7 @@ import type * as crons from "../crons.js";
 import type * as derive from "../derive.js";
 import type * as eventFeed from "../eventFeed.js";
 import type * as events from "../events.js";
+import type * as feeds from "../feeds.js";
 import type * as http from "../http.js";
 import type * as indexing from "../indexing.js";
 import type * as ingest_broker from "../ingest/broker.js";
@@ -105,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   derive: typeof derive;
   eventFeed: typeof eventFeed;
   events: typeof events;
+  feeds: typeof feeds;
   http: typeof http;
   indexing: typeof indexing;
   "ingest/broker": typeof ingest_broker;

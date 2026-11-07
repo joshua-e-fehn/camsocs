@@ -32,6 +32,9 @@ export const ROUTE_INDEXING: Record<string, RouteIndexing> = {
   "/categories": { sitemap: "societies.xml" },
   "/categories/[category]": { sitemap: "societies.xml" },
   "/colleges": { sitemap: "pages.xml", linkedFrom: "footer" },
+  "/finder": { sitemap: "pages.xml", linkedFrom: "footer" },
+  "/finder/events": { sitemap: "pages.xml", linkedFrom: "page:/finder" },
+  "/finder/calendar": { excluded: "a browser's own Finder calendar: noindex, nothing to find" },
   "/for/beginners": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/for/postgraduates": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/for/international-students": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
@@ -59,6 +62,9 @@ export const ROUTE_INDEXING: Record<string, RouteIndexing> = {
       "talks.cam content: classic search may find talk pages, but no sitemap lists them (G1)",
   },
   "/talks/departments": { sitemap: "pages.xml", linkedFrom: "footer" },
+  "/talks/finder": {
+    excluded: "inside the talks pillar: linked from /finder, but no sitemap lists talks pages (G1)",
+  },
   "/talks/events/[key]": {
     excluded: "a talks.cam-derived event's page: never in a sitemap (G1)",
   },

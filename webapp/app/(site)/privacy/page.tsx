@@ -546,6 +546,14 @@ export default function PrivacyPage() {
             They are strictly necessary to keep the form open to people and closed to spam.
           </li>
           <li>
+            <strong>Your Finder calendar.</strong> If you follow societies with the Finder, we make
+            a calendar feed identified only by a random code, holding the societies you chose and
+            when a calendar app last read it; nothing about you. Your browser keeps that code and a
+            second, secret one in local storage (<InlineCode>camsocs.finder.feed</InlineCode>) so
+            that you can change the list later; they are strictly necessary for the service you
+            asked for. A feed no calendar app has read for a year is deleted.
+          </li>
+          <li>
             <strong>Recent searches.</strong> The search box remembers your last five searches in
             your browser’s local storage so you can repeat them. They stay on your device.
           </li>
