@@ -52,7 +52,12 @@ const ROWS: BrokerOrgRow[] = [
   orgRow({ key: "org-list", slug: "list", name: "List Society", bestAddress: undefined }),
 ]
 
+// bun's module mocks are process-wide and outlive this file: keep every real
+// export and replace only what this test drives, so a later test file that
+// imports another hook (broker-traffic.test.tsx) still finds it.
+const realBrokerHooks = await import("@/hooks/convex/broker")
 mock.module("@/hooks/convex/broker", () => ({
+  ...realBrokerHooks,
   useAllBrokerOrgRows: () => ({ rows: ROWS, complete: true }),
   useBrokerInteractionMutations: () => ({ recordSendLog: async () => ({}) }),
   errorMessage: (error: unknown) => String(error),
