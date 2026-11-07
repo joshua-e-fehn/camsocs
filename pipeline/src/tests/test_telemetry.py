@@ -606,3 +606,11 @@ def test_a_stage_that_fetched_sends_one_event_per_host_class(make_settings, net)
     assert completed["metrics"]["fetchRequests"] == 2
     for name in completed["metrics"]:
         assert telemetry_module._NAME.fullmatch(name) and name[0] not in "_$"
+
+
+def test_source_fetched_carries_a_transport_error_class_name_only() -> None:
+    assert clean_properties(SOURCE_FETCHED, {"transportErrorType": "ConnectTimeout"}) == {
+        "transportErrorType": "ConnectTimeout"
+    }
+    assert clean_properties(SOURCE_FETCHED, {"transportErrorType": "timed out: x.org"}) == {}
+    assert clean_properties(STAGE_COMPLETED, {"transportErrorType": "ConnectTimeout"}) == {}

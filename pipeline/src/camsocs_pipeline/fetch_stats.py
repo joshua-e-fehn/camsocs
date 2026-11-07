@@ -1,18 +1,42 @@
 """Fetch statistics per stage: what the polite client did, as counts only.
 
 The runner (`pipeline/sync.py`) activates one collector per stage
-(``with fetch_stats.activate(stage.name) as stats:``). While it is active,
-`sources/base.py` reports every logical fetch (a `PoliteClient.fetch` or
-`post_form`, redirects and retries included) and what happened inside it:
-retries, 429 answers, address refusals, robots.txt hosts that could not be
-reached, the hosts contacted and the seconds spent waiting for a host slot.
+(``with fetch_stats.activate(stage.name, phase=stage.phase) as stats:``).
+While it is active, `sources/base.py` reports every logical fetch (a
+`PoliteClient.fetch` or `post_form`, redirects and retries included) and what
+happened inside it: retries, 429 answers, transport errors (by exception
+class), address refusals, robots.txt hosts that could not be reached, the
+hosts contacted and the seconds spent waiting for a host slot.
 `extract/memo.py` counts LLM cache hits and fresh generations the same way.
 
 Afterwards `StageStats.metrics()` gives the stage's totals, merged into
 `StageReport.metrics` (they travel to Convex on `runs/finish` and to
 PostHog on `harvest_stage_completed`), and `StageStats.by_host_class()` the
 same counters per host class, one `harvest_source_fetched` event each
-(`telemetry.HarvestTelemetry.sources_fetched`).
+(`telemetry.HarvestTelemetry.sources_fetched`). That event alone also carries
+`transportErrorType`: the class's most frequent transport exception class
+name (``ConnectTimeout``, ``ConnectError``…), when there was one. It is not a
+counter, so it stays out of `CLASS_COUNTERS` and `StageReport.metrics`.
+
+**Host classes** (`host_class`), first match wins:
+
+1. ``never_override``: talks.cam and tbc.xyz (`policy.never_overridden`).
+2. A D3 society URL class (``society_website``, ``linktree``,
+   ``google_calendar_feed``, ``su_asset``, ``college_society_list``): by the
+   URL's shape (`policy.url_class_of`) or the class the purpose declared
+   (`policy.society_class`).
+3. ``registry`` for every other fetch of a stage in a register phase
+   (`REGISTER_PHASES`: the society registers, ``harvest``): the SU directory,
+   Camdram, CUCBC, the Proctors' and Sport registers, the colleges' lists.
+4. ``university_main_site``: the University's, a college's or a department's
+   own site on cam.ac.uk, the central www.cam.ac.uk included
+   (`policy.is_cam_main_site`).
+5. ``registry``: the University's register and admin hosts, that is a
+   general host on cam.ac.uk that is not a main site (webservices.admin…),
+   or a host with a recorded permission (`policy.permission_for`).
+6. ``other``: everything else, including the other general hosts (search
+   engines, social and video sites, link shorteners, gov.uk and the
+   national organisations) and the event sources outside a register phase.
 
 **Never a host or a URL.** A fetch is reduced to its host *class*
 (`HOST_CLASSES`, decided by `sources/policy.py`'s own functions); hosts are
@@ -29,6 +53,7 @@ that is not a run) every call is a no-op.
 from __future__ import annotations
 
 import threading
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -73,6 +98,10 @@ CLASS_COUNTERS: tuple[str, ...] = (
     "fetchWaitS",
 )
 
+#: Phases whose stages read a register (`pipeline.context.PHASES`): there,
+#: a fetch of no fixed class (rules 1-2 above) is a ``registry`` fetch.
+REGISTER_PHASES = frozenset({"harvest"})
+
 #: Counters other modules add through `count` (only when non-zero).
 EXTRA_COUNTERS: tuple[str, ...] = ("llmCacheHits", "llmGenerations")
 
@@ -92,25 +121,35 @@ _OVERRIDE_COUNTER = {
 }
 
 
-def host_class(url: str, purpose: policy.FetchPurpose = policy.GENERAL) -> str:
+def host_class(
+    url: str, purpose: policy.FetchPurpose = policy.GENERAL, *, register: bool = False
+) -> str:
     """The class of `url`'s host for statistics (`HOST_CLASSES`), decided
-    by `sources/policy.py`: talks.cam and tbc.xyz first, then the D3 URL
-    classes (from the URL, or the class the purpose declared), the
-    University's central, admin and register hosts and other general hosts
-    (`registry`), a college's or department's own site, else `other`."""
+    by `sources/policy.py`'s functions in the order the module docstring
+    lists. `register`: the fetching stage reads a register
+    (`REGISTER_PHASES`)."""
     try:
         if policy.never_overridden(url):
             return "never_override"
         shaped = policy.url_class_of(url) or policy.society_class(url, purpose)
         if shaped is not None:
             return shaped
-        if policy.is_general_host(url) or policy.permission_for(url, "fetch") is not None:
+        if register:
             return "registry"
         if policy.is_cam_main_site(url):
             return "university_main_site"
+        if policy.permission_for(url, "fetch") is not None or (
+            _on_cam(url) and policy.is_general_host(url)
+        ):
+            return "registry"
     except ValueError:
         pass
     return "other"
+
+
+def _on_cam(url: str) -> bool:
+    host = policy.host_of(url)
+    return host == "cam.ac.uk" or host.endswith(".cam.ac.uk")
 
 
 def _host(url: str) -> str:
@@ -127,6 +166,8 @@ class FetchTrace:
     wait_s: float = 0.0
     hosts: set[str] = field(default_factory=set)
     robots_unreachable: set[str] = field(default_factory=set)
+    #: Transport exceptions per class name (``ConnectTimeout``: 2).
+    transport_errors: Counter[str] = field(default_factory=Counter)
 
 
 @dataclass
@@ -135,6 +176,7 @@ class _ClassStats:
     wait_s: float = 0.0
     hosts: set[str] = field(default_factory=set)
     robots_unreachable: set[str] = field(default_factory=set)
+    transport_errors: Counter[str] = field(default_factory=Counter)
 
     def add(self, name: str, amount: int = 1) -> None:
         if amount:
@@ -147,25 +189,33 @@ class _ClassStats:
         self.wait_s += trace.wait_s
         self.hosts |= trace.hosts
         self.robots_unreachable |= trace.robots_unreachable
+        self.transport_errors.update(trace.transport_errors)
 
     @property
     def active(self) -> bool:
         return bool(self.counts or self.hosts or self.robots_unreachable or self.wait_s)
 
-    def values(self) -> dict[str, int | float]:
-        values: dict[str, int | float] = dict.fromkeys(CLASS_COUNTERS, 0)
+    def values(self) -> dict[str, int | float | str]:
+        values: dict[str, int | float | str] = dict.fromkeys(CLASS_COUNTERS, 0)
         values.update(self.counts)
         values["robotsHostsUnreachable"] = len(self.robots_unreachable)
         values["hostsContacted"] = len(self.hosts)
         values["fetchWaitS"] = round(self.wait_s, 3)
+        if self.transport_errors:
+            # Most frequent first; a tie goes to the name first in order.
+            values["transportErrorType"] = min(
+                self.transport_errors, key=lambda name: (-self.transport_errors[name], name)
+            )
         return values
 
 
 class StageStats:
     """One stage's statistics. Filled while it is the active collector."""
 
-    def __init__(self, stage: str) -> None:
+    def __init__(self, stage: str, *, register: bool = False) -> None:
         self.stage = stage
+        #: The stage reads a register (`REGISTER_PHASES`, `host_class`).
+        self.register = register
         self._lock = threading.Lock()
         self._classes: dict[str, _ClassStats] = {}
         self._extra: dict[str, int] = {}
@@ -210,8 +260,9 @@ class StageStats:
         with self._lock:
             self._extra[name] = self._extra.get(name, 0) + amount
 
-    def by_host_class(self) -> dict[str, dict[str, int | float]]:
-        """Every counter per host class that saw any activity."""
+    def by_host_class(self) -> dict[str, dict[str, int | float | str]]:
+        """Every counter per host class that saw any activity, and its
+        `transportErrorType` when it had transport errors."""
         with self._lock:
             return {
                 name: stats.values()
@@ -255,10 +306,11 @@ def current() -> StageStats | None:
 
 
 @contextmanager
-def activate(stage: str) -> Iterator[StageStats]:
-    """Collect statistics for `stage` until the block ends; yields them."""
+def activate(stage: str, *, phase: str | None = None) -> Iterator[StageStats]:
+    """Collect statistics for `stage` (of `phase`, `pipeline.context.PHASES`)
+    until the block ends; yields them."""
     global _current
-    stats = StageStats(stage)
+    stats = StageStats(stage, register=phase in REGISTER_PHASES)
     with _lock:
         previous, _current = _current, stats
     try:
@@ -313,6 +365,13 @@ def note_wait(seconds: float) -> None:
         _note(lambda trace: setattr(trace, "wait_s", trace.wait_s + seconds))
 
 
+def note_transport_error(error: BaseException) -> None:
+    """One attempt that ended in a transport exception (a timeout, a refused
+    connection): its class name only, never its message."""
+    name = type(error).__name__
+    _note(lambda trace: trace.transport_errors.update((name,)))
+
+
 def note_contacted(url: str) -> None:
     _note(lambda trace: trace.hosts.add(_host(url)))
 
@@ -336,7 +395,7 @@ def record_fetch(
     if stats is None:
         return
     stats.record(
-        host_class(url, purpose),
+        host_class(url, purpose, register=stats.register),
         outcome=outcome,
         status=status,
         from_cache=from_cache,
@@ -356,6 +415,7 @@ __all__ = [
     "CLASS_COUNTERS",
     "EXTRA_COUNTERS",
     "HOST_CLASSES",
+    "REGISTER_PHASES",
     "FetchTrace",
     "StageStats",
     "activate",
@@ -368,6 +428,7 @@ __all__ = [
     "note_retry",
     "note_robots_unreachable",
     "note_too_many",
+    "note_transport_error",
     "note_wait",
     "record_fetch",
 ]

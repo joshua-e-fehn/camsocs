@@ -817,6 +817,7 @@ class PoliteClient:
                         )
                 except (httpx.TimeoutException, httpx.TransportError) as error:
                     last_error = f"{type(error).__name__}: {error}"
+                    fetch_stats.note_transport_error(error)
                     wait = _jittered(backoff)
                 else:
                     if response.status_code not in RETRYABLE_STATUSES:

@@ -75,7 +75,8 @@ registry knows). `harvest_stage_completed` adds the stage's `pillar`, its
 adds `timeLimitS` when the runner states it (`CAMSOCS_TIME_LIMIT_S`). After
 each stage, one `harvest_source_fetched` per host class the stage fetched
 from (`fetch_stats.HOST_CLASSES`: a class, never a host or URL) carries the
-fetch counters. The run is one PostHog trace: `$ai_trace` at its end (the
+fetch counters (and `transportErrorType`, the most frequent transport
+exception class name, when there was one). The run is one PostHog trace: `$ai_trace` at its end (the
 run key as `$ai_trace_id`, the group as `$ai_span_name`), one `$ai_span` per
 stage (``<runKey>.<stage>``, parent the run) and each generation's
 `$ai_parent_id` its stage's span. `$ai_input`, `$ai_output_choices`,
@@ -204,7 +205,8 @@ ALLOWED: Mapping[str, frozenset[str]] = {
         "metrics",
         "errorType",
     },
-    SOURCE_FETCHED: _COMMON | {"stage", "pillar", "hostClass", "durationS", *CLASS_COUNTERS},
+    SOURCE_FETCHED: _COMMON
+    | {"stage", "pillar", "hostClass", "durationS", "transportErrorType", *CLASS_COUNTERS},
     RUN_FINISHED: _COMMON
     | {
         "command",
@@ -268,6 +270,8 @@ _STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 #: A metric or coverage name: camelCase, as the stages write them.
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
 _REVISION = re.compile(r"[0-9a-f]{7,40}")
+#: An exception's class name, never its message.
+_ERROR_TYPE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,79}")
 _RUN_KEY_PATTERN = r"\d{8}T\d{6}Z-[0-9a-f]{6}"  # report.mint_run_key
 _RUN_KEY = re.compile(_RUN_KEY_PATTERN)
 #: A stage span ``<runKey>.<stage>``.
@@ -287,7 +291,8 @@ _SHAPES: Mapping[str, re.Pattern[str]] = {
     "stage": _STAGE,
     "requestedStages": _STAGE,
     "failedStages": _STAGE,
-    "errorType": re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,79}"),
+    "errorType": _ERROR_TYPE,
+    "transportErrorType": _ERROR_TYPE,
     "pipelineVersion": re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_\-]{0,39}"),
     "revision": _REVISION,
     "campus": re.compile(r"[a-z]{2,8}"),
@@ -636,14 +641,16 @@ class HarvestTelemetry:
     def sources_fetched(
         self,
         stage: str,
-        by_host_class: Mapping[str, Mapping[str, int | float]],
+        by_host_class: Mapping[str, Mapping[str, int | float | str]],
         *,
         duration_s: float,
         pillar: str | None = None,
     ) -> None:
         """One `harvest_source_fetched` per host class the stage fetched from
         (`fetch_stats.StageStats.by_host_class`): counts only, the class
-        never a host. `duration_s` is the stage's."""
+        never a host, plus the most frequent transport exception class name
+        (`transportErrorType`) when there was one. `duration_s` is the
+        stage's."""
         for host_class, counters in by_host_class.items():
             self._capture(
                 SOURCE_FETCHED,
@@ -653,6 +660,7 @@ class HarvestTelemetry:
                     "hostClass": host_class,
                     "durationS": round(duration_s, 3),
                     **{name: value for name, value in counters.items() if name in CLASS_COUNTERS},
+                    "transportErrorType": counters.get("transportErrorType"),
                 },
             )
 

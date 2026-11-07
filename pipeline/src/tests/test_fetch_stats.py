@@ -40,16 +40,89 @@ _CONVEX_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
         ("https://soc.example.org/", SOCIETY_WEBSITE, "society_website"),
         ("https://www.jcr.example.ac.uk/socs", COLLEGE_SOCIETY_LIST, "college_society_list"),
         ("https://soc.example.org/", GENERAL, "other"),
-        ("https://www.cam.ac.uk/", GENERAL, "registry"),
-        ("https://www.proctors.cam.ac.uk/register", GENERAL, "registry"),
-        ("https://webservices.admin.cam.ac.uk/events/api/programmes", GENERAL, "registry"),
+        # The University's central site is a main site, not a register.
+        ("https://www.cam.ac.uk/whatson", GENERAL, "university_main_site"),
+        ("https://www.proctors.cam.ac.uk/register", GENERAL, "university_main_site"),
         ("https://www.clare.cam.ac.uk/", SOCIETY_WEBSITE, "university_main_site"),
+        # The University's register and admin hosts, recorded permissions.
+        ("https://webservices.admin.cam.ac.uk/events/api/programmes", GENERAL, "registry"),
+        ("https://reporter.admin.cam.ac.uk/x", GENERAL, "registry"),
+        # Other general hosts are not registers.
+        ("https://www.google.com/search?q=x", GENERAL, "other"),
+        ("https://bit.ly/x", GENERAL, "other"),
+        ("https://www.gov.uk/x", GENERAL, "other"),
+        ("https://www.cmf.org.uk/", GENERAL, "other"),
+        # Outside a register phase, a register source's host is `other`.
+        ("https://www.camdram.net/societies", GENERAL, "other"),
+        ("https://www.cambridgesu.co.uk/organisation/x", GENERAL, "other"),
         ("https://example.org/", GENERAL, "other"),
     ],
 )
 def test_host_class_comes_from_the_fetch_policy(url: str, purpose, expected: str) -> None:
     assert fetch_stats.host_class(url, purpose.bound_to(url)) == expected
     assert expected in fetch_stats.HOST_CLASSES
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://www.camdram.net/societies", "registry"),
+        ("https://www.cambridgesu.co.uk/organisation/x", "registry"),
+        ("https://cucbc.org/clubs", "registry"),
+        ("https://api.playwaze.com/x", "registry"),
+        ("https://www.cam.ac.uk/", "registry"),
+        ("https://www.clare.cam.ac.uk/", "registry"),
+        # The fixed classes still win in a register phase.
+        ("https://www.cambridgesu.co.uk/asset/Organisation/1/logo.png", "su_asset"),
+        ("https://linktr.ee/somesoc", "linktree"),
+        ("https://talks.cam.ac.uk/show/index/1", "never_override"),
+    ],
+)
+def test_a_register_phase_classes_its_unfixed_fetches_as_registry(url: str, expected: str) -> None:
+    assert fetch_stats.host_class(url, GENERAL.bound_to(url), register=True) == expected
+
+
+def test_only_the_harvest_phase_reads_registers() -> None:
+    from camsocs_pipeline.pipeline.context import PHASES
+
+    assert sorted(fetch_stats.REGISTER_PHASES) == ["harvest"]
+    assert "harvest" in PHASES
+    url = "https://www.camdram.net/societies"
+    for phase, expected in (("harvest", "registry"), ("events", "other"), (None, "other")):
+        with fetch_stats.activate("probe", phase=phase) as stats:
+            fetch_stats.record_fetch(
+                url,
+                GENERAL,
+                outcome="fetched",
+                status=200,
+                from_cache=False,
+                override=None,
+                trace=None,
+            )
+        assert set(stats.by_host_class()) == {expected}, phase
+
+
+def test_transport_errors_keep_their_most_frequent_class_name_only() -> None:
+    import httpx
+
+    with fetch_stats.activate("probe") as stats:
+        with fetch_stats.fetch_trace() as trace:
+            fetch_stats.note_transport_error(httpx.ConnectError("secret host detail"))
+            fetch_stats.note_transport_error(httpx.ReadTimeout("x"))
+            fetch_stats.note_transport_error(httpx.ReadTimeout("y"))
+        fetch_stats.record_fetch(
+            "https://example.org/",
+            GENERAL,
+            outcome="unreachable",
+            status=None,
+            from_cache=False,
+            override=None,
+            trace=trace,
+        )
+    other = stats.by_host_class()["other"]
+    assert other["transportErrorType"] == "ReadTimeout"
+    assert "transportErrorType" not in stats.metrics(), "not a counter"
+    assert "secret" not in repr(stats.by_host_class())
 
 
 def test_every_metric_name_is_a_safe_record_key() -> None:

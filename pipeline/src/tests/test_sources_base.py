@@ -656,6 +656,20 @@ def test_unreachable_robots_and_refused_addresses_are_counted(tmp_path: Path, ne
     assert metrics["fetchRobotsBlocked"] == 3 and not page.called
 
 
+def test_transport_errors_are_counted_by_class_name(tmp_path: Path, net) -> None:
+    allow_all(net, "https://flaky.example")
+    net.get("https://flaky.example/").mock(
+        side_effect=[httpx.ConnectTimeout("slow host"), httpx.Response(200, text="ok")]
+    )
+    client = make_client(tmp_path)
+
+    with _stats_for() as stats:
+        assert client.fetch("https://flaky.example/").outcome == "fetched"
+
+    assert stats.metrics()["fetchRetries"] == 1
+    assert stats.by_host_class()["other"]["transportErrorType"] == "ConnectTimeout"
+
+
 def test_without_an_active_stage_nothing_is_collected(tmp_path: Path, net) -> None:
     from camsocs_pipeline import fetch_stats
 

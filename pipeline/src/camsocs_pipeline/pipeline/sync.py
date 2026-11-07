@@ -318,7 +318,7 @@ def _run_stages(
         staging.active_stage = stage if stage.writes else declared.get(stage.name, stage)
         started = time.monotonic()
         try:
-            with fetch_stats.activate(stage.name) as fetched:
+            with fetch_stats.activate(stage.name, phase=stage.phase) as fetched:
                 error_type = _guard(
                     stage_report, lambda stage=stage, ctx=context: stage.resolve()(ctx)
                 )
