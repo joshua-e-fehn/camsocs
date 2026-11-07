@@ -32,6 +32,8 @@ export const VISIT_PAGES = [
   "event",
   "talks",
   "term_dates",
+  "colleges",
+  "guides",
   "info",
   "other",
 ] as const
@@ -68,6 +70,8 @@ export function visitPage(pathname: string): VisitPage {
   if (path.startsWith("/events/")) return "event"
   if (path === "/talks" || path.startsWith("/talks/")) return "talks"
   if (path === "/term-dates") return "term_dates"
+  if (path === "/colleges") return "colleges"
+  if (path === "/guides" || path.startsWith("/guides/")) return "guides"
   if (INFO_PAGES.has(path)) return "info"
   return "other"
 }

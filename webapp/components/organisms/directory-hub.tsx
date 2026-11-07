@@ -23,6 +23,7 @@ export function DirectoryHub({
   collegeNames,
   missingHref,
   missingText,
+  badge,
   aside,
 }: {
   eyebrow: string
@@ -35,6 +36,8 @@ export function DirectoryHub({
   /** "Missing a society at …? Add it". */
   missingHref: string
   missingText: string
+  /** Beside the H1: a college's crest. */
+  badge?: React.ReactNode
   /** Links to the other hubs, under the list. */
   aside?: React.ReactNode
 }) {
@@ -65,9 +68,12 @@ export function DirectoryHub({
           <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
             {eyebrow}
           </p>
-          <h1 className="font-serif text-4xl font-medium tracking-tight text-balance sm:text-5xl">
-            {title}
-          </h1>
+          <div className="flex items-center gap-4">
+            {badge}
+            <h1 className="font-serif text-4xl font-medium tracking-tight text-balance sm:text-5xl">
+              {title}
+            </h1>
+          </div>
           <p className="max-w-3xl text-lg leading-relaxed text-pretty">{intro}</p>
         </div>
       </header>

@@ -71,7 +71,9 @@ describe("visitPage", () => {
     expect(visitPage("/talks/departments")).toBe("talks")
     expect(visitPage("/term-dates")).toBe("term_dates")
     expect(visitPage("/privacy")).toBe("info")
-    expect(visitPage("/guides/freshers")).toBe("other")
+    expect(visitPage("/guides/formal-hall")).toBe("guides")
+    expect(visitPage("/colleges")).toBe("colleges")
+    expect(visitPage("/freshers")).toBe("other")
     for (const path of ["/", "/societies/x", "/nowhere"]) {
       expect(VISIT_PAGES).toContain(visitPage(path))
     }

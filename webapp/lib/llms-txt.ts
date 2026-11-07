@@ -41,6 +41,17 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "Full Term dates and the week of term, from the University's published dates",
   },
   {
+    path: "/colleges",
+    name: "Colleges",
+    about: "all 31 colleges with their JCR, MCR, boat club, societies and formal hall rules",
+  },
+  {
+    path: "/guides/formal-hall",
+    name: "Formal hall guide",
+    about:
+      "how formal hall works and how to go to another college's formal, every fact linked to its source",
+  },
+  {
     path: "/about",
     name: `About ${SITE_NAME}`,
     about: "who runs it, where every fact comes from and how the data is collected",

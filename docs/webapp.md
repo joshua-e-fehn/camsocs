@@ -53,6 +53,12 @@ app/                         Next.js App Router pages
     about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
     term-dates/page.tsx      Full Term dates by academic year, the week of term today and each week's
                              dates (`termDates` + lib/term-calendar.ts; no hand-written dates)
+    colleges/page.tsx        All 31 colleges: crest, JCR/MCR/boat club links, listing count (orgs.hub)
+                             and formal hall summary; crests + checked formal rules in
+                             lib/data/colleges.json (lib/colleges.ts, from the Cambridge Tracker,
+                             re-checked 7 Nov 2026); a college's own page shows its FormalHallBox
+    guides/                  /guides index and /guides/formal-hall (lib/guides.ts, lib/formal-guide.ts;
+                             every fact cites its source, GuideArticle lists them)
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
                              it is closed): overview, organisations (?org=<key> opens the drawer),
