@@ -17,7 +17,7 @@ const COLUMNS = [
       { href: "/talks/departments", label: "Departments" },
       { href: "/term-dates", label: "Term dates" },
       { href: "/colleges", label: "Colleges" },
-      { href: "/guides/formal-hall", label: "Formal hall guide" },
+      { href: "/guides", label: "Guides" },
     ],
   },
   {

@@ -31,6 +31,7 @@ const CANONICAL = [
   "/term-dates",
   "/colleges",
   "/guides/formal-hall",
+  "/guides/may-balls",
   "/categories",
   "/categories/science-tech",
   "/societies",

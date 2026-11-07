@@ -4,6 +4,7 @@ import { notFound, unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { CollegeCrest } from "@/components/molecules/college-crest"
 import { FormalHallBox } from "@/components/molecules/formal-hall-box"
+import { MayBallBox } from "@/components/molecules/may-ball-box"
 import { TrackView } from "@/components/molecules/track-view"
 import { DirectoryHub } from "@/components/organisms/directory-hub"
 import { OrgProfile } from "@/components/organisms/org-profile"
@@ -27,6 +28,7 @@ import {
 } from "@/lib/directory-profile"
 import { withoutTalksCam } from "@/lib/directory-talks-guard"
 import { collegeHubTitle, titleBase } from "@/lib/directory-title"
+import { ballsOf } from "@/lib/may-balls"
 import { pageMetadata } from "@/lib/page-metadata"
 import type { OrgPage } from "@/lib/public-api"
 import { publicQuery } from "@/lib/public-data"
@@ -213,6 +215,7 @@ async function CollegeHubPage({ page }: { page: OrgPage }) {
         aside={
           <>
             {info && <FormalHallBox college={info} />}
+            {info && <MayBallBox balls={ballsOf(org.key)} college={info.shortName} />}
             {others.length > 0 && (
               <section aria-labelledby="other-colleges" className="flex flex-col gap-3">
                 <h2

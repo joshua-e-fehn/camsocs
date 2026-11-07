@@ -57,8 +57,11 @@ app/                         Next.js App Router pages
                              and formal hall summary; crests + checked formal rules in
                              lib/data/colleges.json (lib/colleges.ts, from the Cambridge Tracker,
                              re-checked 7 Nov 2026); a college's own page shows its FormalHallBox
-    guides/                  /guides index and /guides/formal-hall (lib/guides.ts, lib/formal-guide.ts;
-                             every fact cites its source, GuideArticle lists them)
+    guides/                  /guides index, formal-hall, may-balls, rowing, varsity (lib/guides.ts).
+                             Researched text lives in lib/data/guides/*.json (paragraphs + source
+                             URLs, rendered by GuideSections); rowing/Varsity "coming up" lists are
+                             CAMsocs' own sport events (lib/sport-calendar.ts); a college's page
+                             shows its May Ball (MayBallBox, #may-ball)
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
                              it is closed): overview, organisations (?org=<key> opens the drawer),

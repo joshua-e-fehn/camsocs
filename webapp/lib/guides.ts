@@ -13,7 +13,7 @@ import { breadcrumbList, PUBLISHER_ID, pageId, WEBSITE_ID } from "./structured-d
  * list once their review notes are settled.
  */
 
-export type GuideSlug = "formal-hall"
+export type GuideSlug = "formal-hall" | "may-balls" | "rowing" | "varsity"
 
 export type GuideSource = {
   /** Who published it, short: shown inline as the citation. */
@@ -43,7 +43,7 @@ export type Guide = {
 export const GUIDES_PATH = "/guides"
 export const GUIDES_TITLE = "Guides to student life in Cambridge"
 export const GUIDES_DESCRIPTION =
-  "Plain guides for Cambridge students: formal hall and more to come. Unofficial; every fact links the page it comes from."
+  "Plain guides for Cambridge students: formal hall, May Balls, rowing and Varsity. Unofficial; every fact links the page it comes from."
 
 export const GUIDES: readonly Guide[] = [
   {
@@ -56,6 +56,39 @@ export const GUIDES: readonly Guide[] = [
       "What formal hall is, how to get into another college's formal (a host or a swap), gowns and dress, and the rules of all 31 colleges.",
     published: "2026-11-07",
     updated: "2026-11-07",
+  },
+  {
+    slug: "may-balls",
+    path: "/guides/may-balls",
+    title: "May Balls in Cambridge: dates, tickets and every college",
+    description:
+      "Every Cambridge May Ball and June Event: 2027 dates, how tickets and worker tickets work, and dress codes, each linked to the ball's own site.",
+    summary:
+      "What May Week is, ball or June Event, how tickets and worker tickets work, dress codes, and each college's ball for 2027.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "rowing",
+    path: "/guides/rowing",
+    title: "Rowing in Cambridge: Bumps, Fairbairns and the Boat Race",
+    description:
+      "How Cambridge rowing works: college boat clubs and novices, Fairbairns, Lent and May Bumps explained, the Boat Race, and the races coming up.",
+    summary:
+      "College boat clubs and novice rowing, how bumps racing works, Fairbairns, the University squads and the Boat Race, with the races coming up.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "varsity",
+    path: "/guides/varsity",
+    title: "Varsity in Cambridge: Oxford fixtures and the ski trip",
+    description:
+      "Cambridge v Oxford: the Boat Race, the Varsity Match and other Varsity fixtures, the Varsity ski trip, and how to watch, with this season's dates.",
+    summary:
+      "What Varsity means, Blues, the Boat Race, the rugby Varsity Match and other fixtures, the Varsity ski trip, and the fixtures coming up.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
   },
 ]
 
