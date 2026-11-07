@@ -163,6 +163,11 @@ describe("the allow-list", () => {
       method: "cam",
     })
     expect(allowed("sign_in_completed", { method: "ab123@cam.ac.uk" })).toBeNull()
+    expect(allowed("finder_completed", { finder: "societies", resultCount: 15 })).toEqual({
+      finder: "societies",
+      resultCount: 15,
+    })
+    expect(allowed("finder_completed", { finder: "music, beginner", resultCount: 3 })).toBeNull()
   })
 })
 

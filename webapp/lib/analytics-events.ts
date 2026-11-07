@@ -89,6 +89,9 @@ export type SearchSurface = (typeof SEARCH_SURFACES)[number]
 /** What a calendar link adds: the talks feed, one event or talk, or (later) an events feed. */
 export const CALENDAR_FEEDS = ["talks", "event", "talk", "events", "personal"] as const
 
+/** Which Finder quiz was finished (ENG-133). */
+export const FINDERS = ["societies", "events", "talks"] as const
+
 /** What kind of page a link off the site goes to (never its address). */
 export const OUTBOUND_KINDS = ["website", "social", "source", "other"] as const
 export type OutboundKind = (typeof OUTBOUND_KINDS)[number]
@@ -138,6 +141,10 @@ export const ANALYTICS_EVENTS = {
   },
   sign_in_completed: {
     method: oneOf(SIGN_IN_METHODS),
+  },
+  finder_completed: {
+    finder: oneOf(FINDERS),
+    resultCount: count(15),
   },
 } as const satisfies EventRules
 

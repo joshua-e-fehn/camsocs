@@ -63,6 +63,12 @@ export default async function FreshersGuide() {
         <div className="flex flex-col gap-2 rounded-xl border p-5">
           <h2 className="font-semibold">Find your people</h2>
           <Link
+            href="/finder"
+            className="font-medium text-brand-text underline-offset-4 hover:underline"
+          >
+            🧭 Society Finder: five questions
+          </Link>
+          <Link
             href="/for/beginners"
             className="font-medium text-brand-text underline-offset-4 hover:underline"
           >

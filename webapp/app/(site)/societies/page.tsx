@@ -2,6 +2,7 @@ import { preloadedQueryResult } from "convex/nextjs"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
+import { FinderLink } from "@/components/molecules/finder-link"
 import { OrgDirectory } from "@/components/organisms/org-directory"
 import { api } from "@/convex/_generated/api"
 import { CATEGORIES_PATH, collectionJsonLd, directorySeo } from "@/lib/directory-hubs"
@@ -136,6 +137,10 @@ export default async function SocietiesPage({ searchParams }: Props) {
             </Link>
             .
           </p>
+          <FinderLink className="mt-2">
+            <strong className="font-semibold">Not sure where to start?</strong> Five questions find
+            your 15 best societies.
+          </FinderLink>
         </div>
       </header>
       <OrgDirectory

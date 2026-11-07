@@ -33,6 +33,7 @@ import {
   type QuickChip,
 } from "@/components/molecules/filter-chip-strip"
 import { FilterSheet } from "@/components/molecules/filter-sheet"
+import { FinderLink } from "@/components/molecules/finder-link"
 import { OrgPicker } from "@/components/molecules/org-picker"
 import { SearchField } from "@/components/molecules/search-field"
 import { WeekStrip } from "@/components/molecules/week-strip"
@@ -876,6 +877,12 @@ export function EventsCalendar({
               >
                 {headline}
               </p>
+              {!org && (
+                <FinderLink href="/finder/events" emoji="🎟️">
+                  <strong className="font-semibold">Too much on?</strong> Five questions pick your
+                  15 best events.
+                </FinderLink>
+              )}
               <UniversitySwitch
                 value={state.university}
                 onChange={pickUniversity}

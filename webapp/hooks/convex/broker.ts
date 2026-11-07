@@ -61,6 +61,11 @@ export function useBrokerSummary() {
   return useQuery(api.broker.overview.summary)
 }
 
+/** The Finder's personal calendars, as counts (ENG-133). */
+export function useFinderFeeds() {
+  return useQuery(api.broker.overview.finderFeeds)
+}
+
 export function useBrokerPeople() {
   return useQuery(api.broker.people.list)
 }

@@ -19,7 +19,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { runWithToast, useBrokerSummary, useRefreshCoverage } from "@/hooks/convex/broker"
+import {
+  runWithToast,
+  useBrokerSummary,
+  useFinderFeeds,
+  useRefreshCoverage,
+} from "@/hooks/convex/broker"
 import { COVERAGE_FIELDS } from "@/lib/broker/coverage"
 import {
   capitalise,
@@ -288,6 +293,8 @@ export function BrokerOverview() {
 
       <BrokerTraffic />
 
+      <FinderFeedsCard />
+
       <BrokerIndexing />
 
       <Card>
@@ -340,5 +347,42 @@ export function BrokerOverview() {
         </CardContent>
       </Card>
     </>
+  )
+}
+
+/** The Finder's calendars (ENG-133): made and read, as plain counts. */
+function FinderFeedsCard() {
+  const feeds = useFinderFeeds()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Finder calendars</CardTitle>
+        <CardDescription>
+          Personal calendar feeds made with the Society Finder (/finder). A feed is “read” when a
+          calendar app fetches it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {feeds ? (
+          <>
+            <StatTile
+              emphasis
+              label="Made, last 7 days"
+              value={feeds.created7}
+              hint={`${feeds.created28} in 28 days`}
+            />
+            <StatTile label="Read, last 7 days" value={feeds.fetched7} hint="by a calendar app" />
+            <StatTile
+              label="All calendars"
+              value={feeds.total}
+              hint="deleted after a year unread"
+            />
+            <StatTile label="Societies followed" value={feeds.averageFollowed} hint="on average" />
+          </>
+        ) : (
+          [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+        )}
+      </CardContent>
+    </Card>
   )
 }

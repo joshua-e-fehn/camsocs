@@ -5,7 +5,11 @@ import { motion, useReducedMotion } from "framer-motion"
 import { CalendarPlusIcon } from "lucide-react"
 import Link from "next/link"
 import { useMemo } from "react"
-import { FinderQuiz, type FinderResult } from "@/components/organisms/finder-quiz"
+import {
+  FinderQuiz,
+  type FinderResult,
+  useFinderCompleted,
+} from "@/components/organisms/finder-quiz"
 import { api } from "@/convex/_generated/api"
 import { addDays, formatEventWhen, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import type { CollegeInfo } from "@/lib/colleges"
@@ -53,6 +57,8 @@ function EventMatches({ result }: { result: FinderResult }) {
     () => (events ? rankEvents(events, answers, now) : undefined),
     [events, answers, now],
   )
+
+  useFinderCompleted("events", ranked?.length)
 
   if (ranked === undefined) {
     return (
