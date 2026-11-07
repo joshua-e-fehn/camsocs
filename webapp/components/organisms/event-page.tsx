@@ -13,6 +13,7 @@ import { TrackView } from "@/components/molecules/track-view"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { linkProps } from "@/lib/crawl-traps"
 import { eventHasEnded, eventTrail } from "@/lib/events"
+import type { NextEvent } from "@/lib/next-events"
 import type { EventPublic } from "@/lib/public-api"
 import { camSignInHref, SITE_URL } from "@/lib/site"
 import { eventPath } from "@/lib/talks-boundary"
@@ -34,12 +35,16 @@ export function EventPage({
   venueName,
   termWeek,
   now,
+  nextEvents = [],
 }: {
   event: EventPublic
   venueName?: string
   termWeek?: string
   /** The request's time, for "this event has ended". */
   now: number
+  /** The host's next events after this one (lib/next-events.ts); none
+   * under /talks. */
+  nextEvents?: readonly NextEvent[]
 }) {
   const path = eventPath(event)
   const pageUrl = `${SITE_URL}${path}`
@@ -131,7 +136,7 @@ export function EventPage({
         </article>
 
         {event.fromUniversity ? (
-          <FromUniversity listingUrl={event.sourceUrl} />
+          <FromUniversity listingUrl={event.sourceUrl} nextEvents={nextEvents} />
         ) : lead ? (
           <aside aria-label={`More from ${lead.name}`} className="lg:pt-16">
             <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:sticky lg:top-[calc(var(--site-header-height,4rem)+1.5rem)]">
@@ -148,6 +153,7 @@ export function EventPage({
                   ? "Someone else’s event, on this society’s calendar because it takes part."
                   : "What it does, how to join, and everything else it has on."}
               </p>
+              <NextFrom heading={`Next from ${lead.name}`} events={nextEvents} />
               <div className="flex flex-col gap-2">
                 <Link
                   href={`/societies/${lead.slug}`}
@@ -176,7 +182,39 @@ export function EventPage({
 /** The side panel of one of the University's own listings (ENG-24), in place
  * of the society's: its page in the University's programme, and the
  * calendar's University view. */
-function FromUniversity({ listingUrl }: { listingUrl?: string }) {
+/** "Next from …": the host's next events, as plain links in the server HTML
+ * (lib/next-events.ts), so every upcoming event is reachable from the one
+ * before it. Nothing when there are none. */
+function NextFrom({ heading, events }: { heading: string; events: readonly NextEvent[] }) {
+  if (events.length === 0) return null
+  return (
+    <nav aria-label={heading} className="flex flex-col gap-2 border-t pt-4">
+      <p className="text-xs font-medium text-muted-foreground">{heading}</p>
+      <ul className="flex flex-col gap-2.5">
+        {events.map((next) => (
+          <li key={next.key} className="min-w-0 text-sm">
+            <Link
+              href={`/events/${next.key}`}
+              prefetch={false}
+              className="line-clamp-2 font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {next.title}
+            </Link>
+            <span className="block text-xs text-muted-foreground">{next.when}</span>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+function FromUniversity({
+  listingUrl,
+  nextEvents,
+}: {
+  listingUrl?: string
+  nextEvents: readonly NextEvent[]
+}) {
   return (
     <aside aria-label="From the University" className="lg:pt-16">
       <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:sticky lg:top-[calc(var(--site-header-height,4rem)+1.5rem)]">
@@ -189,6 +227,7 @@ function FromUniversity({ listingUrl }: { listingUrl?: string }) {
           Listed in the University’s public events programme; its page there has the full details
           and any booking.
         </p>
+        <NextFrom heading="Next from the University" events={nextEvents} />
         <div className="flex flex-col gap-2">
           {listingUrl && (
             <a

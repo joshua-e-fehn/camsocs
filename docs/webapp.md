@@ -831,7 +831,10 @@ department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?
 society's canonical calendar, `/events?org=<slug>` (`eventsIndexing(...).canonical`), never a
 slice. Event pages are found through the sitemap
 (`sitemaps/events.xml`), the new-events feed (`/events.atom`), the canonical calendars, the
-society profiles, whose rows link them, and the plain `/events` page's "Newly listed" list
+society profiles, whose rows link them, each event page's "Next from <society>" (or "Next from
+the University") list of the host's next three events after it (`lib/next-events.ts`,
+`loadNextEvents`: one cached `events.list` read per host and day; never under /talks), which chains
+a society's whole programme, and the plain `/events` page's "Newly listed" list
 (`components/molecules/newly-listed.tsx`, the 30 newest from `eventFeed.newest`): the calendar
 itself links one week, so without it an event weeks away (above all one of the University's,
 which no profile links) had no link from any indexed page (crawl of 7 Nov 2026: 311 of 612). An
