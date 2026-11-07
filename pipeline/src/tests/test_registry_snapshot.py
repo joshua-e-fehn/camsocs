@@ -1,8 +1,8 @@
 """The stage registry and its groups, frozen (multi-campus seam, guardrail L0a).
 
-Cambridge's stage, group and module names, their order, what each group runs
-and reads, and each stage's `requires` and `fetches` are part of what must stay
-byte-identical while the campus seam lands: the VPS timers, the alert script,
+Cambridge's stage and group names, the function each stage runs, their order,
+what each group runs and reads, and each stage's `requires` and `fetches` are
+part of what must stay byte-identical while the campus seam lands: the VPS timers, the alert script,
 the run log in Convex and PostHog all key on them. A deliberate change edits
 the literal below in the same commit, so it shows in review.
 """
@@ -83,9 +83,52 @@ def test_each_stage_keeps_its_requires_and_fetches() -> None:
     assert tuple((s.name, s.requires, s.fetches) for s in STAGES) == STAGE_SNAPSHOT
 
 
+#: What each stage runs: ``module:qualname`` of the function `Stage.resolve`
+#: returns. A stage given its own `fn`, or a module other than
+#: ``stages.<name>`` (whose ``run`` may re-export another module's), shows here.
+STAGE_TARGETS: dict[str, str] = {
+    "term_dates": "camsocs_pipeline.stages.term_dates:run",
+    "su_directory": "camsocs_pipeline.stages.su_directory:run",
+    "proctors_register": "camsocs_pipeline.stages.proctors_register:run",
+    "sport_clubs": "camsocs_pipeline.stages.sport_clubs:run",
+    "sport_guide_pdf": "camsocs_pipeline.stages.sport_guide_pdf:run",
+    "camdram_societies": "camsocs_pipeline.stages.camdram_societies:run",
+    "cucbc_clubs": "camsocs_pipeline.stages.cucbc_clubs:run",
+    "colleges": "camsocs_pipeline.stages.colleges:run",
+    "resolve": "camsocs_pipeline.stages.resolve:run",
+    "enrich": "camsocs_pipeline.stages.enrich:run",
+    "classify": "camsocs_pipeline.stages.classify:run",
+    "camdram_events": "camsocs_pipeline.events.camdram:run",
+    "talks_cam": "camsocs_pipeline.events.talks_cam:run",
+    "cucbc_events": "camsocs_pipeline.events.cucbc:run",
+    "playwaze": "camsocs_pipeline.events.playwaze:run",
+    "uni_events": "camsocs_pipeline.events.uni_events:run",
+    "calendar_feeds": "camsocs_pipeline.events.calendar_feeds:run",
+    "su_whatson": "camsocs_pipeline.events.su_whatson:run",
+    "website_events": "camsocs_pipeline.sources.websites.events:run",
+    "inbox": "camsocs_pipeline.stages.inbox:run",
+    "instagram": "camsocs_pipeline.stages.instagram:run",
+    "termcards": "camsocs_pipeline.stages.termcards:run",
+    "load": "camsocs_pipeline.stages.load:run",
+    "talks": "camsocs_pipeline.talks.stage:run",
+    "report": "camsocs_pipeline.stages.report:run",
+}
+
+
 def test_each_stage_runs_its_own_module() -> None:
-    """No stage carries its own function: each is ``stages.<name>.run``."""
+    """No stage carries its own function: each resolves through its module."""
     assert [stage.fn for stage in STAGES] == [None] * len(STAGES)
+
+
+def test_each_stage_resolves_to_the_same_function() -> None:
+    """The run target itself is frozen, so rerouting a stage (its own `fn`,
+    or a `module` other than ``stages.<name>``) is a snapshot diff."""
+    targets = {}
+    for stage in STAGES:
+        fn = stage.resolve()
+        targets[stage.name] = f"{fn.__module__}:{fn.__qualname__}"
+    assert list(targets) == list(STAGE_TARGETS)
+    assert targets == STAGE_TARGETS
 
 
 def test_the_groups_are_frozen() -> None:

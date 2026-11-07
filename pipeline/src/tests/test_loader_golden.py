@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 
 from camsocs_pipeline.keys import canonical_json
+from camsocs_pipeline.pipeline import load as load_module
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import PAYLOAD_DIGEST_ENV, ConvexLoader
 from camsocs_pipeline.pipeline.report import RunReport
@@ -149,8 +150,19 @@ def test_nothing_posted_carries_a_null(make_settings) -> None:
 
 
 def test_the_digest_is_off_unless_asked_for(tmp_path: Path, monkeypatch) -> None:
+    """Unset means no behaviour change: the hook opens no file anywhere (not
+    a default path, not the working directory) and the post still succeeds."""
     monkeypatch.delenv(PAYLOAD_DIGEST_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
+    opened: list[object] = []
+
+    def no_open(file: object, *args: object, **kwargs: object) -> None:
+        opened.append(file)
+        raise AssertionError(f"the digest hook opened {file!r} with {PAYLOAD_DIGEST_ENV} unset")
+
+    monkeypatch.setattr(load_module, "open", no_open, raising=False)
     ConvexLoader("", "", dry_run=True).post("claims", {"claims": [{"a": 1}]})
+    assert opened == []
     assert list(tmp_path.iterdir()) == []
 
 
