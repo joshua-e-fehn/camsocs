@@ -5,7 +5,7 @@ import { isThinListing } from "../lib/directory-indexing"
 import { ORG_SORTS } from "../lib/directory-sort"
 import { withoutTalksCam } from "../lib/directory-talks-guard"
 import { isTalksCamUrl, isTalksDerivedEvent } from "../lib/talks-boundary"
-import { CATEGORIES } from "../lib/vocab"
+import { AUDIENCES, CATEGORIES } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { londonIsoDate, type TermDates, termWeekLabel } from "./lib/derived"
@@ -356,18 +356,27 @@ const hubCardValidator = v.object({
  * (`/categories/<slug>`, a college's `/societies/<slug>`; SEO audit
  * 2026-11-02, no-category-college-hubs, owner decision G13): the whole list
  * server-rendered on one indexable page, where the directory pages through
- * it. The directory's own rules: no counterparts, nothing archived.
+ * it. The directory's own rules: no counterparts, nothing archived. The
+ * audience pages (`/for/<audience>`, ENG-118) ask by `audience` or by
+ * `beginnerFriendly` (a sports club's flag) in the same way.
  */
 export const hub = query({
   args: {
     category: v.optional(literalUnion(CATEGORIES)),
     collegeKey: v.optional(v.string()),
+    audience: v.optional(literalUnion(AUDIENCES)),
+    beginnerFriendly: v.optional(v.boolean()),
   },
   returns: v.array(hubCardValidator),
   handler: async (ctx, args) => {
     const selected = selections({
       categories: args.category ? [args.category] : undefined,
       collegeKeys: args.collegeKey ? [args.collegeKey] : undefined,
+      audiences: args.audience ? [args.audience] : undefined,
+      sport:
+        args.beginnerFriendly === undefined
+          ? undefined
+          : { beginnerFriendly: args.beginnerFriendly },
     })
     const cards = (await candidates(ctx, undefined)).filter((card) => matches(card, selected))
     const contacts = await loadContactHashes(ctx)

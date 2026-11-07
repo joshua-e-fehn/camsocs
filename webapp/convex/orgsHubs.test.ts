@@ -107,6 +107,24 @@ describe("orgs.hub", () => {
     })
   })
 
+  test("an audience's listings, and sports clubs marked beginner-friendly (ENG-118)", async () => {
+    const t = newTest()
+    await seed(t)
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim("org-chess", "audiences", ["beginners", "postgraduates"]),
+        claim("org-netball", "beginnerFriendly", true),
+      ],
+    })
+    const beginners = await t.query(api.orgs.hub, { audience: "beginners" })
+    expect(beginners.map((card) => card.key)).toEqual(["org-chess"])
+    const friendly = await t.query(api.orgs.hub, { beginnerFriendly: true })
+    expect(friendly.map((card) => card.key)).toEqual(["org-netball"])
+    const postgrads = await t.query(api.orgs.hub, { audience: "postgraduates" })
+    expect(postgrads.map((card) => card.key)).toEqual(["org-chess"])
+    expect(await t.query(api.orgs.hub, { audience: "international" })).toEqual([])
+  })
+
   test("a college's listings", async () => {
     const t = newTest()
     await seed(t)

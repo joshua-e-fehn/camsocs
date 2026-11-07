@@ -246,7 +246,10 @@ export default async function JoinASocietyGuide() {
           <li>
             <strong>Search CAMsocs.</strong> The <Link {...linkProps("/societies")}>directory</Link>{" "}
             puts the SU's list together with sports clubs, college societies and others, and{" "}
-            <Link {...linkProps("/events")}>Events</Link> shows what they have on this week.
+            <Link {...linkProps("/events")}>Events</Link> shows what they have on this week. There
+            are lists of societies <Link href="/for/beginners">for beginners</Link>,{" "}
+            <Link href="/for/postgraduates">for postgraduates</Link> and{" "}
+            <Link href="/for/international-students">for international students</Link>.
           </li>
           <li>
             <strong>Write to the society.</strong> The Sports Service advises contacting its clubs

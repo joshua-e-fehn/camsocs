@@ -65,7 +65,8 @@ export function visitPage(pathname: string): VisitPage {
   if (path === "/") return "home"
   if (path === "/societies") return "societies"
   if (path.startsWith("/societies/")) return "society"
-  if (path === "/categories" || path.startsWith("/categories/")) return "categories"
+  if (path === "/categories" || path.startsWith("/categories/") || path.startsWith("/for/"))
+    return "categories"
   if (path === "/events") return "events"
   if (path.startsWith("/events/")) return "event"
   if (path === "/talks" || path.startsWith("/talks/")) return "talks"
