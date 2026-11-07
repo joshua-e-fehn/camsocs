@@ -59,12 +59,16 @@ export function serverEnvironment(env: Env = process.env): "production" | "devel
  *  - `ics_feed_fetched` (ENG-7, `lib/ics-telemetry.ts`): `feed` is `talks`,
  *    `events`, `event` or `talk`; `key` the event or talk key, never the
  *    feed filters.
+ *  - `page_visit` (2026-11-07, proxy.ts, `lib/visit-count.ts`): `page` is a
+ *    kind of page (`VISIT_PAGES`), `source` a kind of referring site
+ *    (`VISIT_SOURCES`); never a path, key, query or full referrer.
  *
  * (`listing_request_received` is sent by Convex, `convex/analytics.ts`, not
  * from here.)
  */
 export const SERVER_EVENTS: Readonly<Record<string, readonly string[]>> = {
   ics_feed_fetched: ["feed", "key"],
+  page_visit: ["page", "source"],
 }
 
 /** Request facts an error report may carry (spec "Errors"), as PostHog /

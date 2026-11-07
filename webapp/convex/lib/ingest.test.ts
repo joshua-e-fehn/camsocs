@@ -7,6 +7,7 @@ import {
   pageLimit,
   planPrune,
   pruneTable,
+  sameContent,
   sameFields,
   upsertRow,
   valuesEqual,
@@ -149,5 +150,36 @@ describe("upsertRow / pruneTable against a real table", () => {
     expect(result.pruned).toEqual({ deleted: 1 })
     expect(result.refused).toMatch(/Refusing to delete 2 of 3/)
     expect(result.left).toEqual(["a", "b", "c"])
+  })
+})
+
+describe("sameContent", () => {
+  test("ignores the stamps a harvest refreshes every run, at any depth", () => {
+    const before = {
+      title: "Social",
+      lastSeenAt: 1,
+      meta: { title: { status: "found", retrievedAt: 1 } },
+      websiteHealth: { lastStatus: 200, checkedAt: 1 },
+    }
+    const reseen = {
+      title: "Social",
+      lastSeenAt: 2,
+      meta: { title: { status: "found", retrievedAt: 2 } },
+      websiteHealth: { lastStatus: 200, checkedAt: 2 },
+    }
+    expect(sameFields(before, reseen)).toBe(false)
+    expect(sameContent(before, reseen)).toBe(true)
+  })
+
+  test("any other difference is a change", () => {
+    expect(sameContent({ title: "Social", lastSeenAt: 1 }, { title: "Ball", lastSeenAt: 1 })).toBe(
+      false,
+    )
+    expect(
+      sameContent(
+        { meta: { title: { status: "found", retrievedAt: 1 } } },
+        { meta: { title: { status: "conflicting", retrievedAt: 1 } } },
+      ),
+    ).toBe(false)
   })
 })

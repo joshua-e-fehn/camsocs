@@ -291,8 +291,11 @@ describe("server events (for ENG-7)", () => {
 })
 
 describe("SERVER_EVENTS (ENG-7)", () => {
-  test("lists ics_feed_fetched with feed and key only", () => {
-    expect(SERVER_EVENTS).toEqual({ ics_feed_fetched: ["feed", "key"] })
+  test("lists ics_feed_fetched and page_visit with their enums only", () => {
+    expect(SERVER_EVENTS).toEqual({
+      ics_feed_fetched: ["feed", "key"],
+      page_visit: ["page", "source"],
+    })
   })
 
   test("ics_feed_fetched goes out with its allow-listed properties and nothing else", async () => {

@@ -2,7 +2,7 @@ import type { EntityType } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { isWithdrawn, type TermDates } from "./derived"
-import { sameFields } from "./ingest"
+import { sameContent, sameFields } from "./ingest"
 import { type DeriveContext, type LatestEvent, materialise } from "./materialise"
 import { runKeyOf } from "./orgActivity"
 import type { FieldMeta } from "./resolve"
@@ -177,7 +177,8 @@ export async function refreshOrganisation(
     await writeOrgCard(ctx, org)
     return false
   }
-  await ctx.db.patch("organisations", org._id, { ...row, updatedAt: context.now } as Partial<
+  const updatedAt = sameContent(org, row) ? org.updatedAt : context.now
+  await ctx.db.patch("organisations", org._id, { ...row, updatedAt } as Partial<
     Doc<"organisations">
   >)
   const updated = await ctx.db.get("organisations", org._id)

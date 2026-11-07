@@ -179,6 +179,7 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              captureServerException(), captureServerEvent(), SERVER_EVENTS (see
                              "Error tracking", "Server counts")
   ics-telemetry.ts           countIcsFetch(): the .ics routes' ics_feed_fetched count, in after()
+  visit-count.ts             visitFacts(): the proxy's page_visit count (kind of page, kind of source)
                              (see "Server counts")
   error-scrub.ts             What an error report may say: no query string, fragment or email in
                              messages and stacks, frame paths only (browser and server)
@@ -574,6 +575,7 @@ record of processing P12). Full table, settings and caveats: `docs/deploy.md` "P
 |---|---|---|
 | `ics_feed_fetched` | `feed` (`talks` / `events` / `event` / `talk`), `key?` (a valid event or talk key) | the `.ics` route handlers → `countIcsFetch` (`lib/ics-telemetry.ts`) in `after()` → `captureServerEvent` |
 | `listing_request_received` | `kind` (`LISTING_REQUEST_KINDS`) | `listingRequests.submit` schedules `internal.analytics.captureListingRequest` → capture API (`convex/lib/posthog.ts`) |
+| `page_visit` | `page` (`VISIT_PAGES`), `source` (`VISIT_SOURCES`) | `proxy.ts` `countVisit` (`lib/visit-count.ts` `visitFacts`) in `event.waitUntil` → `captureServerEvent` |
 
 - A new server event needs an entry in `SERVER_EVENTS` (Next) or its own internal action (Convex),
   a row in both tables, and a check against P12 and `/privacy`.

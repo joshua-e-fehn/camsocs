@@ -163,6 +163,63 @@ function NumberCell({ children }: { children: React.ReactNode }) {
 
 const CONSENTED = "Counts only visitors who accepted analytics, so it undercounts."
 
+/** The server's kinds of source and page (lib/visit-count.ts), as read. */
+const SOURCE_LABELS: Record<string, string> = {
+  google: "Google",
+  bing: "Bing",
+  other_search: "Other search engines",
+  ai_assistant: "AI assistants",
+  social: "Social media",
+  cambridge: "Cambridge sites (cam.ac.uk, SU)",
+  internal: "Within CAMsocs",
+  direct: "Direct / no referrer",
+  other_site: "Other websites",
+}
+const PAGE_LABELS: Record<string, string> = {
+  home: "Home",
+  societies: "Society directory",
+  society: "Society pages",
+  categories: "Category hubs",
+  events: "Events calendar",
+  event: "Event pages",
+  talks: "Talks",
+  term_dates: "Term dates",
+  info: "About, privacy, terms, request",
+  other: "Other",
+}
+
+function KindTable({
+  rows,
+  heading,
+  labels,
+}: {
+  rows: { kind: string; visits: number; visits7d: number }[]
+  heading: string
+  labels: Record<string, string>
+}) {
+  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No page loads yet.</p>
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{heading}</TableHead>
+          <TableHead className="text-right">30 days</TableHead>
+          <TableHead className="text-right">7 days</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.kind}>
+            <TableCell>{labels[row.kind] ?? row.kind}</TableCell>
+            <NumberCell>{count.format(row.visits)}</NumberCell>
+            <NumberCell>{count.format(row.visits7d)}</NumberCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
 /**
  * The overview's website traffic: PostHog's consented visitors (last 30
  * days) and Google Search Console (28 days to yesterday), as the latest
@@ -198,6 +255,7 @@ export function TrafficView({
 }) {
   const posthog = traffic?.posthog.data
   const gsc = traffic?.searchConsole.data
+  const server = posthog?.serverVisits
   const now = traffic?.computedAt ?? Date.now()
   // Loaded, but neither source has numbers: the notes above say why.
   const empty = traffic !== undefined && !posthog && !gsc
@@ -208,6 +266,7 @@ export function TrafficView({
   const visitorsByDay = new Map(posthog?.daily.map((d) => [d.day, d.visitors]))
   const pageviewsByDay = new Map(posthog?.daily.map((d) => [d.day, d.pageviews]))
   const gscDays = gsc ? daysBetween(gsc.startDate, gsc.endDate) : []
+  const loadsByDay = new Map(server?.daily.map((d) => [d.day, d.visits]))
   const clicksByDay = new Map(gsc?.daily.map((d) => [d.day, d.clicks]))
   const impressionsByDay = new Map(gsc?.daily.map((d) => [d.day, d.impressions]))
 
@@ -219,8 +278,8 @@ export function TrafficView({
             Website traffic
           </h2>
           <p className="text-sm text-muted-foreground">
-            Visitors from PostHog (last 30 days), Google Search from Search Console (28 days to
-            yesterday).
+            Page loads counted by our server and consented visitors from PostHog (last 30 days),
+            Google Search from Search Console (28 days to yesterday).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -255,13 +314,22 @@ export function TrafficView({
 
       {!empty && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             {traffic === undefined ? (
-              [0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+              [0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
             ) : (
               <>
                 <StatTile
                   emphasis
+                  label="Page loads, 30 days"
+                  value={server ? count.format(server.visits) : "—"}
+                  hint={
+                    server
+                      ? `${count.format(server.visits7d)} in 7 days · every visitor, counted by our server`
+                      : "server count"
+                  }
+                />
+                <StatTile
                   label="Visitors, 30 days"
                   value={posthog ? count.format(posthog.visitors) : "—"}
                   hint={
@@ -427,6 +495,51 @@ export function TrafficView({
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Page loads, every visitor</CardTitle>
+              <CardDescription>
+                Counted by our server, so no consent is needed and nothing is stored in the browser:
+                each page a browser loads from us (not clicks inside the site), by the kind of site
+                it came from. Known bots are left out.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {server ? (
+                <>
+                  <DailyBars days={posthogDays} values={loadsByDay} unit="page loads" />
+                  <Tabs defaultValue="sources">
+                    <TabsList>
+                      <TabsTrigger value="sources">Where from</TabsTrigger>
+                      <TabsTrigger value="pages">Which pages</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="sources">
+                      <KindTable
+                        rows={server.sources.map((row) => ({ kind: row.source, ...row }))}
+                        heading="Came from"
+                        labels={SOURCE_LABELS}
+                      />
+                    </TabsContent>
+                    <TabsContent value="pages">
+                      <KindTable
+                        rows={server.pages.map((row) => ({ kind: row.page, ...row }))}
+                        heading="Kind of page"
+                        labels={PAGE_LABELS}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </>
+              ) : traffic === undefined ? (
+                <Skeleton className="h-36" />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No server count yet: it starts with the first page load after this release and
+                  shows at the next hourly read.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

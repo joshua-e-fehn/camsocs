@@ -139,6 +139,24 @@ describe("the claim log", () => {
     expect((await org(t))?.meta.name.retrievedAt).toBe(NOW - 60_000)
   })
 
+  test("a re-observation keeps updatedAt; a change a reader sees moves it (sitemap lastmod)", async () => {
+    const t = newTest()
+    const first = claim("name", "CU Test Society", { retrievedAt: NOW - 3 * 86_400_000 })
+    await ingest(t, [first])
+    const stamp = 1_000
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", first.entityKey))
+        .unique()
+      if (row) await ctx.db.patch("organisations", row._id, { updatedAt: stamp })
+    })
+    await ingest(t, [{ ...first, retrievedAt: NOW - 60_000 }], "run-2")
+    expect((await org(t))?.updatedAt).toBe(stamp)
+    await ingest(t, [claim("email", "new@cutest.org", { retrievedAt: NOW - 30_000 })], "run-3")
+    expect((await org(t))?.updatedAt).toBeGreaterThan(stamp)
+  })
+
   test("a newer reading from the same source and method supersedes the old one", async () => {
     const t = newTest()
     await ingest(t, [claim("name", "CU Test Society"), claim("email", "old@cutest.org")])
