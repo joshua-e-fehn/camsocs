@@ -25,11 +25,14 @@ import {
   stageTitle,
 } from "@/lib/pipeline-graph/graph"
 import {
+  type FetchGap,
+  fetchGap,
   formatCount,
   formatDuration,
   type SourceStatusRow,
   type StageView,
   sourceStatusRows,
+  stagesWithoutSource,
   stageViews,
   stateCounts,
 } from "@/lib/pipeline-graph/status"
@@ -37,13 +40,23 @@ import {
 /**
  * `/dashboard/status` (spec §5D): one row per source in the campus's manifest,
  * joined to its stage's newest result (last ok, last productive run, status,
- * yield against the 7/28-day median, fetch error share, duration), and a tile
- * per pillar from Convex's own tables. Counts and dates only: no notes and no
- * error text. This page is the fallback view when PostHog is down.
+ * yield against the 7/28-day median, fetch error share, duration), a tile
+ * per pillar from Convex's own tables, and the stages no source names
+ * (resolve, classify, load, report…), so a failed `load` shows here too.
+ * Counts and dates only: no notes and no error text. This page is the
+ * fallback view when PostHog is down.
  */
 
 const STAGES = stageNodes(PIPELINE_GRAPH)
+const SOURCELESS = stagesWithoutSource(PIPELINE_GRAPH)
 const TILE_PILLARS: Exclude<Pillar, "shared">[] = ["societies", "events", "talks"]
+
+/** The fetch cell's words when there are no counters to show. */
+const FETCH_GAP_WORDS: Record<FetchGap, string> = {
+  no_fetch: "no fetches",
+  no_result: "—",
+  none_recorded: "none recorded",
+}
 
 const PERMISSION_LABELS: Record<string, string> = {
   robots: "robots.txt",
@@ -86,7 +99,74 @@ export function BrokerStatus() {
         </p>
         <SourceTable rows={rows} />
       </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="border-b-2 border-foreground pb-1 font-serif text-xl">
+          Stages without a source
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          The engine stages that read what the sources staged, and the shared ones that post it to
+          Convex and report on it.
+        </p>
+        <EngineTable views={views} />
+      </section>
     </>
+  )
+}
+
+function EngineTable({ views }: { views: Record<string, StageView> | undefined }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border">
+      <Table>
+        <TableHeader className="sticky top-0 bg-card">
+          <TableRow>
+            <TableHead>Stage</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Last ok</TableHead>
+            <TableHead className="text-right">Yield</TableHead>
+            <TableHead className="text-right">Duration</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {SOURCELESS.map((stage) => {
+            const view = views?.[stage.name]
+            return (
+              <TableRow key={stage.name}>
+                <TableCell className="min-w-56 align-top whitespace-normal">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <code className="font-mono text-sm">{stageTitle(stage)}</code>
+                    <Badge variant="outline">{PILLAR_LABELS[stage.pillar]}</Badge>
+                  </span>
+                </TableCell>
+                {view === undefined ? (
+                  Array.from({ length: 4 }, (_, j) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: placeholder cells
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))
+                ) : (
+                  <>
+                    <TableCell className="align-top">
+                      <StageStatusMark view={view} />
+                    </TableCell>
+                    <TableCell className="align-top font-mono text-xs tabular-nums">
+                      {formatDateTime(view.lastOkAt)}
+                    </TableCell>
+                    <TableCell className="text-right align-top font-mono tabular-nums">
+                      {formatCount(view.yield)}
+                    </TableCell>
+                    <TableCell className="text-right align-top font-mono tabular-nums">
+                      {formatDuration(view.durationMs)}
+                    </TableCell>
+                  </>
+                )}
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
@@ -128,6 +208,7 @@ function SourceTable({ rows }: { rows: SourceStatusRow[] | undefined }) {
 
 function SourceRow({ row }: { row: SourceStatusRow }) {
   const { source, stage, view, errorShare, ratio } = row
+  const gap = fetchGap(stage, view)
   return (
     <TableRow>
       <TableCell className="min-w-56 align-top whitespace-normal">
@@ -165,8 +246,10 @@ function SourceRow({ row }: { row: SourceStatusRow }) {
         </span>
       </TableCell>
       <TableCell className="text-right align-top font-mono tabular-nums">
-        {view.fetch === null ? (
-          <span className="font-sans text-xs text-muted-foreground">not recorded</span>
+        {gap !== null || view.fetch === null ? (
+          <span className="font-sans text-xs text-muted-foreground">
+            {FETCH_GAP_WORDS[gap ?? "none_recorded"]}
+          </span>
         ) : errorShare === null ? (
           "—"
         ) : (

@@ -27,19 +27,23 @@ import {
 } from "@/lib/pipeline-graph/graph"
 import {
   fetchErrorShare,
+  fetchGap,
   formatCount,
   formatDuration,
+  STATE_WORDS,
   type StageView,
   yieldRatio,
 } from "@/lib/pipeline-graph/status"
 
 /**
  * One stage's sheet on `/dashboard/pipeline` (spec §5B): the newest result's
- * metrics, the yield against its median, the fetch counters ("not recorded"
- * when the result carried none, never zeros), the docs § it is built on, the
- * groups that run it and what it reads, writes and posts. The run's notes and
- * error sit behind a disclosure and are read from the broker-only
- * `stageDetail` only once it is opened.
+ * metrics (or, with a run picked, that run's), the yield against its median,
+ * the fetch counters (never zeros when there are none: a stage that does not
+ * fetch says so), the docs § it is built on, the groups that run it and what
+ * it reads, writes and posts. The counts always name the run they come from;
+ * a newer run the stage is in (still open, or ended without posting it) is
+ * named separately. The run's notes and error sit behind a disclosure and are
+ * read from the broker-only `stageDetail` only once it is opened.
  */
 export function StageSheet({
   graph,
@@ -114,7 +118,14 @@ function SheetBody({
   const io = stageIo(graph, stage.id)
   const ratio = yieldRatio(view)
   const share = fetchErrorShare(view.fetch)
+  const gap = fetchGap(stage, view)
   const groups = graph.groups.filter((group) => stage.groups.includes(group.key))
+  const single = view.source === "run"
+  // The newest run the stage is in, when it is not the one the counts are from.
+  const newerRun =
+    !single && view.statusRunKey !== null && view.statusRunKey !== view.runKey
+      ? view.statusRunKey
+      : null
 
   return (
     <div className="flex flex-col gap-5 pb-8">
@@ -125,14 +136,23 @@ function SheetBody({
             {stage.phase}
           </Badge>
           <Badge variant="outline">{PILLAR_LABELS[stage.pillar]}</Badge>
-          <Badge variant="outline">{stage.campus === null ? "engine" : stage.campus}</Badge>
+          <Badge variant="outline">{stage.campus === null ? "engine" : graph.campus.name}</Badge>
         </div>
         <SheetTitle className="text-xl">{stageTitle(stage)}</SheetTitle>
         <SheetDescription>{stage.description ?? `The ${stage.name} stage.`}</SheetDescription>
         <StageStatusMark view={view} className="text-sm" />
       </SheetHeader>
 
-      <Section title="Newest result">
+      {newerRun && (
+        <p className="mx-4 rounded-md border bg-muted px-3 py-2 text-sm">
+          The newest run (<code className="font-mono text-xs">{newerRun}</code>, started{" "}
+          {formatDateTime(view.statusStartedAt)}) is{" "}
+          {view.state === "running" ? "still running" : `${STATE_WORDS[view.state]} for this stage`}
+          . The numbers below are from the result before it.
+        </p>
+      )}
+
+      <Section title={single ? "This run" : "Newest result"}>
         <Metrics
           rows={[
             ["Run", view.runKey ?? "—"],
@@ -143,27 +163,41 @@ function SheetBody({
             ["Updated", formatCount(view.updated)],
             ["Unchanged", formatCount(view.unchanged)],
             ["Skipped", formatCount(view.skipped)],
-            ["Failed in a row", formatCount(view.failStreak)],
-            ["Last ok", formatDateTime(view.lastOkAt)],
-            ["Last productive", formatDateTime(view.lastProductiveAt)],
+            ...(single
+              ? []
+              : ([
+                  ["Failed in a row", formatCount(view.failStreak)],
+                  ["Last ok", formatDateTime(view.lastOkAt)],
+                  ["Last productive", formatDateTime(view.lastProductiveAt)],
+                ] as [string, string][])),
           ]}
         />
       </Section>
 
       <Section title={`Yield against the ${view.medianDays}-day median`}>
-        <Metrics
-          rows={[
-            ["Median", view.median === null ? "—" : formatCount(view.median)],
-            ["Runs in the median", formatCount(view.medianSamples)],
-            ["Latest ÷ median", ratio === null ? "—" : percent(ratio)],
-          ]}
-        />
+        {single ? (
+          <p className="text-sm text-muted-foreground">
+            Not shown for a single run: choose “Newest result per stage” to see the baseline.
+          </p>
+        ) : (
+          <Metrics
+            rows={[
+              ["Median", view.median === null ? "—" : formatCount(view.median)],
+              ["Runs in the median", formatCount(view.medianSamples)],
+              ["Latest ÷ median", ratio === null ? "—" : percent(ratio)],
+            ]}
+          />
+        )}
       </Section>
 
       <Section title="Fetches">
-        {view.fetch === null ? (
+        {gap === "no_fetch" ? (
+          <p className="text-sm text-muted-foreground">This stage does not fetch from the web.</p>
+        ) : gap === "no_result" ? (
+          <p className="text-sm text-muted-foreground">No result yet.</p>
+        ) : view.fetch === null ? (
           <p className="text-sm text-muted-foreground">
-            Not recorded: the newest result carried no fetch counters.
+            None recorded: this result made no fetch, or was posted before fetch counters existed.
           </p>
         ) : (
           <Metrics
@@ -223,7 +257,7 @@ function SheetBody({
           {groups.map((group) => (
             <li key={group.key} className="flex flex-wrap items-baseline gap-x-2">
               <code className="font-mono text-xs font-semibold">{group.key}</code>
-              <span className="text-muted-foreground">{group.schedule ?? "on request"}</span>
+              <span className="text-muted-foreground">{group.schedule ?? "by hand"}</span>
             </li>
           ))}
         </ul>

@@ -23,8 +23,9 @@ export const STATE_WORDS: Record<NodeState, string> = {
 }
 
 /** The yield-drop rule, mirroring the monitor's shadow check `yield_drop`
- * (spec §6): the latest yield below a quarter of the median of at least three
- * prior ok runs whose median is at least five. */
+ * (spec §6, monitor.py `_yield_drop`), over at least three prior ok runs:
+ * the latest yield below a quarter of a median of at least five, or a yield
+ * of zero against any median above zero. */
 export const YIELD_DROP_RATIO = 0.25
 export const YIELD_MIN_SAMPLES = 3
 export const YIELD_MIN_MEDIAN = 5
@@ -34,6 +35,10 @@ export const YIELD_MIN_MEDIAN = 5
 export const RUNNING_STALE_MS = 12 * 60 * 60 * 1000
 
 export type StageView = {
+  /** Where the view comes from: the newest result per stage (`status`), or
+   * one run the run picker chose (`run`), which has no baseline, streak or
+   * freshness. */
+  source: "status" | "run"
   state: NodeState
   /** The latest ok yield fell below a quarter of its median. */
   yieldDrop: boolean
@@ -49,9 +54,15 @@ export type StageView = {
   medianDays: 7 | 28
   medianSamples: number
   durationMs: number | null
-  /** The run the node's numbers come from (the sheet's notes and error). */
+  /** The run the node's numbers come from (the sheet's notes and error):
+   * the newest posted result's run, or the chosen run. */
   runKey: string | null
   startedAt: number | null
+  /** The run the state is about: the newest run that requested the stage.
+   * Differs from `runKey` while that run is open, or when it ended without
+   * posting the stage. */
+  statusRunKey: string | null
+  statusStartedAt: number | null
   lastOkAt: number | null
   lastProductiveAt: number | null
   fetch: FetchSummary | null
@@ -59,6 +70,7 @@ export type StageView = {
 }
 
 const EMPTY: Omit<StageView, "state"> = {
+  source: "status",
   yieldDrop: false,
   failStreak: 0,
   inserted: null,
@@ -72,6 +84,8 @@ const EMPTY: Omit<StageView, "state"> = {
   durationMs: null,
   runKey: null,
   startedAt: null,
+  statusRunKey: null,
+  statusStartedAt: null,
   lastOkAt: null,
   lastProductiveAt: null,
   fetch: null,
@@ -89,9 +103,9 @@ export function isYieldDrop(
   median: number | null,
   samples: number,
 ): boolean {
-  if (yieldValue === null || median === null) return false
-  if (samples < YIELD_MIN_SAMPLES || median < YIELD_MIN_MEDIAN) return false
-  return yieldValue < YIELD_DROP_RATIO * median
+  if (yieldValue === null || median === null || samples < YIELD_MIN_SAMPLES) return false
+  if (yieldValue === 0 && median > 0) return true
+  return median >= YIELD_MIN_MEDIAN && yieldValue < YIELD_DROP_RATIO * median
 }
 
 /**
@@ -112,6 +126,7 @@ export function viewFromStatus(
   const median = days === 7 ? row.yieldMedian7d : row.yieldMedian28d
   const samples = days === 7 ? row.yieldSamples7d : row.yieldSamples28d
   return {
+    source: "status",
     state: row.lastStatus,
     yieldDrop: row.lastStatus === "ok" && isYieldDrop(row.yield, median, samples),
     failStreak: row.failStreak,
@@ -124,8 +139,10 @@ export function viewFromStatus(
     medianDays: days,
     medianSamples: samples,
     durationMs: row.durationMs,
-    runKey: row.lastRunKey,
-    startedAt: row.lastStartedAt,
+    runKey: row.resultRunKey,
+    startedAt: row.resultStartedAt,
+    statusRunKey: row.lastRunKey,
+    statusStartedAt: row.lastStartedAt,
     lastOkAt: row.lastOkAt,
     lastProductiveAt: row.lastProductiveAt,
     fetch: row.fetch,
@@ -133,10 +150,19 @@ export function viewFromStatus(
   }
 }
 
-/** A stage's view in one chosen run (the run picker). No yield baseline. */
+/** A stage's view in one chosen run (the run picker): that run's counts and
+ * fetches, no yield baseline, streak or freshness (`source: "run"`). */
 export function viewFromRun(stage: StageNode, run: RunSummary, now: number): StageView {
   const result = run.stages.find((s) => s.name === stage.name)
-  const base = { ...EMPTY, runKey: run.runKey, startedAt: run.startedAt }
+  const base: Omit<StageView, "state"> = {
+    ...EMPTY,
+    source: "run",
+    medianDays: medianWindow(stage),
+    runKey: run.runKey,
+    startedAt: run.startedAt,
+    statusRunKey: run.runKey,
+    statusStartedAt: run.startedAt,
+  }
   if (!result && !run.requestedStages.includes(stage.name)) {
     return { ...base, state: "not_requested" }
   }
@@ -151,6 +177,7 @@ export function viewFromRun(stage: StageNode, run: RunSummary, now: number): Sta
       skipped: result.skipped,
       yield: result.inserted + result.updated + result.unchanged,
       durationMs: result.durationMs,
+      fetch: result.fetch,
     }
   }
   const open = run.finishedAt === null && now - run.startedAt < RUNNING_STALE_MS
@@ -255,4 +282,30 @@ export function sourceStatusRows(
       : { ...EMPTY, state: "not_run" as const }
     return { source, stage, view, errorShare: fetchErrorShare(view.fetch), ratio: yieldRatio(view) }
   })
+}
+
+/**
+ * Why a view has no fetch counters, in a word for the status table:
+ * `no_fetch` for a stage that never fetches from the web (`network: false`),
+ * `no_result` before the stage's first result, `none_recorded` for a result
+ * without counters (the pipeline writes them only when the stage fetched at
+ * least once, and results from before fetch metrics have none); null when
+ * the counters are there.
+ */
+export type FetchGap = "no_fetch" | "no_result" | "none_recorded"
+
+export function fetchGap(
+  stage: Pick<StageNode, "network"> | null,
+  view: Pick<StageView, "fetch" | "runKey">,
+): FetchGap | null {
+  if (stage && !stage.network) return "no_fetch"
+  if (view.fetch !== null) return null
+  return view.runKey === null ? "no_result" : "none_recorded"
+}
+
+/** Stages no manifest source names (resolve, classify, load, report…), in
+ * registry order: the status page lists them so every stage's state shows. */
+export function stagesWithoutSource(graph: PipelineGraph): StageNode[] {
+  const named = new Set(graph.sources.map((source) => source.stage))
+  return stageNodes(graph).filter((stage) => !named.has(stage.name))
 }

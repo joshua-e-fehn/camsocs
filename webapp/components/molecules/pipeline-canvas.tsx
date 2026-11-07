@@ -31,6 +31,11 @@ import { cn } from "@/lib/utils"
  * stages, orthogonal edges and the selector buses. Positions come from
  * `lib/pipeline-graph/layout.ts`; this component only draws them.
  *
+ * It opens at a readable zoom on the first lane's top-left; "Fit the whole
+ * pipeline" gives the overview. The phase names sit in a header pinned to the
+ * top of the canvas that follows the pan and zoom across, so every lane keeps
+ * its column names in view.
+ *
  * `@xyflow/react` is imported here and nowhere else, through `next/dynamic`
  * with `ssr: false`, so it ships only in the broker's dashboard chunk and is
  * never rendered on the server. Nodes are fixed (no dragging, no connecting);
@@ -49,17 +54,15 @@ export type PipelineCanvasProps = {
 
 type StageData = { stage: StageNode; view: StageView; selected: boolean; onOpen: () => void }
 type LaneData = { label: string; width: number; height: number }
-type PhaseData = { label: string; width: number }
 type PortData = { node: PortNode; width: number; height: number }
 type BusData = { label: string; description: string; width: number; drops: number }
 type OrthoData = { points: Point[]; kind: EdgeKind }
 
 type StageFlowNode = Node<StageData, "stage">
 type LaneFlowNode = Node<LaneData, "lane">
-type PhaseFlowNode = Node<PhaseData, "phase">
 type BusFlowNode = Node<BusData, "bus">
 type PortFlowNode = Node<PortData, "port">
-type FlowNode = StageFlowNode | LaneFlowNode | PhaseFlowNode | BusFlowNode | PortFlowNode
+type FlowNode = StageFlowNode | LaneFlowNode | BusFlowNode | PortFlowNode
 type OrthoEdge = Edge<OrthoData, "ortho">
 
 /** Handles exist so the library can attach edges; ours draw their own paths. */
@@ -77,6 +80,10 @@ const EDGE_STYLE: Record<EdgeKind, CSSProperties> = {
 
 const STATIC = { draggable: false, selectable: false, focusable: false, connectable: false }
 
+/** Where the canvas opens: the first lane's top-left at a zoom where a stage's
+ * title and status read (the whole graph only fits at about 0.2). */
+const OPENING_VIEWPORT = { x: 16, y: 8, zoom: 0.6 }
+
 function CanvasSkeleton() {
   return <Skeleton className="h-[min(78vh,860px)] min-h-[420px] w-full rounded-xl" />
 }
@@ -93,6 +100,7 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
       Position,
       ReactFlow,
       useReactFlow,
+      useViewport,
     } = await import("@xyflow/react")
 
     function StageNodeView({ data }: NodeProps<StageFlowNode>) {
@@ -134,11 +142,27 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
       )
     }
 
-    function PhaseNodeView({ data }: NodeProps<PhaseFlowNode>) {
+    /** The phase names, pinned to the top and following the pan and zoom
+     * across, so the columns stay named in every lane. */
+    function PhaseHeader({ phases }: { phases: PipelineLayout["phases"] }) {
+      const { x, zoom } = useViewport()
       return (
-        <div className="border-t-2 border-foreground pt-1" style={{ width: data.width }}>
-          <span className="font-serif text-base">{data.label}</span>
-        </div>
+        <Panel
+          position="top-left"
+          className="pointer-events-none h-7 overflow-hidden border-b bg-card/90"
+          style={{ margin: 0, right: 0 }}
+          aria-hidden="true"
+        >
+          {phases.map((phase) => (
+            <span
+              key={phase.key}
+              className="absolute top-0 truncate border-t-2 border-foreground px-1 pt-0.5 font-serif text-sm"
+              style={{ left: phase.x * zoom + x, width: phase.width * zoom }}
+            >
+              {phase.label}
+            </span>
+          ))}
+        </Panel>
       )
     }
 
@@ -208,7 +232,6 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
     const nodeTypes = {
       stage: StageNodeView,
       lane: LaneNodeView,
-      phase: PhaseNodeView,
       bus: BusNodeView,
       port: PortNodeView,
     }
@@ -217,7 +240,7 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
     function ZoomControls() {
       const { zoomIn, zoomOut, fitView } = useReactFlow()
       return (
-        <Panel position="top-right" className="flex gap-1">
+        <Panel position="bottom-right" className="flex gap-1">
           <Button size="icon-sm" variant="outline" aria-label="Zoom in" onClick={() => zoomIn()}>
             <PlusIcon />
           </Button>
@@ -246,15 +269,6 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
               position: { x: 0, y: lane.y },
               data: { label: lane.label, width: lane.width, height: lane.height },
               zIndex: -1,
-              ...STATIC,
-            }),
-          ),
-          ...layout.phases.map(
-            (phase): PhaseFlowNode => ({
-              id: `phase:${phase.key}`,
-              type: "phase",
-              position: { x: phase.x, y: 0 },
-              data: { label: phase.label, width: phase.width },
               ...STATIC,
             }),
           ),
@@ -355,13 +369,13 @@ export const PipelineCanvas = dynamic<PipelineCanvasProps>(
             nodesFocusable={false}
             edgesFocusable={false}
             elementsSelectable={false}
-            fitView
-            fitViewOptions={{ padding: 0.04 }}
+            defaultViewport={OPENING_VIEWPORT}
             minZoom={0.15}
             maxZoom={1.5}
             aria-label="The pipeline: stages by phase (columns) and lane (rows)"
           >
             <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border)" />
+            <PhaseHeader phases={layout.phases} />
             <ZoomControls />
           </ReactFlow>
         </div>

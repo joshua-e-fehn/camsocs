@@ -94,6 +94,9 @@ export function BrokerPipeline() {
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <span id="pipeline-group-caption" className="text-xs text-muted-foreground">
+          Group (scheduled run)
+        </span>
         <ToggleGroup
           type="single"
           variant="outline"
@@ -106,7 +109,7 @@ export function BrokerPipeline() {
             setRunKey(LATEST)
           }}
           className="flex-wrap"
-          aria-label="Group"
+          aria-labelledby="pipeline-group-caption"
         >
           {([ALL, ...GROUPS] as GroupChoice[]).map((choice) => (
             <ToggleGroupItem
@@ -143,7 +146,9 @@ export function BrokerPipeline() {
           <PillarSummary views={views} />
           {!run && status?.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No run of this group is recorded yet, so every stage reads “not run”.
+              {groupArg === undefined
+                ? "No run is recorded yet, so every stage reads “not run”."
+                : `No ${groupArg} run is recorded yet: its stages read “not run”, the others “not requested”.`}
             </p>
           )}
           <PipelineCanvas

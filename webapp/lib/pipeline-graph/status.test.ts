@@ -8,6 +8,7 @@ import {
 import { PIPELINE_GRAPH, type StageNode, stageNodes } from "./graph"
 import {
   fetchErrorShare,
+  fetchGap,
   formatCount,
   formatDuration,
   isYieldDrop,
@@ -16,6 +17,7 @@ import {
   RUNNING_STALE_MS,
   STATE_WORDS,
   sourceStatusRows,
+  stagesWithoutSource,
   stageViews,
   stateCounts,
   statusText,
@@ -38,6 +40,8 @@ function row(name: string, over: Partial<StageStatusRow> = {}): StageStatusRow {
     lastStatus: "ok",
     lastRunKey: "20261101T043000Z-abc123",
     lastStartedAt: 1_000,
+    resultRunKey: "20261101T043000Z-abc123",
+    resultStartedAt: 1_000,
     lastOkAt: 2_000,
     lastProductiveAt: 2_000,
     inserted: 3,
@@ -79,6 +83,7 @@ function run(over: Partial<RunSummary> = {}): RunSummary {
         skipped: 0,
         durationMs: 5_000,
         failed: false,
+        fetch: null,
       },
     ],
     warningCount: 0,
@@ -121,16 +126,37 @@ describe("viewFromStatus", () => {
     // Exactly a quarter is not a drop.
     const quarter = row("camdram_events", { yield: 25, yieldMedian7d: 100 })
     expect(viewFromStatus(stage("camdram_events"), quarter).yieldDrop).toBe(false)
-    // Too few prior runs, or too small a median, never flags.
+    // Too few prior runs never flags; a small median flags only a zero yield,
+    // as the monitor's `yield_drop` does ("or latest = 0").
     const few = row("camdram_events", { yield: 0, yieldSamples7d: 2 })
     expect(viewFromStatus(stage("camdram_events"), few).yieldDrop).toBe(false)
-    const tiny = row("camdram_events", { yield: 0, yieldMedian7d: 4 })
+    const tiny = row("camdram_events", { yield: 1, yieldMedian7d: 4 })
     expect(viewFromStatus(stage("camdram_events"), tiny).yieldDrop).toBe(false)
+    const none = row("camdram_events", { yield: 0, yieldMedian7d: 3, yieldSamples7d: 3 })
+    expect(viewFromStatus(stage("camdram_events"), none).yieldDrop).toBe(true)
+    const neverAny = row("camdram_events", { yield: 0, yieldMedian7d: 0, yieldSamples7d: 3 })
+    expect(viewFromStatus(stage("camdram_events"), neverAny).yieldDrop).toBe(false)
     // A failed stage shows "failed", not a yield drop.
     const failed = row("camdram_events", { lastStatus: "failed", yield: 0 })
     expect(viewFromStatus(stage("camdram_events"), failed).yieldDrop).toBe(false)
     expect(isYieldDrop(null, 100, 9)).toBe(false)
     expect(isYieldDrop(0, 5, 3)).toBe(true)
+  })
+
+  test("the numbers name their own run; the state names the newest run", () => {
+    const open = row("talks_cam", {
+      lastStatus: "running",
+      lastRunKey: "20261103T043000Z-new",
+      lastStartedAt: 5_000,
+      resultRunKey: "20261102T043000Z-old",
+      resultStartedAt: 1_000,
+    })
+    const view = viewFromStatus(stage("talks_cam"), open)
+    expect(view.source).toBe("status")
+    expect(view.runKey).toBe("20261102T043000Z-old")
+    expect(view.startedAt).toBe(1_000)
+    expect(view.statusRunKey).toBe("20261103T043000Z-new")
+    expect(view.statusStartedAt).toBe(5_000)
   })
 
   test("a stage outside the chosen group is not requested", () => {
@@ -167,6 +193,22 @@ describe("viewFromRun", () => {
     expect(view.yield).toBe(6)
     expect(view.durationMs).toBe(5_000)
     expect(view.runKey).toBe("20261102T043000Z-def456")
+    expect(view.source).toBe("run")
+    expect(view.medianDays).toBe(7)
+  })
+
+  test("a finished result shows that run's fetch counters", () => {
+    const fetch = {
+      requests: 30,
+      errors: 3,
+      status4xx: 1,
+      status5xx: 2,
+      robotsBlocked: 0,
+      retries: 4,
+      tooMany: 0,
+    }
+    const fetched = run({ stages: [{ ...run().stages[0], fetch }] })
+    expect(viewFromRun(stage("camdram_events"), fetched, 30_000).fetch).toEqual(fetch)
   })
 
   test("requested without a result: running while the run is open, else not run", () => {
@@ -188,6 +230,7 @@ describe("viewFromRun", () => {
           skipped: 0,
           durationMs: null,
           failed: true,
+          fetch: null,
         },
       ],
     })
@@ -278,3 +321,38 @@ function emptyFetch() {
     tooMany: 0,
   }
 }
+
+describe("fetchGap and stagesWithoutSource", () => {
+  test("a stage that never fetches says so, whatever its result", () => {
+    const view = viewFromStatus(stage("load"), row("load"))
+    expect(fetchGap(stage("load"), view)).toBe("no_fetch")
+    expect(fetchGap(stage("inbox"), viewFromStatus(stage("inbox"), row("inbox")))).toBe("no_fetch")
+  })
+
+  test("a network stage: none recorded, no result yet, or the counters", () => {
+    const camdram = stage("camdram_events")
+    expect(fetchGap(camdram, viewFromStatus(camdram, row("camdram_events")))).toBe("none_recorded")
+    expect(fetchGap(camdram, viewFromStatus(camdram, undefined))).toBe("no_result")
+    const fetched = row("camdram_events", {
+      fetch: {
+        requests: 1,
+        errors: 0,
+        status4xx: 0,
+        status5xx: 0,
+        robotsBlocked: 0,
+        retries: 0,
+        tooMany: 0,
+      },
+    })
+    expect(fetchGap(camdram, viewFromStatus(camdram, fetched))).toBeNull()
+  })
+
+  test("every stage without a manifest source is listed, shared ones included", () => {
+    const names = stagesWithoutSource(PIPELINE_GRAPH).map((s) => s.name)
+    expect(names).toContain("load")
+    expect(names).toContain("report")
+    expect(names).not.toContain("term_dates")
+    const sourced = new Set(PIPELINE_GRAPH.sources.map((source) => source.stage))
+    for (const name of names) expect(sourced.has(name)).toBe(false)
+  })
+})

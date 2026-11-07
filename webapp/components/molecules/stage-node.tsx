@@ -137,7 +137,7 @@ export function StageNodeCard({
       type="button"
       onClick={onOpen}
       aria-label={`${title}: ${statusText(view)}. Open details`}
-      aria-pressed={selected}
+      aria-haspopup="dialog"
       className={cn(
         "flex flex-col justify-between gap-1 rounded-lg border bg-card p-2.5 text-left text-card-foreground shadow-sm transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         FRAME[view.state],
@@ -227,7 +227,7 @@ export function StageLegend({ className }: { className?: string }) {
       <li className="inline-flex items-center gap-1.5">
         <TrendingDownIcon aria-hidden="true" className="size-3.5" />
         <span className="font-medium">yield ↓</span>
-        <span className="text-muted-foreground">under a quarter of the median</span>
+        <span className="text-muted-foreground">under a quarter of the median, or none</span>
       </li>
       <li className="inline-flex items-center gap-1.5">
         <FolderIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />

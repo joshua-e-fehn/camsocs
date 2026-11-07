@@ -97,9 +97,15 @@ const stageStatusRow = v.object({
    * Runs of other groups never decide it, so a full-only stage keeps its
    * weekly result while the daily events runs are newer. */
   lastStatus: literalUnion(STAGE_STATES),
-  /** The newest run that requested or reported the stage. */
+  /** The newest run that requested or reported the stage: the run
+   * `lastStatus` is about. It may be newer than `resultRunKey` (still open,
+   * or ended without posting the stage). */
   lastRunKey: v.union(v.null(), v.string()),
   lastStartedAt: nullableNumber,
+  /** The run of the newest posted result: the run every count, the yield,
+   * the duration and `fetch` come from (null before the first result). */
+  resultRunKey: v.union(v.null(), v.string()),
+  resultStartedAt: nullableNumber,
   /** `finishedAt` of the newest run whose result for the stage was `ok`. */
   lastOkAt: nullableNumber,
   /** `finishedAt` of the newest `ok` result with a yield above zero. */
@@ -124,8 +130,10 @@ const stageStatusRow = v.object({
   yieldSamples7d: v.number(),
   yieldSamples28d: v.number(),
   /** The newest result's fetch counters (pipeline fetch_stats); null when it
-   * recorded none (every result posted before the pipeline sent fetch metrics),
-   * which readers show as "not recorded", never as zeros. */
+   * recorded none: the pipeline writes them only when the stage fetched at
+   * least once, so a stage that never fetches (`network: false`), a run that
+   * fetched nothing and a result from before fetch metrics all read null.
+   * Readers tell those apart (the graph's `network`), never show zeros. */
   fetch: v.union(v.null(), fetchSummary),
   /** For the `talks` stage: the latest `talkRuns` row, counts only. */
   talkRun: v.union(v.null(), talkRunSummary),
@@ -142,6 +150,8 @@ const runStageSummary = v.object({
   durationMs: nullableNumber,
   /** Whether the stage posted an error (its text is in `stageDetail`). */
   failed: v.boolean(),
+  /** The result's fetch counters, as `stageStatusRow.fetch`. */
+  fetch: v.union(v.null(), fetchSummary),
 })
 
 const runSummary = v.object({
@@ -277,6 +287,7 @@ export function summariseStages(
     const lastStatus = stageStateIn(lastRun, name, now, runs.slice(0, Math.max(0, lastIndex)))
 
     const latest = results[0]?.result ?? null
+    const latestRun = results[0]?.run ?? null
     const ok = results.filter(({ result }) => result.status === "ok")
     const lastOk = ok[0]?.run ?? null
     const lastProductive = ok.find(({ result }) => stageYield(result) > 0)?.run ?? null
@@ -301,6 +312,8 @@ export function summariseStages(
       lastStatus,
       lastRunKey: lastRun?.runKey ?? null,
       lastStartedAt: lastRun?.startedAt ?? null,
+      resultRunKey: latestRun?.runKey ?? null,
+      resultStartedAt: latestRun?.startedAt ?? null,
       lastOkAt: lastOk?.finishedAt ?? null,
       lastProductiveAt: lastProductive?.finishedAt ?? null,
       inserted: latest?.inserted ?? null,
@@ -342,6 +355,7 @@ export function summariseRun(run: Doc<"harvestRuns">): RunSummary {
       skipped: stage.skipped,
       durationMs: stage.durationMs ?? null,
       failed: stage.error !== null,
+      fetch: fetchSummaryOf(stage.metrics),
     })),
     warningCount: run.warnings.length,
     hasError: run.error !== null,

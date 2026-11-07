@@ -209,7 +209,10 @@ describe("summariseStages", () => {
     expect(running.find((r) => r.name === "talks_cam")).toMatchObject({
       lastStatus: "running",
       lastRunKey: open.runKey,
-      inserted: 7, // from the last posted result
+      // The counts come from the last posted result, and say which run that is.
+      resultRunKey: older.runKey,
+      resultStartedAt: older.startedAt,
+      inserted: 7,
     })
     expect(running.find((r) => r.name === "resolve")?.lastStatus).toBe("not_requested")
     expect(running.find((r) => r.name === "resolve")?.lastRunKey).toBe(older.runKey)
