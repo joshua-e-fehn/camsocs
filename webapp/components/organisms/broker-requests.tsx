@@ -20,6 +20,11 @@ import {
   AcceptCorrectionsDialog,
   AcceptRemovalDialog,
 } from "@/components/organisms/broker-request-dialogs"
+import {
+  isDrafted,
+  RequestDraftPanel,
+  readyDraft,
+} from "@/components/organisms/broker-request-draft"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -73,7 +78,10 @@ const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
 
 /**
  * The inbox of requests from the public claim / correct / remove / object /
- * add form, and where they are accepted: a claim or correction's values
+ * add form, and where they are accepted. The request agent (ENG-126) drafts
+ * each open claim, correction, removal and objection (`RequestDraftPanel`)
+ * and its draft pre-fills the dialogs, so accepting is a review and a
+ * confirm: a claim or correction's values
  * become owner-confirmed claims (`AcceptCorrectionsDialog`); a removal or
  * objection becomes a suppression of the listing, some fields, an address or
  * named people (`AcceptRemovalDialog`), listed on the card with a way to lift
@@ -379,6 +387,7 @@ function RequestCard({
             ))}
           </dl>
         )}
+        {isDrafted(request) && <RequestDraftPanel request={request} />}
         {applied.length > 0 && (
           <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
             <CheckIcon className="size-4" />
@@ -392,7 +401,7 @@ function RequestCard({
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setDialog("corrections")}>
               <CheckIcon />
-              Accept corrections…
+              {readyDraft(request) ? "Review and confirm…" : "Accept corrections…"}
             </Button>
           </div>
         )}
@@ -401,7 +410,9 @@ function RequestCard({
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="destructive" onClick={() => setDialog("removal")}>
               <ShieldXIcon />
-              Accept {request.kind === "remove" ? "removal" : "objection"}…
+              {readyDraft(request)
+                ? "Review and confirm…"
+                : `Accept ${request.kind === "remove" ? "removal" : "objection"}…`}
             </Button>
             {request.org.hidden && (
               <Button

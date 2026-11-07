@@ -205,6 +205,10 @@ ingestionRoute("purge", internal.ingest.purge.purge)
 // what to send on Slack / WhatsApp now, and how each send went.
 ingestionRoute("notify/pending", internal.notifications.relayPending)
 ingestionRoute("notify/ack", internal.notifications.relayAck)
+// The request agent (ENG-126, pipeline request_agent.py): drafts of what to
+// apply, which the broker confirms.
+ingestionRoute("requests/pending", internal.requestAgent.pending)
+ingestionRoute("requests/draft", internal.requestAgent.saveDraft)
 // The daily indexing check's alerts, for the VPS monitor (convex/indexing.ts).
 readRoute("indexing/summary", internal.indexing.monitorSummary)
 // Events a corrected reader will never restate (`camsocs clean-events`,

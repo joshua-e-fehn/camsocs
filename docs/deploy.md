@@ -192,6 +192,10 @@ bunx convex env set --prod REQUEST_NOTIFY_EMAIL requests@camsocs.uk   # comma-se
 
 Switching email off: `bunx convex env remove --prod REQUEST_NOTIFY_EMAIL`. Switching the relay off: `systemctl disable --now camsocs-notify.timer` on the VPS.
 
+### The request agent (ENG-126)
+
+Each open claim, correction, removal and objection is drafted by an agent on the VPS (`camsocs-request-agent.timer`, docs/ops-vps.md §13) within about a minute: a summary, rule-based checks on the sender, concerns, the values to apply and a reply to send. The broker opens **Review and confirm…** on the request, where the draft fills the dialog, edits if needed and confirms; the confirm runs the usual acceptance (`acceptCorrections` or `acceptRemoval`): owner-confirmed claims or suppressions, applied at once, on the public pages within 5 minutes (incremental static regeneration). No rebuild and no deploy is involved. Nothing to set on Convex or Vercel: the agent uses the pipeline's own LLM settings (`pipeline/.env`) and production's pipeline key (`.env.prod`).
+
 ## 4. The pipeline against production
 
 The pipeline reads `pipeline/.env` (dev) and, for another environment, a second file on top of it (`pipeline/src/camsocs_pipeline/config.py`):

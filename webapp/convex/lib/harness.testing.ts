@@ -28,6 +28,7 @@ const appModules = {
   "./indexing.ts": () => import("../indexing"),
   "./listingRequests.ts": () => import("../listingRequests"),
   "./notifications.ts": () => import("../notifications"),
+  "./requestAgent.ts": () => import("../requestAgent"),
   "./orgs.ts": () => import("../orgs"),
   "./retention.ts": () => import("../retention"),
   "./runs.ts": () => import("../runs"),

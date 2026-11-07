@@ -1,0 +1,67 @@
+# The request agent (`camsocs request-drafts`, ENG-126): drafts what to apply
+# for open listing requests with the strong model through cliproxy, and posts
+# each draft to Convex, where the broker confirms it on the dashboard. It
+# applies nothing. Started by camsocs-request-agent.timer every minute, or by
+# hand: `systemctl start camsocs-request-agent.service`. Runbook:
+# /opt/camsocs/docs/ops-vps.md §13. Installed by install.sh from a reviewed
+# commit; like the monitor it runs the checkout's pipeline as camsocs.
+[Unit]
+Description=camsocs request agent (drafts for listing requests)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+# No OnFailure=: a run every minute would page on every cliproxy blip. The
+# dashboard shows the agent offline when it has not called for 5 minutes, and
+# a failed draft on the request itself (retried, three tries).
+# The checkout's code arrives with the harvest's pull: until then there is no
+# command to run, and a failed condition skips the run quietly.
+ConditionPathExists=/opt/camsocs/pipeline/src/camsocs_pipeline/request_agent.py
+
+[Service]
+Type=oneshot
+User=camsocs
+Group=camsocs
+WorkingDirectory=/opt/camsocs
+# --as-is: never install or update the environment (the harvest does, under
+# its lock). LLM_* come from /opt/camsocs/pipeline/.env, Convex's URL and key
+# from .env.prod on top.
+ExecStart=/usr/local/bin/pixi run --as-is --manifest-path /opt/camsocs/pixi.toml pipeline -- --env prod request-drafts
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Three model requests at most per run, each with its own retries.
+TimeoutStartSec=15min
+# pixi's cache lives in the camsocs home, /var/lib/camsocs.
+StateDirectory=camsocs
+StateDirectoryMode=0750
+UMask=0027
+Nice=10
+
+# --- hardening: it reads the checkout, talks to cliproxy and Convex
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# The camsocs home (pixi's cache) and the checkout's .pixi, where pixi records
+# a task cache after every run; the rest of the checkout stays read-only.
+ReadWritePaths=/var/lib/camsocs -/opt/camsocs/.pixi
+ProtectHome=yes
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/etc/camsocs -/var/lib/camsocs/.ssh -/var/log/camsocs
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ProtectProc=invisible
+# No private, CGNAT, link-local or multicast range, as the harvest. Of the
+# loopback only cliproxy (127.0.0.1, port 8317) and the DNS stub (127.0.0.53).
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 localhost
+IPAddressAllow=127.0.0.1 127.0.0.53
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

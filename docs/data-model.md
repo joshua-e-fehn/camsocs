@@ -417,7 +417,9 @@ These are never returned by public queries.
   | createdAt | number |
   | resolvedAt | number? |
   | outcome | `{ appliedFields?: string[], suppressionKeys?: string[], acceptedAt }`? — what accepting it did |
-  | purgedAt | number? — when retention reduced an accepted correction (which its owner claims cite) to a stub without the submitter's address, message or fields |
+  | notifications | `{ channel, ok, error?, at, attempts? }[]`? — where the new-request notification went (ENG-104) |
+  | draft | object? — the request agent's draft (ENG-126, `convex/lib/requestDraft.ts`): `state` (`ready \| failed`), `at`, `attempts`, `model?`, `promptVersion?`, `error?`, `summary?`, `concerns?`, `checks?` `{ domain, cam, listed, siteDomain }`, `corrections?` `{ field, text, current?, reason? }[]` (checked editor text), `removal?` `{ scope, fields?, address?, name?, eventKeys? }`, `dropped?` `{ field, reason }[]`, `reply?`. Pre-fills the accept dialogs; never applied without the broker's confirm. Cleared by "Redraft" and by retention with the request's contents |
+  | purgedAt | number? — when retention reduced an accepted correction (which its owner claims cite) to a stub without the submitter's address, message, fields or draft |
 
   Submitted through the public `listingRequests.submit`, which the form reaches through the site's BotID-checked `POST /api/request`; once `REQUEST_FORM_SECRET` is set on a deployment only that route's calls are accepted (ENG-37) (validated, length-limited; ENG-35 limits: per address 5 an hour and 20 a day; per listing and budget 10 an hour and 20 a day; overall, claims, corrections and additions 200 an hour and 600 a day, removals and objections their own 300 an hour and 1,000 a day so a flood of the others never shuts the GDPR route; a listing's first 2 requests of a budget in a day may go past the overall cap, by at most 100 an hour and 300 a day in all). The submitter's address is not verified (the broker inbox says so). Index `by_kind_createdAt` besides those below.
 

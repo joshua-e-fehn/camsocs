@@ -132,6 +132,8 @@ convex/
                              into `coverageSnapshots` (after each run, daily 04:45 UTC, on request);
                              the same fold page by page for the pipeline's coverage report
   runs.ts                    internal runs.start / runs.finish / runs.latest (pipeline run log)
+  requestAgent.ts            /api/pipeline/requests/pending + /draft: the request agent's drafts
+                             (ENG-126; lib/requestDraft.ts masks, checks and builds them)
   analytics.ts               internal captureListingRequest: listing_request_received { kind } to
                              PostHog (lib/posthog.ts; see "Server counts")
   auth.ts                    getCurrentUser, getBrokerAccess, getSignInOptions, getViewerTier (public, never throw)

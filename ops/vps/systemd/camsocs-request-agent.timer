@@ -1,0 +1,14 @@
+# The request agent, every minute (ENG-126). /opt/camsocs/docs/ops-vps.md §13.
+[Unit]
+Description=camsocs request agent, every minute
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=false
+Unit=camsocs-request-agent.service
+
+[Install]
+WantedBy=timers.target

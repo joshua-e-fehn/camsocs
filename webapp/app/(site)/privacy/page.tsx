@@ -184,7 +184,10 @@ export default function PrivacyPage() {
           message. When you send it, Vercel, our host, checks that the request comes from a person’s
           browser rather than an automated script (Vercel BotID): a script from our own address
           reads technical signals from your browser for that one check. What you wrote is not part
-          of it.
+          of it. To prepare the operator&apos;s review, the AI model (below) reads your request:
+          your message, the role you give and the values you propose, with every email address and
+          phone number replaced by a placeholder first, and never your own address. It drafts what
+          to change and a reply; the operator checks the draft and decides.
         </p>
         <h3>When you sign in</h3>
         <p>
@@ -382,9 +385,10 @@ export default function PrivacyPage() {
         <h3>The AI model</h3>
         <p>
           The AI model that extracts facts from public pages, the University of Cambridge’s public
-          events programme (with its permission) and mailing-list messages, and replaces names in
-          descriptions with roles, is one of OpenAI’s. We do not use OpenAI’s API service for it:
-          the operator reaches the models through his own ChatGPT subscription, by way of a relay
+          events programme (with its permission) and mailing-list messages, replaces names in
+          descriptions with roles, and drafts the operator&apos;s answer to a request sent through
+          the request form, is one of OpenAI’s. We do not use OpenAI’s API service for it: the
+          operator reaches the models through his own ChatGPT subscription, by way of a relay
           (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI under the
           subscription’s own terms. We have no data processing agreement with OpenAI, so it is not a
           provider acting only on our instructions like those above. Under OpenAI’s terms for
@@ -400,7 +404,7 @@ export default function PrivacyPage() {
           what it is sent to train its models is switched off (since 3 November 2026), and we send
           it as little as we can: talk listings from talks.cam and departments never, and
           mailing-list messages only after quoted replies, signatures, addresses and phone numbers
-          are cut out.
+          are cut out, and requests only with their email addresses and phone numbers replaced.
         </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
