@@ -93,6 +93,8 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS`, `INBOUND_EMAIL_SECRET` | forwarded list mail (J3, J4) | optional; see `docs/setup/inbox-instagram.md`. Point the Resend webhook at the **production** site URL (`https://<prod>.convex.site/api/inbound/email`) once production is the one that should receive mail |
 | `REQUEST_FORM_SECRET` | the request form's route as the only way in (ENG-37) | the **same** value as Vercel's `REQUEST_FORM_SECRET`; set it **last**, after a production deploy that sends it ("Request form bot check" below). Unset = the mutation accepts any caller, as before. Never on dev |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog counts from Convex (`listing_request_received`, ENG-7, `convex/analytics.ts`) | the project token (`phc_…`) and `https://eu.i.posthog.com`; set on **production only**, so dev never sends events. Either unset = nothing is sent. Their events carry `environment: production`; `POSTHOG_ENV=development` (optional, never on production) tags a test deployment's events so the project's filter hides them |
+| `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` (`POSTHOG_APP_HOST` optional, default `https://eu.posthog.com`) | the broker overview's website traffic, read from PostHog (`convex/traffic.ts`, "Website traffic" below) | a personal API key with **only `query:read`**, scoped to the camsocs project (1Password Mya item `PostHog Convex traffic`), and `330133`. Production only; unset = the card says PostHog is not set up |
+| `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET`, `GSC_REFRESH_TOKEN` (`GSC_SITE_URL` optional, default `SITE_URL` + `/`) | the broker overview's Google Search numbers, read from Search Console | an OAuth client of GCP project `camsocs` and a refresh token granted `webmasters.readonly` by a user of the Search Console property ("Website traffic" below). Production only; unset = the card says Search Console is not set up |
 
 `bunx convex env list --prod` prints values; use `bunx convex env list --prod --names-only` to check what is set.
 
@@ -143,6 +145,27 @@ The dashboards as applied on 2026-11-01 (EU Cloud, project 330133; PostHog login
 - [camsocs: Reliability](https://eu.posthog.com/project/330133/dashboard/1075492)
 
 `POSTHOG_APP_HOST` defaults to `https://eu.posthog.com`. The browser numbers count only visitors who accepted analytics; content insights break down by `orgKey`, `eventKey` and `talkKey` (names are resolved in camsocs, never sent). The hourly production checks that alert on Slack are the VPS monitor (`camsocs monitor`, `docs/ops-vps.md` §6 "Monitor"), not PostHog alerts: the project's keys have no alert scopes.
+
+### Website traffic (broker overview)
+
+The overview at `/dashboard` has a "Website traffic" section: consented visitors, pageviews and sessions (30 days, and the last 7), visitors per day, sessions by referring domain and the top pages, from PostHog; Google clicks, impressions, CTR and average position (28 days to yesterday), clicks per day, and the search terms and landing pages, from Search Console. `convex/traffic.ts` reads both hourly (cron `traffic-hourly`, :20 UTC) and on "Refresh traffic", and replaces one `trafficSnapshots` row; a source that fails keeps its last numbers and the card names the failure (an HTTP status or OAuth code, never a body). Only aggregates are stored: paths, referring domains, Google's own aggregated search terms (it omits rare ones), no visitor-level rows. Each source stays off until its variables are set (§3).
+
+**PostHog.** Make a personal API key in PostHog (Settings → Personal API keys) named `camsocs-convex-traffic`, scope **`query:read` only**, limited to the camsocs project, and store it in the Mya vault as `PostHog Convex traffic`. Then, from `webapp/`:
+
+```bash
+bunx convex env set --prod POSTHOG_PERSONAL_API_KEY   # prompts: paste the key, it is not echoed
+bunx convex env set --prod POSTHOG_PROJECT_ID 330133
+```
+
+The queries (`convex/lib/traffic.ts` `POSTHOG_QUERIES`) are HogQL over `$pageview` with the project's internal/test filter (`filterTestAccounts`) and the deployment's campus (`ifNull(properties.campus,'cam')`), so they match the `camsocs: Traffic` dashboard. PostHog's query API allows a few hundred queries an hour; a refresh costs four.
+
+**Search Console.** One-time, as `admin@joshua-fehn.de` (an owner of the `https://camsocs.uk/` property):
+
+1. In GCP project `camsocs`, enable the **Google Search Console API**.
+2. Create an OAuth client of type **Desktop app**, `camsocs search console reader` (the consent screen is Internal, so the refresh token does not expire after 7 days). Store its id and secret in the Mya vault, item `camsocs Search Console OAuth`.
+3. Grant `https://www.googleapis.com/auth/webmasters.readonly` once with a loopback consent (any OAuth tool that does the installed-app flow; the scope is read-only), store the refresh token in the same item, and set the three variables with `bunx convex env set --prod …`.
+
+Revoking it: remove the app at myaccount.google.com → Security → Third-party access (or delete the OAuth client), then `bunx convex env remove --prod GSC_REFRESH_TOKEN`; the card then reads "not set up".
 
 ## 4. The pipeline against production
 

@@ -152,6 +152,16 @@ export function useListingRequestMutations() {
   }
 }
 
+/** The overview's website traffic (PostHog and Search Console). */
+export function useBrokerTraffic() {
+  return useQuery(api.broker.overview.traffic)
+}
+
+/** Reads the website traffic again on the server now. */
+export function useRefreshTraffic() {
+  return useMutation(api.broker.overview.refreshTraffic)
+}
+
 /** Recomputes the overview's directory coverage on the server now. */
 export function useRefreshCoverage() {
   return useMutation(api.broker.overview.refreshCoverage)

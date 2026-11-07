@@ -58,6 +58,7 @@ import type * as lib_signInEmail from "../lib/signInEmail.js";
 import type * as lib_suppressionEffects from "../lib/suppressionEffects.js";
 import type * as lib_suppressions from "../lib/suppressions.js";
 import type * as lib_talks from "../lib/talks.js";
+import type * as lib_traffic from "../lib/traffic.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_viewer from "../lib/viewer.js";
 import type * as listingRequests from "../listingRequests.js";
@@ -67,6 +68,7 @@ import type * as runs from "../runs.js";
 import type * as sitemap from "../sitemap.js";
 import type * as talks from "../talks.js";
 import type * as termDates from "../termDates.js";
+import type * as traffic from "../traffic.js";
 import type * as venues from "../venues.js";
 
 import type {
@@ -126,6 +128,7 @@ declare const fullApi: ApiFromModules<{
   "lib/suppressionEffects": typeof lib_suppressionEffects;
   "lib/suppressions": typeof lib_suppressions;
   "lib/talks": typeof lib_talks;
+  "lib/traffic": typeof lib_traffic;
   "lib/validators": typeof lib_validators;
   "lib/viewer": typeof lib_viewer;
   listingRequests: typeof listingRequests;
@@ -135,6 +138,7 @@ declare const fullApi: ApiFromModules<{
   sitemap: typeof sitemap;
   talks: typeof talks;
   termDates: typeof termDates;
+  traffic: typeof traffic;
   venues: typeof venues;
 }>;
 

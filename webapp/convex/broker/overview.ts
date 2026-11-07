@@ -9,7 +9,7 @@ import { internal } from "../_generated/api"
 import { mutation, query } from "../_generated/server"
 import { requireBrokerUser } from "../lib/auth"
 import { DAY_MS, londonIsoDate } from "../lib/derived"
-import { coverageStatsValidator, harvestRunFields } from "../schema"
+import { coverageStatsValidator, harvestRunFields, trafficSnapshotFields } from "../schema"
 
 /**
  * The broker overview, computed on the server: events in the next 14 days by
@@ -161,6 +161,44 @@ export const refreshCoverage = mutation({
   handler: async (ctx) => {
     await requireBrokerUser(ctx)
     await ctx.scheduler.runAfter(0, internal.coverage.recompute, {})
+    return null
+  },
+})
+
+/**
+ * The website traffic (convex/traffic.ts): the deployment's latest
+ * `trafficSnapshots` row, or null before the first refresh.
+ */
+export const traffic = query({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      posthog: trafficSnapshotFields.posthog,
+      searchConsole: trafficSnapshotFields.searchConsole,
+      computedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const snapshot = await ctx.db
+      .query("trafficSnapshots")
+      .withIndex("by_scope", (q) => q.eq("scope", "site"))
+      .first()
+    if (!snapshot) return null
+    const { posthog, searchConsole, computedAt } = snapshot
+    return { posthog, searchConsole, computedAt }
+  },
+})
+
+/** Reads PostHog and Search Console again now (it also runs hourly); the
+ * card updates when the read finishes. */
+export const refreshTraffic = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    await ctx.scheduler.runAfter(0, internal.traffic.refresh, {})
     return null
   },
 })
