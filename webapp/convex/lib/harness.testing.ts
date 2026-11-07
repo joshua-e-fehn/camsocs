@@ -31,6 +31,7 @@ const appModules = {
   "./sitemap.ts": () => import("../sitemap"),
   "./talks.ts": () => import("../talks"),
   "./termDates.ts": () => import("../termDates"),
+  "./traffic.ts": () => import("../traffic"),
   "./venues.ts": () => import("../venues"),
   "./broker/graph.ts": () => import("../broker/graph"),
   "./broker/interactions.ts": () => import("../broker/interactions"),

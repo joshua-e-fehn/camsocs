@@ -1,5 +1,5 @@
 import { defineSchema, defineTable } from "convex/server"
-import { type Infer, v } from "convex/values"
+import { type Infer, type Validator, v } from "convex/values"
 import {
   ACTIVITY_TYPES,
   AUDIENCES,
@@ -899,6 +899,66 @@ export const coverageSnapshotFields = {
   computedAt: v.number(),
 }
 
+/** Clicks, impressions, CTR (0..1) and average position in Google Search. */
+const searchRowFields = {
+  clicks: v.number(),
+  impressions: v.number(),
+  ctr: v.number(),
+  position: v.number(),
+}
+
+export const posthogTrafficValidator = v.object({
+  windowDays: v.number(),
+  visitors: v.number(),
+  visitors7d: v.number(),
+  pageviews: v.number(),
+  pageviews7d: v.number(),
+  sessions: v.number(),
+  daily: v.array(v.object({ day: v.string(), visitors: v.number(), pageviews: v.number() })),
+  referrers: v.array(v.object({ domain: v.string(), sessions: v.number(), visitors: v.number() })),
+  pages: v.array(v.object({ path: v.string(), pageviews: v.number(), visitors: v.number() })),
+})
+
+export const searchConsoleTrafficValidator = v.object({
+  ...searchRowFields,
+  siteUrl: v.string(),
+  startDate: v.string(),
+  endDate: v.string(),
+  daily: v.array(v.object({ day: v.string(), ...searchRowFields })),
+  queries: v.array(v.object({ query: v.string(), ...searchRowFields })),
+  pages: v.array(v.object({ path: v.string(), ...searchRowFields })),
+})
+
+export const trafficSourceStatuses = ["ok", "not_configured", "failed"] as const
+
+/** One traffic source in the snapshot: its latest outcome, and the data of
+ * its latest success (kept when a later read fails). */
+function trafficSource<T extends Validator<unknown, "required", string>>(data: T) {
+  return v.object({
+    status: literalUnion(trafficSourceStatuses),
+    /** The last read, successful or not. */
+    checkedAt: v.number(),
+    /** A short reason for the last failure (an HTTP status, an OAuth code). */
+    error: v.optional(v.string()),
+    /** When `data` was read. */
+    fetchedAt: v.optional(v.number()),
+    data: v.optional(data),
+  })
+}
+
+/**
+ * The website traffic the broker overview shows (convex/traffic.ts,
+ * convex/lib/traffic.ts): aggregate numbers read from PostHog and Google
+ * Search Console, one row per deployment, replaced hourly. Paths, referring
+ * domains and Google's search queries, no visitor-level data.
+ */
+export const trafficSnapshotFields = {
+  scope: v.literal("site"),
+  posthog: trafficSource(posthogTrafficValidator),
+  searchConsole: trafficSource(searchConsoleTrafficValidator),
+  computedAt: v.number(),
+}
+
 /**
  * One accepted listing request, stamped for the form's rate limits
  * (convex/listingRequests.ts): which budget it used and the listing it was
@@ -1040,6 +1100,7 @@ export default defineSchema({
     .index("by_orgKey", ["orgKey"])
     .index("by_scope", ["scope"]),
   coverageSnapshots: defineTable(coverageSnapshotFields).index("by_scope", ["scope"]),
+  trafficSnapshots: defineTable(trafficSnapshotFields).index("by_scope", ["scope"]),
 
   // internal, written by the inbound webhook and the public form
   inboundEmails: defineTable(inboundEmailFields)

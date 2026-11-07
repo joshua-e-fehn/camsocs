@@ -18,6 +18,9 @@ import { internal } from "./_generated/api"
  *  - `talks-stats-daily` (00:10): the talks counts (this London week, next 28
  *    days, per department), which move with the day even when no run came
  *    (`refreshStats`; a finished sweep refreshes them too).
+ *  - `traffic-hourly` (:20): the broker overview's website traffic from
+ *    PostHog and Search Console (convex/traffic.ts); a no-op read where their
+ *    env vars are unset.
  */
 const crons = cronJobs()
 
@@ -36,5 +39,7 @@ crons.daily(
   internal.ingest.talks.refreshStatsDaily,
   {},
 )
+
+crons.hourly("traffic-hourly", { minuteUTC: 20 }, internal.traffic.refresh, {})
 
 export default crons
