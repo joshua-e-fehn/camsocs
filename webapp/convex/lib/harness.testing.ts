@@ -25,6 +25,7 @@ const appModules = {
   "./events.ts": () => import("../events"),
   "./http.ts": () => import("../http"),
   "./listingRequests.ts": () => import("../listingRequests"),
+  "./notifications.ts": () => import("../notifications"),
   "./orgs.ts": () => import("../orgs"),
   "./retention.ts": () => import("../retention"),
   "./runs.ts": () => import("../runs"),

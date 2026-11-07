@@ -5,11 +5,12 @@ import { isEmail } from "../../lib/syntax"
 import { LISTING_REQUEST_STATUSES, ORGANISATION_FIELDS, SUPPRESSION_SCOPES } from "../../lib/vocab"
 import { internal } from "../_generated/api"
 import type { Doc } from "../_generated/dataModel"
-import { type MutationCtx, mutation, query } from "../_generated/server"
+import { action, type MutationCtx, mutation, query } from "../_generated/server"
 import type { ClaimInput } from "../ingest/claims"
 import { requireBrokerUser } from "../lib/auth"
 import { brokerOrgRefs, orgRefValidator } from "../lib/brokerRows"
 import { withoutSystemFields } from "../lib/ingest"
+import { channelSummary, notifyConfig } from "../lib/requestNotify"
 import { createSuppression } from "../lib/suppressionEffects"
 import {
   contactHash,
@@ -78,6 +79,70 @@ export const list = query({
       })
     }
     return out
+  },
+})
+
+/** Open requests, for the sidebar's badge; counted up to `OPEN_CAP` (the
+ * badge then reads "99+"). */
+export const OPEN_CAP = 100
+
+export const openCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const rows = await ctx.db
+      .query("listingRequests")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "open"))
+      .take(OPEN_CAP)
+    return rows.length
+  },
+})
+
+/** Which notification channels are switched on (ENG-104); no secrets. */
+export const notificationChannels = query({
+  args: {},
+  returns: v.object({
+    slack: v.boolean(),
+    email: v.boolean(),
+    whatsapp: v.union(v.null(), v.literal("meta"), v.literal("callmebot")),
+  }),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    return channelSummary(notifyConfig())
+  },
+})
+
+/** Sends a request's notification again on every configured channel. */
+export const notifyAgain = mutation({
+  args: { key: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireBrokerUser(ctx)
+    const row = await findRequest(ctx, args.key)
+    await ctx.scheduler.runAfter(0, internal.notifications.listingRequest, {
+      key: row.key,
+      force: true,
+    })
+    return null
+  },
+})
+
+type TestDelivery = { channel: "slack" | "email" | "whatsapp"; ok: boolean; error?: string }
+
+/** A synthetic request on every configured channel; nothing is stored. */
+export const sendTestNotification = action({
+  args: {},
+  returns: v.array(
+    v.object({
+      channel: v.union(v.literal("slack"), v.literal("email"), v.literal("whatsapp")),
+      ok: v.boolean(),
+      error: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx): Promise<TestDelivery[]> => {
+    await requireBrokerUser(ctx)
+    return await ctx.runAction(internal.notifications.test, {})
   },
 })
 

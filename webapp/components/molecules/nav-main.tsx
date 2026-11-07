@@ -7,6 +7,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -24,6 +25,10 @@ export function NavMain({
     url: string
     icon?: React.ReactNode
     isActive?: boolean
+    /** A count shown beside the entry (e.g. open requests); hidden at 0. */
+    badge?: number
+    /** What the badge counts, for screen readers ("3 open requests"). */
+    badgeLabel?: string
     items?: {
       title: string
       url: string
@@ -71,8 +76,29 @@ export function NavMain({
                 <Link href={item.url} prefetch={false}>
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.badge ? (
+                    <span className="sr-only">
+                      {" "}
+                      ({item.badge} {item.badgeLabel ?? "new"})
+                    </span>
+                  ) : null}
                 </Link>
               </SidebarMenuButton>
+              {item.badge ? (
+                // The collapsed (icon-only) sidebar hides the count: a dot.
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
+                />
+              ) : null}
+              {item.badge ? (
+                <SidebarMenuBadge
+                  aria-hidden
+                  className="rounded-full bg-destructive px-1.5 text-white peer-hover/menu-button:text-white peer-data-[active=true]/menu-button:text-white"
+                >
+                  {item.badge >= 100 ? "99+" : item.badge}
+                </SidebarMenuBadge>
+              ) : null}
             </SidebarMenuItem>
           ),
         )}

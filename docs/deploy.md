@@ -92,6 +92,7 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3) | optional; both unset = the option shows as off |
 | `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS`, `INBOUND_EMAIL_SECRET` | forwarded list mail (J3, J4) | optional; see `docs/setup/inbox-instagram.md`. Point the Resend webhook at the **production** site URL (`https://<prod>.convex.site/api/inbound/email`) once production is the one that should receive mail |
 | `REQUEST_FORM_SECRET` | the request form's route as the only way in (ENG-37) | the **same** value as Vercel's `REQUEST_FORM_SECRET`; set it **last**, after a production deploy that sends it ("Request form bot check" below). Unset = the mutation accepts any caller, as before. Never on dev |
+| `SLACK_REQUESTS_WEBHOOK_URL`, `REQUEST_NOTIFY_EMAIL`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TO`, `WHATSAPP_TEMPLATE`, `WHATSAPP_TEMPLATE_LANG`, `CALLMEBOT_PHONE`, `CALLMEBOT_APIKEY` | new-request notifications to the broker (ENG-104) | optional, per channel; see "Request notifications" below. Email also needs `RESEND_API_KEY` + `RESEND_FROM`. Never on dev |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | server-side PostHog counts from Convex (`listing_request_received`, ENG-7, `convex/analytics.ts`) | the project token (`phc_…`) and `https://eu.i.posthog.com`; set on **production only**, so dev never sends events. Either unset = nothing is sent. Their events carry `environment: production`; `POSTHOG_ENV=development` (optional, never on production) tags a test deployment's events so the project's filter hides them |
 | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` (`POSTHOG_APP_HOST` optional, default `https://eu.posthog.com`) | the broker overview's website traffic, read from PostHog (`convex/traffic.ts`, "Website traffic" below) | the camsocs project's personal API key from the 1Password Mya item `PostHog` (field `personal API key`, the same key as the dashboards and the VPS monitor; it needs `query:read`) and `330133`. Production only; unset = the card says PostHog is not set up |
 | `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET`, `GSC_REFRESH_TOKEN` (`GSC_SITE_URL` optional, default `SITE_URL` + `/`) | the broker overview's Google Search numbers, read from Search Console | the Desktop OAuth client `camsocs search console reader` of GCP project `camsocs` (Mya item `CAMsocs Search Console client`) and its refresh token for `webmasters.readonly` granted by admin@joshua-fehn.de (Mya item `camsocs Search Console OAuth`; "Website traffic" below). Production only; unset = the card says Search Console is not set up |
@@ -166,6 +167,32 @@ The queries (`convex/lib/traffic.ts` `POSTHOG_QUERIES`) are HogQL over `$pagevie
 3. `https://www.googleapis.com/auth/webmasters.readonly` was granted once through a loopback consent (the installed-app flow to `http://127.0.0.1:<port>/`, with `access_type=offline&prompt=consent`). The refresh token is in the Mya vault item `camsocs Search Console OAuth` (field `credential`), and the three `GSC_*` variables are set on Convex prod. To issue a new token, repeat the consent and update both places.
 
 Revoking it: remove the app at myaccount.google.com → Security → Third-party access (or delete the OAuth client), then `bunx convex env remove --prod GSC_REFRESH_TOKEN`; the card then reads "not set up".
+
+### Request notifications (ENG-104)
+
+Every request stored by the listing form (`listingRequests.submit`) schedules `notifications.listingRequest`, which announces it on each channel whose variables are set, with a link that opens that request on the broker dashboard (`/dashboard/requests?request=<key>`). Each channel's outcome is stored on the request (`notifications`, shown on its card with "Notify again"); a failed channel is tried once more after 2 minutes. The Requests page says which channels are on and has **Send test notification** (a marked synthetic request, nothing stored). The sidebar's Requests entry shows the number of open requests. The hourly VPS summary (`camsocs monitor`, counts only) keeps running as a fallback.
+
+What each channel carries (the request's text is the public's and unverified):
+
+- **Email**: everything the inbox shows (address, role, message, proposed field names), escaped and marked unverified.
+- **Slack**: kind, listing, role, the submitter's *domain* and a flattened 280-character preview in which no mention, link or `<!channel>` can form. Use an **incoming webhook of its own** posting to a channel Mya is not in, never Mya's bot token: Mya reads its DMs as instructions.
+- **WhatsApp**: kind, listing name and link only, never free text.
+
+**Slack.** api.slack.com/apps → Create New App → From scratch, `CAMsocs requests`, the workspace → Incoming Webhooks → On → Add New Webhook → a new private channel such as `#camsocs-requests` → copy the URL (Mya vault, `CAMsocs Slack requests webhook`), then `bunx convex env set --prod SLACK_REQUESTS_WEBHOOK_URL` (prompts; only `https://hooks.slack.com/…` is accepted).
+
+**Email.** A Resend account with `camsocs.uk` verified (Resend → Domains → add the SPF/DKIM records it lists in IONOS DNS; the sign-in email needs the same), an API key with *sending access* to that domain only, then:
+
+```bash
+bunx convex env set --prod RESEND_API_KEY          # prompts
+bunx convex env set --prod RESEND_FROM "CAMsocs <requests@camsocs.uk>"
+bunx convex env set --prod REQUEST_NOTIFY_EMAIL admin@joshua-fehn.de   # comma-separated for several
+```
+
+**WhatsApp, Meta Cloud API** (robust, free for this volume). developers.facebook.com → Create App → Business → add WhatsApp; use the test number or add your own; add your phone as a recipient; create a permanent token (Business Settings → System users → Generate token, `whatsapp_business_messaging`). WhatsApp Manager → Message templates → Create, category **Utility**, name `camsocs_listing_request`, language English, body `New CAMsocs request: {{1}} for {{2}}. Open it: {{3}}` (samples: `Claim`, `Chess Club`, `https://camsocs.uk/dashboard/requests?request=lr-123`). Once approved, set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TO` (your number, digits only) and, if you named or localised it differently, `WHATSAPP_TEMPLATE` / `WHATSAPP_TEMPLATE_LANG` (default `en`).
+
+**WhatsApp, CallMeBot** (two minutes, one personal number, a free third-party relay: the text passes through callmebot.com, which is why it carries nothing personal). Add +34 644 66 32 62 to your contacts, send it "I allow callmebot to send me messages" on WhatsApp, and set `CALLMEBOT_PHONE` (with country code) and `CALLMEBOT_APIKEY` from its answer. Meta's variables win when both are set.
+
+Switching a channel off: `bunx convex env remove --prod <VAR>`; it takes effect on the next request, no deploy needed.
 
 ## 4. The pipeline against production
 

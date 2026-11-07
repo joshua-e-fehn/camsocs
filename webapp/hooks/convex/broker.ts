@@ -3,7 +3,7 @@
 // `requireBrokerUser`, so they are only mounted inside `BrokerGate`
 // (components/organisms/broker-gate.tsx) — a non-broker would get a thrown
 // query instead of an empty page.
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
+import { useAction, useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import type { FunctionReturnType } from "convex/server"
 import { ConvexError } from "convex/values"
 import { useEffect } from "react"
@@ -136,6 +136,21 @@ export function useBrokerIntroductionMutations() {
     create: useMutation(api.broker.introductions.create),
     update: useMutation(api.broker.introductions.update),
     remove: useMutation(api.broker.introductions.remove),
+  }
+}
+
+/** Open requests for the sidebar badge (ENG-104). The sidebar sits outside
+ * BrokerGate, so it passes `enabled` only once the caller is a broker. */
+export function useOpenRequestCount(enabled: boolean) {
+  return useQuery(api.broker.listingRequests.openCount, enabled ? {} : "skip")
+}
+
+/** Which notification channels are on, the test send and "Notify again". */
+export function useRequestNotifications() {
+  return {
+    channels: useQuery(api.broker.listingRequests.notificationChannels),
+    sendTest: useAction(api.broker.listingRequests.sendTestNotification),
+    notifyAgain: useMutation(api.broker.listingRequests.notifyAgain),
   }
 }
 
