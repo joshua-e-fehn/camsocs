@@ -3,10 +3,18 @@ import { addDays } from "./calendar"
 import {
   academicYearLabel,
   byAcademicYear,
+  formatDayLong,
   formatDayWithYear,
   fullTermDays,
+  leadingYear,
+  nextTerm,
+  termAnswer,
+  termDatesDescription,
+  termDatesTitle,
+  termSeasons,
   termTitle,
   termWeeks,
+  upcomingTerms,
 } from "./term-calendar"
 import { type TermDatesRow, termWeekOf } from "./term-week"
 
@@ -68,4 +76,79 @@ test("labels", () => {
   expect(academicYearLabel("2026-27")).toBe("2026–27")
   expect(termTitle(LENT)).toBe("Lent 2027")
   expect(formatDayWithYear("2026-10-06")).toBe("Tue 6 Oct 2026")
+})
+
+const EASTER: TermDatesRow = {
+  academicYear: "2026-27",
+  term: "easter",
+  fullTermStart: "2027-04-27",
+  fullTermEnd: "2027-06-18",
+}
+const ROWS = [NEXT_MICHAELMAS, EASTER, LENT, MICHAELMAS]
+/** Noon in London on `iso` (GMT and BST both keep the London day). */
+const at = (iso: string) => Date.parse(`${iso}T12:00:00Z`)
+
+describe("search-facing words", () => {
+  test("formatDayLong spells the day out", () => {
+    expect(formatDayLong("2027-01-19")).toBe("Tuesday 19 January 2027")
+  })
+
+  test("nextTerm and upcomingTerms read the stored dates in order", () => {
+    expect(nextTerm(ROWS, "2026-11-07")).toEqual(LENT)
+    expect(nextTerm(ROWS, "2027-01-19")).toEqual(EASTER)
+    expect(nextTerm(ROWS, "2027-10-05")).toBeUndefined()
+    expect(upcomingTerms(ROWS, "2026-11-07")).toEqual([MICHAELMAS, LENT, EASTER, NEXT_MICHAELMAS])
+    expect(upcomingTerms(ROWS, "2026-12-05")).toEqual([LENT, EASTER, NEXT_MICHAELMAS])
+  })
+
+  test("the leading year is the current or next term's", () => {
+    expect(leadingYear(ROWS, at("2026-11-07"))).toBe("2026-27")
+    expect(leadingYear(ROWS, at("2027-07-01"))).toBe("2027-28")
+  })
+
+  test("the title names the year and when the next Full Term starts, within 60 characters", () => {
+    expect(termDatesTitle(ROWS, at("2026-11-07"))).toBe(
+      "Cambridge term dates 2026–27: Lent 2027 starts 19 Jan",
+    )
+    expect(termDatesTitle(ROWS, at("2027-02-01"))).toBe(
+      "Cambridge term dates 2026–27: Easter 2027 starts 27 Apr",
+    )
+    // In Easter Term the next term is next year's, and so is the title.
+    expect(termDatesTitle(ROWS, at("2027-05-10"))).toBe(
+      "Cambridge term dates 2027–28: Michaelmas 2027 starts 5 Oct",
+    )
+    expect(termDatesTitle(ROWS, at("2027-11-01"))).toBe("Cambridge term dates 2027–28")
+    for (const day of ["2026-11-07", "2027-02-01", "2027-05-10", "2027-08-01"])
+      expect(termDatesTitle(ROWS, at(day)).length).toBeLessThanOrEqual(60)
+  })
+
+  test("the description lists the next three Full Terms and fits a search result", () => {
+    const description = termDatesDescription(ROWS, at("2026-11-07"))
+    expect(description).toStartWith(
+      "Full Term: Michaelmas 2026 6 Oct–4 Dec, Lent 2027 19 Jan–19 Mar, Easter 2027 27 Apr–18 Jun.",
+    )
+    expect(description.length).toBeLessThanOrEqual(155)
+    expect(termDatesDescription(ROWS, at("2027-07-01"))).toStartWith(
+      "Full Term: Michaelmas 2027 5 Oct–3 Dec.",
+    )
+    expect(termDatesDescription([], at("2026-11-07"))).toStartWith("Cambridge Full Term dates")
+  })
+
+  test("termAnswer answers 'when is … term' from the dates and the week rule", () => {
+    expect(termAnswer(LENT)).toEqual({
+      id: "lent-2027",
+      question: "When is Lent Term 2027?",
+      answer:
+        "Full Term runs from Tuesday 19 January to Friday 19 March 2027. Week 1 starts on Thursday 21 January.",
+    })
+    expect(termAnswer(MICHAELMAS).answer).toBe(
+      "Full Term runs from Tuesday 6 October to Friday 4 December 2026. Week 1 starts on Thursday 8 October.",
+    )
+  })
+
+  test("termSeasons names each term's months", () => {
+    expect(termSeasons([EASTER, MICHAELMAS, LENT])).toBe(
+      "Michaelmas (October to December), Lent (January to March) and Easter (April to June)",
+    )
+  })
 })
