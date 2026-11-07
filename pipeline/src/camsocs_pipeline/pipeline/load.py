@@ -58,6 +58,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -159,6 +160,31 @@ SOCIETY_FILE_FIELDS = frozenset({("organisation", "logo"), ("event", "image")})
 #: Bytes and content type of an image URL fetched for a purpose, or None
 #: (`media.CachedImages`).
 MediaSource = Callable[[str, FetchPurpose], tuple[bytes, str] | None]
+
+
+#: Opt-in payload digest: set to a file path and every ingestion request
+#: appends one line ``{"path", "count", "sha256"}`` to it, a dry run's too —
+#: never the payload itself. Two runs over the same staging (base and branch,
+#: `pipeline -- sync --stages load --dry-run`) then compare line by line.
+#: `count` is the number of rows the request carries; `sha256` is over the
+#: payload's `canonical_json` without its top-level ``runKey``, which every
+#: run mints anew and which would otherwise make no two runs agree.
+PAYLOAD_DIGEST_ENV = "CAMSOCS_PAYLOAD_DIGEST"
+
+
+def append_payload_digest(path: str, payload: dict[str, Any]) -> None:
+    """One line of the payload digest (`PAYLOAD_DIGEST_ENV`); nothing when unset."""
+    target = os.environ.get(PAYLOAD_DIGEST_ENV)
+    if not target:
+        return
+    hashed = {name: value for name, value in payload.items() if name != "runKey"}
+    line = {
+        "path": path,
+        "count": sum(len(value) for value in payload.values() if isinstance(value, list)),
+        "sha256": hashlib.sha256(canonical_json(hashed).encode("utf-8")).hexdigest(),
+    }
+    with open(target, "a", encoding="utf-8") as out:
+        out.write(json.dumps(line, sort_keys=True) + "\n")
 
 
 #: The claims route's refusal of an image claim whose `storageId` the
@@ -330,7 +356,9 @@ class ConvexLoader:
         return bool(self._request("GET", "health").get("ok"))
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """One ingestion request. In a dry run the payload is serialised and discarded."""
+        """One ingestion request. In a dry run the payload is serialised and
+        discarded. With `PAYLOAD_DIGEST_ENV` set, its digest is appended first."""
+        append_payload_digest(path, payload)
         if self.dry_run:
             json.dumps(payload)
             return {"inserted": 0, "updated": 0, "unchanged": 0, "dryRun": True}
