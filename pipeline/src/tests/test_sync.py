@@ -451,3 +451,132 @@ def test_the_summary_payload_has_one_line_per_stage_and_the_coverage(make_settin
     assert payload["coverage"] == {"listed": 793, "counterparts": 168, "upcomingEvents": 533}
     assert all("notes" not in stage for stage in payload["stages"])
     json.dumps(payload)  # serialisable as it is
+
+
+# --- the campus's registry (decision D8) ----------------------------------------------------------
+
+
+def test_the_stage_order_is_cambridges_registry() -> None:
+    from camsocs_pipeline.campuses import CAMBRIDGE
+    from camsocs_pipeline.stages import groups as campus_groups
+    from camsocs_pipeline.stages import registry as campus_registry
+
+    assert campus_registry(CAMBRIDGE) is STAGES
+    assert campus_groups(CAMBRIDGE) is GROUPS
+    assert tuple(stage.name for stage in campus_registry(CAMBRIDGE)) == STAGE_ORDER
+
+
+def test_every_stage_sees_the_runs_campus_profile(make_settings) -> None:
+    from camsocs_pipeline.campuses import CAMBRIDGE
+
+    seen = []
+    report = run_sync(
+        settings=make_settings(),
+        dry_run=True,
+        registry=registry(fetch=lambda ctx: seen.append(ctx.profile)),
+    )
+    assert report.ok
+    assert seen == [CAMBRIDGE]
+
+
+def test_the_default_registry_is_the_campus_registry(make_settings) -> None:
+    """Without `registry=`, a run resolves stage names against the active
+    campus's registry: Cambridge's real stages here."""
+    report = run_sync(settings=make_settings(), dry_run=True, stages=["term_dates"])
+    assert [stage.name for stage in report.stages] == ["term_dates"]
+    with pytest.raises(ValueError, match="Unknown stage"):
+        run_sync(settings=make_settings(), dry_run=True, stages=["discover"])
+
+
+# --- run-log fields and stage statistics (L6) ------------------------------------
+
+
+def test_runs_start_carries_the_group_and_the_stated_revision(
+    make_settings, net, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    routes = mock_convex(net)
+    monkeypatch.setenv("CAMSOCS_REVISION", "0123456789abcdef0123456789abcdef01234567")
+    group = StageGroup("events", stages=("discover",))
+
+    run_sync(
+        settings=make_settings(convex_http_url=SITE, pipeline_api_key="test-key"),
+        group=group,
+        registry=registry(),
+    )
+
+    start = json.loads(routes["start"].calls[0].request.content)
+    assert start["group"] == "events"
+    assert start["revision"] == "0123456789abcdef0123456789abcdef01234567"
+    assert start["command"] == "sync --group events"
+
+
+def test_an_ad_hoc_run_sends_no_group_and_a_checkout_revision(make_settings, net) -> None:
+    from camsocs_pipeline.pipeline.sync import run_revision
+
+    routes = mock_convex(net)
+    run_sync(
+        settings=make_settings(convex_http_url=SITE, pipeline_api_key="test-key"),
+        stages=["discover"],
+        registry=registry(),
+    )
+
+    start = json.loads(routes["start"].calls[0].request.content)
+    assert "group" not in start, "omitted, never null: runs.start's field is optional"
+    revision = run_revision()
+    if revision is None:
+        assert "revision" not in start
+    else:
+        assert start["revision"] == revision and len(revision) == 40
+
+
+@pytest.mark.parametrize("stated", ["main", "Dr Example", "12345", "../../etc"])
+def test_a_stated_revision_that_is_not_a_commit_is_ignored(
+    monkeypatch: pytest.MonkeyPatch, stated: str
+) -> None:
+    import camsocs_pipeline.pipeline.sync as sync_module
+
+    monkeypatch.setenv("CAMSOCS_REVISION", stated)
+    monkeypatch.setattr(sync_module, "REPO_ROOT", sync_module.REPO_ROOT / "no-such-dir")
+    assert sync_module.run_revision() is None
+
+
+def test_runs_finish_carries_each_stage_duration_and_fetch_metrics(make_settings, net) -> None:
+    from camsocs_pipeline import fetch_stats
+    from camsocs_pipeline.sources.policy import GENERAL
+
+    routes = mock_convex(net)
+
+    def counted(ctx: StageContext) -> None:
+        ctx.report.inserted += 1
+        ctx.report.metrics["fetchRequests"] = 99  # the stage's own name wins
+        fetch_stats.record_fetch(
+            "https://soc.example.org/",
+            GENERAL,
+            outcome="fetched",
+            status=200,
+            from_cache=False,
+            override=None,
+            trace=None,
+        )
+
+    report = run_sync(
+        settings=make_settings(convex_http_url=SITE, pipeline_api_key="test-key"),
+        registry=[Stage("counted", counted), Stage("plain", ok_stage)],
+    )
+
+    assert report.ok
+    finish = json.loads(routes["finish"].calls[0].request.content)
+    counted_row, plain_row = finish["stages"]
+    assert isinstance(counted_row["durationMs"], int) and counted_row["durationMs"] >= 0
+    assert counted_row["metrics"]["fetchRequests"] == 99
+    assert counted_row["metrics"]["fetchFetched"] == 1
+    assert "metrics" not in plain_row, "a stage that fetched nothing adds no metrics"
+    assert "durationMs" in plain_row
+
+
+def test_a_stage_not_run_records_no_duration(make_settings) -> None:
+    report = run_sync(
+        settings=make_settings(), dry_run=True, registry=registry(resolve=failing_stage)
+    )
+    load_row = report.stages[-1].to_payload()
+    assert report.stages[-1].status == "not_run" and "durationMs" not in load_row

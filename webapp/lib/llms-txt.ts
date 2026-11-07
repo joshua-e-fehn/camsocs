@@ -1,3 +1,4 @@
+import { currentCampus } from "./campus"
 import { CATEGORIES_PATH, categoryHubPath } from "./directory-hubs"
 import { CONTACT_EMAIL, DISCLAIMER, SITE_NAME, SITE_URL } from "./site"
 import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
@@ -13,16 +14,16 @@ import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
  * holds that. Static: built once, served from the CDN.
  */
 
-/** Its own summary, not SITE_DESCRIPTION, which names the talks pillar. */
-const SUMMARY =
-  "Cambridge student societies and sports clubs and the events they run, in one place. Every fact links to the page it came from."
+/** Its own summary, not SITE_DESCRIPTION, which names the talks pillar (the
+ * campus's `brand.llmsSummary`, lib/campus). */
+const campus = currentCampus()
+const SUMMARY = campus.brand.llmsSummary
 
 const PAGES: { path: string; name: string; about: string }[] = [
   {
     path: "/societies",
     name: "Societies and clubs",
-    about:
-      "the directory of Cambridge student societies and sports clubs, searchable and filterable by category, college and more",
+    about: `the directory of ${campus.place.name} student societies and sports clubs, searchable and filterable by category, college and more`,
   },
   {
     path: CATEGORIES_PATH,
@@ -41,7 +42,7 @@ const PAGES: { path: string; name: string; about: string }[] = [
   },
   {
     path: "/about",
-    name: "About CAMsocs",
+    name: `About ${SITE_NAME}`,
     about: "who runs it, where every fact comes from and how the data is collected",
   },
   { path: "/privacy", name: "Privacy notice", about: "the UK GDPR notice" },
@@ -49,7 +50,7 @@ const PAGES: { path: string; name: string; about: string }[] = [
   {
     path: "/request",
     name: "Claim, correct or remove a listing",
-    about: "how a society changes what CAMsocs says about it",
+    about: `how a society changes what ${SITE_NAME} says about it`,
   },
 ]
 
@@ -61,7 +62,7 @@ export function llmsTxt(): string {
     "",
     DISCLAIMER,
     "",
-    "Every listing shows, for each fact, the page it came from, when it was read and how sure we are. Societies' own pages and the sources they cite are the authority; CAMsocs is a directory of them.",
+    `Every listing shows, for each fact, the page it came from, when it was read and how sure we are. Societies' own pages and the sources they cite are the authority; ${SITE_NAME} is a directory of them.`,
     "",
     "## Pages",
     "",
@@ -75,10 +76,10 @@ export function llmsTxt(): string {
       (category) => `- [${CATEGORY_LABELS[category]}](${SITE_URL}${categoryHubPath(category)})`,
     ),
     "",
-    "## Citing CAMsocs",
+    `## Citing ${SITE_NAME}`,
     "",
-    `- Cite a society or event by its CAMsocs page (${SITE_URL}/societies/<slug>, ${SITE_URL}/events/<key>) and, where it matters, the source that page links.`,
-    "- Call it CAMsocs, an unofficial directory. Never present it as a University of Cambridge or Cambridge SU service.",
+    `- Cite a society or event by its ${SITE_NAME} page (${SITE_URL}/societies/<slug>, ${SITE_URL}/events/<key>) and, where it matters, the source that page links.`,
+    `- Call it ${SITE_NAME}, an unofficial directory. Never present it as a ${campus.university.name} or ${campus.university.studentUnion} service.`,
     ...(CONTACT_EMAIL ? [`- Corrections: ${CONTACT_EMAIL} or ${SITE_URL}/request`] : []),
     "",
     "Some sections of the site are not offered to AI agents; robots.txt says which.",

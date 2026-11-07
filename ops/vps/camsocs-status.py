@@ -5,7 +5,7 @@
         --started 2026-10-10T03:30:00Z --finished 2026-10-10T03:52:10Z \\
         --exit-code 0 --phase done --commit 0123456789ab \\
         --log /var/log/camsocs/2026-10-10-events.log \\
-        --run-summary /var/lib/camsocs/run-events.json [--invocation ID]
+        --run-summary /var/lib/camsocs/run-events.json [--invocation ID] [--campus ID]
 
 `camsocs-harvest.sh` calls it on every exit once it holds the lock, and when
 the weekly run could not have the lock at all (phase ``lock``). It writes
@@ -13,13 +13,18 @@ the weekly run could not have the lock at all (phase ``lock``). It writes
 ``<state-dir>/status.json`` (the latest run of any group), each whole or not
 at all (a temporary file renamed into place):
 
-    {"group", "environment", "startedAt", "finishedAt", "exitCode",
+    {"group", "campus", "environment", "startedAt", "finishedAt", "exitCode",
      "result": "ok" | "failed" | "timed_out" | "stopped",
      "phase": "done" | "lock" | "update" | "install" | "pipeline" | "prune" | "script"
               | "stopped",
      "commit", "logFile", "invocationId",
      "runKey", "summary": [one line per stage], "failedStages", "warnings",
      "error", "coverage": {"listed", "counterparts", "upcomingEvents", "report"} | null}
+
+``campus`` is the run's campus (decision D8): ``--campus``, else
+``CAMSOCS_CAMPUS`` from the runner's environment, else ``cam`` (Cambridge's
+runner sets neither); a value that is not a campus id (``^[a-z]{2,8}$``) is
+written as ``null`` rather than stop the status file. The alert reads it.
 
 The run's own part comes from the pipeline's ``--summary-json`` file; when the
 pipeline never wrote one (the update failed, the run was killed) those fields
@@ -32,13 +37,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 #: Exit codes with a name of their own (camsocs-harvest.sh's header).
 TIMED_OUT = {124, 137}
 STOPPED = {143}
+#: A campus id (decision D8), and the campus when nothing names one.
+CAMPUS = re.compile(r"[a-z]{2,8}")
+DEFAULT_CAMPUS = "cam"
+
+
+def campus_of(flag: str, environ: Mapping[str, str]) -> str | None:
+    """The run's campus: `flag`, else ``CAMSOCS_CAMPUS``, else Cambridge;
+    `None` when the value given is not a campus id."""
+    value = flag or environ.get("CAMSOCS_CAMPUS", "").strip() or DEFAULT_CAMPUS
+    return value if CAMPUS.fullmatch(value) else None
 
 
 def result_of(exit_code: int) -> str:
@@ -75,10 +92,12 @@ def build_status(
     log_file: str,
     run: dict[str, Any],
     invocation: str = "",
+    campus: str | None = DEFAULT_CAMPUS,
 ) -> dict[str, Any]:
     stages = run.get("stages") if isinstance(run.get("stages"), list) else []
     return {
         "group": group,
+        "campus": campus,
         "environment": environment,
         "startedAt": started,
         "finishedAt": finished,
@@ -121,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log", default="")
     parser.add_argument("--run-summary", type=Path)
     parser.add_argument("--invocation", default="")
+    parser.add_argument("--campus", default="", help="the run's campus (default: cam)")
     args = parser.parse_args(argv)
     if not args.group.isidentifier():
         parser.error(f"not a group name: {args.group!r}")
@@ -136,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         log_file=args.log,
         run=read_run_summary(args.run_summary),
         invocation=args.invocation,
+        campus=campus_of(args.campus, os.environ),
     )
     args.state_dir.mkdir(parents=True, exist_ok=True)
     write_json(args.state_dir / f"status-{args.group}.json", status)

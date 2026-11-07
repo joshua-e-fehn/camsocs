@@ -1,6 +1,14 @@
 "use client"
 
-import { HandshakeIcon, NetworkIcon, SparklesIcon } from "lucide-react"
+import {
+  EyeOffIcon,
+  HandshakeIcon,
+  MessagesSquareIcon,
+  NetworkIcon,
+  ShieldAlertIcon,
+  SparklesIcon,
+  UsersIcon,
+} from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useMemo, useState } from "react"
@@ -23,12 +31,21 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   type BrokerMatch,
   runWithToast,
-  useBrokerGraph,
+  useBrokerEcosystem,
   useBrokerIntroductionMutations,
   useBrokerIntroductions,
   useBrokerMatches,
 } from "@/hooks/convex/broker"
-import { humanize, RELATIONSHIP_LABELS } from "@/lib/broker/format"
+import {
+  ECOSYSTEM_EDGE_LABELS,
+  ECOSYSTEM_LAYERS,
+  type EcosystemEdge,
+  type EcosystemLayer,
+  type EcosystemNode,
+  LAYER_LABELS,
+  limitView,
+} from "@/lib/broker/ecosystem"
+import { formatDate, humanize, RELATIONSHIP_LABELS } from "@/lib/broker/format"
 import {
   CATEGORY_LABELS,
   type Category,
@@ -42,10 +59,33 @@ const RelationshipGraph = dynamic(
   { ssr: false, loading: () => <Skeleton className="aspect-[11/7] w-full rounded-lg" /> },
 )
 
-/** More nodes than this stop being readable; the best-connected are kept. */
-const MAX_NODES = 250
-
 type Visibility = "all" | "public" | "internal"
+
+/** What an edge is, in words: its relationship type or its layer's kind. */
+/** Each layer outside relationships (all internal) has its own stroke, so
+ * co-hosting, sponsor and outreach edges can be told apart on the canvas. */
+const LAYER_DASH: Record<Exclude<EcosystemLayer, "relationships">, string> = {
+  cohosting: "1 3",
+  sponsors: "8 3",
+  outreach: "6 2 1 2",
+}
+
+function edgeLabel(edge: EcosystemEdge): string {
+  if (edge.layer === "relationships") return RELATIONSHIP_LABELS[edge.type] ?? humanize(edge.type)
+  return (
+    ECOSYSTEM_EDGE_LABELS[edge.type as keyof typeof ECOSYSTEM_EDGE_LABELS] ?? humanize(edge.type)
+  )
+}
+
+/** How much stands behind an edge: co-hosted events per academic year, an
+ * introduction's status, or the number of sightings. */
+function edgeDetail(edge: EcosystemEdge): string {
+  if (edge.years.length > 0) {
+    return edge.years.map((year) => `${year.academicYear}: ${year.count}`).join(" · ")
+  }
+  if (edge.status) return humanize(edge.status).toLowerCase()
+  return `${edge.weight} ${edge.weight === 1 ? "sighting" : "sightings"}`
+}
 
 function matchReason(match: BrokerMatch): string {
   const shared = match.sharedCategories.length
@@ -60,44 +100,51 @@ function matchReason(match: BrokerMatch): string {
 }
 
 /**
- * The organisation graph: every relationship (public and internal), filtered
- * by type, as a force-directed picture with a list beside it — and "who could
- * meet whom", complementary needs and offers that become introduction ideas.
+ * The organisation graph: the ecosystem map's layers (lib/broker/ecosystem.ts)
+ * — relationships (public and internal, filtered by type), co-hosted events,
+ * sponsors and the broker's outreach — as a force-directed picture with a
+ * list beside it, and "who could meet whom", complementary needs and offers
+ * that become introduction ideas. People are only ever a count.
  */
 export function BrokerGraph() {
+  const [layers, setLayers] = useState<EcosystemLayer[]>(["relationships"])
   const [types, setTypes] = useState<RelationshipType[]>([])
   const [visibility, setVisibility] = useState<Visibility>("all")
   const [selected, setSelected] = useState<string | null>(null)
-  const graph = useBrokerGraph(types)
+  const graph = useBrokerEcosystem(layers, layers.includes("relationships") ? types : [])
 
   const view = useMemo(() => {
     if (!graph) return undefined
-    const edges: GraphEdge[] = graph.edges.filter(
-      (edge) => visibility === "all" || edge.visibility === visibility,
-    )
-    const degree = new Map<string, number>()
-    for (const edge of edges) {
-      degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1)
-      degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1)
-    }
-    const nodes: GraphNode[] = graph.nodes
-      .filter((node) => degree.has(node.key))
-      .map((node) => ({ ...node, degree: degree.get(node.key) ?? 0 }))
-      .sort((a, b) => b.degree - a.degree || a.name.localeCompare(b.name))
-      .slice(0, MAX_NODES)
-    const kept = new Set(nodes.map((node) => node.key))
+    const limited = limitView(graph, { visibility })
+    const nodes: GraphNode[] = limited.nodes.map((node) => ({
+      key: node.id,
+      name: node.name,
+      isCounterpart: node.isCounterpart,
+      degree: node.degree,
+    }))
+    const edges: GraphEdge[] = limited.edges.map((edge) => ({
+      key: edge.id,
+      from: edge.from,
+      to: edge.to,
+      type: edge.type,
+      visibility: edge.visibility,
+      label: edgeLabel(edge),
+      dash: edge.layer === "relationships" ? undefined : LAYER_DASH[edge.layer],
+    }))
     return {
       nodes,
-      edges: edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to)),
-      dropped: degree.size - nodes.length,
-      names: new Map(graph.nodes.map((node) => [node.key, node.name])),
+      edges,
+      ecosystemEdges: limited.edges,
+      dropped: limited.dropped,
+      byId: new Map(graph.nodes.map((node) => [node.id, node])),
     }
   }, [graph, visibility])
 
+  const selectedNode = selected ? view?.byId.get(selected) : undefined
   const selectedEdges = useMemo(
     () =>
       view && selected
-        ? view.edges.filter((edge) => edge.from === selected || edge.to === selected)
+        ? view.ecosystemEdges.filter((edge) => edge.from === selected || edge.to === selected)
         : [],
     [view, selected],
   )
@@ -106,7 +153,7 @@ export function BrokerGraph() {
     <>
       <BrokerPageHeader
         title="Graph"
-        description="Sponsors, co-hosts, sister societies and affiliations — and who could usefully meet."
+        description="Sponsors, co-hosts, sister societies and affiliations, your outreach — and who could usefully meet."
       />
 
       <div className="flex flex-col gap-2">
@@ -115,20 +162,43 @@ export function BrokerGraph() {
           variant="outline"
           size="sm"
           spacing={1}
-          value={types}
+          value={layers}
           onValueChange={(value) => {
-            setTypes(value as RelationshipType[])
+            // At least one layer stays on.
+            if (value.length === 0) return
+            setLayers(value as EcosystemLayer[])
             setSelected(null)
           }}
           className="flex-wrap"
-          aria-label="Relationship types"
+          aria-label="Layers"
         >
-          {RELATIONSHIP_TYPES.map((type) => (
-            <ToggleGroupItem key={type} value={type}>
-              {RELATIONSHIP_LABELS[type]}
+          {ECOSYSTEM_LAYERS.map((layer) => (
+            <ToggleGroupItem key={layer} value={layer}>
+              {LAYER_LABELS[layer]}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        {layers.includes("relationships") && (
+          <ToggleGroup
+            type="multiple"
+            variant="outline"
+            size="sm"
+            spacing={1}
+            value={types}
+            onValueChange={(value) => {
+              setTypes(value as RelationshipType[])
+              setSelected(null)
+            }}
+            className="flex-wrap"
+            aria-label="Relationship types"
+          >
+            {RELATIONSHIP_TYPES.map((type) => (
+              <ToggleGroupItem key={type} value={type}>
+                {RELATIONSHIP_LABELS[type]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
         <ToggleGroup
           type="single"
           variant="outline"
@@ -148,15 +218,32 @@ export function BrokerGraph() {
           <CardContent className="flex flex-col gap-3">
             {view === undefined ? (
               <Skeleton className="aspect-[11/7] w-full rounded-lg" />
+            ) : view.nodes.length === 0 &&
+              visibility !== "all" &&
+              (graph?.edges.length ?? 0) > 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <NetworkIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No {visibility} edges in these layers</EmptyTitle>
+                  <EmptyDescription>
+                    {visibility === "public"
+                      ? "The co-hosting, sponsor and outreach layers are internal. Choose All or Internal to see them."
+                      : "These layers hold only public relationships. Choose All or Public to see them."}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : view.nodes.length === 0 ? (
               <Empty>
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <NetworkIcon />
                   </EmptyMedia>
-                  <EmptyTitle>No relationships yet</EmptyTitle>
+                  <EmptyTitle>Nothing in these layers yet</EmptyTitle>
                   <EmptyDescription>
-                    Edges appear as the pipeline finds sponsors, co-hosted events and affiliations.
+                    Edges appear as the pipeline finds sponsors, co-hosted events and affiliations,
+                    and as you record introductions and interactions.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -168,12 +255,12 @@ export function BrokerGraph() {
                 onSelect={setSelected}
               />
             )}
-            <GraphLegend />
+            <GraphLegend layers={layers} />
             {view && (view.dropped > 0 || graph?.truncated) && (
               <p className="text-xs text-muted-foreground">
                 Showing the {view.nodes.length} best-connected organisations
-                {view.dropped > 0 && `; ${view.dropped} more are left out`}. Filter by type to see
-                them.
+                {view.dropped > 0 && `; ${view.dropped} more are left out`}. Filter by layer or type
+                to see them.
               </p>
             )}
           </CardContent>
@@ -182,12 +269,12 @@ export function BrokerGraph() {
         <Card>
           <CardHeader>
             <CardTitle className="truncate">
-              {selected ? (view?.names.get(selected) ?? selected) : "Select an organisation"}
+              {selected ? (selectedNode?.name ?? selected) : "Select an organisation"}
             </CardTitle>
             <CardDescription>
-              {selected ? (
+              {selectedNode ? (
                 <Link
-                  href={`/dashboard/organisations?org=${selected}`}
+                  href={`/dashboard/organisations?org=${selectedNode.key}`}
                   className="underline-offset-4 hover:underline"
                 >
                   Open its record
@@ -197,25 +284,27 @@ export function BrokerGraph() {
               )}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
+            {selectedNode && <NodeBadges node={selectedNode} />}
             <ul className="flex max-h-96 flex-col gap-2 overflow-auto text-sm">
               {selectedEdges.map((edge) => {
                 const other = edge.from === selected ? edge.to : edge.from
                 return (
-                  <li key={edge.key} className="flex flex-col">
+                  <li key={edge.id} className="flex flex-col">
                     <span className="text-xs text-muted-foreground">
-                      {edge.from === selected
-                        ? RELATIONSHIP_LABELS[edge.type]
-                        : `${RELATIONSHIP_LABELS[edge.type]} (incoming)`}{" "}
-                      · {edge.visibility}
+                      {edge.from === selected ? edgeLabel(edge) : `${edgeLabel(edge)} (incoming)`} ·{" "}
+                      {edge.layer === "relationships" ? edge.visibility : LAYER_LABELS[edge.layer]}
                     </span>
                     <button
                       type="button"
                       className="text-left font-medium underline-offset-4 hover:underline"
                       onClick={() => setSelected(other)}
                     >
-                      {view?.names.get(other) ?? other}
+                      {view?.byId.get(other)?.name ?? other}
                     </button>
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {edgeDetail(edge)}
+                    </span>
                   </li>
                 )
               })}
@@ -229,7 +318,50 @@ export function BrokerGraph() {
   )
 }
 
-function GraphLegend() {
+/**
+ * What the map knows about one organisation beyond its edges, each as an icon
+ * and words (never colour alone): a sensitive society (Art 9), a hidden
+ * listing, how many people the CRM holds (a count; people are never nodes)
+ * and your interactions with it.
+ */
+function NodeBadges({ node }: { node: EcosystemNode }) {
+  if (!node.sensitive && !node.hidden && node.people === 0 && node.interactions === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {node.sensitive && (
+        <Badge variant="outline">
+          <ShieldAlertIcon />
+          sensitive
+        </Badge>
+      )}
+      {node.hidden && (
+        <Badge variant="outline">
+          <EyeOffIcon />
+          hidden
+        </Badge>
+      )}
+      {node.people > 0 && (
+        <Badge variant="outline" className="font-mono tabular-nums">
+          <UsersIcon />
+          {node.people} {node.people === 1 ? "person" : "people"}
+        </Badge>
+      )}
+      {node.interactions > 0 && (
+        <Badge variant="outline" className="font-mono tabular-nums">
+          <MessagesSquareIcon />
+          {node.interactions} {node.interactions === 1 ? "interaction" : "interactions"}
+          {node.lastInteractionAt !== undefined && `, last ${formatDate(node.lastInteractionAt)}`}
+        </Badge>
+      )}
+    </div>
+  )
+}
+
+function GraphLegend({ layers }: { layers: readonly EcosystemLayer[] }) {
+  const others = ECOSYSTEM_LAYERS.filter(
+    (layer): layer is Exclude<EcosystemLayer, "relationships"> =>
+      layer !== "relationships" && layers.includes(layer),
+  )
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
@@ -252,6 +384,22 @@ function GraphLegend() {
         </svg>
         internal
       </span>
+      {others.map((layer) => (
+        <span key={layer} className="flex items-center gap-1.5">
+          <svg width="28" height="8" aria-hidden="true">
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="var(--muted-foreground)"
+              strokeWidth="2"
+              strokeDasharray={LAYER_DASH[layer]}
+            />
+          </svg>
+          {LAYER_LABELS[layer]} (internal)
+        </span>
+      ))}
       <span className="flex items-center gap-1.5">
         <svg width="12" height="12" aria-hidden="true">
           <circle cx="6" cy="6" r="5" fill="var(--card)" stroke="var(--foreground)" />
@@ -272,7 +420,7 @@ function GraphLegend() {
         </svg>
         counterpart
       </span>
-      <span>size: number of relationships</span>
+      <span>size: number of edges</span>
     </div>
   )
 }

@@ -40,7 +40,13 @@ from the checkout the harvest can write.
   could not answer and of the site checks that recovered, and new listing
   requests as a count per kind (a kind's shape, a number) with the window's
   times (ENG-33). No event property and no page text is in that file to
-  begin with.
+  begin with. The monitor's shadow checks (decision D9) are never in it.
+- **The campus** (decision D8): a status file may name its campus
+  (``campus``, ``^[a-z]{2,8}$``) and, the monitor's, the campus's site
+  (``site``, an ``https://`` origin), which replaces the default requests
+  inbox (`REQUESTS_INBOX`, Cambridge's). Both are optional and
+  shape-checked; a campus other than ``cam`` is named in the message's first
+  line, and Cambridge's messages read as they did before the campus existed.
 - **The backup and the restore test** (``<group>`` ``backup`` /
   ``restore_test``, ENG-44, ``camsocs-backup.py``): from systemd's ``MONITOR_*``
   variables only — the exit status, mapped to what it means
@@ -92,14 +98,26 @@ MONITOR_GROUP = "monitor"
 #: A monitor check's name, and a name of one of its counts.
 _CHECK = re.compile(r"[a-z][a-z_]{0,39}")
 _COUNT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]{0,39}")
-#: Checks named at most.
-MAX_CHECKS = 8
+#: Checks named at most (the monitor's paging checks once every shadow
+#: check is promoted, decision D9).
+MAX_CHECKS = 16
 #: A site check's failure reason: an exception class name or `HTTP 503`.
 _REASON = re.compile(r"[A-Z][A-Za-z]{0,39}|HTTP \d{3}")
 #: A listing request's kind (`LISTING_REQUEST_KINDS`, or `other`).
 _KIND = re.compile(r"[a-z]{1,20}")
-#: Where requests are read and answered.
+#: Where requests are read and answered: Cambridge's, unless the status file
+#: names another campus's site (``site``).
 REQUESTS_INBOX = "https://camsocs.uk/dashboard/requests"
+#: The requests inbox's path on a campus's site.
+INBOX_PATH = "/dashboard/requests"
+#: A campus id (decision D8) and a campus site: an https origin, no path.
+_CAMPUS = re.compile(r"[a-z]{2,8}")
+_SITE = re.compile(
+    r"https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    r"(?::\d{1,5})?"
+)
+#: The campus whose messages name no campus (the default everywhere).
+DEFAULT_CAMPUS = "cam"
 #: The backup's pseudo-groups (camsocs-backup.service, camsocs-restore-test.service).
 BACKUP_GROUP = "backup"
 RESTORE_TEST_GROUP = "restore_test"
@@ -242,6 +260,20 @@ def _shaped(value: Any, pattern: re.Pattern[str]) -> str | None:
     return value if isinstance(value, str) and pattern.fullmatch(value) else None
 
 
+def campus_tag(status: Mapping[str, Any]) -> str:
+    """`` (campus ox)`` for a status file of another campus than Cambridge;
+    nothing for Cambridge's, a file without one or one of the wrong shape."""
+    campus = _shaped(status.get("campus"), _CAMPUS)
+    return f" (campus {campus})" if campus and campus != DEFAULT_CAMPUS else ""
+
+
+def requests_inbox(status: Mapping[str, Any]) -> str:
+    """Where the campus's requests are answered: its site's inbox when the
+    status file names a site of the right shape, else Cambridge's."""
+    site = _shaped(status.get("site"), _SITE)
+    return f"{site}{INBOX_PATH}" if site else REQUESTS_INBOX
+
+
 def log_path(group: str, status: Mapping[str, Any], today: str) -> str:
     """Where the run's log is on the host: the status file's path when it has
     the runner's own shape, else the day's log of the group."""
@@ -271,12 +303,13 @@ def build_message(
     if exit_status is None:
         code = status.get("exitCode")
         exit_status = str(code) if isinstance(code, int) and not isinstance(code, bool) else "?"
-    head = f":rotating_light: camsocs harvest *{group}* failed on {host}"
     facts = [f"exit status {exit_status}" + (f" ({exit_code}, {result})" if exit_code else "")]
     invocation = environ.get("MONITOR_INVOCATION_ID")
     current = bool(status) and (
         not invocation or not status.get("invocationId") or status["invocationId"] == invocation
     )
+    tag = campus_tag(status) if current else ""
+    head = f":rotating_light: camsocs harvest *{group}* failed on {host}{tag}"
     body = [head]
     if current:
         phase = status.get("phase")
@@ -347,10 +380,11 @@ def _names(value: Any) -> list[str]:
     return names[:MAX_CHECKS]
 
 
-def _requests_lines(requests: Any) -> list[str]:
+def _requests_lines(requests: Any, *, inbox: str = REQUESTS_INBOX, tag: str = "") -> list[str]:
     """New listing requests: their total and a count per kind, from numbers
     and kinds of a known shape only (never a request's content: there is none
-    in the file). Nothing when there are none or they were not counted."""
+    in the file), and the campus's inbox. Nothing when there are none or they
+    were not counted."""
     if not isinstance(requests, dict) or requests.get("status") != "ok":
         return []
     by_kind = requests.get("byKind")
@@ -368,8 +402,8 @@ def _requests_lines(requests: Any) -> list[str]:
     until = _shaped(requests.get("until"), _INSTANT)
     span = f" (stored {since} to {until})" if since and until else ""
     return [
-        f":inbox_tray: camsocs: {total} new listing {noun}: {kinds}{span}",
-        f"Read and answer: {REQUESTS_INBOX}",
+        f":inbox_tray: camsocs{tag}: {total} new listing {noun}: {kinds}{span}",
+        f"Read and answer: {inbox}",
     ]
 
 
@@ -399,7 +433,12 @@ def build_monitor_message(
     # always about its failing checks.
     checks_paged = bool(failed) and status.get("checksPaged") is not False
     recovered = _names(status.get("recoveredChecks")) if current else []
-    requests = _requests_lines(status.get("requests")) if current else []
+    tag = campus_tag(status) if current else ""
+    requests = (
+        _requests_lines(status.get("requests"), inbox=requests_inbox(status), tag=tag)
+        if current
+        else []
+    )
     tail = (
         f"status: {DEFAULT_STATE_DIR}/status-monitor.json · "
         "journalctl -u camsocs-monitor · docs/ops-vps.md"
@@ -418,13 +457,13 @@ def build_monitor_message(
     if checks_paged:
         lines = [line for check in failed[:MAX_CHECKS] if (line := _check_line(check))]
         noun = "check" if len(failed) == 1 else "checks"
-        body += [f":rotating_light: camsocs monitor: {len(failed)} {noun} failing on {host}"]
+        body += [f":rotating_light: camsocs monitor: {len(failed)} {noun} failing on {host}{tag}"]
         body += lines
         if names := _names(status.get("unknownChecks")):
             body.append(f"not checked (PostHog did not answer): {', '.join(names)}")
     if recovered:
         body.append(
-            f":white_check_mark: camsocs monitor: {', '.join(recovered)} ok again on {host}"
+            f":white_check_mark: camsocs monitor: {', '.join(recovered)} ok again on {host}{tag}"
         )
     body += requests
     if failed and not checks_paged:

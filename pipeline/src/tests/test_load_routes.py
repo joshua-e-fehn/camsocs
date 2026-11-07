@@ -435,3 +435,45 @@ def test_refusals_name_the_claim_or_the_retired_key() -> None:
     assert _describe(claim) == "org-x.name: too long"
     retired = {"index": 1, "key": "evt-1", "reason": "by is not an event key"}
     assert _describe(retired) == "evt-1: by is not an event key"
+
+
+# --- the run log (L6): runs/start's optional fields, runs/finish's duration ------
+
+
+def test_runs_start_sends_group_and_revision_only_when_known(net) -> None:
+    route = net.post(f"{SITE}/api/pipeline/runs/start").respond(
+        200, json={"runKey": "r1", "created": True}
+    )
+    loader().start_run("r1", command="sync", stages=["fetch"], pipeline_version="0.1.0")
+    loader().start_run(
+        "r2",
+        command="sync --group events",
+        stages=["fetch"],
+        pipeline_version="0.1.0",
+        group="events",
+        revision="0123456789ab",
+    )
+    plain, grouped = (json.loads(call.request.content) for call in route.calls)
+    assert set(plain) == {"runKey", "command", "requestedStages", "pipelineVersion"}
+    assert grouped["group"] == "events" and grouped["revision"] == "0123456789ab"
+
+
+def test_runs_finish_carries_the_stage_duration(net) -> None:
+    from camsocs_pipeline.pipeline.report import RunReport
+
+    route = net.post(f"{SITE}/api/pipeline/runs/finish").respond(
+        200, json={"runKey": "r1", "status": "success", "unchanged": False}
+    )
+    report = RunReport("r1", "sync")
+    ran = report.stage("discover")
+    ran.duration_ms = 1234
+    ran.metrics = {"fetchRequests": 3, "fetchWaitS": 1.5}
+    skipped = report.stage("load")
+    skipped.status = "not_run"
+
+    loader().finish_run(report.to_finish_payload())
+
+    ran_row, skipped_row = json.loads(route.calls[0].request.content)["stages"]
+    assert ran_row["durationMs"] == 1234
+    assert ran_row["metrics"] == {"fetchRequests": 3, "fetchWaitS": 1.5}
+    assert "durationMs" not in skipped_row, "optional on the server: omitted, never null"

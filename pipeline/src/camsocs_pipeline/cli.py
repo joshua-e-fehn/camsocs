@@ -2,6 +2,8 @@
 
     camsocs [--env NAME] <command>       NAME selects pipeline/.env.<NAME> (default dev:
                                          pipeline/.env, or CAMSOCS_ENV_FILE); docs/deploy.md
+    camsocs [--campus ID] <command>      the campus (tenant, decision D8): CAMSOCS_CAMPUS,
+                                         default cam; must agree with the env file
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
     camsocs sync [--stages a,b | --group events|full|talks] [--dry-run] [--limit N]
@@ -13,9 +15,12 @@
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
     camsocs clean-events [--titles] [--apply]   stored events no reader restates; --apply
                                          only with --env prod (docs/deploy.md §7)
-    camsocs monitor [--status-json PATH] production checks against PostHog and the site,
-                                         new listing requests (ENG-10, ENG-33); exits 1
-                                         when it pages (docs/ops-vps.md)
+    camsocs monitor [--status-json PATH] [--json]   production checks against PostHog and
+                                         the site, new listing requests (ENG-10, ENG-33);
+                                         exits 1 when it pages; shadow checks never page
+                                         (D9, docs/ops-vps.md)
+    camsocs graph [--json PATH] [--mermaid PATH]   the stage registry as a graph (JSON,
+                                         Mermaid); offline (`pixi run pipeline-graph`)
 
 `sync` and `harvest` also take `--env NAME` after the command, as `pixi run
 harvest -- --env prod` passes it, and `--summary-json PATH` for a scheduler
@@ -40,7 +45,7 @@ from pathlib import Path
 
 import click
 
-from camsocs_pipeline import __version__
+from camsocs_pipeline import __version__, campuses
 from camsocs_pipeline.config import (
     DEFAULT_ENV,
     ENV_FILE,
@@ -58,11 +63,14 @@ from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
     check_sites,
+    checks_for,
     count_requests,
     read_status,
     requests_window,
     run_checks,
+    run_shadow_checks,
     safe_invocation_id,
+    shadow_checks_for,
     site_client,
     summary,
 )
@@ -79,11 +87,13 @@ from camsocs_pipeline.pipeline.load import (
 )
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
-from camsocs_pipeline.pipeline.sync import GROUPS, STAGE_ORDER, resolve_group, run_sync
+from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
+from camsocs_pipeline.stages import groups as campus_groups
+from camsocs_pipeline.stages import registry
 from camsocs_pipeline.staging.store import StagingStore
 from camsocs_pipeline.telemetry import HarvestTelemetry
 from camsocs_pipeline.worklist import (
@@ -120,33 +130,63 @@ def _configure_logging(verbose: bool) -> None:
         "Default: CAMSOCS_ENV_FILE if set, else pipeline/.env."
     ),
 )
+@click.option(
+    "--campus",
+    "campus",
+    metavar="ID",
+    help=(
+        "The campus (tenant) this run belongs to: cam (default) or another registered id. "
+        "Must agree with CAMSOCS_CAMPUS in the shell and in the env file."
+    ),
+)
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool, env_name: str | None) -> None:
-    """camsocs — Cambridge societies harvesting pipeline."""
+def cli(ctx: click.Context, verbose: bool, env_name: str | None, campus: str | None) -> None:
+    """camsocs: societies, events and talks pipeline."""
     _configure_logging(verbose)
     ctx.ensure_object(dict)
     if "settings" in ctx.obj:
         # Injected (tests): the environment is whatever the caller says.
         ctx.obj.setdefault("env", EnvChoice(DEFAULT_ENV, ENV_FILE))
+        if campus is not None and campus != ctx.obj["settings"].campus:
+            raise click.UsageError(
+                f"--campus {campus} disagrees with the settings' campus "
+                f"{ctx.obj['settings'].campus}."
+            )
         return
     # Read when the command first needs it (`_loaded`), so that `--env` may
     # also follow the command.
     ctx.obj["env_name"] = env_name
+    ctx.obj["campus"] = campus
 
 
 def _loaded(ctx: click.Context) -> dict:
     """The command's settings and environment, read once: `--env` before or
-    after the command, else `CAMSOCS_ENV_FILE`, else `pipeline/.env`."""
+    after the command, else `CAMSOCS_ENV_FILE`, else `pipeline/.env`.
+
+    The settings' campus becomes the process's (`campuses.configure`) here,
+    once, before any stage or thread pool starts."""
     obj = ctx.find_object(dict)
     if "settings" not in obj:
         env_name = obj.get("env_name")
+        campus = obj.get("campus")
         try:
             choice = choose_env(env_name)
-            settings = get_settings() if env_name is None else load_settings(choice)
+            settings = (
+                get_settings()
+                if env_name is None and campus is None
+                else load_settings(choice, campus=campus)
+            )
         except ConfigError as error:
             raise click.ClickException(str(error)) from error
         obj["env"] = choice
         obj["settings"] = settings
+    if "profile" not in obj:
+        try:
+            profile = campuses.get_profile(obj["settings"].campus)
+            campuses.configure(profile)
+        except ConfigError as error:
+            raise click.ClickException(str(error)) from error
+        obj["profile"] = profile
     return obj
 
 
@@ -206,6 +246,7 @@ def status(ctx: click.Context) -> None:
 
     rows = [
         ("Environment", _env(ctx).describe()),
+        ("Campus", f"{settings.campus} ({_loaded(ctx)['profile'].name})"),
         ("Convex HTTP", _convex_http_url(settings)),
         ("Pipeline key", secret(settings.pipeline_api_key)),
         ("LLM base URL", settings.llm_base_url or "(unset)"),
@@ -222,7 +263,7 @@ def status(ctx: click.Context) -> None:
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
-        ("Stages", ", ".join(STAGE_ORDER)),
+        ("Stages", ", ".join(s.name for s in registry(_loaded(ctx)["profile"]))),
         ("State file", str(settings.state_path)),
     ]
     state = load_state(settings.state_path)
@@ -330,8 +371,8 @@ def harvest(
     ctx: click.Context, dry_run: bool, limit: int | None, summary_json: Path | None
 ) -> None:
     """The full harvest, `sync --group full`: every stage in registry order
-    (seed → harvest → resolve → enrich → events → inbox / Instagram /
-    termcards → load → report), then a re-derivation, and the coverage report
+    (seed → harvest → resolve → enrich → classify → events → inbox /
+    Instagram / termcards → load → talks → report), then a re-derivation, and the coverage report
     var/reports/coverage-<date>.md. What `pixi run harvest` runs."""
     _run(ctx, stages=None, group="full", dry_run=dry_run, limit=limit, summary=summary_json)
 
@@ -358,7 +399,8 @@ def _run(
     telemetry = HarvestTelemetry.from_settings(settings)
     try:
         try:
-            chosen = resolve_group(group) if group is not None else None
+            groups = campus_groups(_loaded(ctx)["profile"])
+            chosen = resolve_group(group, groups) if group is not None else None
             report = run_sync(
                 settings=settings,
                 stages=stages,
@@ -395,7 +437,7 @@ def _run(
         # The ClickException above wraps the real failure; send its class.
         cause = error.__cause__ if isinstance(error, click.ClickException) else None
         # An unknown --group is operator-typed text: never sent.
-        known = group if group in GROUPS else None
+        known = group if group in campus_groups(campuses.active()) else None
         command = "sync" if known is None else f"sync --group {known}"
         telemetry.run_aborted(cause or error, group=known, command=command)
         raise
@@ -551,16 +593,28 @@ def clean_events(ctx: click.Context, apply: bool, titles: bool) -> None:
         "listing requests are counted from where the previous run stopped."
     ),
 )
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help=(
+        "Print the verdict as JSON (the status file plus the shadow checks, "
+        "`shadowChecks`) instead of one line per check."
+    ),
+)
 @_env_option
 @click.pass_context
-def monitor(ctx: click.Context, status_json: Path | None) -> None:
-    """Production checks (monitor.py): against PostHog an error spike, a stale
-    harvest, a high zero-result search rate, no pageviews; camsocs.uk's home
-    and societies pages answering 200; and new listing requests by kind.
-    Exits 1 when it pages: a check fails, a site check recovers, or a request
-    arrived. A query PostHog cannot answer is `unknown` and never fails the
-    run. Prints counts, status codes and thresholds only."""
+def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None:
+    """Production checks (monitor.py) for the campus: against PostHog an
+    error spike, a stale harvest, a high zero-result search rate, no
+    pageviews; the campus site's pages answering 200; and new listing
+    requests by kind. Exits 1 when it pages: a check fails, a site check
+    recovers, or a request arrived. A query PostHog cannot answer is
+    `unknown` and never fails the run. The scraper-health checks run in
+    shadow (decision D9): printed, never paged. Prints counts, status codes
+    and thresholds only."""
     settings = _settings(ctx)
+    profile = _loaded(ctx)["profile"]
     if not settings.posthog_query_configured:
         click.echo(
             "monitor: POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID are not set; nothing checked."
@@ -572,22 +626,30 @@ def monitor(ctx: click.Context, status_json: Path | None) -> None:
         raise click.ClickException(str(error)) from error
     previous = read_status(status_json)
     now = datetime.now(UTC)
+    branding = profile.branding
+    invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
     with client:
-        results = run_checks(client)
-        requests = count_requests(client, *requests_window(previous, now=now))
-    with site_client() as site:
-        results += check_sites(site)
-    verdict = assess(results, previous, now=now, requests=requests)
-    for line in summary(verdict):
-        click.echo(f"monitor: {line}")
+        results = run_checks(client, checks_for(profile))
+        requests = count_requests(client, *requests_window(previous, now=now), profile.id)
+        with site_client(branding.about_url) as site:
+            results += check_sites(site, branding.monitor_urls)
+        verdict = assess(
+            results, previous, now=now, requests=requests, campus=profile.id, site=branding.site_url
+        )
+        # Written before the shadow checks run: nothing they do reaches it.
+        _write_summary(status_json, verdict.status_payload(invocation))
+        verdict = verdict.with_shadow(run_shadow_checks(client, shadow_checks_for(profile)))
+    if as_json:
+        click.echo(json.dumps(verdict.json_payload(invocation), indent=1, ensure_ascii=False))
+    else:
+        for line in summary(verdict):
+            click.echo(f"monitor: {line}")
     if verdict.unknown:
         click.echo(
             f"warning: not checked, PostHog did not answer: {', '.join(verdict.unknown)} "
             "(not a failure: an outage must not page)",
             err=True,
         )
-    invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
-    _write_summary(status_json, verdict.status_payload(invocation))
     if verdict.page:
         raise click.ClickException("; ".join(verdict.reasons()))
 
@@ -717,6 +779,42 @@ def talks_demo_seed(ctx: click.Context, days: int) -> None:
         window = EventWindow(start=start, end=start + timedelta(days=days))
         missing = push.sweep(loader, run_id, window, sources)
     click.echo(f"departments {len(departments)}; {result}; swept {missing}")
+
+
+@cli.command()
+@click.option(
+    "--json",
+    "json_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Write the graph JSON (schema camsocs.pipeline-graph/1) here.",
+)
+@click.option(
+    "--mermaid",
+    "mermaid_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Write the Mermaid pipeline map (Markdown) here.",
+)
+@click.pass_context
+def graph(ctx: click.Context, json_path: Path | None, mermaid_path: Path | None) -> None:
+    """The stage registry as a graph: stages, staging directories, Convex
+    routes, groups and sources (spec §5A). Offline; reads no env file. Without
+    a path, prints the JSON. `pixi run pipeline-graph` regenerates the
+    committed copies."""
+    from camsocs_pipeline.graph import GraphError, build_graph, to_json, write_outputs
+
+    if "settings" in ctx.obj:
+        campus_id = ctx.obj["settings"].campus
+    else:
+        campus_id = ctx.obj.get("campus") or os.environ.get("CAMSOCS_CAMPUS") or "cam"
+    try:
+        built = build_graph(campuses.get_profile(campus_id))
+    except (ConfigError, GraphError) as error:
+        raise click.ClickException(str(error)) from error
+    if json_path is None and mermaid_path is None:
+        click.echo(to_json(built), nl=False)
+        return
+    for path in write_outputs(built, json_path, mermaid_path):
+        click.echo(f"wrote {path}")
 
 
 def main() -> None:

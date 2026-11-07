@@ -51,6 +51,7 @@ description, §10).
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 from dataclasses import dataclass, field, replace
@@ -71,6 +72,9 @@ MAX_OCCURRENCES = 400
 #: Zone names that are UTC by another name: never "bogus".
 _UTC_NAMES = frozenset({"utc", "etc/utc", "z", "gmt", "etc/gmt", "universal", "zulu", "etc/zulu"})
 
+#: Cambridge's location rule, the word or a CB postcode (its profile's
+#: `NameRules.location_pattern`). The rule reads the active campus's
+#: (`_campus_location`); for Cambridge it is this regex byte for byte.
 _CAMBRIDGE = re.compile(r"\bcambridge\b|\bCB\d{1,2}\b", re.IGNORECASE)
 _ONLINE = re.compile(r"\b(?:online|zoom|teams|google meet|virtual|livestream|webinar)\b", re.I)
 
@@ -155,10 +159,25 @@ def _disagrees_with_london(wall: datetime) -> bool:
     return _offset(wall) != _offset(wall.astimezone(LONDON))
 
 
+@functools.cache
+def location_regex(pattern: str) -> re.Pattern[str]:
+    """A campus's `NameRules.location_pattern`, compiled once (case-insensitive)."""
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _campus_location() -> re.Pattern[str]:
+    """The active campus's location regex (Cambridge: `_CAMBRIDGE`)."""
+    from camsocs_pipeline.campuses import active
+
+    return location_regex(active().names.location_pattern)
+
+
 def _location_is_cambridge(location: str | None) -> bool:
+    """Whether a location is empty, online or in the active campus's town
+    (Cambridge: the word or a CB postcode). The name predates campuses."""
     if not location or not location.strip():
         return True
-    return bool(_CAMBRIDGE.search(location) or _ONLINE.search(location))
+    return bool(_campus_location().search(location) or _ONLINE.search(location))
 
 
 # --- values -------------------------------------------------------------------------------

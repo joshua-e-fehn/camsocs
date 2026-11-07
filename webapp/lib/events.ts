@@ -8,6 +8,7 @@ import {
   londonTime,
   spanEndOf,
 } from "./calendar"
+import { currentCampus } from "./campus"
 import type { CategoryTone } from "./category-tone"
 import { universityListingLine, utcStamp } from "./ics"
 import { summary } from "./rich-text"
@@ -245,9 +246,10 @@ type CalendarEvent = Timed & {
 }
 
 /** The University as the organiser of its own listings (ENG-24), in words
- * and in JSON-LD: a factual credit, never our branding. */
-export const UNIVERSITY_NAME = "University of Cambridge"
-const UNIVERSITY_URL = "https://www.cam.ac.uk"
+ * and in JSON-LD: a factual credit, never our branding. The campus's own
+ * (lib/campus, decision D8). */
+export const UNIVERSITY_NAME = currentCampus().university.name
+const UNIVERSITY_URL = currentCampus().university.url
 
 /** The words a calendar entry carries: who runs it (or takes part; for one
  * of the University's own listings, the programme and its page there), the

@@ -12,7 +12,8 @@ Around that:
   Convex's (``POST /api/pipeline/crosswalk``; a 404 means the route is not
   deployed yet and the local cache is used alone). It is saved after a real
   run, never after a dry run;
-- operator decisions come from ``pipeline/resolve-decisions.json``;
+- operator decisions come from the campus's decisions file
+  (``pipeline/resolve-decisions.json`` for Cambridge, `ctx.profile.paths`);
 - the quarantine — held observations, dropped references, matches to review —
   is written to ``var/reports/quarantine.json`` every run, dry or not.
 
@@ -28,7 +29,6 @@ import json
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexNotFound
 from camsocs_pipeline.resolve.crosswalk import (
-    DECISIONS_PATH,
     Crosswalk,
     Decisions,
     crosswalk_path,
@@ -67,7 +67,7 @@ def run(ctx: StageContext) -> None:
     resolution = resolve_records(
         records,
         crosswalk=crosswalk,
-        decisions=Decisions.load(DECISIONS_PATH),
+        decisions=Decisions.load(ctx.profile.paths.decisions),
         run_key=ctx.run.run_key,
     )
     written = ctx.staging.write(RESOLVED, ctx.run.run_key, resolution.records)

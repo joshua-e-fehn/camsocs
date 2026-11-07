@@ -1,0 +1,70 @@
+{
+  "_comment": "Campus facts (decision D8, docs/campuses/README.md), shared by both languages. The cam facts equal today's constants: asserted by pipeline/src/tests/test_campus_facts.py (links.CRSID_PATTERN, _CRSID_MAIL_DOMAINS, _ALUMNI_DOMAINS, when._TERM_PREFIX, _THURSDAY) and, once lib/campus exists, by webapp/lib/campus/campus.test.ts. zz ('Testford') is synthetic, for tests only, and never in a production registry. Every emailCases type is in EMAIL_TYPES; the cam cases are today's classifyEmail / email_type output.",
+  "schema": "camsocs.campus-facts/1",
+  "campuses": {
+    "cam": {
+      "name": "University of Cambridge",
+      "site": "https://camsocs.uk",
+      "universityDomains": ["cam.ac.uk"],
+      "terms": {
+        "order": ["michaelmas", "lent", "easter"],
+        "codes": { "michaelmas": "MT", "lent": "LT", "easter": "ET" },
+        "weekStartPy": 3,
+        "weekStartJs": 4,
+        "minWeek": 0,
+        "maxWeek": 10,
+        "labelFormat": "{code}{yy} Wk {week}"
+      },
+      "memberEmail": {
+        "domains": ["cam.ac.uk"],
+        "excluded": ["lists.cam.ac.uk"],
+        "idPattern": "^[a-z]{2,5}[0-9]{1,5}$",
+        "forwarding": ["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"],
+        "alumni": ["cantab.ac.uk", "cantab.net", "oxon.org"],
+        "strictForeignAcademic": false
+      },
+      "officialEventSources": ["uni_events_api"]
+    },
+    "zz": {
+      "synthetic": true,
+      "name": "Testford University",
+      "site": "https://zz.localhost",
+      "universityDomains": ["testford.ac.uk"],
+      "terms": {
+        "order": ["michaelmas", "hilary", "trinity"],
+        "codes": { "michaelmas": "MT", "hilary": "HT", "trinity": "TT" },
+        "weekStartPy": 6,
+        "weekStartJs": 0,
+        "minWeek": 0,
+        "maxWeek": 10,
+        "labelFormat": "{code}{yy} Wk {week}"
+      },
+      "memberEmail": {
+        "domains": ["testford.ac.uk"],
+        "excluded": ["lists.testford.ac.uk"],
+        "idPattern": null,
+        "forwarding": [],
+        "alumni": ["testford-alumni.org"],
+        "strictForeignAcademic": true
+      },
+      "officialEventSources": []
+    }
+  },
+  "emailCases": [
+    { "campus": "cam", "email": "abc12@cam.ac.uk", "type": "personal_crsid" },
+    { "campus": "cam", "email": "ab123@jesus.cam.ac.uk", "type": "personal_crsid" },
+    { "campus": "cam", "email": "ab123@srcf.net", "type": "personal_crsid" },
+    { "campus": "cam", "email": "jane.smith@cantab.net", "type": "personal_crsid" },
+    { "campus": "cam", "email": "president@cantab.net", "type": "role_own_domain" },
+    { "campus": "cam", "email": "president@cam.ac.uk", "type": "role_own_domain" },
+    { "campus": "cam", "email": "ab12@lists.cam.ac.uk", "type": "lists_cam" },
+    { "campus": "cam", "email": "chess@srcf.net", "type": "srcf" },
+    { "campus": "cam", "email": "chess@cambridgesu.co.uk", "type": "cambridgesu" },
+    { "campus": "cam", "email": "secretary@chu.cam.ac.uk", "type": "college_domain" },
+    { "campus": "cam", "email": "cuchess@gmail.com", "type": "webmail" },
+    { "campus": "cam", "email": "chess@cusu.org", "type": "legacy_cusu" },
+    { "campus": "zz", "email": "jane.doe@chem.testford.ac.uk", "type": "personal_crsid" },
+    { "campus": "zz", "email": "j.smith@unknown.ac.uk", "type": "personal_crsid" },
+    { "campus": "zz", "email": "chess@testford.ac.uk", "type": "role_own_domain" }
+  ]
+}

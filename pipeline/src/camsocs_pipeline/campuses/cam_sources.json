@@ -1,0 +1,204 @@
+{
+  "schema": "camsocs.campus-sources/1",
+  "campus": "cam",
+  "sources": [
+    {
+      "key": "term_dates",
+      "label": "University Full Term dates (verified seed)",
+      "stage": "term_dates",
+      "sourceTypes": [],
+      "eventSources": [],
+      "section": "19",
+      "permission": null
+    },
+    {
+      "key": "su_directory",
+      "label": "Cambridge SU society directory and profiles",
+      "stage": "su_directory",
+      "sourceTypes": ["su_directory", "su_profile"],
+      "eventSources": [],
+      "section": "1",
+      "permission": "D3"
+    },
+    {
+      "key": "proctors_register",
+      "label": "Proctors' register of societies",
+      "stage": "proctors_register",
+      "sourceTypes": ["proctors_register"],
+      "eventSources": [],
+      "section": "2",
+      "permission": "robots"
+    },
+    {
+      "key": "sport_clubs",
+      "label": "Sport Cambridge A–Z and club pages",
+      "stage": "sport_clubs",
+      "sourceTypes": ["sport_az", "sport_club_page"],
+      "eventSources": [],
+      "section": "3",
+      "permission": "robots"
+    },
+    {
+      "key": "sport_guide_pdf",
+      "label": "Sports Club Guide (PDF)",
+      "stage": "sport_guide_pdf",
+      "sourceTypes": ["sport_guide_pdf"],
+      "eventSources": [],
+      "section": "4",
+      "permission": "robots"
+    },
+    {
+      "key": "camdram_societies",
+      "label": "Camdram societies",
+      "stage": "camdram_societies",
+      "sourceTypes": ["camdram"],
+      "eventSources": [],
+      "section": "5",
+      "permission": "robots"
+    },
+    {
+      "key": "cucbc_clubs",
+      "label": "CUCBC clubs",
+      "stage": "cucbc_clubs",
+      "sourceTypes": ["cucbc"],
+      "eventSources": [],
+      "section": "7",
+      "permission": "D3"
+    },
+    {
+      "key": "colleges",
+      "label": "College and JCR/MCR society lists",
+      "stage": "colleges",
+      "sourceTypes": ["college_list", "society_website"],
+      "eventSources": [],
+      "section": "8",
+      "permission": "D3"
+    },
+    {
+      "key": "linktree",
+      "label": "Linktree pages",
+      "stage": "enrich",
+      "sourceTypes": ["linktree"],
+      "eventSources": [],
+      "section": "13",
+      "permission": "D3"
+    },
+    {
+      "key": "society_websites",
+      "label": "Society websites",
+      "stage": "enrich",
+      "sourceTypes": ["society_website"],
+      "eventSources": [],
+      "section": "14",
+      "permission": "D3"
+    },
+    {
+      "key": "camdram_events",
+      "label": "Camdram diary",
+      "stage": "camdram_events",
+      "sourceTypes": ["camdram"],
+      "eventSources": ["camdram"],
+      "section": "5",
+      "permission": "robots"
+    },
+    {
+      "key": "talks_cam",
+      "label": "talks.cam lists (G1)",
+      "stage": "talks_cam",
+      "sourceTypes": ["talks_list"],
+      "eventSources": ["talks_cam"],
+      "section": "6",
+      "permission": "robots"
+    },
+    {
+      "key": "cucbc_events",
+      "label": "CUCBC calendar, Bumps and timetable",
+      "stage": "cucbc_events",
+      "sourceTypes": ["cucbc"],
+      "eventSources": ["cucbc"],
+      "section": "7",
+      "permission": "robots"
+    },
+    {
+      "key": "playwaze",
+      "label": "Playwaze college leagues",
+      "stage": "playwaze",
+      "sourceTypes": ["playwaze"],
+      "eventSources": ["playwaze"],
+      "section": "9",
+      "permission": "robots"
+    },
+    {
+      "key": "uni_events",
+      "label": "University events programme",
+      "stage": "uni_events",
+      "sourceTypes": ["uni_events_api"],
+      "eventSources": ["uni_events_api"],
+      "section": "10",
+      "permission": "D3a"
+    },
+    {
+      "key": "calendar_feeds",
+      "label": "Society calendar feeds (ICS, Google Calendar, Luma)",
+      "stage": "calendar_feeds",
+      "sourceTypes": ["ics_feed", "luma"],
+      "eventSources": ["ics", "google_calendar", "luma"],
+      "section": "11",
+      "permission": "D3"
+    },
+    {
+      "key": "su_whatson",
+      "label": "SU What's On",
+      "stage": "su_whatson",
+      "sourceTypes": ["su_whatson"],
+      "eventSources": ["su_whatson"],
+      "section": "12",
+      "permission": "D3"
+    },
+    {
+      "key": "website_events",
+      "label": "Society websites' events pages",
+      "stage": "website_events",
+      "sourceTypes": ["society_website"],
+      "eventSources": ["website", "termcard"],
+      "section": "14",
+      "permission": "D3"
+    },
+    {
+      "key": "inbox",
+      "label": "Forwarded mailing-list mail",
+      "stage": "inbox",
+      "sourceTypes": ["mailing_list_email"],
+      "eventSources": ["mailing_list"],
+      "section": "16",
+      "permission": null
+    },
+    {
+      "key": "instagram",
+      "label": "Instagram Business Discovery API",
+      "stage": "instagram",
+      "sourceTypes": ["instagram_api"],
+      "eventSources": ["instagram_api"],
+      "section": "17",
+      "permission": null
+    },
+    {
+      "key": "termcards",
+      "label": "Termcards",
+      "stage": "termcards",
+      "sourceTypes": ["termcard"],
+      "eventSources": ["termcard"],
+      "section": "21",
+      "permission": "D3"
+    },
+    {
+      "key": "talks",
+      "label": "talks.cam API and department sites (talks pillar)",
+      "stage": "talks",
+      "sourceTypes": [],
+      "eventSources": [],
+      "section": null,
+      "permission": "robots"
+    }
+  ]
+}

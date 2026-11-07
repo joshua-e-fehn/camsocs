@@ -147,3 +147,21 @@ def test_calendar_context_names_the_week() -> None:
     assert "Monday 19 October 2026" in text
     assert "Week 1 starts Thursday 8 October 2026" in text
     assert "Week 2" in text
+
+
+def test_the_calendar_reads_the_campus_term_model() -> None:
+    """The term model is the active campus's (decision D8); Cambridge's is
+    the default, and a calendar may be built under another campus's rules."""
+    from dataclasses import replace
+
+    from camsocs_pipeline.campuses import CAMBRIDGE
+
+    assert CAL.rules is CAMBRIDGE.terms
+    assert CAL.terms[0].week_start_weekday == 3
+    sunday_weeks = replace(CAMBRIDGE.terms, week_start_weekday=6)
+    calendar = TermCalendar(CAMBRIDGE.terms.dates, sunday_weeks)
+    term = calendar.term_named("michaelmas", 2026, date(2026, 10, 1))
+    assert term is not None
+    # Full Term from Tue 6 Oct 2026: a Sunday-start Week 1 begins Sun 11 Oct.
+    assert term.week1_start == date(2026, 10, 11)
+    assert term.label(1) == "MT26 Wk 1"

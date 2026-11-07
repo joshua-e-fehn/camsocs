@@ -380,6 +380,125 @@ def test_a_status_file_from_before_eng_33_still_lists_its_failing_checks() -> No
     assert "camsocs monitor: 2 checks failing on srv1608974" in monitor_message(status)
 
 
+# --- campuses (D8) and the shadow checks (D9) --------------------------------------------
+
+
+def test_every_monitor_check_and_its_counts_have_the_shapes_the_alert_shows() -> None:
+    """Promoting every shadow check must not make a check or a count vanish
+    from the alert: names of `_CHECK`'s shape, camelCased counts, and no more
+    checks than `MAX_CHECKS`."""
+    from camsocs_pipeline import monitor
+    from camsocs_pipeline.campuses import CAMBRIDGE
+    from camsocs_pipeline.stages import GROUPS, STAGES
+
+    paging = monitor.checks_for(CAMBRIDGE)
+    shadow = monitor.shadow_checks_for(CAMBRIDGE)
+    names = [c.name for c in (*paging, *shadow)] + list(monitor.SITE_CHECK_NAMES)
+    assert alert.MAX_CHECKS == 16 and len(names) <= alert.MAX_CHECKS
+    for name in names:
+        assert alert._CHECK.fullmatch(name), name
+    for count in [monitor.camel(s.name) for s in STAGES] + [monitor.camel(g) for g in GROUPS]:
+        assert alert._COUNT_NAME.fullmatch(count), count
+    for count in ("hoursSinceLastSuccess", "generations", "errors", "bulkGenerations", "fallbacks"):
+        assert alert._COUNT_NAME.fullmatch(count), count
+
+
+def many_failing(n: int) -> dict:
+    from datetime import UTC, datetime
+
+    from camsocs_pipeline.monitor import CheckResult, assess
+
+    results = [
+        CheckResult(f"check_{chr(97 + i)}", "failed", 3, 0, "gt", 26, {"websiteEvents": 3})
+        for i in range(n)
+    ]
+    return assess(results, {}, now=datetime(2026, 11, 1, 12, 0, tzinfo=UTC)).status_payload(
+        "f" * 32
+    )
+
+
+def test_the_monitor_alert_names_up_to_sixteen_checks() -> None:
+    text = monitor_message(many_failing(18))
+    assert "18 checks failing" in text
+    shown = [line for line in text.split("\n") if line.startswith("• check_")]
+    assert len(shown) == 16
+    assert "• check_a: 3 (fails when > 0, last 26 h) · websiteEvents 3" in text
+
+
+def test_cambridges_alerts_read_as_before_the_campus_existed() -> None:
+    """The monitor now writes `campus` and `site`; for Cambridge the message
+    is byte for byte the one a status file without them gives."""
+    for status in (monitor_status(), monitor_news(by_kind={"claim": 1})):
+        old = {k: v for k, v in status.items() if k not in ("campus", "site")}
+        cam = old | {"campus": "cam", "site": "https://camsocs.uk"}
+        assert monitor_message(cam) == monitor_message(old)
+    assert message(campus="cam") == message()
+
+
+def test_another_campus_is_named_and_its_own_inbox_linked() -> None:
+    status = monitor_news(by_kind={"remove": 1}) | {
+        "campus": "zz",
+        "site": "https://zz.localhost",
+    }
+    text = monitor_message(status)
+    assert text.split("\n")[0].startswith(":inbox_tray: camsocs (campus zz): 1 new listing")
+    assert "Read and answer: https://zz.localhost/dashboard/requests" in text
+    assert "camsocs.uk" not in text
+    failing = monitor_message(monitor_status() | {"campus": "zz"})
+    assert failing.split("\n")[0].endswith("failing on srv1608974 (campus zz)")
+    harvest = message(campus="ox")
+    assert harvest.split("\n")[0] == (
+        ":rotating_light: camsocs harvest *events* failed on srv1608974 (campus ox)"
+    )
+
+
+@pytest.mark.parametrize(
+    "campus, site",
+    [
+        ("Oxford <@U123>", "https://evil.example/path?x=1"),
+        ("x", "http://zz.localhost"),
+        (["zz"], "javascript:alert(1)"),
+        ("toolongcampus", "https://user:pw@zz.localhost"),
+        (None, "https://zz.localhost/"),
+    ],
+)
+def test_a_campus_or_site_of_the_wrong_shape_is_not_shown(campus: object, site: object) -> None:
+    status = monitor_news(by_kind={"claim": 1}) | {"campus": campus, "site": site}
+    text = monitor_message(status)
+    assert "(campus" not in text
+    assert "Read and answer: https://camsocs.uk/dashboard/requests" in text
+    for leaked in ("evil", "<@U123>", "javascript", "pw@", "http://"):
+        assert leaked not in text
+
+
+def test_a_status_file_from_an_earlier_run_names_no_campus() -> None:
+    text = message(invocationId="inv-0", campus="ox")
+    assert "from an earlier run" in text and "campus" not in text
+
+
+def write_status(tmp_path: Path, *extra: str) -> dict:
+    code = status_writer.main(
+        [
+            "--state-dir", str(tmp_path), "--group", "events",
+            "--started", "2026-10-10T03:30:00Z", "--finished", "2026-10-10T03:40:00Z",
+            "--exit-code", "0", "--phase", "done", *extra,
+        ]
+    )  # fmt: skip
+    assert code == 0
+    return json.loads((tmp_path / "status-events.json").read_text())
+
+
+def test_the_status_file_records_the_campus(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("CAMSOCS_CAMPUS", raising=False)
+    assert write_status(tmp_path)["campus"] == "cam", "Cambridge's runner names none"
+    assert write_status(tmp_path, "--campus", "zz")["campus"] == "zz"
+    monkeypatch.setenv("CAMSOCS_CAMPUS", "ox")
+    assert write_status(tmp_path)["campus"] == "ox"
+    assert write_status(tmp_path, "--campus", "zz")["campus"] == "zz", "the flag wins"
+    monkeypatch.setenv("CAMSOCS_CAMPUS", "Oxford; rm -rf")
+    assert write_status(tmp_path)["campus"] is None, "written, but never a bad value"
+
+
 # --- sending ----------------------------------------------------------------------------
 
 

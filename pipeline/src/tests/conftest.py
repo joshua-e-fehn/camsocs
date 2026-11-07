@@ -13,11 +13,16 @@ Two safety properties hold for every test:
   `requests`, which respx cannot see; its transport is refused outright, and
   telemetry tests inject a fake client instead.
 - **No real configuration.** Every variable the pipeline reads is removed from
-  the environment, and `settings()` builds `Settings` with `_env_file=None`, so
-  `pipeline/.env` (real keys) is never read by a test.
+  the environment (`ENV_VARS`, the campus `CAMSOCS_CAMPUS` and systemd's
+  `INVOCATION_ID` included), and `settings()` builds `Settings` with
+  `_env_file=None`, so `pipeline/.env` (real keys) is never read by a test.
+  The active campus profile is reset after every test.
 - **No telemetry carried over.** A test that starts a run makes its telemetry
   the process's active one (LLM generations go there); it is cleared after
-  every test.
+  every test, and so is any active fetch-statistics collector.
+- **Strict staging guard.** ``CAMSOCS_STRICT_STAGING=1``: a stage run by the
+  runner that writes a staging directory its registry entry does not declare
+  fails the test (`staging/store.py`); production only logs it.
 """
 
 from __future__ import annotations
@@ -29,9 +34,11 @@ from typing import Any
 import pytest
 import respx
 
+from camsocs_pipeline import campuses
 from camsocs_pipeline.config import Settings, get_settings
 
 ENV_VARS = (
+    "CAMSOCS_CAMPUS",
     "CONVEX_URL",
     "CONVEX_HTTP_URL",
     "PIPELINE_API_KEY",
@@ -58,6 +65,10 @@ ENV_VARS = (
     "POSTHOG_PROJECT_ID",
     "POSTHOG_APP_HOST",
     "INDEXNOW_SITE_URL",
+    "CAMSOCS_REVISION",
+    "CAMSOCS_TIME_LIMIT_S",
+    "CAMSOCS_PAYLOAD_DIGEST",
+    "INVOCATION_ID",
 )
 
 TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
@@ -67,9 +78,11 @@ TEST_UA = "camsocs-test/0.1 (+https://example.org/camsocs)"
 def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name in ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CAMSOCS_STRICT_STAGING", "1")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+    campuses.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)
@@ -103,9 +116,10 @@ def _no_requests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _no_active_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
-    from camsocs_pipeline import telemetry
+    from camsocs_pipeline import fetch_stats, telemetry
 
     monkeypatch.setattr(telemetry, "_active", None)
+    monkeypatch.setattr(fetch_stats, "_current", None)
 
 
 class ModelReached(BaseException):

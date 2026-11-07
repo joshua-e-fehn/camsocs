@@ -78,6 +78,7 @@ describe("listingRequests.submit → listing_request_received", () => {
         distinct_id: "camsocs-server",
         properties: {
           kind: "add",
+          campus: "cam",
           environment: "production",
           $process_person_profile: false,
           $geoip_disable: true,
@@ -180,10 +181,12 @@ describe("lib/posthog", () => {
     const config = { key: KEY, host: HOST, environment: "development" as const }
     const body = captureBody(config, "x", {
       environment: "production",
+      campus: "elsewhere",
       $process_person_profile: true,
     })
     expect(body.distinct_id).toBe(SERVER_DISTINCT_ID)
     expect(body.properties).toEqual({
+      campus: "cam",
       environment: "development",
       $process_person_profile: false,
       $geoip_disable: true,

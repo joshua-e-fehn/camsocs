@@ -1,5 +1,13 @@
+import { currentCampus } from "./campus"
+
 /**
  * Site-wide facts the public pages, metadata and compliance pages state.
+ *
+ * The brand and the member tier come from the campus this build serves
+ * (`currentCampus()`, `NEXT_PUBLIC_CAMPUS`, unset: `cam`; decision D8,
+ * docs/webapp.md "Campus profile"). For Cambridge every value is today's
+ * literal (lib/campus/profiles/cam.ts), so the export names and the pages
+ * they render are unchanged.
  *
  * `CONTACT_EMAIL` is Joshua's decision D4 (PLAN.md, 2026-10-08); he creates the
  * alias. `ICO_REGISTRATION_NUMBER` is empty: no data protection fee is payable
@@ -7,7 +15,9 @@
  * number, and the pages leave the line out. Never put a guessed value here.
  */
 
-export const SITE_NAME = "CAMsocs"
+const campus = currentCampus()
+
+export const SITE_NAME = campus.brand.name
 
 /** What the root layout's title template appends to a page's title
  * (app/layout.tsx). */
@@ -18,13 +28,12 @@ export const TITLE_SUFFIX = ` · ${SITE_NAME}`
  * limit for the directory, events, talks and the site's own pages. */
 export const MAX_TITLE_LENGTH = 60
 
-export const SITE_TAGLINE = "Cambridge societies, events and talks, sourced"
+export const SITE_TAGLINE = campus.brand.tagline
 
 /** The home page's and the site's meta description: at most 155 characters,
  * so no result cuts it short (SEO audit 2026-11-02, meta-description-quality;
  * a test holds the limit). */
-export const SITE_DESCRIPTION =
-  "Cambridge student societies, sports clubs and their events, plus public academic talks, in one place. Every fact links to its source. Unofficial."
+export const SITE_DESCRIPTION = campus.brand.description
 
 /** The home hero's first sentence: what the site is, said plainly for a
  * searcher and an AI answer that quotes the page (SEO audit 2026-11-02,
@@ -32,19 +41,16 @@ export const SITE_DESCRIPTION =
  * claim of affiliation (DISCLAIMER). The talks are public academic ones
  * (talks.cam), not the societies' own, as SITE_DESCRIPTION says (review of
  * 2026-11-03, site-intro-talks). */
-export const SITE_INTRO =
-  "CAMsocs is an unofficial, independent directory of Cambridge student societies and clubs, their events, and public academic talks."
+export const SITE_INTRO = campus.brand.intro
 
 /** The light theme's paper, the one colour the browser's chrome takes
  * (DESIGN.md "Light only"; app/globals.css `--background`): the viewport's
  * theme-color and the web manifest. */
 export const THEME_COLOR = "#FFFFFF"
 
-/** The public origin, for absolute URLs in the sitemap and Open Graph tags. */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://camsocs.uk").replace(
-  /\/+$/,
-  "",
-)
+/** The public origin, for absolute URLs in the sitemap and Open Graph tags
+ * (`NEXT_PUBLIC_SITE_URL`, else the campus's origin). */
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || campus.origin).replace(/\/+$/, "")
 
 /** The data controller (UK GDPR Art 4(7)): an individual, not an organisation. */
 export const CONTROLLER_NAME = "Joshua Fehn"
@@ -76,11 +82,11 @@ export const SECURITY_CONTACT_EMAIL = CONTACT_EMAIL
 export const SECURITY_TXT_EXPIRES = "2027-09-01T00:00:00.000Z"
 
 /** The User-Agent our harvester sends (docs/source-research.md, global rules). */
-export const BOT_USER_AGENT = "camsocs-bot/0.1 (+https://camsocs.uk/about)"
+export const BOT_USER_AGENT = campus.botUserAgent
 
 /** Where a visitor goes to unlock Cambridge-only events: the @cam.ac.uk
- * sign-in link (`cam=1` selects that option). */
-export const CAM_SIGN_IN_HREF = "/sign-in?cam=1"
+ * sign-in link (`cam=1` selects that option). The member tier's, per campus. */
+export const CAM_SIGN_IN_HREF = campus.memberTier.signInHref
 
 /** The @cam.ac.uk sign-in, landing back on `next` (a same-origin path). */
 export function camSignInHref(next: string): string {
@@ -89,8 +95,7 @@ export function camSignInHref(next: string): string {
 
 /** What the generic share image shows, for its alt text
  * (app/opengraph-image.tsx draws exactly this). */
-export const SHARE_IMAGE_ALT = `${SITE_NAME}: Everything on in Cambridge, in one place. Events, talks and societies. Unofficial.`
+export const SHARE_IMAGE_ALT = campus.brand.shareAlt
 
 /** The one-line non-affiliation statement shown in the footer and on About. */
-export const DISCLAIMER =
-  "CAMsocs is an independent, unofficial project. It is not affiliated with, endorsed by or run by the University of Cambridge, any of its colleges or Cambridge SU."
+export const DISCLAIMER = campus.brand.disclaimer

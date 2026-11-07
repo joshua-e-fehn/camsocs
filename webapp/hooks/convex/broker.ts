@@ -9,6 +9,7 @@ import { ConvexError } from "convex/values"
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
+import type { EcosystemLayer } from "@/lib/broker/ecosystem"
 import type { RelationshipType } from "@/lib/vocab"
 
 export type BrokerOrgRow = FunctionReturnType<typeof api.broker.orgs.page>["page"][number]
@@ -16,7 +17,7 @@ export type BrokerOrgDetail = NonNullable<FunctionReturnType<typeof api.broker.o
 export type BrokerPerson = FunctionReturnType<typeof api.broker.people.list>[number]
 export type BrokerInteraction = FunctionReturnType<typeof api.broker.interactions.list>[number]
 export type BrokerIntroduction = FunctionReturnType<typeof api.broker.introductions.list>[number]
-export type BrokerGraph = FunctionReturnType<typeof api.broker.graph.relationships>
+export type BrokerEcosystem = FunctionReturnType<typeof api.broker.graph.ecosystem>
 export type BrokerMatch = FunctionReturnType<typeof api.broker.graph.matches>[number]
 export type BrokerListingRequest = FunctionReturnType<
   typeof api.broker.listingRequests.list
@@ -76,8 +77,13 @@ export function useBrokerIntroductions() {
   return useQuery(api.broker.introductions.list)
 }
 
-export function useBrokerGraph(types: RelationshipType[]) {
-  return useQuery(api.broker.graph.relationships, types.length ? { types } : {})
+/** The graph page's ecosystem map: the chosen layers (lib/broker/ecosystem.ts),
+ * the relationship layer narrowed to `types` when any are chosen. */
+export function useBrokerEcosystem(layers: EcosystemLayer[], types: RelationshipType[]) {
+  return useQuery(api.broker.graph.ecosystem, {
+    ...(layers.length ? { layers } : {}),
+    ...(types.length ? { types } : {}),
+  })
 }
 
 export function useBrokerMatches() {

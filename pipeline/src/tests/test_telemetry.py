@@ -24,12 +24,16 @@ from camsocs_pipeline.pipeline.context import Stage, StageContext
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.telemetry import (
+    AI_SPAN,
+    AI_TRACE,
     ALLOWED,
     CLOSE_TIMEOUT,
     DISTINCT_ID,
     FLUSH_TIMEOUT,
+    FORBIDDEN_AI_KEYS,
     RUN_FINISHED,
     RUN_STARTED,
+    SOURCE_FETCHED,
     STAGE_COMPLETED,
     HarvestTelemetry,
     clean_properties,
@@ -110,6 +114,8 @@ def assert_safe(client: FakeClient) -> None:
         assert set(properties) <= ALLOWED[event], set(properties) - ALLOWED[event]
         for forbidden in ("error", "notes", "warnings", "title", "url", "message"):
             assert forbidden not in properties
+        assert not FORBIDDEN_AI_KEYS & set(properties)
+        assert properties["campus"] == "cam"
         dumped = json.dumps(properties)
         assert "example.org" not in dumped and "Talk title" not in dumped
         assert "http" not in dumped and KEY not in dumped
@@ -222,8 +228,9 @@ def test_a_run_sends_start_each_stage_and_finish_with_counts_only(make_settings,
     assert not report.ok
     assert [name for name, _ in client.events] == [
         RUN_STARTED,
-        *[STAGE_COMPLETED] * 4,
+        *[STAGE_COMPLETED, AI_SPAN] * 4,
         RUN_FINISHED,
+        AI_TRACE,
     ]
     assert_safe(client)
 
@@ -428,7 +435,13 @@ def test_the_cli_flushes_after_a_successful_run(
 
     assert result.exit_code == 0, result.output
     assert fake_client.flushes == [FLUSH_TIMEOUT] and fake_client.shutdowns == 1
-    assert [name for name, _ in fake_client.events] == [RUN_STARTED, STAGE_COMPLETED, RUN_FINISHED]
+    assert [name for name, _ in fake_client.events] == [
+        RUN_STARTED,
+        STAGE_COMPLETED,
+        AI_SPAN,
+        RUN_FINISHED,
+        AI_TRACE,
+    ]
     assert fake_client.named(RUN_FINISHED)[0]["status"] == "success"
 
 
@@ -488,3 +501,116 @@ def test_status_shows_a_blank_posthog_key_as_unset(make_settings) -> None:
     result = invoke(make_settings(posthog_key="   "), "status")
     assert result.exit_code == 0, result.output
     assert "(unset) (run telemetry)" in result.output
+
+
+# --- campus, pillars, fetches (L6) ---------------------------------------------
+
+
+def test_registry_vocabularies_are_mirrored() -> None:
+    from camsocs_pipeline.pipeline.context import PHASES, PILLARS
+
+    assert set(PHASES) == telemetry_module._PHASES
+    assert set(PILLARS) == telemetry_module._PILLARS
+
+
+def test_a_stage_reports_its_pillar_phase_yield_and_the_time_limit(
+    make_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(telemetry_module.TIME_LIMIT_ENV, "7200")
+    client = FakeClient()
+    run_sync(
+        settings=make_settings(),
+        dry_run=True,
+        registry=[Stage("discover", ok_stage, phase="harvest", pillar="societies")],
+        telemetry=telemetry(client),
+    )
+
+    assert_safe(client)
+    (started,) = client.named(RUN_STARTED)
+    assert started["timeLimitS"] == 7200 and started["campus"] == "cam"
+    (stage,) = client.named(STAGE_COMPLETED)
+    assert stage["pillar"] == "societies" and stage["phase"] == "harvest"
+    assert stage["yield"] == 3, "inserted + updated + unchanged"
+    assert client.named(SOURCE_FETCHED) == [], "a stage that fetched nothing sends none"
+
+
+@pytest.mark.parametrize("value", ["", "soon", "-5", "1e9", "99999999"])
+def test_a_time_limit_that_is_not_whole_seconds_is_left_out(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(telemetry_module.TIME_LIMIT_ENV, value)
+    client = FakeClient()
+    telemetry(client).run_started(RunReport("k", "sync"), group=None, stages=[])
+    assert "timeLimitS" not in client.named(RUN_STARTED)[0]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("campus", "ox"),  # not a registered campus
+        ("campus", "Cambridge"),
+        ("pillar", "people"),
+        ("phase", "scrape"),
+        ("hostClass", "www.example.org"),
+        ("hostClass", "https://example.org/x"),
+    ],
+)
+def test_unknown_campuses_pillars_and_host_like_classes_are_dropped(key: str, value: str) -> None:
+    assert clean_properties(SOURCE_FETCHED, {key: value}) == {}
+    assert clean_properties(STAGE_COMPLETED, {key: value}) == {}
+
+
+def test_a_stage_that_fetched_sends_one_event_per_host_class(make_settings, net) -> None:
+    from camsocs_pipeline.sources.base import PoliteClient
+    from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+
+    net.get("https://soc.example.org/robots.txt").respond(404)
+    net.get("https://soc.example.org/events").respond(200, text="<p>events</p>")
+    net.get("https://linktr.ee/robots.txt").respond(404)
+    net.get("https://linktr.ee/somesoc").respond(404)
+
+    def fetching(ctx: StageContext) -> None:
+        with PoliteClient(
+            user_agent="camsocs-test", cache_dir=ctx.settings.cache_dir, min_interval=0.0
+        ) as client:
+            client.fetch("https://soc.example.org/events", purpose=SOCIETY_WEBSITE)
+            client.fetch("https://linktr.ee/somesoc")
+        ctx.report.inserted += 1
+
+    client = FakeClient()
+    report = run_sync(
+        settings=make_settings(),
+        dry_run=True,
+        registry=[Stage("website_events", fetching, phase="events", pillar="events")],
+        telemetry=telemetry(client),
+    )
+
+    assert_safe(client)
+    fetched = {props["hostClass"]: props for props in client.named(SOURCE_FETCHED)}
+    assert set(fetched) == {"society_website", "linktree"}
+    assert fetched["society_website"]["fetchRequests"] == 1
+    assert fetched["society_website"]["fetchFetched"] == 1
+    assert fetched["society_website"]["fetchStatus2xx"] == 1, "robots.txt is not a fetch"
+    assert fetched["linktree"]["fetchNotFound"] == 1
+    for props in fetched.values():
+        assert props["stage"] == "website_events" and props["pillar"] == "events"
+        assert props["campus"] == "cam" and props["durationS"] >= 0
+    dumped = json.dumps(client.events)
+    for host_or_path in ("example.org", "linktr.ee", "somesoc", "/events"):
+        assert host_or_path not in dumped
+
+    (stage,) = report.stages
+    assert stage.metrics["fetchRequests"] == 2 and stage.metrics["hostsContacted"] == 2
+    assert stage.to_payload()["durationMs"] >= 0
+    (completed,) = client.named(STAGE_COMPLETED)
+    assert completed["metrics"]["fetchRequests"] == 2
+    for name in completed["metrics"]:
+        assert telemetry_module._NAME.fullmatch(name) and name[0] not in "_$"
+
+
+def test_source_fetched_carries_a_transport_error_class_name_only() -> None:
+    assert clean_properties(SOURCE_FETCHED, {"transportErrorType": "ConnectTimeout"}) == {
+        "transportErrorType": "ConnectTimeout"
+    }
+    assert clean_properties(SOURCE_FETCHED, {"transportErrorType": "timed out: x.org"}) == {}
+    assert clean_properties(STAGE_COMPLETED, {"transportErrorType": "ConnectTimeout"}) == {}

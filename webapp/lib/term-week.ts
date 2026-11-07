@@ -1,4 +1,5 @@
 import { DAY_MS, formatDayShort, isoDateMs, londonIsoDate } from "@/lib/calendar"
+import { currentCampus } from "@/lib/campus"
 import type { Term } from "@/lib/vocab"
 
 /**
@@ -11,7 +12,13 @@ import type { Term } from "@/lib/vocab"
  * holds them together): Full Term starts on a Tuesday, a week runs Thursday
  * to Wednesday, Week 1 begins on the first Thursday of Full Term and Week 0
  * is the week before it. A term's weeks run until the last day of Full Term.
+ *
+ * The term names, the teaching weeks and the weekday a week starts on are
+ * the campus's (`currentCampus()`, lib/campus, decision D8); for Cambridge
+ * they are the literals above.
  */
+
+const campus = currentCampus()
 
 export type TermDatesRow = {
   academicYear: string
@@ -39,29 +46,26 @@ export type TermClock =
       next?: { term: Term; fullTermStart: string; inDays: number }
     }
 
-export const TERM_NAMES: Record<Term, string> = {
-  michaelmas: "Michaelmas",
-  lent: "Lent",
-  easter: "Easter",
-}
+/** "Michaelmas", "Lent", "Easter". */
+export const TERM_NAMES = campus.terms.names as Readonly<Record<Term, string>>
 
 /** The short names students use: "Mich", "Lent", "Easter". */
-export const TERM_SHORT: Record<Term, string> = {
-  michaelmas: "Mich",
-  lent: "Lent",
-  easter: "Easter",
-}
+export const TERM_SHORT = campus.terms.short as Readonly<Record<Term, string>>
 
 /** Teaching weeks in a Full Term. A term that runs past Week 8 (Michaelmas and
  * Lent, at 60 days from a Tuesday) ends in a short Week 9; Easter does not. */
-export const TEACHING_WEEKS = 8
+export const TEACHING_WEEKS = campus.terms.teachingWeeks
+
+/** The JS weekday a student week starts on (4 = Thursday). */
+const WEEK_START = campus.facts.terms.weekStartJs
 
 const WEEK_MS = 7 * DAY_MS
 
-/** The Thursday Week 1 begins on: the first Thursday on or after the start. */
+/** The Thursday Week 1 begins on: the first Thursday (the campus's week
+ * start) on or after the start. */
 function firstThursday(fullTermStart: string): number {
   const start = isoDateMs(fullTermStart)
-  return start + ((4 - new Date(start).getUTCDay() + 7) % 7) * DAY_MS
+  return start + ((WEEK_START - new Date(start).getUTCDay() + 7) % 7) * DAY_MS
 }
 
 /** The term week of London day `date` within `term`, or undefined outside

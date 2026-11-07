@@ -11,6 +11,11 @@ export type GraphEdge = {
   to: string
   type: string
   visibility: "public" | "internal"
+  /** The edge's tooltip; defaults to its relationship label. */
+  label?: string
+  /** A stroke pattern of its own (another layer's); defaults to solid for
+   * public, dashed for internal. */
+  dash?: string
 }
 
 const WIDTH = 880
@@ -88,10 +93,10 @@ export function RelationshipGraph({
               y2={b.y}
               stroke={edge.visibility === "public" ? "var(--primary)" : "var(--muted-foreground)"}
               strokeWidth={active && neighbours ? 2 : 1.25}
-              strokeDasharray={edge.visibility === "public" ? undefined : "4 3"}
+              strokeDasharray={edge.dash ?? (edge.visibility === "public" ? undefined : "4 3")}
               strokeOpacity={active ? 0.7 : 0.12}
             >
-              <title>{RELATIONSHIP_LABELS[edge.type] ?? humanize(edge.type)}</title>
+              <title>{edge.label ?? RELATIONSHIP_LABELS[edge.type] ?? humanize(edge.type)}</title>
             </line>
           )
         })}
