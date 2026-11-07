@@ -62,6 +62,14 @@ const RelationshipGraph = dynamic(
 type Visibility = "all" | "public" | "internal"
 
 /** What an edge is, in words: its relationship type or its layer's kind. */
+/** Each layer outside relationships (all internal) has its own stroke, so
+ * co-hosting, sponsor and outreach edges can be told apart on the canvas. */
+const LAYER_DASH: Record<Exclude<EcosystemLayer, "relationships">, string> = {
+  cohosting: "1 3",
+  sponsors: "8 3",
+  outreach: "6 2 1 2",
+}
+
 function edgeLabel(edge: EcosystemEdge): string {
   if (edge.layer === "relationships") return RELATIONSHIP_LABELS[edge.type] ?? humanize(edge.type)
   return (
@@ -120,6 +128,8 @@ export function BrokerGraph() {
       to: edge.to,
       type: edge.type,
       visibility: edge.visibility,
+      label: edgeLabel(edge),
+      dash: edge.layer === "relationships" ? undefined : LAYER_DASH[edge.layer],
     }))
     return {
       nodes,
@@ -208,6 +218,22 @@ export function BrokerGraph() {
           <CardContent className="flex flex-col gap-3">
             {view === undefined ? (
               <Skeleton className="aspect-[11/7] w-full rounded-lg" />
+            ) : view.nodes.length === 0 &&
+              visibility !== "all" &&
+              (graph?.edges.length ?? 0) > 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <NetworkIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No {visibility} edges in these layers</EmptyTitle>
+                  <EmptyDescription>
+                    {visibility === "public"
+                      ? "The co-hosting, sponsor and outreach layers are internal. Choose All or Internal to see them."
+                      : "These layers hold only public relationships. Choose All or Public to see them."}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : view.nodes.length === 0 ? (
               <Empty>
                 <EmptyHeader>
@@ -229,7 +255,7 @@ export function BrokerGraph() {
                 onSelect={setSelected}
               />
             )}
-            <GraphLegend />
+            <GraphLegend layers={layers} />
             {view && (view.dropped > 0 || graph?.truncated) && (
               <p className="text-xs text-muted-foreground">
                 Showing the {view.nodes.length} best-connected organisations
@@ -331,7 +357,11 @@ function NodeBadges({ node }: { node: EcosystemNode }) {
   )
 }
 
-function GraphLegend() {
+function GraphLegend({ layers }: { layers: readonly EcosystemLayer[] }) {
+  const others = ECOSYSTEM_LAYERS.filter(
+    (layer): layer is Exclude<EcosystemLayer, "relationships"> =>
+      layer !== "relationships" && layers.includes(layer),
+  )
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
@@ -354,6 +384,22 @@ function GraphLegend() {
         </svg>
         internal
       </span>
+      {others.map((layer) => (
+        <span key={layer} className="flex items-center gap-1.5">
+          <svg width="28" height="8" aria-hidden="true">
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="var(--muted-foreground)"
+              strokeWidth="2"
+              strokeDasharray={LAYER_DASH[layer]}
+            />
+          </svg>
+          {LAYER_LABELS[layer]} (internal)
+        </span>
+      ))}
       <span className="flex items-center gap-1.5">
         <svg width="12" height="12" aria-hidden="true">
           <circle cx="6" cy="6" r="5" fill="var(--card)" stroke="var(--foreground)" />
@@ -375,7 +421,6 @@ function GraphLegend() {
         counterpart
       </span>
       <span>size: number of edges</span>
-      <span>layers other than relationships: internal</span>
     </div>
   )
 }
