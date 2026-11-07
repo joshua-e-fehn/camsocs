@@ -29,6 +29,8 @@ export const PAGE_PATHS = [
   "/term-dates",
   "/colleges",
   "/guides",
+  "/guides/join-a-society",
+  "/guides/start-a-society",
   "/guides/formal-hall",
   "/guides/may-balls",
   "/guides/rowing",

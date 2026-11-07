@@ -35,6 +35,8 @@ export const ROUTE_INDEXING: Record<string, RouteIndexing> = {
   "/events": { sitemap: "pages.xml", linkedFrom: "header" },
   "/events/[key]": { sitemap: "events.xml" },
   "/guides": { sitemap: "pages.xml", linkedFrom: "footer" },
+  "/guides/join-a-society": { sitemap: "pages.xml", linkedFrom: "footer" },
+  "/guides/start-a-society": { sitemap: "pages.xml", linkedFrom: "footer" },
   "/guides/formal-hall": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/guides/may-balls": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/guides/rowing": { sitemap: "pages.xml", linkedFrom: "page:/guides" },

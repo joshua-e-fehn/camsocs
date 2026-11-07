@@ -18,6 +18,7 @@ export const COLUMNS = [
       { href: "/term-dates", label: "Term dates" },
       { href: "/colleges", label: "Colleges" },
       { href: "/guides", label: "Guides" },
+      { href: "/guides/join-a-society", label: "Joining a society" },
     ],
   },
   {
@@ -26,6 +27,7 @@ export const COLUMNS = [
       // The bare form opens on "claim": the one /request URL to crawl.
       { href: "/request", label: "Claim or correct a listing" },
       { href: "/request?kind=add", label: "Add a missing society" },
+      { href: "/guides/start-a-society", label: "Starting a society" },
       { href: "/request?kind=remove", label: "Ask for removal" },
       { href: "/request?kind=object", label: "Object or complain" },
     ],

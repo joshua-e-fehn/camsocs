@@ -13,7 +13,13 @@ import { breadcrumbList, PUBLISHER_ID, pageId, WEBSITE_ID } from "./structured-d
  * list once their review notes are settled.
  */
 
-export type GuideSlug = "formal-hall" | "may-balls" | "rowing" | "varsity"
+export type GuideSlug =
+  | "join-a-society"
+  | "start-a-society"
+  | "formal-hall"
+  | "may-balls"
+  | "rowing"
+  | "varsity"
 
 export type GuideSource = {
   /** Who published it, short: shown inline as the citation. */
@@ -43,9 +49,31 @@ export type Guide = {
 export const GUIDES_PATH = "/guides"
 export const GUIDES_TITLE = "Guides to student life in Cambridge"
 export const GUIDES_DESCRIPTION =
-  "Plain guides for Cambridge students: formal hall, May Balls, rowing and Varsity. Unofficial; every fact links the page it comes from."
+  "Plain guides for Cambridge students: joining and starting societies, formal hall, May Balls, rowing and Varsity. Unofficial; every fact links its source."
 
 export const GUIDES: readonly Guide[] = [
+  {
+    slug: "join-a-society",
+    path: "/guides/join-a-society",
+    title: "How to find and join societies in Cambridge",
+    description:
+      "How to find and join Cambridge student societies and sports clubs: the Freshers' and Sports Fairs, joining later in the year, costs, and where to get help.",
+    summary:
+      "The fairs at the start of the year, what to do if you missed them, sport, mailing lists, costs, and where to go if something goes wrong.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "start-a-society",
+    path: "/guides/start-a-society",
+    title: "How to start a society in Cambridge",
+    description:
+      "How to start a student society in Cambridge: registering with Cambridge SU, the Junior Proctor or your college, a constitution, money, rooms and events.",
+    summary:
+      "Checking it does not exist yet, the three ways to register, a constitution, a bank account and grants, rooms and events, and keeping it going.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
   {
     slug: "formal-hall",
     path: "/guides/formal-hall",
