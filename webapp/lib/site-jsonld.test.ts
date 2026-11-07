@@ -24,6 +24,12 @@ describe("the WebSite node on /", () => {
     expect(byType(data, "Person")).toMatchObject({ "@id": PUBLISHER_ID, name: CONTROLLER_NAME })
   })
 
+  test("offers Google no lower-case or domain site name (Search Console, 2026-11-07)", () => {
+    const names = [site.name, ...((site.alternateName as string[] | undefined) ?? [])]
+    expect(names).not.toContain(new URL(SITE_URL).host)
+    expect(names).not.toContain("camsocs")
+  })
+
   test("its search goes to the society directory's own query parameter", () => {
     expect(site.potentialAction).toMatchObject({
       "@type": "SearchAction",

@@ -641,9 +641,7 @@ function startIsStated(
  * "event-tbc-marked-scheduled"): only a public, confirmed event with a start
  * the source states (`startIsStated`) and whose title does not say "TBC" —
  * an Event rich result with a guessed date would mislead. Never a
- * talks.cam-derived event (owner decision G1). Over a list item too, so a
- * profile links by `@id` only the Event nodes that exist
- * (lib/directory-profile.ts `jsonLdEvents`).
+ * talks.cam-derived event (owner decision G1).
  */
 export function eventHasStructuredData(event: StructuredDataFacts): boolean {
   return (
