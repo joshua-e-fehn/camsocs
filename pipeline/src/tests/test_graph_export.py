@@ -222,7 +222,25 @@ def test_stages_read_the_read_routes_and_post_to_the_rest(graph: dict) -> None:
     assert {"from": "sink:cam:inbound/pending", "to": "stage:cam:inbox", "kind": "reads"} in edges
     assert {"from": "stage:cam:inbox", "to": "sink:cam:inbound/mark", "kind": "posts"} in edges
     assert {"from": "sink:cam:coverage", "to": "stage:cam:report", "kind": "reads"} in edges
+    assert {"from": "sink:cam:coverage/events", "to": "stage:cam:report", "kind": "reads"} in edges
     assert not any(edge["from"] == "stage:cam:report" for edge in edges)
+    # The inbox posts what it read as load does; load reads the suppressions.
+    for route in ("claims", "sources", "events/superseded", "brokerInferences", "files"):
+        for stage in ("inbox", "load"):
+            assert {"from": f"stage:cam:{stage}", "to": f"sink:cam:{route}", "kind": "posts"} in (
+                edges
+            )
+    for stage in ("inbox", "load"):
+        assert {"from": "sink:cam:suppressions", "to": f"stage:cam:{stage}", "kind": "reads"} in (
+            edges
+        )
+    assert {"from": "sink:cam:crosswalk", "to": "stage:cam:resolve", "kind": "reads"} in edges
+    assert {"from": "stage:cam:instagram", "to": "sink:cam:files", "kind": "posts"} in edges
+    assert {"from": "stage:cam:talks", "to": "sink:cam:talks/sweep", "kind": "posts"} in edges
+    # The talks pillar's own staging file is a staging node, not a source type.
+    assert {"from": "stage:cam:talks", "to": "dir:cam:talks", "kind": "writes"} in edges
+    talks_dir = next(n for n in _nodes(graph, "staging") if n["name"] == "talks")
+    assert (talks_dir["sourceType"], talks_dir["events"]) == (None, False)
 
 
 def test_groups_mirror_the_registry_and_the_vps_timers(graph: dict) -> None:
@@ -492,8 +510,7 @@ def test_a_synthetic_campus_gets_its_own_lanes_and_ids() -> None:
 # --- the command ---------------------------------------------------------------------------
 
 
-def test_the_graph_command_writes_both_files(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("CAMSOCS_CAMPUS", raising=False)
+def test_the_graph_command_writes_both_files(tmp_path: Path) -> None:
     out_json, out_md = tmp_path / "g" / "graph.json", tmp_path / "map.md"
     result = CliRunner().invoke(
         cli, ["graph", "--json", str(out_json), "--mermaid", str(out_md)], obj={}
@@ -507,8 +524,7 @@ def test_the_graph_command_writes_both_files(tmp_path: Path, monkeypatch) -> Non
     )
 
 
-def test_the_graph_command_prints_json_without_a_path(monkeypatch) -> None:
-    monkeypatch.delenv("CAMSOCS_CAMPUS", raising=False)
+def test_the_graph_command_prints_json_without_a_path() -> None:
     result = CliRunner().invoke(cli, ["graph"], obj={})
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["schema"] == SCHEMA

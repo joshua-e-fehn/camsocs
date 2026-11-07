@@ -28,6 +28,7 @@ from camsocs_pipeline.config import (
     ABOUT_URL,
     DEFAULT_REPORTS_DIR,
     DEFAULT_STAGING_DIR,
+    DEFAULT_STATE_PATH,
     DOCUMENTED_USER_AGENT,
 )
 from camsocs_pipeline.events.common import LONDON
@@ -91,7 +92,13 @@ CAMBRIDGE = CampusProfile(
     has_colleges=True,
     stages=tuple(stage for stage in STAGES if stage.campus == "cam"),
     groups=GROUPS,
-    paths=Paths(staging=DEFAULT_STAGING_DIR, reports=DEFAULT_REPORTS_DIR, decisions=DECISIONS_PATH),
+    paths=Paths(
+        staging=DEFAULT_STAGING_DIR,
+        reports=DEFAULT_REPORTS_DIR,
+        decisions=DECISIONS_PATH,
+        state=DEFAULT_STATE_PATH,
+    ),
+    email_domain_types=links.CAMBRIDGE_EMAIL_DOMAIN_TYPES,
 )
 
 __all__ = ["CAMBRIDGE", "REQUESTS_INBOX", "SITE_CHECKS"]

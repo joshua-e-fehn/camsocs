@@ -69,7 +69,7 @@ A new campus is added only after the launch blockers below are cleared. Then, in
 - [ ] The zz privacy tests pass: member-email classification (`emailCases`) on both sides, other-university noise, location rules, week labels with a non-Thursday week start.
 - [ ] Cambridge's snapshots are unchanged: registry, loader golden, calendar context, `keys.fixtures.json`, `email-types.fixtures.json`, and Joshua's payload digest compared base against branch.
 - [ ] `docs/campuses/<id>.md` covers every source the campus's stages read, and `camsocs graph` validates (every cited `§` exists).
-- [ ] A dry run of the campus's groups on the host, under the lock, writes staging, reports and crosswalk only under `var/campus/<id>/` (plus the shared, URL-keyed `var/cache`) and posts nothing.
+- [ ] A dry run of the campus's groups on the host, under the lock, writes staging, reports, crosswalk and run state only under `var/campus/<id>/` (plus the shared, URL-keyed `var/cache`) and posts nothing.
 - [ ] The campus's legal pages (privacy, removal, Art 14 basis) and its record of processing entry are approved by Joshua.
 - [ ] The monitor's site checks and shadow alerts are scoped to the campus (`ifNull(properties.campus,'cam')`).
 - [ ] Joshua signs off the launch in `PLAN.md` §6.

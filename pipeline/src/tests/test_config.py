@@ -253,10 +253,26 @@ def test_the_campus_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch
     assert Settings(_env_file=None).campus == "cam"
 
 
-@pytest.mark.parametrize("campus", ["ox", "zz", "CAM", "cam.ac.uk", ""])
+@pytest.mark.parametrize("campus", ["ox", "zz", "CAM", "cam.ac.uk"])
 def test_an_unknown_campus_is_refused(campus: str) -> None:
     with pytest.raises(ValidationError, match="unknown campus"):
         Settings(_env_file=None, campus=campus)
+
+
+@pytest.mark.parametrize("blank", ["", "  "])
+def test_a_blank_campus_is_unset(tmp_path, blank: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # As the env-file guards read it: `CAMSOCS_CAMPUS=` copied from a template
+    # or exported empty is no campus stated, so Cambridge, never an error.
+    monkeypatch.setenv("CAMSOCS_CAMPUS", blank)
+    from_shell = Settings(_env_file=None)
+    monkeypatch.delenv("CAMSOCS_CAMPUS")
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"CAMSOCS_CAMPUS={blank}\n")
+    from_file = Settings(_env_file=env_file)
+    for settings in (from_shell, from_file):
+        assert settings.campus == "cam"
+        assert "campus" not in settings.model_fields_set
+    assert load_settings(EnvChoice(DEFAULT_ENV, env_file), environ={}).campus == "cam"
 
 
 def test_an_unknown_campus_flag_is_a_config_error(base_env) -> None:
@@ -269,6 +285,12 @@ def test_the_campus_flag_wins_over_an_unset_file(base_env, zz_campus) -> None:
     assert settings.campus == "zz"
     assert settings.staging_dir == zz_campus.paths.staging
     assert settings.reports_dir == zz_campus.paths.reports
+    # Its run state too: a zz run on the default env never overwrites
+    # Cambridge's `.camsocs-state.json` (watermarks, per-stage data).
+    assert settings.state_path == zz_campus.paths.state
+    assert settings.state_path == REPO_ROOT / "var" / "campus" / "zz" / "state.json"
+    cambridge = load_settings(EnvChoice(DEFAULT_ENV, base_env), environ={})
+    assert cambridge.state_path == REPO_ROOT / ".camsocs-state.json"
 
 
 def test_a_campus_flag_contradicting_the_env_file_is_refused(base_env, zz_campus) -> None:

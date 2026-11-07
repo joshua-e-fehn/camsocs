@@ -3,7 +3,9 @@ stage `calendar_feeds`).
 
 **Which feeds.** The `orgInternal` feeds of organisations in staging
 (``icsUrls``, ``lumaCalendarIds``, ``googleCalendarIds``; website and Linktree
-enrichment find them) plus `seeds.FEED_SEEDS`. The organiser of every event in
+enrichment find them) plus, for Cambridge only, `seeds.FEED_SEEDS` (this is
+an engine stage: another campus reads only its own organisations' feeds).
+The organiser of every event in
 a feed is the organisation that publishes it; a feed two organisations publish
 gives both. The ``ORGANIZER`` property is never used: on Luma it is often a
 person's name.
@@ -197,9 +199,10 @@ def _owner(index: OrgLookup, org_key: str) -> IdentityHints:
     return IdentityHints(name=index.name_of(org_key) or org_key, known_key=org_key)
 
 
-def collect_feeds(index: OrgLookup, notes: list[str] | None = None) -> list[Feed]:
+def collect_feeds(index: OrgLookup, notes: list[str] | None = None, *, campus: str) -> list[Feed]:
     """Every feed to read, by URL; one on a recorded-permission path is
-    dropped, with a note in `notes` (module docstring)."""
+    dropped, with a note in `notes` (module docstring). The seed feeds are
+    Cambridge's: `campus` other than ``cam`` reads none of them."""
     feeds: dict[str, Feed] = {}
     dropped: set[str] = set()
 
@@ -214,7 +217,7 @@ def collect_feeds(index: OrgLookup, notes: list[str] | None = None) -> list[Feed
 
     for ref in index.feeds(*KINDS):
         add(ref.kind, ref.value, _owner(index, ref.org_key))
-    for seed in FEED_SEEDS:
+    for seed in FEED_SEEDS if campus == "cam" else ():
         add(seed.kind, seed.value, seed.owner)
     if dropped and notes is not None:
         notes.append(
@@ -355,7 +358,7 @@ def run(
 ) -> None:
     window = window or default_window(now)
     index = OrgLookup.for_stage(ctx)
-    feeds = collect_feeds(index, ctx.report.notes)
+    feeds = collect_feeds(index, ctx.report.notes, campus=ctx.profile.id)
     slugs = collect_luma_slugs(index)
     if ctx.limit is not None:
         feeds = feeds[: ctx.limit]

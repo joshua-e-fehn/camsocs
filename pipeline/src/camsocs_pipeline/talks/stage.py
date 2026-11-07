@@ -53,6 +53,7 @@ from camsocs_pipeline.events.common import EventWindow, polite_client
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import BatchResult, ConvexError
 from camsocs_pipeline.sources.base import PoliteClient
+from camsocs_pipeline.staging.store import TALKS
 from camsocs_pipeline.talks import push
 from camsocs_pipeline.talks.dedupe import dedupe
 from camsocs_pipeline.talks.mapping import DepartmentMapper
@@ -74,8 +75,9 @@ logger = logging.getLogger(__name__)
 SITES_MODULE = "camsocs_pipeline.talks.sites"
 #: Wall time all department sources share in one run.
 DEPARTMENT_BUDGET = timedelta(minutes=20)
-#: `var/staging/talks/` — beside, not among, the observation directories.
-STAGING_DIRECTORY = "talks"
+#: `var/staging/talks/` — beside, not among, the observation directories
+#: (`staging.store.TALKS`, the stage's declared `writes`).
+STAGING_DIRECTORY = TALKS
 
 DEPARTMENT_SOURCE_TYPES = frozenset(SOURCE_TYPES) - {"talks_cam"}
 
@@ -352,6 +354,7 @@ def run(
 
     path = staging_path(ctx.settings.staging_dir, ctx.run.run_key)
     if merged:
+        ctx.staging.guard_write(STAGING_DIRECTORY)
         write_staging(path, merged)
         notes.append(f"staged → {STAGING_DIRECTORY}/{path.name}")
 

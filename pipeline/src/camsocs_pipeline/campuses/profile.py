@@ -15,10 +15,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from camsocs_pipeline.config import PIPELINE_DIR, REPO_ROOT
 from camsocs_pipeline.models.wire import TermDate
 from camsocs_pipeline.pipeline.context import Stage, StageGroup
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.sources.links import EmailDomainType
 
 
 @dataclass(frozen=True)
@@ -100,17 +104,21 @@ class Paths:
     reports: Path
     #: Operator decisions for the resolver, committed.
     decisions: Path
+    #: The run state of the default env (watermarks, per-stage data:
+    #: `pipeline/sync.py`); a named env keeps ``.camsocs-state.<env>.json``.
+    state: Path
 
 
 def default_paths(campus_id: str) -> Paths:
-    """A non-cam campus's local files: ``var/campus/<id>/…`` and
-    ``pipeline/resolve-decisions.<id>.json``. The URL-keyed, sha256-checked
-    web cache (`var/cache`) stays shared."""
+    """A non-cam campus's local files: ``var/campus/<id>/…`` (staging,
+    reports, the run state) and ``pipeline/resolve-decisions.<id>.json``.
+    The URL-keyed, sha256-checked web cache (`var/cache`) stays shared."""
     root = REPO_ROOT / "var" / "campus" / campus_id
     return Paths(
         staging=root / "staging",
         reports=root / "reports",
         decisions=PIPELINE_DIR / f"resolve-decisions.{campus_id}.json",
+        state=root / "state.json",
     )
 
 
@@ -134,6 +142,10 @@ class CampusProfile:
     stages: tuple[Stage, ...]
     groups: Mapping[str, StageGroup]
     paths: Paths
+    #: The campus's own email domain kinds, in `classifyEmail`'s order
+    #: (`sources/links.email_type`; Cambridge: legacy CUSU, the SU, SRCF).
+    #: Mirrors `emailDomainTypes` in webapp/lib/campus/profiles/<id>.ts.
+    email_domain_types: tuple[EmailDomainType, ...] = ()
 
     def __post_init__(self) -> None:
         foreign = [stage.name for stage in self.stages if stage.campus != self.id]

@@ -121,10 +121,13 @@ class Stage:
     - `module`: the module whose ``run`` it calls, when that is not
       ``camsocs_pipeline.stages.<name>``;
     - `reads` / `writes`: staging directories (a source type, its
-      ``<type>.events`` directory, ``_resolved``) or `SELECTORS`;
-    - `sinks`: the Convex routes it posts to (``termDates``, ``claims``…);
-    - `network`: it uses the network for real (`fetches` keeps its dry-run
-      meaning); `llm`: it may ask a model;
+      ``<type>.events`` directory, ``_resolved``, the talks pillar's
+      ``talks``) or `SELECTORS`;
+    - `sinks`: the Convex routes it calls on a real run, by their exact names
+      in ``webapp/convex/http.ts`` (``termDates``, ``claims``, and the routes
+      it reads back from, ``crosswalk``…);
+    - `network`: it uses the network for real, a robots.txt check included
+      (`fetches` keeps its dry-run meaning); `llm`: it may ask a model;
     - `docs`: where its rules are written, ``"source-research§1"``.
     """
 

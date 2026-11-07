@@ -19,9 +19,16 @@ from camsocs_pipeline.config import REPO_ROOT
 from camsocs_pipeline.models.vocab import SOURCE_TYPES
 from camsocs_pipeline.pipeline.context import PHASES, PILLARS, SELECTORS, Stage, StageGroup
 from camsocs_pipeline.stages import ENGINE, GROUPS, STAGES, registry
-from camsocs_pipeline.staging.store import RESOLVED, events_directory
+from camsocs_pipeline.staging.store import RESOLVED, TALKS, events_directory
 
 ORG, EVENTS, ALL = "@org_lookup", "@event_index", "@all_observations"
+
+#: What `post_observations` calls, in order: the suppression list (read),
+#: then sources, stored files, claims and the side tables.
+OBSERVATIONS = (
+    "suppressions", "sources", "files", "claims", "orgInternal", "relationships",
+    "eventOrganisers", "events/superseded", "brokerInferences",
+)  # fmt: skip
 
 #: name → (phase, pillar, campus, writes, reads, sinks, network, llm, docs)
 ANNOTATIONS: dict[str, tuple] = {
@@ -48,12 +55,14 @@ ANNOTATIONS: dict[str, tuple] = {
         "harvest", "societies", "cam", ("college_list", "society_website"), (), (), True, False,
         ("§8",),
     ),
-    "resolve": ("resolve", "societies", None, (RESOLVED,), (ALL,), (), False, False, ()),
+    "resolve": (
+        "resolve", "societies", None, (RESOLVED,), (ALL,), ("crosswalk",), False, False, ()
+    ),
     "enrich": (
         "enrich", "societies", None, ("society_website", "linktree"), (RESOLVED,), (), True, True,
         ("§13", "§14"),
     ),
-    "classify": ("classify", "societies", None, (ALL,), (ALL,), (), False, True, ()),
+    "classify": ("classify", "societies", None, (ALL,), (ALL,), (), True, True, ()),
     "camdram_events": (
         "events", "events", "cam", ("camdram.events",), (ORG,), (), True, False, ("§5",)
     ),
@@ -80,22 +89,24 @@ ANNOTATIONS: dict[str, tuple] = {
         True, ("§14",),
     ),
     "inbox": (
-        "inbox", "events", None, ("mailing_list_email",), (ORG, EVENTS), ("inbound",), False,
-        True, ("§16", "§20"),
+        "inbox", "events", None, ("mailing_list_email",), (ORG, EVENTS),
+        ("inbound/pending", "inbound/file", *OBSERVATIONS, "inbound/mark"), False, True,
+        ("§16", "§20"),
     ),
     "instagram": (
-        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), (), True, True, ("§17",)
+        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), ("files",), True, True,
+        ("§17",),
     ),
     "termcards": ("inbox", "events", None, ("termcard",), (ORG, EVENTS), (), True, True, ("§21",)),
-    "load": (
-        "load", "shared", None, (), (ALL,),
-        ("claims", "sources", "orgInternal", "relationships", "events", "files"), False, False, (),
-    ),
+    "load": ("load", "shared", None, (), (ALL,), OBSERVATIONS, False, False, ()),
     "talks": (
-        "talks", "talks", "cam", (), (), ("talks/departments", "talks/batch", "talks/runs"), True,
-        False, ("talks-redesign-spec",),
+        "talks", "talks", "cam", (TALKS,), (),
+        ("talks/departments", "talks/batch", "talks/sweep", "talks/runs"), True, False,
+        ("talks-redesign-spec",),
     ),
-    "report": ("report", "shared", None, (), (), ("coverage",), False, False, ()),
+    "report": (
+        "report", "shared", None, (), (), ("coverage", "coverage/events"), False, False, ()
+    ),
 }  # fmt: skip
 
 
@@ -148,7 +159,7 @@ def test_phases_are_monotonic_in_the_registry() -> None:
 
 
 def _staging_directories() -> set[str]:
-    return {*SOURCE_TYPES, *(events_directory(t) for t in SOURCE_TYPES), RESOLVED}
+    return {*SOURCE_TYPES, *(events_directory(t) for t in SOURCE_TYPES), RESOLVED, TALKS}
 
 
 def test_every_write_is_a_staging_directory_or_the_wildcard() -> None:

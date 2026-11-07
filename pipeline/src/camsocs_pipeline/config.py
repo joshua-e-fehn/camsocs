@@ -20,8 +20,11 @@ both deployments.
 env file (``--campus ox --env ox-prod`` reads ``pipeline/.env.ox-prod``, which
 must state ``CAMSOCS_CAMPUS=ox``): `--campus` disagreeing with the campus its
 env file states is an error, never an override. The staging and reports
-directories and the User-Agent default to the campus profile's; Cambridge's
-are the constants below.
+directories, the default env's run state and the User-Agent default to the
+campus profile's (another campus's under ``var/campus/<id>/``, so a run of it
+never overwrites Cambridge's state); Cambridge's are the constants below. A
+blank `CAMSOCS_CAMPUS` (``CAMSOCS_CAMPUS=`` in a file or the shell) counts as
+unset.
 
 Every setting the pipeline needs to reach the outside world lives here, so a
 misconfigured host fails once with a readable message rather than at the first
@@ -45,7 +48,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # python-dotenv is pydantic-settings' own dotenv reader (a required dependency).
 from dotenv import dotenv_values
@@ -148,7 +151,7 @@ class Settings(BaseSettings):
     )
 
     #: The campus (`camsocs_pipeline.campuses`); its profile supplies the
-    #: defaults of `staging_dir`, `reports_dir` and `user_agent`.
+    #: defaults of `staging_dir`, `reports_dir`, `state_path` and `user_agent`.
     campus: str = Field(default=DEFAULT_CAMPUS, validation_alias=CAMPUS_VARIABLE)
     convex_url: str = Field(default="", validation_alias="CONVEX_URL")
     convex_http_url: str = Field(default="", validation_alias="CONVEX_HTTP_URL")
@@ -212,6 +215,22 @@ class Settings(BaseSettings):
     #: deployment's data is what the site shows.
     indexnow_site_url: str = Field(default="", validation_alias="INDEXNOW_SITE_URL")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_campus_is_unset(cls, data: Any) -> Any:
+        """A blank `CAMSOCS_CAMPUS` is no campus stated, as `_check_campus`
+        reads it: dropped, so the field keeps its default and stays out of
+        the explicitly set fields."""
+        if isinstance(data, dict):
+            blank = [
+                key
+                for key in ("campus", CAMPUS_VARIABLE)
+                if isinstance(data.get(key), str) and not data[key].strip()
+            ]
+            if blank:
+                return {key: value for key, value in data.items() if key not in blank}
+        return data
+
     @field_validator("campus")
     @classmethod
     def _known_campus(cls, value: str) -> str:
@@ -230,6 +249,7 @@ class Settings(BaseSettings):
         defaults = {
             "staging_dir": profile.paths.staging,
             "reports_dir": profile.paths.reports,
+            "state_path": profile.paths.state,
             "user_agent": profile.branding.user_agent,
         }
         for name, value in defaults.items():

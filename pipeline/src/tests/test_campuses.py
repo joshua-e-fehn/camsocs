@@ -21,6 +21,7 @@ from camsocs_pipeline.config import (
     ABOUT_URL,
     DEFAULT_REPORTS_DIR,
     DEFAULT_STAGING_DIR,
+    DEFAULT_STATE_PATH,
     DOCUMENTED_USER_AGENT,
     PIPELINE_DIR,
     REPO_ROOT,
@@ -268,7 +269,10 @@ def test_zz_settings_default_to_its_paths_and_user_agent(zz_campus) -> None:
     assert settings.reports_dir == ZZ.paths.reports
     assert settings.user_agent == ZZ.branding.user_agent
     assert settings.require_user_agent() == ZZ.branding.user_agent
-    assert {"staging_dir", "reports_dir", "user_agent"}.isdisjoint(settings.model_fields_set)
+    assert settings.state_path == ZZ.paths.state
+    assert {"staging_dir", "reports_dir", "state_path", "user_agent"}.isdisjoint(
+        settings.model_fields_set
+    )
     # Explicit values still win.
     explicit = Settings(_env_file=None, campus="zz", staging_dir=Path("/tmp/x"))
     assert explicit.staging_dir == Path("/tmp/x")
@@ -281,7 +285,18 @@ def test_cam_settings_are_unchanged() -> None:
     assert settings.staging_dir == DEFAULT_STAGING_DIR
     assert settings.reports_dir == DEFAULT_REPORTS_DIR
     assert settings.user_agent == DOCUMENTED_USER_AGENT
+    assert settings.state_path == DEFAULT_STATE_PATH == CAMBRIDGE.paths.state
     assert "campus" not in settings.model_fields_set
+
+
+def test_the_email_domain_kinds_are_the_profiles() -> None:
+    assert CAMBRIDGE.email_domain_types is links.CAMBRIDGE_EMAIL_DOMAIN_TYPES
+    assert [kind for kind, _ in CAMBRIDGE.email_domain_types] == [
+        "legacy_cusu",
+        "cambridgesu",
+        "srcf",
+    ]
+    assert ZZ.email_domain_types == ()
 
 
 # --- the runner and the stages read the run's profile ------------------------------------------

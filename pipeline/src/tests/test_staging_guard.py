@@ -16,6 +16,7 @@ from camsocs_pipeline.stages import STAGES
 from camsocs_pipeline.staging.store import (
     RESOLVED,
     STRICT_ENV,
+    TALKS,
     StagingGuardError,
     StagingStore,
     declares_write,
@@ -51,6 +52,9 @@ def observation(source_type: str = "su_directory") -> Observation:
         (("@all_observations",), RESOLVED, False),
         ((RESOLVED,), RESOLVED, True),
         ((), "su_directory", False),
+        # The talks pillar's own directory: declared by name, never a wildcard.
+        ((TALKS,), TALKS, True),
+        (("@all_observations",), TALKS, False),
     ],
 )
 def test_declared_writes(writes: tuple[str, ...], directory: str, allowed: bool) -> None:
@@ -71,6 +75,19 @@ def test_strict_mode_refuses_an_undeclared_directory(tmp_path: Path) -> None:
         store.write_shadowed("su_directory", [])
     assert not (tmp_path / "su_directory").exists()
     assert store.write("proctors_register", RUN_KEY, [observation("proctors_register")]) == 1
+
+
+def test_a_stage_writing_its_own_file_checks_it_with_guard_write(tmp_path: Path) -> None:
+    # The talks stage writes var/staging/talks/ itself, not through the store.
+    store = StagingStore(tmp_path)
+    store.guard_write(TALKS)  # outside a run: nothing is checked
+    store.active_stage = Stage("talks", writes=(TALKS,))
+    store.guard_write(TALKS)
+    store.active_stage = Stage("classify", writes=("@all_observations",))
+    with pytest.raises(StagingGuardError, match="talks"):
+        store.guard_write(TALKS)
+    talks = next(stage for stage in STAGES if stage.name == "talks")
+    assert declares_write(talks.writes, TALKS)
 
 
 def test_production_only_warns_once_per_stage_and_directory(
@@ -167,7 +184,8 @@ def test_every_registry_write_names_a_staging_directory_or_the_wildcard() -> Non
 
     for stage in STAGES:
         for directory in stage.writes:
-            assert directory == "@all_observations" or _is_directory_name(directory), (
+            # The talks pillar's own file (`TALKS`) is checked by `guard_write`.
+            assert directory in ("@all_observations", TALKS) or _is_directory_name(directory), (
                 stage.name,
                 directory,
             )
