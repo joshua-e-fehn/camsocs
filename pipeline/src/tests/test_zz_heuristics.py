@@ -166,6 +166,29 @@ def test_zz_member_rules(zz) -> None:
     assert email_type("chess@lists.cam.ac.uk") == "personal_crsid"
 
 
+@pytest.mark.parametrize(
+    ("email", "kind"),
+    [
+        # Testford has no domain kinds of its own (`emailDomainTypes: []`):
+        # Cambridge's SU, CUSU and SRCF hosts are ordinary domains there.
+        ("ab123@srcf.net", "role_own_domain"),
+        ("chess@soc.srcf.ucam.org", "role_own_domain"),
+        ("chess@cusu.testford.ac.uk", "college_domain"),
+        ("info@cambridgesu.co.uk", "role_own_domain"),
+        ("x@cusu.org", "role_own_domain"),
+    ],
+)
+def test_zz_has_no_cambridge_domain_kinds(zz, email: str, kind: str) -> None:
+    assert email_type(email) == kind
+
+
+def test_cambridge_domain_kinds_are_untouched() -> None:
+    assert email_type("chess@srcf.net") == "srcf"
+    assert email_type("chess@cusu.cam.ac.uk") == "legacy_cusu"
+    assert email_type("x@cusu.org") == "legacy_cusu"
+    assert email_type("info@cambridgesu.co.uk") == "cambridgesu"
+
+
 def test_free_text_withholds_by_the_campus_rule(zz) -> None:
     text = "Write to jane.doe@testford.ac.uk or chess@testford.ac.uk"
     assert withhold_personal_emails(text) == f"Write to {WITHHELD} or chess@testford.ac.uk"

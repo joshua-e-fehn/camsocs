@@ -331,7 +331,6 @@ NO_IDENTITY_HOSTS = frozenset(
         "github.com",
     }
 )
-#: Hosts shared by many groups: the identity includes the first path segment(s).
 #: Universities whose college and department sites hold many groups' pages
 #: (`site_identity`), whichever campus runs; a campus adds its own
 #: `university_domains`.
@@ -344,6 +343,7 @@ def _page_hosts(profile: CampusProfile) -> tuple[str, ...]:
     return tuple(f".{domain}" for domain in domains)
 
 
+#: Hosts shared by many groups: the identity includes the first path segment(s).
 SHARED_HOSTS: dict[str, int] = {
     "sites.google.com": 2,
     "linktr.ee": 1,

@@ -61,6 +61,8 @@ from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urljoin, urlsp
 from camsocs_pipeline.keys import slugify
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from camsocs_pipeline.campuses.profile import CampusProfile
 
 # --- URLs -----------------------------------------------------------------------------
@@ -711,12 +713,30 @@ def _is_post_address(local: str) -> bool:
     return any(word in _POST_WORDS for word in re.split(r"[^a-z]+", local))
 
 
+#: A campus's own domain kinds, in `classifyEmail`'s order: mirrors
+#: `emailDomainTypes` in webapp/lib/campus/profiles/<id>.ts. A campus not
+#: listed has none (``zz``: ``ab123@srcf.net`` is ``role_own_domain`` there).
+EMAIL_DOMAIN_TYPES: dict[str, tuple[tuple[EmailType, Callable[[str], bool]], ...]] = {
+    "cam": (
+        (
+            "legacy_cusu",
+            lambda domain: bool(re.search(r"(^|\.)cusu\.", domain)) or domain == "cusu.org",
+        ),
+        (
+            "cambridgesu",
+            lambda domain: domain == "cambridgesu.co.uk" or domain.endswith(".cambridgesu.co.uk"),
+        ),
+        ("srcf", lambda domain: bool(re.search(r"(^|\.)srcf\.(net|ucam\.org)$", domain))),
+    ),
+}
+
+
 def email_type(email: str) -> EmailType:
     """What kind of address `email` is — `classifyEmail` in
     webapp/convex/lib/derived.ts, rule for rule, under the active campus:
-    its member rule, its excluded list hosts (``lists_cam``) and its member
-    subdomains (``college_domain``). The SU, CUSU and SRCF kinds are
-    Cambridge hosts and stay global: no other campus's address is one."""
+    its member rule, its own domain kinds (`EMAIL_DOMAIN_TYPES`; Cambridge:
+    legacy CUSU, the SU, SRCF), its excluded list hosts (``lists_cam``) and
+    its member subdomains (``college_domain``)."""
     address = email.strip().lower()
     at = address.rfind("@")
     local = address[:at]
@@ -726,15 +746,13 @@ def email_type(email: str) -> EmailType:
     # An alumni address is one person's unless it is named after a post.
     if _is_alumni_domain(domain) and not _is_post_address(local):
         return "personal_crsid"
-    if re.search(r"(^|\.)cusu\.", domain) or domain == "cusu.org":
-        return "legacy_cusu"
-    if domain == "cambridgesu.co.uk" or domain.endswith(".cambridgesu.co.uk"):
-        return "cambridgesu"
-    rule = _campus().member_ids
+    campus = _campus()
+    for kind, matches in EMAIL_DOMAIN_TYPES.get(campus.id, ()):
+        if matches(domain):
+            return kind
+    rule = campus.member_ids
     if domain in rule.excluded:
         return "lists_cam"
-    if re.search(r"(^|\.)srcf\.(net|ucam\.org)$", domain):
-        return "srcf"
     if any(domain.endswith("." + base) for base in rule.domains):
         return "college_domain"
     if domain in WEBMAIL_DOMAINS:
