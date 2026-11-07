@@ -30,6 +30,9 @@ OBSERVATIONS = (
     "eventOrganisers", "events/superseded", "brokerInferences",
 )  # fmt: skip
 
+#: The route `OrgLookup.for_stage` reads on a real run.
+XW = ("crosswalk",)
+
 #: name → (phase, pillar, campus, writes, reads, sinks, network, llm, docs)
 ANNOTATIONS: dict[str, tuple] = {
     "term_dates": ("seed", "shared", None, (), (), ("termDates",), False, False, ("§19",)),
@@ -56,7 +59,7 @@ ANNOTATIONS: dict[str, tuple] = {
         ("§8",),
     ),
     "resolve": (
-        "resolve", "societies", None, (RESOLVED,), (ALL,), ("crosswalk",), False, False, ()
+        "resolve", "societies", None, (RESOLVED,), (ALL,), XW, False, False, ()
     ),
     "enrich": (
         "enrich", "societies", None, ("society_website", "linktree"), (RESOLVED,), (), True, True,
@@ -64,27 +67,27 @@ ANNOTATIONS: dict[str, tuple] = {
     ),
     "classify": ("classify", "societies", None, (ALL,), (ALL,), (), True, True, ()),
     "camdram_events": (
-        "events", "events", "cam", ("camdram.events",), (ORG,), ("crosswalk",), True, False, ("§5",)
+        "events", "events", "cam", ("camdram.events",), (ORG,), XW, True, False, ("§5",)
     ),
     "talks_cam": (
-        "events", "events", "cam", ("talks_list.events",), (ORG,), ("crosswalk",), True, False, ("§6",)
+        "events", "events", "cam", ("talks_list.events",), (ORG,), XW, True, False, ("§6",)
     ),
     "cucbc_events": (
-        "events", "events", "cam", ("cucbc.events",), (ORG,), ("crosswalk",), True, False, ("§7",)
+        "events", "events", "cam", ("cucbc.events",), (ORG,), XW, True, False, ("§7",)
     ),
     "playwaze": (
-        "events", "events", "cam", ("playwaze.events",), (ORG,), ("crosswalk",), True, False,
+        "events", "events", "cam", ("playwaze.events",), (ORG,), XW, True, False,
         ("§9",),
     ),
     "uni_events": (
-        "events", "events", "cam", ("uni_events_api.events",), (ORG,), ("crosswalk",), True, False, ("§10",)
+        "events", "events", "cam", ("uni_events_api.events",), (ORG,), XW, True, False, ("§10",)
     ),
     "calendar_feeds": (
-        "events", "events", None, ("ics_feed.events", "luma.events"), (ORG,), ("crosswalk",), True, False,
+        "events", "events", None, ("ics_feed.events", "luma.events"), (ORG,), XW, True, False,
         ("§11",),
     ),
     "su_whatson": (
-        "events", "events", "cam", ("su_whatson.events",), ("su_profile", ORG), ("crosswalk",), True, False,
+        "events", "events", "cam", ("su_whatson.events",), ("su_profile", ORG), XW, True, False,
         ("§12",),
     ),
     "website_events": (
@@ -93,15 +96,15 @@ ANNOTATIONS: dict[str, tuple] = {
     ),
     "inbox": (
         "inbox", "events", None, ("mailing_list_email",), (ORG, EVENTS),
-        ("crosswalk", "inbound/pending", "inbound/file", *OBSERVATIONS, "inbound/mark"), False, True,
+        (*XW, "inbound/pending", "inbound/file", *OBSERVATIONS, "inbound/mark"), False, True,
         ("§16", "§20"),
     ),
     "instagram": (
-        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), ("crosswalk", "files"), True, True,
+        "inbox", "events", None, ("instagram_api",), (ORG, EVENTS), (*XW, "files"), True, True,
         ("§17",),
     ),
     "termcards": (
-        "inbox", "events", None, ("termcard",), (ORG, EVENTS), ("crosswalk",), True, True,
+        "inbox", "events", None, ("termcard",), (ORG, EVENTS), XW, True, True,
         ("§21",),
     ),
     "load": ("load", "shared", None, (), (ALL,), OBSERVATIONS, False, False, ()),
