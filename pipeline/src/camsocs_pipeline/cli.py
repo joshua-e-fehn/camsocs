@@ -15,9 +15,10 @@
     camsocs prune-cache [--older-than 90d] [--dry-run]   retention R7 for var/cache + staging
     camsocs clean-events [--titles] [--apply]   stored events no reader restates; --apply
                                          only with --env prod (docs/deploy.md §7)
-    camsocs monitor [--status-json PATH] production checks against PostHog and the site,
-                                         new listing requests (ENG-10, ENG-33); exits 1
-                                         when it pages (docs/ops-vps.md)
+    camsocs monitor [--status-json PATH] [--json]   production checks against PostHog and
+                                         the site, new listing requests (ENG-10, ENG-33);
+                                         exits 1 when it pages; shadow checks never page
+                                         (D9, docs/ops-vps.md)
     camsocs graph [--json PATH] [--mermaid PATH]   the stage registry as a graph (JSON,
                                          Mermaid); offline (`pixi run pipeline-graph`)
 
@@ -62,11 +63,14 @@ from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
     check_sites,
+    checks_for,
     count_requests,
     read_status,
     requests_window,
     run_checks,
+    run_shadow_checks,
     safe_invocation_id,
+    shadow_checks_for,
     site_client,
     summary,
 )
@@ -588,16 +592,28 @@ def clean_events(ctx: click.Context, apply: bool, titles: bool) -> None:
         "listing requests are counted from where the previous run stopped."
     ),
 )
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help=(
+        "Print the verdict as JSON (the status file plus the shadow checks, "
+        "`shadowChecks`) instead of one line per check."
+    ),
+)
 @_env_option
 @click.pass_context
-def monitor(ctx: click.Context, status_json: Path | None) -> None:
-    """Production checks (monitor.py): against PostHog an error spike, a stale
-    harvest, a high zero-result search rate, no pageviews; camsocs.uk's home
-    and societies pages answering 200; and new listing requests by kind.
-    Exits 1 when it pages: a check fails, a site check recovers, or a request
-    arrived. A query PostHog cannot answer is `unknown` and never fails the
-    run. Prints counts, status codes and thresholds only."""
+def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None:
+    """Production checks (monitor.py) for the campus: against PostHog an
+    error spike, a stale harvest, a high zero-result search rate, no
+    pageviews; the campus site's pages answering 200; and new listing
+    requests by kind. Exits 1 when it pages: a check fails, a site check
+    recovers, or a request arrived. A query PostHog cannot answer is
+    `unknown` and never fails the run. The scraper-health checks run in
+    shadow (decision D9): printed, never paged. Prints counts, status codes
+    and thresholds only."""
     settings = _settings(ctx)
+    profile = _loaded(ctx)["profile"]
     if not settings.posthog_query_configured:
         click.echo(
             "monitor: POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID are not set; nothing checked."
@@ -609,22 +625,30 @@ def monitor(ctx: click.Context, status_json: Path | None) -> None:
         raise click.ClickException(str(error)) from error
     previous = read_status(status_json)
     now = datetime.now(UTC)
+    branding = profile.branding
+    invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
     with client:
-        results = run_checks(client)
-        requests = count_requests(client, *requests_window(previous, now=now))
-    with site_client() as site:
-        results += check_sites(site)
-    verdict = assess(results, previous, now=now, requests=requests)
-    for line in summary(verdict):
-        click.echo(f"monitor: {line}")
+        results = run_checks(client, checks_for(profile))
+        requests = count_requests(client, *requests_window(previous, now=now), profile.id)
+        with site_client(branding.about_url) as site:
+            results += check_sites(site, branding.monitor_urls)
+        verdict = assess(
+            results, previous, now=now, requests=requests, campus=profile.id, site=branding.site_url
+        )
+        # Written before the shadow checks run: nothing they do reaches it.
+        _write_summary(status_json, verdict.status_payload(invocation))
+        verdict = verdict.with_shadow(run_shadow_checks(client, shadow_checks_for(profile)))
+    if as_json:
+        click.echo(json.dumps(verdict.json_payload(invocation), indent=1, ensure_ascii=False))
+    else:
+        for line in summary(verdict):
+            click.echo(f"monitor: {line}")
     if verdict.unknown:
         click.echo(
             f"warning: not checked, PostHog did not answer: {', '.join(verdict.unknown)} "
             "(not a failure: an outage must not page)",
             err=True,
         )
-    invocation = safe_invocation_id(os.environ.get("INVOCATION_ID"))
-    _write_summary(status_json, verdict.status_payload(invocation))
     if verdict.page:
         raise click.ClickException("; ".join(verdict.reasons()))
 
