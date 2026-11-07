@@ -165,6 +165,10 @@ export type SocietyFacts = {
   status: string
   shortDescription?: string
   blueStatus?: string
+  /** Events it runs in the current activity window (this term, or the next
+   * eight weeks in a vacation); a society that is doing things fills a
+   * calendar, one that is quiet does not. */
+  upcoming?: number
 }
 
 export type Scored<T> = { item: T; score: number; reasons: string[] }
@@ -234,6 +238,7 @@ export function scoreSociety(
     reasons.push("at your college")
   }
 
+  if ((card.upcoming ?? 0) > 0) score += 3 + Math.min(card.upcoming ?? 0, 6) * 0.5
   if (card.status === "active") score += 1.5
   else if (card.status === "dormant") score -= 2
   if (card.shortDescription) score += 0.5

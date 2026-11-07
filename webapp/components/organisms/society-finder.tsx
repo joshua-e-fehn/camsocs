@@ -160,6 +160,11 @@ function SocietyMatches({ result }: { result: FinderResult }) {
                     ))}
                   </ul>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  {match.upcoming > 0
+                    ? `📅 ${match.upcoming} ${match.upcoming === 1 ? "event" : "events"} ${match.inTerm ? "this term" : "coming up"}`
+                    : "No events listed yet: its page has how to get in touch"}
+                </p>
                 {match.shortDescription && (
                   <p className="line-clamp-2 text-sm text-muted-foreground">
                     {match.shortDescription}

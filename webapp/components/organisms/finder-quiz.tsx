@@ -157,156 +157,161 @@ export function FinderQuiz({
         </div>
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        {phase === "thinking" ? (
-          <motion.div
-            key="thinking"
-            {...slide}
-            className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"
-          >
-            <motion.span
-              aria-hidden
-              className="text-5xl"
-              animate={reduce ? {} : { rotate: [0, 14, -10, 0], scale: [1, 1.15, 1] }}
-              transition={{ duration: 0.9, repeat: Number.POSITIVE_INFINITY }}
+      {/* popLayout: the next question renders at once while the old one fades
+          out on top, so nothing ever waits on an exit animation (a background
+          tab pauses animation frames). */}
+      <div className="relative">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {phase === "thinking" ? (
+            <motion.div
+              key="thinking"
+              {...slide}
+              className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"
             >
-              ✨
-            </motion.span>
-            <p className="font-serif text-2xl">Finding your matches…</p>
-          </motion.div>
-        ) : (
-          <motion.fieldset key={question.id} {...slide} className="flex min-w-0 flex-col gap-5">
-            <legend className="sr-only">{question.prompt}</legend>
-            <div className="flex flex-col gap-1">
-              <h2 className="font-serif text-3xl leading-tight tracking-[-0.01em] text-balance sm:text-4xl">
-                {question.prompt}
-              </h2>
-              {question.help && <p className="text-muted-foreground">{question.help}</p>}
-            </div>
-            <div
-              className={cn(
-                "grid gap-2.5",
-                question.options.length > 6
-                  ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-                  : "grid-cols-1 sm:grid-cols-2",
-              )}
-            >
-              {question.options.map((option, index) => {
-                const on = chosen.includes(option.id)
-                return (
-                  <motion.button
-                    key={option.id}
-                    type="button"
-                    role={question.multi ? "checkbox" : "radio"}
-                    aria-checked={on}
-                    onClick={() => pick(option.id)}
-                    initial={reduce ? false : { opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={
-                      reduce
-                        ? { duration: 0 }
-                        : { delay: index * 0.025, type: "spring", stiffness: 420, damping: 30 }
-                    }
-                    whileTap={reduce ? undefined : { scale: 0.96 }}
-                    className={cn(
-                      "relative flex min-h-16 items-center gap-3 rounded-2xl border-2 px-3.5 py-3 text-left text-[0.9375rem] leading-snug transition-colors",
-                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                      on
-                        ? "border-brand bg-accent/70"
-                        : "border-border bg-card hover:border-brand/50",
-                    )}
-                  >
-                    <motion.span
-                      aria-hidden
-                      className="text-2xl"
-                      animate={
-                        on && !reduce ? { scale: [1, 1.35, 1], rotate: [0, -8, 0] } : { scale: 1 }
-                      }
-                      transition={{ duration: 0.35 }}
-                    >
-                      {option.emoji}
-                    </motion.span>
-                    <span className="min-w-0 flex-1">{option.label}</span>
-                    {on && (
-                      <motion.span
-                        aria-hidden
-                        initial={reduce ? false : { scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-brand-foreground"
-                      >
-                        <CheckIcon className="size-3.5" />
-                      </motion.span>
-                    )}
-                  </motion.button>
-                )
-              })}
-            </div>
-
-            {needsCollege && (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Which college?</p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {colleges.map((college) => (
-                    <button
-                      key={college.key}
+              <motion.span
+                aria-hidden
+                className="text-5xl"
+                animate={reduce ? {} : { rotate: [0, 14, -10, 0], scale: [1, 1.15, 1] }}
+                transition={{ duration: 0.9, repeat: Number.POSITIVE_INFINITY }}
+              >
+                ✨
+              </motion.span>
+              <p className="font-serif text-2xl">Finding your matches…</p>
+            </motion.div>
+          ) : (
+            <motion.fieldset key={question.id} {...slide} className="flex min-w-0 flex-col gap-5">
+              <legend className="sr-only">{question.prompt}</legend>
+              <div className="flex flex-col gap-1">
+                <h2 className="font-serif text-3xl leading-tight tracking-[-0.01em] text-balance sm:text-4xl">
+                  {question.prompt}
+                </h2>
+                {question.help && <p className="text-muted-foreground">{question.help}</p>}
+              </div>
+              <div
+                className={cn(
+                  "grid gap-2.5",
+                  question.options.length > 6
+                    ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                    : "grid-cols-1 sm:grid-cols-2",
+                )}
+              >
+                {question.options.map((option, index) => {
+                  const on = chosen.includes(option.id)
+                  return (
+                    <motion.button
+                      key={option.id}
                       type="button"
-                      aria-pressed={collegeKey === college.key}
-                      onClick={() => setCollegeKey(college.key)}
+                      role={question.multi ? "checkbox" : "radio"}
+                      aria-checked={on}
+                      onClick={() => pick(option.id)}
+                      initial={reduce ? false : { opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={
+                        reduce
+                          ? { duration: 0 }
+                          : { delay: index * 0.025, type: "spring", stiffness: 420, damping: 30 }
+                      }
+                      whileTap={reduce ? undefined : { scale: 0.96 }}
                       className={cn(
-                        "flex min-h-11 items-center gap-2 rounded-xl border-2 px-2.5 py-1.5 text-left text-sm transition-colors",
-                        collegeKey === college.key
+                        "relative flex min-h-16 items-center gap-3 rounded-2xl border-2 px-3.5 py-3 text-left text-[0.9375rem] leading-snug transition-colors",
+                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                        on
                           ? "border-brand bg-accent/70"
-                          : "border-border hover:border-brand/50",
+                          : "border-border bg-card hover:border-brand/50",
                       )}
                     >
-                      <CollegeCrest crest={college.crest} size={24} decorative />
-                      {college.shortName}
-                    </button>
-                  ))}
-                </div>
+                      <motion.span
+                        aria-hidden
+                        className="text-2xl"
+                        animate={
+                          on && !reduce ? { scale: [1, 1.35, 1], rotate: [0, -8, 0] } : { scale: 1 }
+                        }
+                        transition={{ duration: 0.35 }}
+                      >
+                        {option.emoji}
+                      </motion.span>
+                      <span className="min-w-0 flex-1">{option.label}</span>
+                      {on && (
+                        <motion.span
+                          aria-hidden
+                          initial={reduce ? false : { scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-brand-foreground"
+                        >
+                          <CheckIcon className="size-3.5" />
+                        </motion.span>
+                      )}
+                    </motion.button>
+                  )
+                })}
               </div>
-            )}
 
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => go(-1)}
-                disabled={step === 0}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground disabled:invisible"
-              >
-                <ArrowLeftIcon aria-hidden className="size-4" />
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={() => go(1)}
-                disabled={!canGo}
-                className={cn(
-                  "inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 text-sm font-medium text-brand-foreground transition-opacity",
-                  "disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                )}
-              >
-                {last ? (
-                  <>
-                    <SparklesIcon aria-hidden className="size-4" />
-                    {finishLabel}
-                  </>
-                ) : question.optional && chosen.length === 0 ? (
-                  <>
-                    Skip
-                    <ArrowRightIcon aria-hidden className="size-4" />
-                  </>
-                ) : (
-                  <>
-                    Next
-                    <ArrowRightIcon aria-hidden className="size-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.fieldset>
-        )}
-      </AnimatePresence>
+              {needsCollege && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium">Which college?</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {colleges.map((college) => (
+                      <button
+                        key={college.key}
+                        type="button"
+                        aria-pressed={collegeKey === college.key}
+                        onClick={() => setCollegeKey(college.key)}
+                        className={cn(
+                          "flex min-h-11 items-center gap-2 rounded-xl border-2 px-2.5 py-1.5 text-left text-sm transition-colors",
+                          collegeKey === college.key
+                            ? "border-brand bg-accent/70"
+                            : "border-border hover:border-brand/50",
+                        )}
+                      >
+                        <CollegeCrest crest={college.crest} size={24} decorative />
+                        {college.shortName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => go(-1)}
+                  disabled={step === 0}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground disabled:invisible"
+                >
+                  <ArrowLeftIcon aria-hidden className="size-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  disabled={!canGo}
+                  className={cn(
+                    "inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 text-sm font-medium text-brand-foreground transition-opacity",
+                    "disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                  )}
+                >
+                  {last ? (
+                    <>
+                      <SparklesIcon aria-hidden className="size-4" />
+                      {finishLabel}
+                    </>
+                  ) : question.optional && chosen.length === 0 ? (
+                    <>
+                      Skip
+                      <ArrowRightIcon aria-hidden className="size-4" />
+                    </>
+                  ) : (
+                    <>
+                      Next
+                      <ArrowRightIcon aria-hidden className="size-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.fieldset>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
