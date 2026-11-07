@@ -1,0 +1,621 @@
+{
+  "checkedOn": "2026-11-08",
+  "sections": [
+    {
+      "id": "about",
+      "title": "About this glossary",
+      "paragraphs": [
+        {
+          "text": "Cambridge has a lot of its own vocabulary, from the names of its terms to the people who look after you in college. Even the University keeps a short glossary of Cambridge words on its website, and points to the University Library's much longer list.",
+          "sources": [
+            "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+            "https://glossary.lib.cam.ac.uk/glossary-index"
+          ]
+        },
+        {
+          "text": "This page explains the words new students meet most often in their first weeks. Some are official University terms and some are everyday student slang; usage can differ between colleges, so your own college's handbook has the final word.",
+          "sources": [
+            "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+            "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+            "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+          ]
+        }
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "term": "Michaelmas, Lent and Easter",
+      "text": "The names of Cambridge's three terms. Michaelmas runs from October to early December, Lent from January to March, and Easter from April to June; Easter Term is when most final exams are taken.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://www.cam.ac.uk/about-the-university/term-dates-and-calendars",
+        "https://glossary.lib.cam.ac.uk/term/easter-term"
+      ],
+      "see": "/term-dates"
+    },
+    {
+      "term": "Full Term",
+      "text": "The eight-week core of each term, when undergraduate teaching takes place. Full Term always runs from a Tuesday to a Friday, and students are normally expected to live in Cambridge during it.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/term-dates-and-calendars",
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/full-term"
+      ],
+      "see": "/term-dates"
+    },
+    {
+      "term": "Week 0",
+      "text": "Students and societies count each term in numbered weeks, and listings such as Camdram's theatre diary run from \"Week 0\" to \"Week 8\". Week numbers are informal, so check the actual date on any listing.",
+      "sources": ["https://www.camdram.net/"],
+      "see": "/term-dates"
+    },
+    {
+      "term": "Long Vacation (Long Vac)",
+      "text": "The summer break between Easter Term and Michaelmas Term, when undergraduate teaching stops. The University also calls it the Research Period.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/long-vacation"
+      ],
+      "see": "/term-dates"
+    },
+    {
+      "term": "May Week",
+      "text": "The celebrations after exams, which take place in June despite the name. The University Library glossary describes it as two weeks: the last week of Easter Term and the week after.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/may-week",
+        "https://www.cambridge.gov.uk/may-balls"
+      ],
+      "see": "/guides/may-balls"
+    },
+    {
+      "term": "May Ball",
+      "text": "A large, formal college party held during May Week, usually with live music and fireworks and often lasting through the night. Despite the name, May Balls take place in June.",
+      "sources": [
+        "https://www.cambridge.gov.uk/may-balls",
+        "https://glossary.lib.cam.ac.uk/term/may-balls"
+      ],
+      "see": "/guides/may-balls"
+    },
+    {
+      "term": "Tripos",
+      "text": "The Cambridge name for an undergraduate honours course and its exams, for example the Natural Sciences Tripos. Passing the Tripos exams qualifies you for an honours degree; students say they \"read\" a subject rather than study it.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/tripos",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://glossary.lib.cam.ac.uk/term/read"
+      ],
+      "see": null
+    },
+    {
+      "term": "Part IA, IB, II (and III)",
+      "text": "The stages of a Tripos. Part I is often split into Part IA and Part IB, usually taken in the first and second years; Part II is normally a third- or fourth-year exam, and some subjects, such as maths, have a Part III.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/part",
+        "https://glossary.lib.cam.ac.uk/term/tripos"
+      ],
+      "see": null
+    },
+    {
+      "term": "Supervision",
+      "text": "Cambridge's small-group teaching session, led by a specialist in the subject and usually lasting about an hour. Supervisions are arranged by your college and are not assessed; you usually prepare work beforehand and get feedback on it.",
+      "sources": [
+        "https://www.undergraduate.study.cam.ac.uk/courses/teaching-supervisions",
+        "https://www.undergraduate.study.cam.ac.uk/supervisions-and-assessment"
+      ],
+      "see": null
+    },
+    {
+      "term": "Supervisor",
+      "text": "For undergraduates, the person who teaches your supervisions, appointed by your college; the equivalent of an Oxford tutor. Research students have a supervisor appointed by the University.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/supervisor",
+        "https://www.undergraduate.study.cam.ac.uk/courses/teaching-supervisions"
+      ],
+      "see": null
+    },
+    {
+      "term": "Director of Studies (DoS)",
+      "text": "An expert in your subject, usually based at your college, who advises on course choices, arranges or oversees your supervisions and checks your academic progress.",
+      "sources": [
+        "https://www.undergraduate.study.cam.ac.uk/colleges/what-is-a-college",
+        "https://www.undergraduate.study.cam.ac.uk/supervisions-and-assessment"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Tutor",
+      "text": "A college member, usually an academic in a different subject from yours, who supports you with personal, financial and practical matters rather than teaching you.",
+      "sources": [
+        "https://www.undergraduate.study.cam.ac.uk/colleges/what-is-a-college",
+        "https://www.undergraduate.study.cam.ac.uk/student-life/support",
+        "https://glossary.lib.cam.ac.uk/term/tutor"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Faculty and Department",
+      "text": "The University units that organise teaching and research in a subject; departments are usually subdivisions of a faculty. Lectures, seminars and practicals are run by them and attended by students from all colleges.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/how-the-university-and-colleges-work",
+        "https://www.undergraduate.study.cam.ac.uk/supervisions-and-assessment"
+      ],
+      "see": null
+    },
+    {
+      "term": "First, 2:1, 2:2",
+      "text": "Classes of result in Tripos exams. A First is the top class; 2:1 and 2:2 are shorthand for an upper and a lower second.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/first",
+        "https://glossary.lib.cam.ac.uk/term/two-one-two-two"
+      ],
+      "see": null
+    },
+    {
+      "term": "NatSci and Mathmo",
+      "text": "Student slang for someone studying Natural Sciences (pronounced \"nat-ski\") and Mathematics.",
+      "sources": [
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "College",
+      "text": "One of the 31 self-governing communities that make up the University alongside its faculties and departments. Your college is usually where you live, arranges your supervisions and runs much of your social and sporting life.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/how-the-university-and-colleges-work",
+        "https://www.undergraduate.study.cam.ac.uk/colleges/what-is-a-college"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Fellow",
+      "text": "A senior member of a college, elected to a role in its academic work and government. The Head of House and the Fellows form the college's Governing Body.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/fellow"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Master (Head of House)",
+      "text": "The head of a college. Most colleges use \"Master\", but others use Provost, President, Principal, Mistress or Warden.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/head-of-house",
+        "https://glossary.lib.cam.ac.uk/term/master"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Porters and the Porters' Lodge (Plodge)",
+      "text": "Porters staff the lodge at the college entrance, often around the clock, and deal with security, emergencies and everyday problems such as lost keys. Students shorten Porters' Lodge to \"Plodge\".",
+      "sources": [
+        "https://www.pet.cam.ac.uk/plodge",
+        "https://glossary.lib.cam.ac.uk/term/lodge",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Pidge",
+      "text": "Your pigeonhole: the college mail slot, usually in or near the Plodge.",
+      "sources": [
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Bedder",
+      "text": "A member of college housekeeping staff who cleans student rooms and empties bins. The older word is bedmaker.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/bedder",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Staircase",
+      "text": "In college, a group of rooms built around one staircase, which often works as a small social unit.",
+      "sources": ["https://glossary.lib.cam.ac.uk/term/staircase"],
+      "see": null
+    },
+    {
+      "term": "Gyp room",
+      "text": "A small shared kitchen on a college staircase, typically with hobs and a microwave.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/gyp-room",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Buttery",
+      "text": "A college cafeteria where informal meals are served. The name comes from the room next to the kitchens that once supplied beer and simple food.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/buttery",
+        "https://www.qmcr.org/cambridge-glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Hall",
+      "text": "The college dining hall, and by extension a meal eaten there. The same room is usually used for formal dinners.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/halls",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "Formal hall (formal)",
+      "text": "A served, three- or four-course dinner in the college hall, often with gowns worn. Each college sets its own nights, booking rules and dress code.",
+      "sources": [
+        "https://www.lucy.cam.ac.uk/formal-hall-faqs",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.qmcr.org/cambridge-glossary"
+      ],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "Swap",
+      "text": "A visit by a group from one college to another college's formal hall, often arranged by student committees such as an MCR exchange officer.",
+      "sources": ["https://mcr.clare.cam.ac.uk/social/college-swaps"],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "Gown",
+      "text": "The academic robe, which varies by degree and, for undergraduates, by college. Many colleges ask members to wear gowns at formal hall; Lucy Cavendish, for example, requires them for all University members.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/gown",
+        "https://www.lucy.cam.ac.uk/formal-hall-faqs"
+      ],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "Grace",
+      "text": "A short prayer said at formal hall; some colleges say a second grace later in the meal, and you should not leave your seat before it. In University governance, a Grace is also a proposal put to the Regent House.",
+      "sources": [
+        "https://www.lucy.cam.ac.uk/formal-hall-faqs",
+        "https://glossary.lib.cam.ac.uk/term/grace"
+      ],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "High Table",
+      "text": "The table, usually raised on a dais, where the Head and Fellows dine in hall.",
+      "sources": ["https://glossary.lib.cam.ac.uk/term/high-table"],
+      "see": "/guides/formal-hall"
+    },
+    {
+      "term": "JCR",
+      "text": "Junior Combination Room (not \"common room\" at Cambridge): the undergraduate common room, the undergraduate community of a college and its elected committee. Some colleges use other names, such as Pembroke's JP.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/jcr",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "MCR",
+      "text": "Middle Combination Room: the graduate students' common room, and the graduate community and committee of a college.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/mcr",
+        "https://www.qmcr.org/cambridge-glossary"
+      ],
+      "see": "/guides/postgraduates"
+    },
+    {
+      "term": "SCR",
+      "text": "Senior Combination Room: the Fellows' common room, and by extension the Fellows themselves.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/scr",
+        "https://www.qmcr.org/cambridge-glossary"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "College parents",
+      "text": "Older students paired with freshers to help them settle in. Arrangements vary; at Caius, for example, each fresher is linked with two second-years.",
+      "sources": [
+        "https://www.undergraduate.study.cam.ac.uk/student-life/support",
+        "https://www.cai.cam.ac.uk/living-here/welfare-and-support"
+      ],
+      "see": "/colleges"
+    },
+    {
+      "term": "Fresher and Freshers' Week",
+      "text": "A fresher is a first-year student. Freshers' Week is the welcome period at the start of Michaelmas, with tours, bops and other events run by college student committees.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/freshman",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Matriculation",
+      "text": "Formally joining the University, done when new students register with their college and sign a declaration to obey University regulations. Colleges often mark it with a matriculation photo and dinner.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://www.qmcr.org/cambridge-glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Come up / go down",
+      "text": "To arrive at Cambridge (for a term or to start your course) and to leave it.",
+      "sources": ["https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"],
+      "see": null
+    },
+    {
+      "term": "Senate House",
+      "text": "The University building, completed in 1730, where degree ceremonies take place. These ceremonies are formal meetings of the Regent House called Congregations, and each college's graduands are presented by its Praelector.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/senate-house",
+        "https://www.cambridgestudents.cam.ac.uk/graduation/degree-ceremonies/ceremony"
+      ],
+      "see": null
+    },
+    {
+      "term": "General Admission",
+      "text": "The Congregations held towards the end of June, when most final-year undergraduates receive their first degrees in person.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/general-admission"
+      ],
+      "see": null
+    },
+    {
+      "term": "Cambridge MA",
+      "text": "Cambridge BA graduates can be admitted to the MA without further study, not less than six years after the end of their first term. It is not a postgraduate qualification, but it brings membership of the Senate.",
+      "sources": [
+        "https://www.cambridgestudents.cam.ac.uk/graduation/cambridge-ma",
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Cantab",
+      "text": "Short for Cantabrigian, meaning of or relating to the University of Cambridge, as in \"MA (Cantab)\". It comes from Cantabrigia, a medieval Latin name for Cambridge.",
+      "sources": ["https://en.wikipedia.org/wiki/Cantabrigian"],
+      "see": null
+    },
+    {
+      "term": "Senate and Regent House",
+      "text": "The Senate is everyone holding a Cambridge MA or higher degree; it elects the Chancellor and High Steward. The Regent House is the University's ultimate decision-making body, which votes on proposals called Graces.",
+      "sources": [
+        "https://www.cam.ac.uk/about-the-university/history/cambridge-glossary",
+        "https://glossary.lib.cam.ac.uk/term/regent-house",
+        "https://glossary.lib.cam.ac.uk/term/grace"
+      ],
+      "see": null
+    },
+    {
+      "term": "The Reporter",
+      "text": "The Cambridge University Reporter, the University's official journal of business, published weekly in term time since 1870.",
+      "sources": [
+        "https://www.reporter.admin.cam.ac.uk/",
+        "https://glossary.lib.cam.ac.uk/term/reporter"
+      ],
+      "see": null
+    },
+    {
+      "term": "Proctors",
+      "text": "Two University officers elected each year by the Regent House. They manage degree ceremonies and protect lawful free speech and order at University events; the Junior Proctor also oversees University clubs and societies.",
+      "sources": [
+        "https://www.proctors.cam.ac.uk/",
+        "https://www.proctors.cam.ac.uk/what-do-we-do"
+      ],
+      "see": "/guides/start-a-society"
+    },
+    {
+      "term": "Bulldogs (University Constables)",
+      "text": "The University Constables, who assist the Proctors and have constables' legal powers within the University precincts. Their old nickname, \"bulldogs\", dates from when they patrolled the streets with the Proctors.",
+      "sources": [
+        "https://www.proctors.cam.ac.uk/what-do-we-do",
+        "https://glossary.lib.cam.ac.uk/term/university-constables"
+      ],
+      "see": null
+    },
+    {
+      "term": "Registered society",
+      "text": "A University club or society registered with the Junior Proctor. Sports clubs register with the Sports Service instead.",
+      "sources": ["https://www.proctors.cam.ac.uk/clubsandsocs/registered-societies"],
+      "see": "/guides/start-a-society"
+    },
+    {
+      "term": "CU",
+      "text": "Short for Cambridge University, used in many society names (for example CUADC, the Cambridge University Amateur Dramatic Club). It can also mean the Christian Union.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/cu",
+        "https://www.proctors.cam.ac.uk/clubsandsocs/registered-societies",
+        "https://www.adctheatre.com/about-us/history/"
+      ],
+      "see": "/societies"
+    },
+    {
+      "term": "CRSid",
+      "text": "Your University username, made of letters and numbers (for example acb123). It is usually yours for life and forms your email address, [CRSid]@cam.ac.uk.",
+      "sources": ["https://help.uis.cam.ac.uk/service/accounts-passwords/your-crsid"],
+      "see": null
+    },
+    {
+      "term": "Raven (University account)",
+      "text": "The single sign-on used for University systems such as CamSIS, Moodle and Microsoft 365. It used to be called Raven and is now called your University account, though many students still say Raven.",
+      "sources": [
+        "https://help.uis.cam.ac.uk/service/accounts-passwords/your-university-account-formerly-called-raven",
+        "https://help.uis.cam.ac.uk/service/accounts-passwords/your-crsid"
+      ],
+      "see": null
+    },
+    {
+      "term": "University Card",
+      "text": "Your photo ID card, sent to your college, which gives access to buildings and libraries and can be used for services such as paying for meals. It is different from the CAMCard, which is the free card for Cambridge alumni.",
+      "sources": [
+        "https://help.uis.cam.ac.uk/service/accounts-passwords/university-cards/information-cardholders",
+        "https://www.alumni.cam.ac.uk/benefits/camcard"
+      ],
+      "see": null
+    },
+    {
+      "term": "Moodle",
+      "text": "The University's virtual learning environment, where course materials are posted.",
+      "sources": [
+        "https://help.uis.cam.ac.uk/service/accounts-passwords/your-crsid",
+        "https://help.uis.cam.ac.uk/service/accounts-passwords/your-university-account-formerly-called-raven"
+      ],
+      "see": null
+    },
+    {
+      "term": "The Backs",
+      "text": "The area behind the riverside colleges, between Queen's Road and the river, where the Cam runs past Queens', King's, Clare, Trinity Hall, Trinity and St John's.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/backs",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"
+      ],
+      "see": null
+    },
+    {
+      "term": "Punting",
+      "text": "Boating in a punt, a flat-bottomed boat pushed along with a pole against the river bed. Some colleges keep punts their members can hire; Pembroke's, for example, is normally available from May to November.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Punt_(boat)",
+        "https://www.pem.cam.ac.uk/current-students/how-book-pembrokes-facilities/booking-pembroke-punt"
+      ],
+      "see": null
+    },
+    {
+      "term": "Sidgwick Site (Sidge)",
+      "text": "The site between Sidgwick Avenue and West Road with many arts and humanities faculties and lecture rooms.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/sidgwick-site",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/"
+      ],
+      "see": null
+    },
+    {
+      "term": "UL",
+      "text": "The University Library, on West Road since 1934.",
+      "sources": [
+        "https://glossary.lib.cam.ac.uk/term/university-library",
+        "https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary",
+        "https://www.lib.cam.ac.uk/"
+      ],
+      "see": null
+    },
+    {
+      "term": "Cindies",
+      "text": "Student nickname for a city-centre nightclub, kept from a name the club had decades ago.",
+      "sources": ["https://www.jcr.trinhall.cam.ac.uk/freshers-info/glossary"],
+      "see": null
+    },
+    {
+      "term": "Blue and Half Blue",
+      "text": "Awards for representing Cambridge against Oxford in a Varsity match or race. A Full Blue is the highest sporting honour at Cambridge; Half Blues and Second Team Colours depend on each sport's criteria.",
+      "sources": [
+        "https://www.sport.cam.ac.uk/varsity-matches",
+        "https://www.hawksclub.co.uk/about/history/the-cambridge-blue/"
+      ],
+      "see": "/guides/university-sport"
+    },
+    {
+      "term": "Varsity (sport)",
+      "text": "The annual matches between Cambridge and Oxford, now in more than 60 sports, mostly in February and March.",
+      "sources": ["https://www.sport.cam.ac.uk/varsity-matches"],
+      "see": "/guides/varsity"
+    },
+    {
+      "term": "Hawks' Club and Ospreys",
+      "text": "The Hawks' Club, dating from 1872, is a members' club for Cambridge sportsmen; membership is by election and usually needs a Blue, Half Blue or Second Team Colours. The Ospreys, whose page is hosted by the Hawks' Club, celebrates women's sport at Cambridge.",
+      "sources": ["https://www.hawksclub.co.uk/", "https://www.hawksclub.co.uk/ospreys/"],
+      "see": "/guides/university-sport"
+    },
+    {
+      "term": "Cuppers",
+      "text": "Intercollege knock-out competitions, mostly in sport but sometimes in drama.",
+      "sources": ["https://glossary.lib.cam.ac.uk/term/cuppers"],
+      "see": "/guides/university-sport"
+    },
+    {
+      "term": "Bumps (Lents and Mays)",
+      "text": "Cambridge's college rowing races, run by CUCBC twice a year as the Lent Bumps and the May Bumps (held in June). The Cam is too narrow to race side by side, so crews start in a line and try to catch (\"bump\") the boat in front; a crew that bumps up every day wins its \"blades\".",
+      "sources": [
+        "https://www.cucbc.org/bumps",
+        "https://www.cucbc.org/",
+        "https://glossary.lib.cam.ac.uk/term/bumps",
+        "https://glossary.lib.cam.ac.uk/term/lents",
+        "https://glossary.lib.cam.ac.uk/term/mays"
+      ],
+      "see": "/guides/rowing"
+    },
+    {
+      "term": "Cambridge SU",
+      "text": "Cambridge Students' Union, which represents students and supports clubs and societies. It replaced the older CUSU and the Graduate Union.",
+      "sources": [
+        "https://www.cambridgesu.co.uk/",
+        "https://jp.pem.cam.ac.uk/freshers/getting-around/"
+      ],
+      "see": "/guides/join-a-society"
+    },
+    {
+      "term": "Freshers' Fair",
+      "text": "Cambridge SU's societies fair at the start of Michaelmas, held in marquees on Parker's Piece, where societies recruit new members.",
+      "sources": ["https://www.cambridgesu.co.uk/freshers/freshersfair/"],
+      "see": "/guides/join-a-society"
+    },
+    {
+      "term": "Refreshers' Fair",
+      "text": "A smaller SU fair in January, at the University Centre, for joining societies and sports clubs part-way through the year.",
+      "sources": [
+        "https://www.cambridgesu.co.uk/opportunities/refreshersstallbookings",
+        "https://www.cambridgesu.co.uk/"
+      ],
+      "see": "/guides/join-a-society"
+    },
+    {
+      "term": "The Union",
+      "text": "The Cambridge Union, a debating society and members' club founded in 1815. It is separate from Cambridge SU, the students' union.",
+      "sources": ["https://cus.org/", "https://glossary.lib.cam.ac.uk/term/union"],
+      "see": "/societies"
+    },
+    {
+      "term": "ADC",
+      "text": "The ADC Theatre on Park Street, Britain's oldest university playhouse, run by the University. It takes its name from the Cambridge University Amateur Dramatic Club, founded in 1855.",
+      "sources": [
+        "https://www.adctheatre.com/about-us/history/",
+        "https://www.adctheatre.com/about-us/",
+        "https://glossary.lib.cam.ac.uk/term/adc"
+      ],
+      "see": "/guides/theatre"
+    },
+    {
+      "term": "Footlights",
+      "text": "The Cambridge Footlights, a student sketch comedy society founded in 1883.",
+      "sources": [
+        "https://cambridgefootlights.org/",
+        "https://glossary.lib.cam.ac.uk/term/footlights"
+      ],
+      "see": "/guides/theatre"
+    },
+    {
+      "term": "Camdram",
+      "text": "The listings website for amateur theatre in Cambridge, including student shows, with a diary of performances and vacancies for cast and crew.",
+      "sources": ["https://www.camdram.net/"],
+      "see": "/guides/theatre"
+    },
+    {
+      "term": "Varsity (newspaper)",
+      "text": "Cambridge's independent student newspaper, established in its current form in 1947. Other student outlets include The Tab and The Cambridge Student.",
+      "sources": ["https://www.varsity.co.uk/", "https://www.jcr.trinhall.cam.ac.uk/"],
+      "see": null
+    }
+  ]
+}

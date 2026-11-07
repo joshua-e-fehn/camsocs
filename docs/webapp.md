@@ -58,7 +58,9 @@ app/                         Next.js App Router pages
                              lib/data/colleges.json (lib/colleges.ts, from the Cambridge Tracker,
                              re-checked 7 Nov 2026); a college's own page shows its FormalHallBox
     guides/                  /guides index, join-a-society, start-a-society (sources in
-                             lib/society-guides.ts), formal-hall, may-balls, rowing, varsity (lib/guides.ts).
+                             lib/society-guides.ts), formal-hall, may-balls, rowing, varsity,
+                             university-sport, theatre, postgraduates, glossary (lib/guides.ts;
+                             ResearchedGuide renders data-driven guides).
                              Researched text lives in lib/data/guides/*.json (paragraphs + source
                              URLs, rendered by GuideSections); rowing/Varsity "coming up" lists are
                              CAMsocs' own sport events (lib/sport-calendar.ts); a college's page

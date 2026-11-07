@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { collegeInfo } from "./colleges"
+import { GLOSSARY, GLOSSARY_INTRO, termAnchor } from "./glossary"
 import type { GuideSection } from "./guide-content"
 import { MAY_BALL_SECTIONS, MAY_BALLS, MAY_WEEK } from "./may-balls"
+import { GRADUATE_COLLEGES, POSTGRAD_SECTIONS } from "./postgraduates"
 import { ROWING_DATES, ROWING_GLOSSARY, ROWING_SECTIONS } from "./rowing"
+import { PAGE_PATHS } from "./sitemap"
+import { SPORT_CLUBS, SPORT_SECTIONS, THEATRE_SECTIONS } from "./tier2-guides"
 import { VARSITY_FIXTURES, VARSITY_SECTIONS } from "./varsity"
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/
@@ -25,6 +29,16 @@ describe("the guides' researched data", () => {
     checkSections(MAY_BALL_SECTIONS)
     checkSections(ROWING_SECTIONS)
     checkSections(VARSITY_SECTIONS)
+    checkSections(POSTGRAD_SECTIONS)
+    checkSections(SPORT_SECTIONS)
+    checkSections(THEATRE_SECTIONS)
+    checkSections([
+      {
+        id: "clubs",
+        title: "",
+        paragraphs: SPORT_CLUBS.map((c) => ({ text: c.note, sources: c.sources })),
+      },
+    ])
     checkSections([{ id: "may-week", title: "", paragraphs: [MAY_WEEK] }])
     checkSections([{ id: "glossary", title: "", paragraphs: [...ROWING_GLOSSARY] }])
   })
@@ -51,4 +65,28 @@ describe("the guides' researched data", () => {
       expect(fixture.sources.length).toBeGreaterThan(0)
     }
   })
+})
+
+test("graduate colleges are known colleges", () => {
+  for (const entry of GRADUATE_COLLEGES) expect(Boolean(collegeInfo(entry.collegeKey))).toBe(true)
+})
+
+test("glossary words are sourced, unique by anchor and link only to real guide paths", () => {
+  checkSections(GLOSSARY_INTRO)
+  checkSections([
+    {
+      id: "words",
+      title: "",
+      paragraphs: GLOSSARY.map((e) => ({ text: e.text, sources: e.sources })),
+    },
+  ])
+  const anchors = GLOSSARY.map((e) => termAnchor(e.term))
+  expect(new Set(anchors).size).toBe(anchors.length)
+  const paths = new Set(PAGE_PATHS as readonly string[])
+  for (const entry of GLOSSARY)
+    if (entry.see)
+      expect([entry.term, paths.has(entry.see) || entry.see.startsWith("/categories/")]).toEqual([
+        entry.term,
+        true,
+      ])
 })

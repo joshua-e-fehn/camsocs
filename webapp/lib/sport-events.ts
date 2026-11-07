@@ -3,6 +3,7 @@ import { api } from "@/convex/_generated/api"
 import { addDays, londonIsoDate, londonMidnight } from "@/lib/calendar"
 import type { EventListItem } from "@/lib/public-api"
 import { publicQuery } from "@/lib/public-data"
+import type { Category } from "@/lib/vocab"
 
 /** Days ahead the guides look for races and fixtures (events.list allows 186). */
 const HORIZON_DAYS = 185
@@ -15,12 +16,21 @@ const HORIZON_DAYS = 185
  * guide then shows its text without the list.
  */
 export async function loadSportEvents(now: number): Promise<EventListItem[] | null> {
+  return loadCategoryEvents(now, "sport", HORIZON_DAYS)
+}
+
+/** One category's events from today for `days` days, cached the same way. */
+export async function loadCategoryEvents(
+  now: number,
+  category: Category,
+  days: number,
+): Promise<EventListItem[] | null> {
   const today = londonIsoDate(now)
   try {
     return await publicQuery(api.events.list, {
       from: londonMidnight(today),
-      to: londonMidnight(addDays(today, HORIZON_DAYS)),
-      categories: ["sport"],
+      to: londonMidnight(addDays(today, days)),
+      categories: [category],
     })
   } catch (error) {
     unstable_rethrow(error)
