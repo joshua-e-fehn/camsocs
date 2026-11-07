@@ -1,0 +1,1809 @@
+{
+ "schema": "camsocs.calendar-context/1",
+ "terms": [
+  {
+   "term": "michaelmas",
+   "academicYear": "2026-27",
+   "start": "2026-10-06",
+   "end": "2026-12-04",
+   "week0Start": "2026-10-01",
+   "week1Start": "2026-10-08",
+   "lastWeek": 9,
+   "describe": "Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026",
+   "week3": {
+    "monday": "2026-10-26",
+    "tuesday": "2026-10-27",
+    "wednesday": "2026-10-28",
+    "thursday": "2026-10-22",
+    "friday": "2026-10-23",
+    "saturday": "2026-10-24",
+    "sunday": "2026-10-25"
+   }
+  },
+  {
+   "term": "lent",
+   "academicYear": "2026-27",
+   "start": "2027-01-19",
+   "end": "2027-03-19",
+   "week0Start": "2027-01-14",
+   "week1Start": "2027-01-21",
+   "lastWeek": 9,
+   "describe": "Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027",
+   "week3": {
+    "monday": "2027-02-08",
+    "tuesday": "2027-02-09",
+    "wednesday": "2027-02-10",
+    "thursday": "2027-02-04",
+    "friday": "2027-02-05",
+    "saturday": "2027-02-06",
+    "sunday": "2027-02-07"
+   }
+  },
+  {
+   "term": "easter",
+   "academicYear": "2026-27",
+   "start": "2027-04-27",
+   "end": "2027-06-18",
+   "week0Start": "2027-04-22",
+   "week1Start": "2027-04-29",
+   "lastWeek": 8,
+   "describe": "Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027",
+   "week3": {
+    "monday": "2027-05-17",
+    "tuesday": "2027-05-18",
+    "wednesday": "2027-05-19",
+    "thursday": "2027-05-13",
+    "friday": "2027-05-14",
+    "saturday": "2027-05-15",
+    "sunday": "2027-05-16"
+   }
+  },
+  {
+   "term": "michaelmas",
+   "academicYear": "2027-28",
+   "start": "2027-10-05",
+   "end": "2027-12-03",
+   "week0Start": "2027-09-30",
+   "week1Start": "2027-10-07",
+   "lastWeek": 9,
+   "describe": "Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027",
+   "week3": {
+    "monday": "2027-10-25",
+    "tuesday": "2027-10-26",
+    "wednesday": "2027-10-27",
+    "thursday": "2027-10-21",
+    "friday": "2027-10-22",
+    "saturday": "2027-10-23",
+    "sunday": "2027-10-24"
+   }
+  },
+  {
+   "term": "lent",
+   "academicYear": "2027-28",
+   "start": "2028-01-18",
+   "end": "2028-03-17",
+   "week0Start": "2028-01-13",
+   "week1Start": "2028-01-20",
+   "lastWeek": 9,
+   "describe": "Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028",
+   "week3": {
+    "monday": "2028-02-07",
+    "tuesday": "2028-02-08",
+    "wednesday": "2028-02-09",
+    "thursday": "2028-02-03",
+    "friday": "2028-02-04",
+    "saturday": "2028-02-05",
+    "sunday": "2028-02-06"
+   }
+  },
+  {
+   "term": "easter",
+   "academicYear": "2027-28",
+   "start": "2028-04-25",
+   "end": "2028-06-16",
+   "week0Start": "2028-04-20",
+   "week1Start": "2028-04-27",
+   "lastWeek": 8,
+   "describe": "Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028",
+   "week3": {
+    "monday": "2028-05-15",
+    "tuesday": "2028-05-16",
+    "wednesday": "2028-05-17",
+    "thursday": "2028-05-11",
+    "friday": "2028-05-12",
+    "saturday": "2028-05-13",
+    "sunday": "2028-05-14"
+   }
+  }
+ ],
+ "days": [
+  {
+   "date": "2026-09-01",
+   "context": "Reference date: Tuesday 1 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-08-27",
+   "anchorContext": "Reference date: Thursday 27 August 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-06",
+   "context": "Reference date: Sunday 6 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-03",
+   "anchorContext": "Reference date: Thursday 3 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-11",
+   "context": "Reference date: Friday 11 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-10",
+   "anchorContext": "Reference date: Thursday 10 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-16",
+   "context": "Reference date: Wednesday 16 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-10",
+   "anchorContext": "Reference date: Thursday 10 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-21",
+   "context": "Reference date: Monday 21 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-17",
+   "anchorContext": "Reference date: Thursday 17 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-26",
+   "context": "Reference date: Saturday 26 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-24",
+   "anchorContext": "Reference date: Thursday 24 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-09-30",
+   "context": "Reference date: Wednesday 30 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-09-24",
+   "anchorContext": "Reference date: Thursday 24 September 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-10-01",
+   "context": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2026-10-01",
+   "anchorContext": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 0"
+  },
+  {
+   "date": "2026-10-02",
+   "context": "Reference date: Friday 2 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2026-10-01",
+   "anchorContext": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 0"
+  },
+  {
+   "date": "2026-10-05",
+   "context": "Reference date: Monday 5 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2026-10-01",
+   "anchorContext": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 0"
+  },
+  {
+   "date": "2026-10-06",
+   "context": "Reference date: Tuesday 6 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2026-10-01",
+   "anchorContext": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 0"
+  },
+  {
+   "date": "2026-10-07",
+   "context": "Reference date: Wednesday 7 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2026-10-01",
+   "anchorContext": "Reference date: Thursday 1 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 0"
+  },
+  {
+   "date": "2026-10-08",
+   "context": "Reference date: Thursday 8 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2026-10-08",
+   "anchorContext": "Reference date: Thursday 8 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 1"
+  },
+  {
+   "date": "2026-10-09",
+   "context": "Reference date: Friday 9 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2026-10-08",
+   "anchorContext": "Reference date: Thursday 8 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 1"
+  },
+  {
+   "date": "2026-10-11",
+   "context": "Reference date: Sunday 11 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2026-10-08",
+   "anchorContext": "Reference date: Thursday 8 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 1"
+  },
+  {
+   "date": "2026-10-16",
+   "context": "Reference date: Friday 16 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2026-10-15",
+   "anchorContext": "Reference date: Thursday 15 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 2"
+  },
+  {
+   "date": "2026-10-21",
+   "context": "Reference date: Wednesday 21 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2026-10-15",
+   "anchorContext": "Reference date: Thursday 15 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 2"
+  },
+  {
+   "date": "2026-10-26",
+   "context": "Reference date: Monday 26 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2026-10-22",
+   "anchorContext": "Reference date: Thursday 22 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 3"
+  },
+  {
+   "date": "2026-10-31",
+   "context": "Reference date: Saturday 31 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2026-10-29",
+   "anchorContext": "Reference date: Thursday 29 October 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 4"
+  },
+  {
+   "date": "2026-11-05",
+   "context": "Reference date: Thursday 5 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2026-11-05",
+   "anchorContext": "Reference date: Thursday 5 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 5"
+  },
+  {
+   "date": "2026-11-10",
+   "context": "Reference date: Tuesday 10 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2026-11-05",
+   "anchorContext": "Reference date: Thursday 5 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 5"
+  },
+  {
+   "date": "2026-11-15",
+   "context": "Reference date: Sunday 15 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2026-11-12",
+   "anchorContext": "Reference date: Thursday 12 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 6"
+  },
+  {
+   "date": "2026-11-20",
+   "context": "Reference date: Friday 20 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2026-11-19",
+   "anchorContext": "Reference date: Thursday 19 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 7"
+  },
+  {
+   "date": "2026-11-25",
+   "context": "Reference date: Wednesday 25 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2026-11-19",
+   "anchorContext": "Reference date: Thursday 19 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 7"
+  },
+  {
+   "date": "2026-11-30",
+   "context": "Reference date: Monday 30 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2026-11-26",
+   "anchorContext": "Reference date: Thursday 26 November 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 8"
+  },
+  {
+   "date": "2026-12-03",
+   "context": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2026-12-03",
+   "anchorContext": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 9"
+  },
+  {
+   "date": "2026-12-04",
+   "context": "Reference date: Friday 4 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2026-12-03",
+   "anchorContext": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2026",
+   "label": "MT26 Wk 9"
+  },
+  {
+   "date": "2026-12-05",
+   "context": "Reference date: Saturday 5 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-03",
+   "anchorContext": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-12-07",
+   "context": "Reference date: Monday 7 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-03",
+   "anchorContext": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2026",
+   "label": null
+  },
+  {
+   "date": "2026-12-08",
+   "context": "Reference date: Tuesday 8 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-03",
+   "anchorContext": "Reference date: Thursday 3 December 2026 (Europe/London). Cambridge Michaelmas Full Term 2026 runs Tuesday 6 October 2026 to Friday 4 December 2026; Week 1 starts Thursday 8 October 2026 and Week 0 starts Thursday 1 October 2026. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2026-12-10",
+   "context": "Reference date: Thursday 10 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-10",
+   "anchorContext": "Reference date: Thursday 10 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2026-12-15",
+   "context": "Reference date: Tuesday 15 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-10",
+   "anchorContext": "Reference date: Thursday 10 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2026-12-20",
+   "context": "Reference date: Sunday 20 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-17",
+   "anchorContext": "Reference date: Thursday 17 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2026-12-25",
+   "context": "Reference date: Friday 25 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-24",
+   "anchorContext": "Reference date: Thursday 24 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2026-12-30",
+   "context": "Reference date: Wednesday 30 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-24",
+   "anchorContext": "Reference date: Thursday 24 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-01-04",
+   "context": "Reference date: Monday 4 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2026-12-31",
+   "anchorContext": "Reference date: Thursday 31 December 2026 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-01-09",
+   "context": "Reference date: Saturday 9 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-01-07",
+   "anchorContext": "Reference date: Thursday 7 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-01-13",
+   "context": "Reference date: Wednesday 13 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-01-07",
+   "anchorContext": "Reference date: Thursday 7 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-01-14",
+   "context": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-01-14",
+   "anchorContext": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 0"
+  },
+  {
+   "date": "2027-01-15",
+   "context": "Reference date: Friday 15 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-01-14",
+   "anchorContext": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 0"
+  },
+  {
+   "date": "2027-01-18",
+   "context": "Reference date: Monday 18 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-01-14",
+   "anchorContext": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 0"
+  },
+  {
+   "date": "2027-01-19",
+   "context": "Reference date: Tuesday 19 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-01-14",
+   "anchorContext": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 0"
+  },
+  {
+   "date": "2027-01-20",
+   "context": "Reference date: Wednesday 20 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-01-14",
+   "anchorContext": "Reference date: Thursday 14 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 0"
+  },
+  {
+   "date": "2027-01-21",
+   "context": "Reference date: Thursday 21 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-01-21",
+   "anchorContext": "Reference date: Thursday 21 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 1"
+  },
+  {
+   "date": "2027-01-22",
+   "context": "Reference date: Friday 22 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-01-21",
+   "anchorContext": "Reference date: Thursday 21 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 1"
+  },
+  {
+   "date": "2027-01-24",
+   "context": "Reference date: Sunday 24 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-01-21",
+   "anchorContext": "Reference date: Thursday 21 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 1"
+  },
+  {
+   "date": "2027-01-29",
+   "context": "Reference date: Friday 29 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2027-01-28",
+   "anchorContext": "Reference date: Thursday 28 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 2"
+  },
+  {
+   "date": "2027-02-03",
+   "context": "Reference date: Wednesday 3 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2027-01-28",
+   "anchorContext": "Reference date: Thursday 28 January 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 2"
+  },
+  {
+   "date": "2027-02-08",
+   "context": "Reference date: Monday 8 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2027-02-04",
+   "anchorContext": "Reference date: Thursday 4 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 3"
+  },
+  {
+   "date": "2027-02-13",
+   "context": "Reference date: Saturday 13 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2027-02-11",
+   "anchorContext": "Reference date: Thursday 11 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 4"
+  },
+  {
+   "date": "2027-02-18",
+   "context": "Reference date: Thursday 18 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2027-02-18",
+   "anchorContext": "Reference date: Thursday 18 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 5"
+  },
+  {
+   "date": "2027-02-23",
+   "context": "Reference date: Tuesday 23 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2027-02-18",
+   "anchorContext": "Reference date: Thursday 18 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 5"
+  },
+  {
+   "date": "2027-02-28",
+   "context": "Reference date: Sunday 28 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2027-02-25",
+   "anchorContext": "Reference date: Thursday 25 February 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 6"
+  },
+  {
+   "date": "2027-03-05",
+   "context": "Reference date: Friday 5 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2027-03-04",
+   "anchorContext": "Reference date: Thursday 4 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 7"
+  },
+  {
+   "date": "2027-03-10",
+   "context": "Reference date: Wednesday 10 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2027-03-04",
+   "anchorContext": "Reference date: Thursday 4 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 7"
+  },
+  {
+   "date": "2027-03-15",
+   "context": "Reference date: Monday 15 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2027-03-11",
+   "anchorContext": "Reference date: Thursday 11 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 8"
+  },
+  {
+   "date": "2027-03-18",
+   "context": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2027-03-18",
+   "anchorContext": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 9"
+  },
+  {
+   "date": "2027-03-19",
+   "context": "Reference date: Friday 19 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2027-03-18",
+   "anchorContext": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2027",
+   "label": "LT27 Wk 9"
+  },
+  {
+   "date": "2027-03-20",
+   "context": "Reference date: Saturday 20 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-03-18",
+   "anchorContext": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-03-22",
+   "context": "Reference date: Monday 22 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-03-18",
+   "anchorContext": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2027",
+   "label": null
+  },
+  {
+   "date": "2027-03-23",
+   "context": "Reference date: Tuesday 23 March 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-03-18",
+   "anchorContext": "Reference date: Thursday 18 March 2027 (Europe/London). Cambridge Lent Full Term 2027 runs Tuesday 19 January 2027 to Friday 19 March 2027; Week 1 starts Thursday 21 January 2027 and Week 0 starts Thursday 14 January 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-03-25",
+   "context": "Reference date: Thursday 25 March 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-03-25",
+   "anchorContext": "Reference date: Thursday 25 March 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-03-30",
+   "context": "Reference date: Tuesday 30 March 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-03-25",
+   "anchorContext": "Reference date: Thursday 25 March 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-04",
+   "context": "Reference date: Sunday 4 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-04-01",
+   "anchorContext": "Reference date: Thursday 1 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-09",
+   "context": "Reference date: Friday 9 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-04-08",
+   "anchorContext": "Reference date: Thursday 8 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-14",
+   "context": "Reference date: Wednesday 14 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-04-08",
+   "anchorContext": "Reference date: Thursday 8 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-19",
+   "context": "Reference date: Monday 19 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-04-15",
+   "anchorContext": "Reference date: Thursday 15 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-21",
+   "context": "Reference date: Wednesday 21 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-04-15",
+   "anchorContext": "Reference date: Thursday 15 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-04-22",
+   "context": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-23",
+   "context": "Reference date: Friday 23 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-24",
+   "context": "Reference date: Saturday 24 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-26",
+   "context": "Reference date: Monday 26 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-27",
+   "context": "Reference date: Tuesday 27 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-28",
+   "context": "Reference date: Wednesday 28 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-04-22",
+   "anchorContext": "Reference date: Thursday 22 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 0"
+  },
+  {
+   "date": "2027-04-29",
+   "context": "Reference date: Thursday 29 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-04-29",
+   "anchorContext": "Reference date: Thursday 29 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 1"
+  },
+  {
+   "date": "2027-04-30",
+   "context": "Reference date: Friday 30 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-04-29",
+   "anchorContext": "Reference date: Thursday 29 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 1"
+  },
+  {
+   "date": "2027-05-04",
+   "context": "Reference date: Tuesday 4 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-04-29",
+   "anchorContext": "Reference date: Thursday 29 April 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 1"
+  },
+  {
+   "date": "2027-05-09",
+   "context": "Reference date: Sunday 9 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2027-05-06",
+   "anchorContext": "Reference date: Thursday 6 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 2"
+  },
+  {
+   "date": "2027-05-14",
+   "context": "Reference date: Friday 14 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2027-05-13",
+   "anchorContext": "Reference date: Thursday 13 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 3"
+  },
+  {
+   "date": "2027-05-19",
+   "context": "Reference date: Wednesday 19 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2027-05-13",
+   "anchorContext": "Reference date: Thursday 13 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 3"
+  },
+  {
+   "date": "2027-05-24",
+   "context": "Reference date: Monday 24 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2027-05-20",
+   "anchorContext": "Reference date: Thursday 20 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 4"
+  },
+  {
+   "date": "2027-05-29",
+   "context": "Reference date: Saturday 29 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2027-05-27",
+   "anchorContext": "Reference date: Thursday 27 May 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 5"
+  },
+  {
+   "date": "2027-06-03",
+   "context": "Reference date: Thursday 3 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2027-06-03",
+   "anchorContext": "Reference date: Thursday 3 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 6"
+  },
+  {
+   "date": "2027-06-08",
+   "context": "Reference date: Tuesday 8 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2027-06-03",
+   "anchorContext": "Reference date: Thursday 3 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 6"
+  },
+  {
+   "date": "2027-06-13",
+   "context": "Reference date: Sunday 13 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2027-06-10",
+   "anchorContext": "Reference date: Thursday 10 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 7"
+  },
+  {
+   "date": "2027-06-17",
+   "context": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 8"
+  },
+  {
+   "date": "2027-06-18",
+   "context": "Reference date: Friday 18 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2027",
+   "label": "ET27 Wk 8"
+  },
+  {
+   "date": "2027-06-19",
+   "context": "Reference date: Saturday 19 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-06-21",
+   "context": "Reference date: Monday 21 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2027",
+   "label": null
+  },
+  {
+   "date": "2027-06-22",
+   "context": "Reference date: Tuesday 22 June 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-06-23",
+   "context": "Reference date: Wednesday 23 June 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-06-17",
+   "anchorContext": "Reference date: Thursday 17 June 2027 (Europe/London). Cambridge Easter Full Term 2027 runs Tuesday 27 April 2027 to Friday 18 June 2027; Week 1 starts Thursday 29 April 2027 and Week 0 starts Thursday 22 April 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-06-28",
+   "context": "Reference date: Monday 28 June 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-06-24",
+   "anchorContext": "Reference date: Thursday 24 June 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-03",
+   "context": "Reference date: Saturday 3 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-01",
+   "anchorContext": "Reference date: Thursday 1 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-08",
+   "context": "Reference date: Thursday 8 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-08",
+   "anchorContext": "Reference date: Thursday 8 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-13",
+   "context": "Reference date: Tuesday 13 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-08",
+   "anchorContext": "Reference date: Thursday 8 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-18",
+   "context": "Reference date: Sunday 18 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-15",
+   "anchorContext": "Reference date: Thursday 15 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-23",
+   "context": "Reference date: Friday 23 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-22",
+   "anchorContext": "Reference date: Thursday 22 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-07-28",
+   "context": "Reference date: Wednesday 28 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-22",
+   "anchorContext": "Reference date: Thursday 22 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-02",
+   "context": "Reference date: Monday 2 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-07-29",
+   "anchorContext": "Reference date: Thursday 29 July 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-07",
+   "context": "Reference date: Saturday 7 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-05",
+   "anchorContext": "Reference date: Thursday 5 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-12",
+   "context": "Reference date: Thursday 12 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-12",
+   "anchorContext": "Reference date: Thursday 12 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-17",
+   "context": "Reference date: Tuesday 17 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-12",
+   "anchorContext": "Reference date: Thursday 12 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-22",
+   "context": "Reference date: Sunday 22 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-19",
+   "anchorContext": "Reference date: Thursday 19 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-08-27",
+   "context": "Reference date: Friday 27 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-26",
+   "anchorContext": "Reference date: Thursday 26 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-01",
+   "context": "Reference date: Wednesday 1 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-08-26",
+   "anchorContext": "Reference date: Thursday 26 August 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-06",
+   "context": "Reference date: Monday 6 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-02",
+   "anchorContext": "Reference date: Thursday 2 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-11",
+   "context": "Reference date: Saturday 11 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-09",
+   "anchorContext": "Reference date: Thursday 9 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-16",
+   "context": "Reference date: Thursday 16 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-16",
+   "anchorContext": "Reference date: Thursday 16 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-21",
+   "context": "Reference date: Tuesday 21 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-16",
+   "anchorContext": "Reference date: Thursday 16 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-26",
+   "context": "Reference date: Sunday 26 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-23",
+   "anchorContext": "Reference date: Thursday 23 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-29",
+   "context": "Reference date: Wednesday 29 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-09-23",
+   "anchorContext": "Reference date: Thursday 23 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-09-30",
+   "context": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-09-30",
+   "anchorContext": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 0"
+  },
+  {
+   "date": "2027-10-01",
+   "context": "Reference date: Friday 1 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-09-30",
+   "anchorContext": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 0"
+  },
+  {
+   "date": "2027-10-04",
+   "context": "Reference date: Monday 4 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-09-30",
+   "anchorContext": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 0"
+  },
+  {
+   "date": "2027-10-05",
+   "context": "Reference date: Tuesday 5 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-09-30",
+   "anchorContext": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 0"
+  },
+  {
+   "date": "2027-10-06",
+   "context": "Reference date: Wednesday 6 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2027-09-30",
+   "anchorContext": "Reference date: Thursday 30 September 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 0"
+  },
+  {
+   "date": "2027-10-07",
+   "context": "Reference date: Thursday 7 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-10-07",
+   "anchorContext": "Reference date: Thursday 7 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 1"
+  },
+  {
+   "date": "2027-10-08",
+   "context": "Reference date: Friday 8 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-10-07",
+   "anchorContext": "Reference date: Thursday 7 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 1"
+  },
+  {
+   "date": "2027-10-11",
+   "context": "Reference date: Monday 11 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2027-10-07",
+   "anchorContext": "Reference date: Thursday 7 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 1"
+  },
+  {
+   "date": "2027-10-16",
+   "context": "Reference date: Saturday 16 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2027-10-14",
+   "anchorContext": "Reference date: Thursday 14 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 2"
+  },
+  {
+   "date": "2027-10-21",
+   "context": "Reference date: Thursday 21 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2027-10-21",
+   "anchorContext": "Reference date: Thursday 21 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 3"
+  },
+  {
+   "date": "2027-10-26",
+   "context": "Reference date: Tuesday 26 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2027-10-21",
+   "anchorContext": "Reference date: Thursday 21 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 3"
+  },
+  {
+   "date": "2027-10-31",
+   "context": "Reference date: Sunday 31 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2027-10-28",
+   "anchorContext": "Reference date: Thursday 28 October 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 4"
+  },
+  {
+   "date": "2027-11-05",
+   "context": "Reference date: Friday 5 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2027-11-04",
+   "anchorContext": "Reference date: Thursday 4 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 5"
+  },
+  {
+   "date": "2027-11-10",
+   "context": "Reference date: Wednesday 10 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2027-11-04",
+   "anchorContext": "Reference date: Thursday 4 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 5"
+  },
+  {
+   "date": "2027-11-15",
+   "context": "Reference date: Monday 15 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2027-11-11",
+   "anchorContext": "Reference date: Thursday 11 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 6"
+  },
+  {
+   "date": "2027-11-20",
+   "context": "Reference date: Saturday 20 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2027-11-18",
+   "anchorContext": "Reference date: Thursday 18 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 7"
+  },
+  {
+   "date": "2027-11-25",
+   "context": "Reference date: Thursday 25 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2027-11-25",
+   "anchorContext": "Reference date: Thursday 25 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 8"
+  },
+  {
+   "date": "2027-11-30",
+   "context": "Reference date: Tuesday 30 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2027-11-25",
+   "anchorContext": "Reference date: Thursday 25 November 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 8"
+  },
+  {
+   "date": "2027-12-02",
+   "context": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 9"
+  },
+  {
+   "date": "2027-12-03",
+   "context": "Reference date: Friday 3 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2027",
+   "label": "MT27 Wk 9"
+  },
+  {
+   "date": "2027-12-04",
+   "context": "Reference date: Saturday 4 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-12-05",
+   "context": "Reference date: Sunday 5 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-12-06",
+   "context": "Reference date: Monday 6 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "michaelmas 2027",
+   "label": null
+  },
+  {
+   "date": "2027-12-07",
+   "context": "Reference date: Tuesday 7 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-02",
+   "anchorContext": "Reference date: Thursday 2 December 2027 (Europe/London). Cambridge Michaelmas Full Term 2027 runs Tuesday 5 October 2027 to Friday 3 December 2027; Week 1 starts Thursday 7 October 2027 and Week 0 starts Thursday 30 September 2027. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2027-12-10",
+   "context": "Reference date: Friday 10 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-09",
+   "anchorContext": "Reference date: Thursday 9 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2027-12-15",
+   "context": "Reference date: Wednesday 15 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-09",
+   "anchorContext": "Reference date: Thursday 9 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2027-12-20",
+   "context": "Reference date: Monday 20 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-16",
+   "anchorContext": "Reference date: Thursday 16 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2027-12-25",
+   "context": "Reference date: Saturday 25 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-23",
+   "anchorContext": "Reference date: Thursday 23 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2027-12-30",
+   "context": "Reference date: Thursday 30 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-30",
+   "anchorContext": "Reference date: Thursday 30 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-01-04",
+   "context": "Reference date: Tuesday 4 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2027-12-30",
+   "anchorContext": "Reference date: Thursday 30 December 2027 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-01-09",
+   "context": "Reference date: Sunday 9 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-01-06",
+   "anchorContext": "Reference date: Thursday 6 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-01-12",
+   "context": "Reference date: Wednesday 12 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-01-06",
+   "anchorContext": "Reference date: Thursday 6 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-01-13",
+   "context": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-01-13",
+   "anchorContext": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 0"
+  },
+  {
+   "date": "2028-01-14",
+   "context": "Reference date: Friday 14 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-01-13",
+   "anchorContext": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 0"
+  },
+  {
+   "date": "2028-01-17",
+   "context": "Reference date: Monday 17 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-01-13",
+   "anchorContext": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 0"
+  },
+  {
+   "date": "2028-01-18",
+   "context": "Reference date: Tuesday 18 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-01-13",
+   "anchorContext": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 0"
+  },
+  {
+   "date": "2028-01-19",
+   "context": "Reference date: Wednesday 19 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-01-13",
+   "anchorContext": "Reference date: Thursday 13 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 0"
+  },
+  {
+   "date": "2028-01-20",
+   "context": "Reference date: Thursday 20 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-01-20",
+   "anchorContext": "Reference date: Thursday 20 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 1"
+  },
+  {
+   "date": "2028-01-21",
+   "context": "Reference date: Friday 21 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-01-20",
+   "anchorContext": "Reference date: Thursday 20 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 1"
+  },
+  {
+   "date": "2028-01-24",
+   "context": "Reference date: Monday 24 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-01-20",
+   "anchorContext": "Reference date: Thursday 20 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 1"
+  },
+  {
+   "date": "2028-01-29",
+   "context": "Reference date: Saturday 29 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2028-01-27",
+   "anchorContext": "Reference date: Thursday 27 January 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 2"
+  },
+  {
+   "date": "2028-02-03",
+   "context": "Reference date: Thursday 3 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2028-02-03",
+   "anchorContext": "Reference date: Thursday 3 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 3"
+  },
+  {
+   "date": "2028-02-08",
+   "context": "Reference date: Tuesday 8 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2028-02-03",
+   "anchorContext": "Reference date: Thursday 3 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 3"
+  },
+  {
+   "date": "2028-02-13",
+   "context": "Reference date: Sunday 13 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2028-02-10",
+   "anchorContext": "Reference date: Thursday 10 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 4"
+  },
+  {
+   "date": "2028-02-18",
+   "context": "Reference date: Friday 18 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2028-02-17",
+   "anchorContext": "Reference date: Thursday 17 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 5"
+  },
+  {
+   "date": "2028-02-23",
+   "context": "Reference date: Wednesday 23 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2028-02-17",
+   "anchorContext": "Reference date: Thursday 17 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 5"
+  },
+  {
+   "date": "2028-02-28",
+   "context": "Reference date: Monday 28 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2028-02-24",
+   "anchorContext": "Reference date: Thursday 24 February 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 6"
+  },
+  {
+   "date": "2028-03-04",
+   "context": "Reference date: Saturday 4 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2028-03-02",
+   "anchorContext": "Reference date: Thursday 2 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 7"
+  },
+  {
+   "date": "2028-03-09",
+   "context": "Reference date: Thursday 9 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2028-03-09",
+   "anchorContext": "Reference date: Thursday 9 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 8"
+  },
+  {
+   "date": "2028-03-14",
+   "context": "Reference date: Tuesday 14 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2028-03-09",
+   "anchorContext": "Reference date: Thursday 9 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 8"
+  },
+  {
+   "date": "2028-03-16",
+   "context": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 9"
+  },
+  {
+   "date": "2028-03-17",
+   "context": "Reference date: Friday 17 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": "LT28 Wk 9"
+  },
+  {
+   "date": "2028-03-18",
+   "context": "Reference date: Saturday 18 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-03-19",
+   "context": "Reference date: Sunday 19 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-03-20",
+   "context": "Reference date: Monday 20 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "lent 2028",
+   "label": null
+  },
+  {
+   "date": "2028-03-21",
+   "context": "Reference date: Tuesday 21 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-16",
+   "anchorContext": "Reference date: Thursday 16 March 2028 (Europe/London). Cambridge Lent Full Term 2028 runs Tuesday 18 January 2028 to Friday 17 March 2028; Week 1 starts Thursday 20 January 2028 and Week 0 starts Thursday 13 January 2028. A student week runs Thursday to Wednesday. It is in Week 9 of that term.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-03-24",
+   "context": "Reference date: Friday 24 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-23",
+   "anchorContext": "Reference date: Thursday 23 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-03-29",
+   "context": "Reference date: Wednesday 29 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-23",
+   "anchorContext": "Reference date: Thursday 23 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-03",
+   "context": "Reference date: Monday 3 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-03-30",
+   "anchorContext": "Reference date: Thursday 30 March 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-08",
+   "context": "Reference date: Saturday 8 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-04-06",
+   "anchorContext": "Reference date: Thursday 6 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-13",
+   "context": "Reference date: Thursday 13 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-04-13",
+   "anchorContext": "Reference date: Thursday 13 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-18",
+   "context": "Reference date: Tuesday 18 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-04-13",
+   "anchorContext": "Reference date: Thursday 13 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-19",
+   "context": "Reference date: Wednesday 19 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-04-13",
+   "anchorContext": "Reference date: Thursday 13 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-04-20",
+   "context": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-21",
+   "context": "Reference date: Friday 21 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-23",
+   "context": "Reference date: Sunday 23 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-24",
+   "context": "Reference date: Monday 24 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-25",
+   "context": "Reference date: Tuesday 25 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-26",
+   "context": "Reference date: Wednesday 26 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "weekAnchor": "2028-04-20",
+   "anchorContext": "Reference date: Thursday 20 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 0 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 0"
+  },
+  {
+   "date": "2028-04-27",
+   "context": "Reference date: Thursday 27 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-04-27",
+   "anchorContext": "Reference date: Thursday 27 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 1"
+  },
+  {
+   "date": "2028-04-28",
+   "context": "Reference date: Friday 28 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-04-27",
+   "anchorContext": "Reference date: Thursday 27 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 1"
+  },
+  {
+   "date": "2028-05-03",
+   "context": "Reference date: Wednesday 3 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "weekAnchor": "2028-04-27",
+   "anchorContext": "Reference date: Thursday 27 April 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 1 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 1"
+  },
+  {
+   "date": "2028-05-08",
+   "context": "Reference date: Monday 8 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "weekAnchor": "2028-05-04",
+   "anchorContext": "Reference date: Thursday 4 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 2 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 2"
+  },
+  {
+   "date": "2028-05-13",
+   "context": "Reference date: Saturday 13 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "weekAnchor": "2028-05-11",
+   "anchorContext": "Reference date: Thursday 11 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 3 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 3"
+  },
+  {
+   "date": "2028-05-18",
+   "context": "Reference date: Thursday 18 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2028-05-18",
+   "anchorContext": "Reference date: Thursday 18 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 4"
+  },
+  {
+   "date": "2028-05-23",
+   "context": "Reference date: Tuesday 23 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "weekAnchor": "2028-05-18",
+   "anchorContext": "Reference date: Thursday 18 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 4 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 4"
+  },
+  {
+   "date": "2028-05-28",
+   "context": "Reference date: Sunday 28 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "weekAnchor": "2028-05-25",
+   "anchorContext": "Reference date: Thursday 25 May 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 5 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 5"
+  },
+  {
+   "date": "2028-06-02",
+   "context": "Reference date: Friday 2 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2028-06-01",
+   "anchorContext": "Reference date: Thursday 1 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 6"
+  },
+  {
+   "date": "2028-06-07",
+   "context": "Reference date: Wednesday 7 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "weekAnchor": "2028-06-01",
+   "anchorContext": "Reference date: Thursday 1 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 6 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 6"
+  },
+  {
+   "date": "2028-06-12",
+   "context": "Reference date: Monday 12 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "weekAnchor": "2028-06-08",
+   "anchorContext": "Reference date: Thursday 8 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 7 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 7"
+  },
+  {
+   "date": "2028-06-15",
+   "context": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2028-06-15",
+   "anchorContext": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 8"
+  },
+  {
+   "date": "2028-06-16",
+   "context": "Reference date: Friday 16 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "weekAnchor": "2028-06-15",
+   "anchorContext": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2028",
+   "label": "ET28 Wk 8"
+  },
+  {
+   "date": "2028-06-17",
+   "context": "Reference date: Saturday 17 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-06-15",
+   "anchorContext": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-06-19",
+   "context": "Reference date: Monday 19 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday.",
+   "weekAnchor": "2028-06-15",
+   "anchorContext": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": "easter 2028",
+   "label": null
+  },
+  {
+   "date": "2028-06-20",
+   "context": "Reference date: Tuesday 20 June 2028 (Europe/London).",
+   "weekAnchor": "2028-06-15",
+   "anchorContext": "Reference date: Thursday 15 June 2028 (Europe/London). Cambridge Easter Full Term 2028 runs Tuesday 25 April 2028 to Friday 16 June 2028; Week 1 starts Thursday 27 April 2028 and Week 0 starts Thursday 20 April 2028. A student week runs Thursday to Wednesday. It is in Week 8 of that term.",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-06-22",
+   "context": "Reference date: Thursday 22 June 2028 (Europe/London).",
+   "weekAnchor": "2028-06-22",
+   "anchorContext": "Reference date: Thursday 22 June 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-06-27",
+   "context": "Reference date: Tuesday 27 June 2028 (Europe/London).",
+   "weekAnchor": "2028-06-22",
+   "anchorContext": "Reference date: Thursday 22 June 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-02",
+   "context": "Reference date: Sunday 2 July 2028 (Europe/London).",
+   "weekAnchor": "2028-06-29",
+   "anchorContext": "Reference date: Thursday 29 June 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-07",
+   "context": "Reference date: Friday 7 July 2028 (Europe/London).",
+   "weekAnchor": "2028-07-06",
+   "anchorContext": "Reference date: Thursday 6 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-12",
+   "context": "Reference date: Wednesday 12 July 2028 (Europe/London).",
+   "weekAnchor": "2028-07-06",
+   "anchorContext": "Reference date: Thursday 6 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-17",
+   "context": "Reference date: Monday 17 July 2028 (Europe/London).",
+   "weekAnchor": "2028-07-13",
+   "anchorContext": "Reference date: Thursday 13 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-22",
+   "context": "Reference date: Saturday 22 July 2028 (Europe/London).",
+   "weekAnchor": "2028-07-20",
+   "anchorContext": "Reference date: Thursday 20 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-07-27",
+   "context": "Reference date: Thursday 27 July 2028 (Europe/London).",
+   "weekAnchor": "2028-07-27",
+   "anchorContext": "Reference date: Thursday 27 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-01",
+   "context": "Reference date: Tuesday 1 August 2028 (Europe/London).",
+   "weekAnchor": "2028-07-27",
+   "anchorContext": "Reference date: Thursday 27 July 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-06",
+   "context": "Reference date: Sunday 6 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-03",
+   "anchorContext": "Reference date: Thursday 3 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-11",
+   "context": "Reference date: Friday 11 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-10",
+   "anchorContext": "Reference date: Thursday 10 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-16",
+   "context": "Reference date: Wednesday 16 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-10",
+   "anchorContext": "Reference date: Thursday 10 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-21",
+   "context": "Reference date: Monday 21 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-17",
+   "anchorContext": "Reference date: Thursday 17 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-26",
+   "context": "Reference date: Saturday 26 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-24",
+   "anchorContext": "Reference date: Thursday 24 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  },
+  {
+   "date": "2028-08-31",
+   "context": "Reference date: Thursday 31 August 2028 (Europe/London).",
+   "weekAnchor": "2028-08-31",
+   "anchorContext": "Reference date: Thursday 31 August 2028 (Europe/London).",
+   "term": null,
+   "label": null
+  }
+ ]
+}

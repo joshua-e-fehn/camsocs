@@ -42,7 +42,19 @@ The SDK adds its own context to every event (page path without
 query or fragment, browser and OS name and version, language, time zone, device type, screen
 size, random identifiers); `before_send` strips everything else, as `/privacy` lists.
 
-Server-side counts without consent (`ics_feed_fetched`, `listing_request_received`, ENG-7) and
+Every event, ours and the SDK's, browser and server, also carries `environment` (`production` or
+`development`) and `campus`, the campus the deployment serves (decision D8: `cam`, from
+`NEXT_PUBLIC_CAMPUS` in Next and `CAMSOCS_CAMPUS` in Convex; `docs/webapp.md` "Campus profile").
+It names a deployment, not a visitor. Events from before it was added have none, so every query
+splits campuses with `ifNull(properties.campus,'cam')`.
+
+The broker overview (`/dashboard`) reads these numbers back as aggregates: `convex/traffic.ts`
+queries PostHog hourly for `$pageview` visitors, sessions, referring domains and paths, beside
+Google Search Console's search terms (`docs/deploy.md` "Website traffic").
+
+Server-side counts without consent (`ics_feed_fetched`, `listing_request_received`, ENG-7;
+`page_visit`, every browser page load as a kind of page and a kind of referring site, which the
+broker overview shows beside the consented numbers because those undercount) and
 errors (ENG-6) are separate: see `docs/webapp.md` "Server counts" and
 `docs/compliance/record-of-processing.md` P12.
 

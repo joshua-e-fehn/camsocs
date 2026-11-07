@@ -2,12 +2,16 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, unstable_rethrow } from "next/navigation"
 import { cache } from "react"
+import { CollegeCrest } from "@/components/molecules/college-crest"
+import { FormalHallBox } from "@/components/molecules/formal-hall-box"
+import { MayBallBox } from "@/components/molecules/may-ball-box"
 import { TrackView } from "@/components/molecules/track-view"
 import { DirectoryHub } from "@/components/organisms/directory-hub"
 import { OrgProfile } from "@/components/organisms/org-profile"
 import { ProfileCamOnlyEvents } from "@/components/organisms/profile-cam-only-events"
 import { api } from "@/convex/_generated/api"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
+import { COLLEGES_PATH, collegeInfo } from "@/lib/colleges"
 import {
   collectionJsonLd,
   collegeHubIntro,
@@ -17,7 +21,6 @@ import {
 import { isThinListing } from "@/lib/directory-indexing"
 import {
   alternateNames,
-  jsonLdEvents,
   profileLead,
   profileSources,
   societyJsonLd,
@@ -25,6 +28,7 @@ import {
 } from "@/lib/directory-profile"
 import { withoutTalksCam } from "@/lib/directory-talks-guard"
 import { collegeHubTitle, titleBase } from "@/lib/directory-title"
+import { ballsOf } from "@/lib/may-balls"
 import { pageMetadata } from "@/lib/page-metadata"
 import type { OrgPage } from "@/lib/public-api"
 import { publicQuery } from "@/lib/public-data"
@@ -170,13 +174,14 @@ async function CollegeHubPage({ page }: { page: OrgPage }) {
   const title = collegeHubTitle(org.name)
   const intro = collegeHubIntro(org.name, cards)
   const path = collegeHubPath(org)
+  const info = collegeInfo(org.key)
   const jsonLd = collectionJsonLd({
     path,
     title,
     description: summary(intro, 300),
     items: cards.map((card) => ({ name: card.name, path: `/societies/${card.slug}` })),
     crumbs: [
-      { name: "Societies", path: "/societies" },
+      { name: "Colleges", path: COLLEGES_PATH },
       { name: org.name, path },
     ],
     // The college itself, as a place-bound Organization: never typed as a
@@ -197,7 +202,8 @@ async function CollegeHubPage({ page }: { page: OrgPage }) {
         eyebrow="College"
         title={title}
         intro={intro}
-        crumbs={[{ name: "Societies", href: "/societies" }, { name: org.name }]}
+        crumbs={[{ name: "Colleges", href: COLLEGES_PATH }, { name: org.name }]}
+        badge={info && <CollegeCrest crest={info.crest} size={64} decorative />}
         sections={groupByCategory(cards).map((group) => ({
           id: `group-${group.category ?? "other"}`,
           title: group.label,
@@ -207,25 +213,38 @@ async function CollegeHubPage({ page }: { page: OrgPage }) {
         missingHref="/request?kind=add"
         missingText={`Missing a society at ${org.name}?`}
         aside={
-          others.length > 0 && (
-            <section aria-labelledby="other-colleges" className="flex flex-col gap-3">
-              <h2 id="other-colleges" className="font-serif text-2xl font-medium tracking-tight">
-                Other colleges
-              </h2>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {others.map((college) => (
-                  <li key={college.key}>
-                    <Link
-                      href={collegeHubPath(college)}
-                      className="inline-flex min-h-11 items-center underline-offset-4 hover:underline sm:min-h-8"
-                    >
-                      {college.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )
+          <>
+            {info && <FormalHallBox college={info} />}
+            {info && <MayBallBox balls={ballsOf(org.key)} college={info.shortName} />}
+            {others.length > 0 && (
+              <section aria-labelledby="other-colleges" className="flex flex-col gap-3">
+                <h2
+                  id="other-colleges"
+                  className="flex flex-wrap items-baseline gap-x-4 font-serif text-2xl font-medium tracking-tight"
+                >
+                  Other colleges
+                  <Link
+                    href={COLLEGES_PATH}
+                    className="font-sans text-sm font-normal underline underline-offset-4"
+                  >
+                    All colleges compared
+                  </Link>
+                </h2>
+                <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  {others.map((college) => (
+                    <li key={college.key}>
+                      <Link
+                        href={collegeHubPath(college)}
+                        className="inline-flex min-h-11 items-center underline-offset-4 hover:underline sm:min-h-8"
+                      >
+                        {college.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
         }
       />
     </>
@@ -261,7 +280,6 @@ export default async function SocietyPage({ params }: Props) {
     org,
     title: titleBase(societyTitle(org)),
     description,
-    eventKeys: jsonLdEvents(page.events),
   })
 
   return (

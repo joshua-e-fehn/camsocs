@@ -1,11 +1,17 @@
 import { v } from "convex/values"
+import {
+  isOwnSocietyPage,
+  sensitiveBecause,
+  sensitiveOfficerProblem,
+} from "../lib/broker/sensitive"
 import { REVIEW_STATUSES } from "../lib/vocab"
 import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
 import { ORIGINAL_TEXT_FIELDS } from "./ingest/claims"
-import { DAY_MS, londonIsoDate } from "./lib/derived"
-import { loadTerms, refreshOrganisation } from "./lib/entityStore"
+import { orgClassesOf, ownWebsiteOf } from "./lib/brokerRows"
+import { DAY_MS, londonIsoDate, nextHandoverDate } from "./lib/derived"
+import { findOrganisation, loadTerms, refreshOrganisation } from "./lib/entityStore"
 
 /**
  * The retention schedule, enforced (docs/compliance/retention.md; the
@@ -43,6 +49,8 @@ import { loadTerms, refreshOrganisation } from "./lib/entityStore"
  * Not automated (retention.md says why): R1 listings and R2 their provenance
  * (an organisation is deleted only by hand, `ingest/purge:removeEntity`), R7
  * the pipeline host's cache (`camsocs prune-cache`), R9 sign-in accounts.
+ * Run by hand, not scheduled: `removeOffSiteSensitiveOfficers` (DPIA-lite
+ * §5), after the post-deploy audit `coverage:sensitiveOfficers` finds rows.
  */
 
 export const RETENTION = {
@@ -357,6 +365,97 @@ export const expirePeople = internalMutation({
       : { now, cursor: page.continueCursor, stale }
     if (next) await ctx.scheduler.runAfter(0, internal.retention.expirePeople, next)
     return { processed: page.page.length, deleted, done: next === null }
+  },
+})
+
+// --- R5 with DPIA-lite §5: officers of sensitive societies from elsewhere ------------------
+
+/** People rows read at most (as `coverage.sensitiveOfficers`). */
+const MAX_PEOPLE = 5_000
+
+/**
+ * Removes the pipeline's officers of sensitive societies whose source is not
+ * a page of the society's own website (DPIA-lite §5, R-7, ENG-42: for these
+ * societies a name is kept only as the society's own pages list it). Run by
+ * hand after `coverage:sensitiveOfficers` reports rows with a problem; a dry
+ * run unless `apply: true`, and idempotent (a second run finds nothing).
+ * Counts only, never names or keys, so the output is safe to print.
+ *
+ *  - The own site is `ownWebsiteOf`'s, as the broker's checks read it, so a
+ *    society whose latest website reading failed keeps the officers read from
+ *    the site it was last found at.
+ *  - Only pipeline rows (`parser` / `llm`) are deleted, as R5 deletes them,
+ *    without remembering the key in `expiredPeople`: the row goes for its
+ *    source, not its age, so the society's own page may list the person
+ *    again. The broker's own rows and rows held on consent are counted
+ *    (`leftForReview`) and left for Joshua, who decides them in the
+ *    dashboard, where they are flagged "needs review".
+ *  - Rows on the own site that break another rule (links, notes, a later
+ *    `staleAfter`) are counted (`otherProblems`), not deleted: they are
+ *    corrected in the dashboard.
+ */
+export const removeOffSiteSensitiveOfficers = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  returns: v.object({
+    applied: v.boolean(),
+    /** False when the table holds more rows than one run reads. */
+    complete: v.boolean(),
+    people: v.number(),
+    sensitive: v.number(),
+    offSite: v.number(),
+    societies: v.number(),
+    deleted: v.number(),
+    leftForReview: v.number(),
+    otherProblems: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const apply = args.apply === true
+    const limit = nextHandoverDate(Date.now())
+    const rows = await ctx.db.query("people").take(MAX_PEOPLE)
+    const classes = orgClassesOf(ctx)
+    const sites = new Map<string, Promise<{ name: string; website?: string } | null>>()
+    const siteOf = (orgKey: string) => {
+      let hit = sites.get(orgKey)
+      if (!hit) {
+        hit = (async () => {
+          const org = await findOrganisation(ctx, orgKey)
+          return org ? { name: org.name, website: await ownWebsiteOf(ctx, org) } : null
+        })()
+        sites.set(orgKey, hit)
+      }
+      return hit
+    }
+    const counts = { sensitive: 0, offSite: 0, deleted: 0, leftForReview: 0, otherProblems: 0 }
+    const societies = new Set<string>()
+    for (const person of rows) {
+      const classified = await classes(person.orgKey)
+      const because = classified ? sensitiveBecause(classified) : []
+      if (because.length === 0) continue
+      counts.sensitive++
+      const site = await siteOf(person.orgKey)
+      if (!isOwnSocietyPage(person.sourceUrl, site?.website)) {
+        if (person.method === "manual" || person.consentBasis === "consent") {
+          counts.leftForReview++
+          continue
+        }
+        counts.offSite++
+        societies.add(person.orgKey)
+        if (apply) {
+          await ctx.db.delete("people", person._id)
+          counts.deleted++
+        }
+        continue
+      }
+      const society = { name: site?.name ?? person.orgKey, website: site?.website, because }
+      if (sensitiveOfficerProblem(society, person, limit)) counts.otherProblems++
+    }
+    return {
+      applied: apply,
+      complete: rows.length < MAX_PEOPLE,
+      people: rows.length,
+      ...counts,
+      societies: societies.size,
+    }
   },
 })
 

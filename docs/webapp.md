@@ -53,12 +53,16 @@ app/                         Next.js App Router pages
     about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
     term-dates/page.tsx      Full Term dates by academic year, the week of term today and each week's
                              dates (`termDates` + lib/term-calendar.ts; no hand-written dates)
-    guides/page.tsx, guides/join-a-society/page.tsx, guides/start-a-society/page.tsx
-                             Editorial guides (lib/guides.ts): every fact cites a source (`<Cite id>`), the
-                             page lists them with read dates; open REVIEW_NOTES show as "[Joshua: …]"
-                             boxes, mark the pages draft + noindex, and fail lib/guides.test.ts until
-                             resolved. Article + BreadcrumbList JSON-LD (no HowTo/FAQPage). Live counts
-                             via the same cached orgs.facets read as /categories
+    colleges/page.tsx        All 31 colleges: crest, JCR/MCR/boat club links, listing count (orgs.hub)
+                             and formal hall summary; crests + checked formal rules in
+                             lib/data/colleges.json (lib/colleges.ts, from the Cambridge Tracker,
+                             re-checked 7 Nov 2026); a college's own page shows its FormalHallBox
+    guides/                  /guides index, join-a-society, start-a-society (sources in
+                             lib/society-guides.ts), formal-hall, may-balls, rowing, varsity (lib/guides.ts).
+                             Researched text lives in lib/data/guides/*.json (paragraphs + source
+                             URLs, rendered by GuideSections); rowing/Varsity "coming up" lists are
+                             CAMsocs' own sport events (lib/sport-calendar.ts); a college's page
+                             shows its May Ball (MayBallBox, #may-ball)
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
                              it is closed): overview, organisations (?org=<key> opens the drawer),
@@ -68,6 +72,10 @@ app/                         Next.js App Router pages
                              lib/sitemap-societies.ts, convex/sitemap.ts, orgs.sitemap): lastmod, edge-cached
                              an hour, 503 on a backend failure; category hubs and college pages listed; thin
                              profiles (G3), ended and talks.cam-derived events (G1) left out
+  events.atom/               Newly listed events (first stored in the last 14 days, ≤ 100) as Atom
+                             (lib/event-feed.ts, eventFeed.newest): the second `Sitemap:` line in
+                             robots.txt, since Google reads a feed as a sitemap and fetches it more
+                             often; entries dated by first storage, never by a harvest; edge-cached an hour
   robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay and the parameter traps
                              (/events?, /societies?, /talks?, /request?, /talks/departments?, /events/*/ics;
                              canonical ?org= / ?page= / ?dept= / ?school= views allowed); AI agents
@@ -185,6 +193,7 @@ lib/                         Pure logic + *.test.ts (no server imports)
                              captureServerException(), captureServerEvent(), SERVER_EVENTS (see
                              "Error tracking", "Server counts")
   ics-telemetry.ts           countIcsFetch(): the .ics routes' ics_feed_fetched count, in after()
+  visit-count.ts             visitFacts(): the proxy's page_visit count (kind of page, kind of source)
                              (see "Server counts")
   error-scrub.ts             What an error report may say: no query string, fragment or email in
                              messages and stacks, frame paths only (browser and server)
@@ -522,7 +531,8 @@ from `lib/analytics-client.ts` (`lib/analytics-client.test.ts`, posthog-js mocke
   events without an allow-list entry; strips query strings and fragments, titles, element text,
   the user-agent string, the search keyword, campaign parameters, window size, device model and
   previous-page duration (each also as its `$initial_…` / `$session_entry_…` copy); sets
-  `environment` and `$geoip_disable`. A throw drops the event (posthog-js), so it fails closed.
+  `environment`, `campus` (see "Campus profile") and `$geoip_disable`. A throw drops the event
+  (posthog-js), so it fails closed.
   At the source: `save_referrer` and `save_campaign_params` off (no URL in PostHog's cookie),
   `disable_capture_url_hashes`, `disable_scroll_properties`.
 - **For ENG-6**: `getPostHog()` returns the instance only while it may send, else null; call it
@@ -555,7 +565,7 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
 - **Server**: `instrumentation.ts` `onRequestError` (Node.js runtime only) → `reportRequestError`
   in `lib/posthog-server.ts`, which returns at once and sends in the background (`waitUntil`).
   Fixed distinct id `camsocs-server`, no person profile, no GeoIP; only the path without query
-  string, the method, Next's router facts and `environment` go with the exception, and the
+  string, the method, Next's router facts, `environment` and `campus` go with the exception, and the
   client's `before_send` (`sanitizeServerEvent`) drops everything else. Headers are never read.
   Nothing for `/dashboard*` / `/sign-in*` (path or route pattern); at most 10 reports per error
   and route per instance, then one per 10 s; nothing at all without `NEXT_PUBLIC_POSTHOG_KEY`.
@@ -573,12 +583,13 @@ PostHog error tracking (ENG-6); full behaviour, settings and the source map uplo
 Aggregate PostHog events from server code, without consent (nothing touches the visitor's device;
 record of processing P12). Full table, settings and caveats: `docs/deploy.md` "PostHog
 (monitoring)", "Server counts". Fixed distinct id `camsocs-server`, no person profile, no GeoIP,
-`environment`; IDs and enums only.
+`environment` and `campus`; IDs and enums only.
 
 | Event | Properties | Sender |
 |---|---|---|
 | `ics_feed_fetched` | `feed` (`talks` / `events` / `event` / `talk`), `key?` (a valid event or talk key) | the `.ics` route handlers → `countIcsFetch` (`lib/ics-telemetry.ts`) in `after()` → `captureServerEvent` |
 | `listing_request_received` | `kind` (`LISTING_REQUEST_KINDS`) | `listingRequests.submit` schedules `internal.analytics.captureListingRequest` → capture API (`convex/lib/posthog.ts`) |
+| `page_visit` | `page` (`VISIT_PAGES`), `source` (`VISIT_SOURCES`) | `proxy.ts` `countVisit` (`lib/visit-count.ts` `visitFacts`) in `event.waitUntil` → `captureServerEvent` |
 
 - A new server event needs an entry in `SERVER_EVENTS` (Next) or its own internal action (Convex),
   a row in both tables, and a check against P12 and `/privacy`.
@@ -589,6 +600,46 @@ record of processing P12). Full table, settings and caveats: `docs/deploy.md` "P
 - Tests: `lib/ics-telemetry.test.ts`, `app/ics-routes.test.ts` (the route handlers with stubbed
   Convex, `after()` and sender, in their own process), `lib/posthog-server.test.ts`,
   `convex/analytics.test.ts` (convex-test, stubbed `fetch`).
+
+## Campus profile
+
+One deployment serves one campus (decision D8, `docs/campuses/README.md`). `lib/campus/` is the
+campus registry, pure TS that Convex and Next both import: `profile.ts` (the shape),
+`profiles/cam.ts` (Cambridge, today's literals), `index.ts` (`CAMPUS_IDS`, `getCampus`,
+`currentCampus`), `deployment.ts` (Convex's `deploymentCampus()`, from the deployment's
+`CAMSOCS_CAMPUS`), `terms.ts` and `member-email.ts`. The synthetic `zz` profile
+(`profiles/zz.testing.ts`) is for tests only and never registered.
+
+- **Next** reads `currentCampus()`: `NEXT_PUBLIC_CAMPUS`, inlined at build time; unset or empty
+  means `cam`, and an unknown value fails the build. There is no `[campus]` segment, no host
+  routing and no proxy change: each campus is its own Vercel project, so routing, caching and ISR
+  are the same on every host.
+- **Consumers keep their export names**, so their importers are untouched:
+  - `lib/site.ts`: `SITE_NAME`, `SITE_TAGLINE`, `SITE_DESCRIPTION`, `SITE_INTRO`, the `SITE_URL`
+    fallback (`origin`), `BOT_USER_AGENT`, `CAM_SIGN_IN_HREF`, `SHARE_IMAGE_ALT` and `DISCLAIMER`
+    come from `brand`, `origin`, `botUserAgent` and `memberTier`;
+  - `lib/events.ts`: `UNIVERSITY_NAME` and the JSON-LD organiser URL (`university`);
+  - `lib/term-week.ts`: `TERM_NAMES`, `TERM_SHORT`, `TEACHING_WEEKS` and the weekday a week
+    starts on (`terms`, `facts.terms.weekStartJs`);
+  - `lib/llms-txt.ts`: the summary (`brand.llmsSummary`);
+  - `app/_og/card.tsx`: the wordmark, the foot line and `GENERIC_HEADLINE`
+    (`brand.shareHeadline`); `molecules/wordmark.tsx`: `brand.wordmark`;
+  - `organisms/login-form.tsx` and `organisms/public-header.tsx`: the member tier's copy
+    (`memberTier`, `place.name`, the first member domain);
+  - `lib/analytics-client.ts` and `lib/posthog-server.ts`: the `campus` property on every event
+    (the browser's super property, kept by `sanitizeEvent`; pinned by `sanitizeServerEvent`).
+    Convex's sender adds the same from `CAMSOCS_CAMPUS` (`convex/lib/posthog.ts`). PostHog
+    queries read `ifNull(properties.campus,'cam')`, since events before this change have none.
+- **Cambridge is byte-identical.** Every Cambridge value is the literal it replaced; copy is
+  rendered as one template string per text run, so the server renders the same text nodes as
+  before (no `<!-- -->` separators). Checked by building base and branch with
+  `NEXT_PUBLIC_CAMPUS` unset against the placeholder Convex backend and diffing the served
+  HTML of `/about`, `/sign-in` and `/llms.txt`, plus the shell and error render of `/` (it
+  cannot render its data there, so the home hero was not diffed in a successful render), and
+  by comparing every `lib/site.ts` export with the base literals (all equal).
+- **Still Cambridge-only**, and launch blockers for a second site (`docs/campuses/README.md`):
+  legal pages, directory titles and regexes, collegiate facets, category copy and the About
+  page's sources.
 
 ## Environments
 
@@ -684,6 +735,7 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 | `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[], hasPublicEvents? }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn or talks.cam-derived ones (`isTalksDerivedEvent`); relationships are public edges with `direction` and the counterpart's `{key, slug, name}`, whose evidence never links a talks.cam page (an edge seen only on talks.cam pages is left out); `hasPublicEvents`: any public event not from talks.cam, past or upcoming, viewer-independent (decision G3). The whole result is passed through the talks guard (decision G1) |
 | `orgs.hub` | `{ category?, collegeKey? }` | Every listing of one category or one college, by name: `{ key, slug, name, shortName?, shortDescription?, orgType?, level?, status, collegeKeys, categories, sport?: {sport?} }[]` (no logo, no activity); the directory's rules (no counterparts, nothing archived). For the hub pages (decision G13) |
 | `orgs.sitemap` | `{ cursor?, numItems? }` | `{ page: { slug, kind: "listing" \| "college", updatedAt, indexable }[], isDone, continueCursor }` (offset cursor, ≤ 100 a page): every listing and college page; `indexable` false for a thin profile (no description, no public event, no website: decision G3, `lib/directory-indexing.ts` `isThinListing`, judged on the same guarded projection the profile shows, so suppressed fields, talks.cam websites and talks.cam events do not count) and a college that lists nobody; a listing removed on request is left out. Read by `lib/sitemap-societies.ts` |
+| `eventFeed.newest` | `{ limit? }` (≤ 100) | `{ key, title, startsAt, allDay, listedAt, host?, fromUniversity }[]`, newest first by first storage (`_creationTime`), stored in the last 14 days: the events sitemap's pages (public, from today on or still running; never withdrawn, superseded, suppressed, hosted only by hidden organisations or talks.cam-derived, G1) less cancelled ones. Read by `/events.atom` and `/events` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 | `orgs.busy` | `{ limit? }` | `{ label?, from, to, orgs: { card: OrgCardPublic, count }[] }` — the "Busy this week" shelf: listings with the most counted, not cancelled events this term week (Thu–Wed; `label` "MT26 Wk 4"), else the next 7 days; at most 12 |
 | `orgs.related` | `{ slug, limit? }` | `OrgCardPublic[]` (≤ 6): the same college first, then what the group does: the same sport, shared categories, telling words shared in the name, the same specific kind, shared activities and audiences (`relatedScore`); ties in a fixed per-pair hash order, never the alphabet; empty for an unknown or hidden slug |
@@ -771,6 +823,12 @@ edge-cached an hour, and the calendar and event pages advertise their `.ics` as 
 events first (ENG-31), so in a Cambridge Festival window the feed can lose only the
 University's later days; `university: "hide"` would read the society stream alone.
 
+**Getting every page indexed (2026-11-07).** Three layers, so a page cannot quietly stay out of Google:
+
+1. *Before merge* — `lib/route-indexing.ts` names, for every `page.tsx` under `app/(site)`, the sitemap that lists it (or why none does) and, for a single page, where it is linked from. `lib/route-indexing.test.ts` fails CI when a page has no entry, when pages.xml (`PAGE_PATHS`) and the entries disagree, or when a single page is linked from neither the header, the footer nor a page that is. **Adding a page:** an entry there, the path in `PAGE_PATHS`, a footer (or parent page) link; or `{ excluded }` with the reason and a noindex.
+2. *Every day* — the sitemaps are built per request from Convex (societies, events) or `PAGE_PATHS`, so they are never stale; `sitemaps-resubmit-daily` tells Search Console when they changed. `indexing-check-daily` (07:00 UTC, `convex/indexing.ts`) inspects what Google says about every sitemap URL through the URL Inspection API (≤ 1,400 a day of the 2,000 quota: key pages daily, new URLs at once, the rest every 2–10 days) and reads the key pages itself (200, no noindex, a self canonical). The broker overview's "Google indexing" card shows the counts, the URLs that cannot be indexed and the key pages still waiting after 10 days; the VPS monitor's `search_indexing` check pages on the first two (docs/ops-vps.md §6).
+3. *By hand* — "Request indexing" in Search Console for a key page the card lists as waiting (the API cannot; a few a day). Google decides what it indexes: "Discovered/unknown" on a new domain is its crawl queue, not a fault, and only links from other sites shorten it.
+
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the
@@ -788,7 +846,16 @@ department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?
 `/talks?school=` alone stay followed. An event page's "All its events" link is its lead
 society's canonical calendar, `/events?org=<slug>` (`eventsIndexing(...).canonical`), never a
 slice. Event pages are found through the sitemap
-(`sitemaps/events.xml`), the canonical calendars and the society profiles, whose rows link them;
+(`sitemaps/events.xml`), the new-events feed (`/events.atom`), the canonical calendars, the
+society profiles, whose rows link them, each event page's "Next from <society>" (or "Next from
+the University") list of the host's next three events after it (`lib/next-events.ts`,
+`loadNextEvents`: one cached `events.list` read per host and day; never under /talks), which chains
+a society's whole programme, and the plain `/events` page's "Newly listed" list
+(`components/molecules/newly-listed.tsx`, the 30 newest from `eventFeed.newest`): the calendar
+itself links one week, so without it an event weeks away (above all one of the University's,
+which no profile links) had no link from any indexed page (crawl of 7 Nov 2026: 311 of 612). An
+event page's robots meta carries `unavailable_after` at G4's moment (30 days after it ended,
+`eventUnavailableAfter`), so Google drops it then without a recrawl;
 an event page's breadcrumb is "Events" alone (no day crumb, which would point at a trap), the same
 in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `loading.tsx`: their H1, text and JSON-LD are in the first HTML chunk.
@@ -871,14 +938,15 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 
 | Module | Functions |
 |---|---|
-| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
+| `broker/orgs` | `page` (paginated slim rows of every organisation, incl. counterparts and hidden: coverage flags, missingFields, the outreach address (`bestRoleAddress`: a role address with its `EMAIL_TYPES` kind, never a personal CRSid, lists.cam.ac.uk or webmail address) and `nextAddresses` (the other such addresses, in the order to try them after a bounce), `webmailAddresses` (every published webmail address, best first, for the webmail-only export), held fields, source hosts, needs/offers chips, suppressed), `search({q})`, `detail({key})` (full row with meta, orgInternal, profile, people, relationships, interactions), `updateProfile`, `setNeedOffer` (`confirmed` / `rejected` / `null` = forget), `setHidden` (showing a listing again is refused while it is on the suppression list) |
 | `broker/people` | `list` (each row with `sensitiveBecause` and `sensitiveProblem`, why a stored row breaks the sensitive-society rules), `rules({orgKey})` (what a manual entry there may hold: `sensitiveBecause`, `website`, `staleAfterLimit`), `create`, `update` (the row becomes `manual`; `sourceUrl`, `consentRecord`; checked as it would be after the edit), `setArchived`. Both writes refuse a suppressed person (key, or a suppressed name anywhere in the typed name) or listing and, for sensitive societies (`lib/broker/sensitive.ts`, DPIA-lite §5), a source off the society's own website, links, notes, a later `staleAfter` and unrecorded consent, as `ConvexError`s the form shows; stored rows that break those rules are counted, without names, by the internal `coverage.sensitiveOfficers` (post-deploy check) |
 | `broker/interactions` | `list({orgKey?})`, `followUps({days?})`, `create`, `update`, `completeFollowUp`, `remove`, `recordSendLog({entries: {orgKey, email, sentOn, bounced}[]})` (the outreach send log, ≤ 200 rows a call: one email interaction per organisation, address and date, keyed so a second import changes nothing; a bounce adds a follow-up; returns counts, unknown organisations and addresses the listing does not show) |
 | `broker/introductions` | `list`, `create` (each side one org or one person), `update`, `remove` |
-| `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
+| `broker/graph` | `relationships({types?})` (nodes + edges, public and internal), `ecosystem({layers?, types?})` (the graph page's ecosystem map, `lib/broker/ecosystem.ts`: layers `relationships` (the default), `cohosting` (hosted, uncancelled events with a co-host or sponsor over the last 3 academic years, counted org↔org per academic year), `sponsors` (past sponsors and `sponsors` relationships) and `outreach` (introductions as edges, interactions as a count); node ids `${campus}:${key}` from `CAMSOCS_CAMPUS`; people only as a count per organisation, never nodes; sensitive societies flagged `sensitive`; hidden and suppressed listings left out of every layer but `relationships`; talks.cam evidence and talks.cam-derived events excluded (`lib/talks-boundary.ts`), as is a sighting whose event was not read; `truncated` when any read hit its limit), `matches` (complementary needs/offers and past sponsors of similar societies, `lib/broker/matching.ts`) |
 | `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status, the latest `coverage` snapshot, the latest resolve stage's `quarantine` counts), `refreshCoverage` (schedules the fold now) |
 | `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?, eventKeys?, name?})` (remove / object → suppressions, enforced at once; `event` and `name` need no listing) |
 | `broker/suppressions` | `list({orgKey?})` (an address shows only as `contact: true`), `lift({key})` |
+| `broker/pipeline` | `stageStatus({group?})` (per-stage status over the newest 40 `harvestRuns`: lastStatus `ok`/`failed`/`not_run`/`not_requested`/`running`, counts, durationMs, failStreak, yield and 7d/28d medians, `fetch` (`null` = not recorded, never zeros), `talkRun` joined from `talkRuns` on `talks`; no notes or errors), `runs({group?, limit?≤30})` (newest first, no notes/errors/warnings), `stageDetail({runKey, stage})` (notes and the error; `null` for an unknown run or stage) |
 | `broker/session` | `me` |
 
 ### Sending the Art 14 notice
@@ -893,7 +961,8 @@ harvest that collected the data.
    (`email`, with `role` and `email_kind`; `next_emails` holds the others to try after a
    bounce); personal CRSid, lists.cam.ac.uk and webmail addresses are never chosen. A society
    that publishes only those, or no address at all, is left out of the CSV and counted under "No
-   outreach address", complete listing or not; it needs another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
+   outreach address", complete listing or not; it needs the webmail-only file (step 6) or
+   another route (step 5). `notice` holds the personalised text; `sent_on` and `bounced` are
    empty.
 2. **Send** with the mail merge script `ops/outreach/art14-mail-merge.gs`, from the published
    contact address (`CONTACT_EMAIL`, a "Send mail as" address of the Workspace account, so
@@ -923,6 +992,24 @@ harvest that collected the data.
    interaction from its drawer: channel `message` (or `other`), summary "Art 14 notice
    (outreach) sent via … on YYYY-MM-DD". That is the record for those societies; the import
    takes email sends only.
+6. **Webmail-only societies (your choice).** "Download webmail-only CSV (Art 14)" on the same
+   page gives the societies whose only usable published address is webmail (a society
+   @gmail.com, @outlook.com and the like), in the same columns (`webmailOutreachCsv`). The
+   outreach CSV never holds them, because a webmail address may be one officer's own; whether
+   to send to them is yours. `email_kind` is `webmail` on every row, and each notice adds that
+   it went to the contact address the society publishes and asks the reader to pass it to the
+   committee if it reaches one person. CRSid and alumni addresses are personal under
+   `classifyEmail` and are never in it; nor are hidden, suppressed or counterpart listings. The
+   "No outreach address" tile says how many there are, and the "Notice" button on such a row
+   shows the webmail text. To send them, import the file as a **second sheet** of the same
+   spreadsheet (File → Import → Upload → "Insert new sheet(s)", conversion off) or into a
+   separate Google Sheet with its own copy of the script. Every menu item works on the tab in
+   front, and "Check the setup" names it: select the webmail tab and run steps 2–3 the same way
+   (check, test, batches, "Mark bounces" on that tab, then "Queue the next address", which
+   keeps `email_kind` as `webmail`). Both tabs draw on one daily quota. Then File → Download →
+   CSV *with the webmail tab selected* and "Import send log" as in step 4; the import records
+   the sends the same way. A webmail-only society you do not send to still needs step 5, or
+   the disproportionate-effort measures in DPIA-lite §4.
 
 `sent_on` must fall between 1 Oct 2026 and today. A date outside that, usually a sheet in a US
 locale that wrote 5 Nov as `11/5/2026`, stops the import with the row named; a file with an

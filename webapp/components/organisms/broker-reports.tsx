@@ -34,12 +34,14 @@ import {
 } from "@/hooks/convex/broker"
 import { humanize, todayIso } from "@/lib/broker/format"
 import {
+  asWebmailRow,
   fieldLabel,
   outreachCsv,
   outreachGroups,
   outreachNotice,
   parseSendLog,
   SEND_LOG_BATCH,
+  webmailOutreachCsv,
 } from "@/lib/broker/outreach"
 
 type Scope = "address" | "no_address" | "complete"
@@ -54,9 +56,11 @@ const siteUrl = () => (typeof window === "undefined" ? "" : window.location.orig
  * CSV holds one row per listed, non-suppressed organisation with a published
  * role address (never a personal, mailing-list or webmail one): what is
  * missing, and a personalised notice that is also the Art 14 notice. Export
- * only — nothing is sent from here. Once sent, the filled-in CSV comes back
- * through "Import send log", which records each send as an interaction
- * (docs/webapp.md "Sending the Art 14 notice").
+ * only — nothing is sent from here. A second CSV of the same shape holds
+ * the societies whose only usable address is webmail, for Joshua to send or
+ * not. Once sent, each filled-in CSV comes back through "Import send log",
+ * which records each send as an interaction (docs/webapp.md "Sending the
+ * Art 14 notice").
  */
 export function BrokerReports() {
   const { rows, complete } = useAllBrokerOrgRows()
@@ -80,16 +84,17 @@ export function BrokerReports() {
     [groups, scope],
   )
 
-  const download = () => {
+  const download = (webmail: boolean) => {
     if (!rows) return
-    const csv = outreachCsv(rows, siteUrl())
+    const csv = (webmail ? webmailOutreachCsv : outreachCsv)(rows, siteUrl())
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = url
-    link.download = `camsocs-outreach-${todayIso()}.csv`
+    link.download = `camsocs-outreach${webmail ? "-webmail" : ""}-${todayIso()}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success(`Exported ${groups?.withAddress ?? 0} organisations`)
+    const count = (webmail ? groups?.webmailOnly : groups?.withAddress) ?? 0
+    toast.success(`Exported ${count} organisations${webmail ? " (webmail only)" : ""}`)
   }
 
   return (
@@ -99,7 +104,11 @@ export function BrokerReports() {
         description="What each listing lacks, and the phase-2 outreach export (also the Art 14 notice). Send by 9 Nov 2026 (one month after the 9 Oct harvest)."
       >
         <SendLogImport />
-        <Button onClick={download} disabled={!complete}>
+        <Button variant="outline" onClick={() => download(true)} disabled={!complete}>
+          <DownloadIcon />
+          {complete ? "Download webmail-only CSV (Art 14)" : "Loading…"}
+        </Button>
+        <Button onClick={() => download(false)} disabled={!complete}>
           <DownloadIcon />
           {complete ? "Download outreach CSV" : "Loading…"}
         </Button>
@@ -117,7 +126,7 @@ export function BrokerReports() {
             <StatTile
               label="No outreach address"
               value={groups.no_address.length}
-              hint="Needs the notice another way (lists and webmail are left out)"
+              hint={`Needs the notice another way; ${groups.webmailOnly} have webmail only (second CSV)`}
             />
             <StatTile
               label="Complete listings"
@@ -205,9 +214,14 @@ export function BrokerReports() {
                           {humanize(row.bestAddress.role)}
                         </div>
                       </>
+                    ) : row.webmailAddresses.length > 0 ? (
+                      <>
+                        <div className="font-mono">{row.webmailAddresses[0].email}</div>
+                        <div className="text-muted-foreground">webmail only</div>
+                      </>
                     ) : (
                       <span className="text-muted-foreground">
-                        {row.has.email ? "list or webmail only" : "none published"}
+                        {row.has.email ? "list only" : "none published"}
                       </span>
                     )}
                   </TableCell>
@@ -313,7 +327,8 @@ function SendLogImport() {
 }
 
 function NoticePreview({ row }: { row: BrokerOrgRow }) {
-  const text = outreachNotice(row, siteUrl())
+  const webmail = asWebmailRow(row)
+  const text = outreachNotice(webmail ?? row, siteUrl())
   return (
     <>
       <DialogHeader>
@@ -321,7 +336,9 @@ function NoticePreview({ row }: { row: BrokerOrgRow }) {
         <DialogDescription>
           {row.bestAddress
             ? `To ${row.bestAddress.email} (${humanize(row.bestAddress.role).toLowerCase()}). Send it yourself; nothing is sent from here.`
-            : "No outreach address: this listing is not in the export. Send the notice another way and add an interaction for it."}
+            : webmail?.bestAddress
+              ? `Webmail only: in the webmail-only CSV, to ${webmail.bestAddress.email}, if you choose to send it. Nothing is sent from here.`
+              : "No outreach address: this listing is not in the export. Send the notice another way and add an interaction for it."}
         </DialogDescription>
       </DialogHeader>
       <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-4 font-sans text-sm whitespace-pre-wrap">

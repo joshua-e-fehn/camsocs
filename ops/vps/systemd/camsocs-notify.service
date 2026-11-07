@@ -1,0 +1,63 @@
+# New listing requests → Slack and WhatsApp through Mya (ENG-104): asks
+# Convex production for what is owed, sends it with Mya's Slack bot and her
+# WhatsApp bridge, reports each outcome back. Started every minute by
+# camsocs-notify.timer, or by hand: `systemctl start camsocs-notify.service`
+# (sends anything owed; a test from the dashboard is the safe trigger).
+# Runbook: /opt/camsocs/docs/ops-vps.md "Request notifications". Installed by
+# install.sh from a reviewed commit; the script is root-owned in
+# /usr/local/lib/camsocs-ops/, never run from the checkout the harvest writes.
+[Unit]
+Description=camsocs request notifications (Slack and WhatsApp through Mya)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target docker.service
+# No OnFailure=: a run that cannot reach Convex would DM every minute. A
+# silent relay shows on the dashboard ("relay silent since …") instead.
+
+[Service]
+Type=oneshot
+# Root, for one reason: WhatsApp goes through Mya's bridge, which listens on
+# loopback inside her container only, so the script runs `docker exec … curl`
+# (the Docker socket is root-equivalent; the script passes only JSON it built
+# from shape-checked facts, on stdin). Everything else below is taken away.
+User=root
+ExecStart=/usr/bin/python3 -I /usr/local/lib/camsocs-ops/camsocs-notify.py
+# The Slack values and the WhatsApp number from Mya's env file, and
+# production's CONVEX_HTTP_URL and PIPELINE_API_KEY: install.sh assembles this
+# root-owned 0600 file; systemd hands the unit a read-only copy for the run.
+LoadCredential=notify-env:/etc/camsocs/notify.env
+# The Docker CLI writes its config under DOCKER_CONFIG; root's home is hidden.
+RuntimeDirectory=camsocs-notify
+RuntimeDirectoryMode=0700
+Environment=DOCKER_CONFIG=/run/camsocs-notify HOME=/run/camsocs-notify
+TimeoutStartSec=5min
+
+# --- hardening: it talks to Convex, slack.com and the Docker socket -------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/docker.sock
+# Mya's data, the checkout (with the pipeline's keys), the harvest's state and
+# logs, and root's files are out of its reach.
+InaccessiblePaths=-/docker -/var/lib/docker/volumes -/root -/opt/camsocs -/var/lib/camsocs -/var/log/camsocs -/etc/camsocs
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# No private, CGNAT, link-local or multicast range; only the DNS stub on loopback.
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 localhost
+IPAddressAllow=127.0.0.53

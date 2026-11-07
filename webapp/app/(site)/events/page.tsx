@@ -2,11 +2,13 @@ import { preloadedQueryResult } from "convex/nextjs"
 import type { Metadata } from "next"
 import { unstable_rethrow } from "next/navigation"
 import { cache } from "react"
+import { NewlyListed } from "@/components/molecules/newly-listed"
 import { EventsCalendar } from "@/components/organisms/events-calendar"
 import { api } from "@/convex/_generated/api"
 import { londonIsoDate } from "@/lib/calendar"
 import { currentTermEnd } from "@/lib/date-presets"
 import { isThinListing } from "@/lib/directory-indexing"
+import { FEED_PATH, FEED_TITLE, type FeedEvent } from "@/lib/event-feed"
 import { EVENTS_TITLE, eventsListStructuredData, orgEventsTitle } from "@/lib/events"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicPreload, publicQuery } from "@/lib/public-data"
@@ -117,7 +119,11 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     ...(absolute ? { title: { absolute: title } } : {}),
     alternates: {
       ...base.alternates,
-      types: { "text/calendar": [{ url: feed, title: org ? `${org.name} events` : "Events" }] },
+      types: {
+        "text/calendar": [{ url: feed, title: org ? `${org.name} events` : "Events" }],
+        // The newly listed events (lib/event-feed.ts), for the whole calendar.
+        ...(state.org ? {} : { "application/atom+xml": [{ url: FEED_PATH, title: FEED_TITLE }] }),
+      },
     },
     ...(index ? {} : { robots: { index: false, follow: true } }),
   }
@@ -150,7 +156,7 @@ export default async function EventsPage({ searchParams }: Props) {
   const state = parseEventsParams(await searchParams)
   const { today, terms, args } = await viewArgs(state)
 
-  const [preloadedEvents, preloadedColleges, preloadedRestricted, org] = await Promise.all([
+  const [preloadedEvents, preloadedColleges, preloadedRestricted, org, newest] = await Promise.all([
     loadEvents(JSON.stringify(args)),
     publicPreload(api.orgs.colleges, {}),
     // A hint, not the page: if the count cannot be had, the calendar still renders.
@@ -159,6 +165,7 @@ export default async function EventsPage({ searchParams }: Props) {
       return null
     }),
     loadOrg(state.org),
+    loadNewest(state),
   ])
 
   return (
@@ -177,8 +184,29 @@ export default async function EventsPage({ searchParams }: Props) {
         preloadedColleges={preloadedColleges}
         preloadedRestricted={preloadedRestricted}
       />
+      <NewlyListed events={newest} />
     </>
   )
+}
+
+/** How many newly listed events the plain calendar links (`NewlyListed`). */
+const NEWLY_LISTED = 30
+
+/**
+ * The newest events, for the plain calendar only (`/events` as it is
+ * indexed): a filtered or searched view is noindex and a society's calendar
+ * lists its own. Links for crawlers, so a failed read leaves them out
+ * rather than failing the page.
+ */
+async function loadNewest(state: EventsState): Promise<FeedEvent[]> {
+  const { canonical, index } = eventsIndexing(state)
+  if (!index || canonical !== "/events") return []
+  try {
+    return await publicQuery(api.eventFeed.newest, { limit: NEWLY_LISTED })
+  } catch (error) {
+    unstable_rethrow(error)
+    return []
+  }
 }
 
 /** The CollectionPage / ItemList of the events on screen, for the two

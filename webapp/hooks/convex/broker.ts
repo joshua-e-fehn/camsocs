@@ -9,6 +9,7 @@ import { ConvexError } from "convex/values"
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
+import type { EcosystemLayer } from "@/lib/broker/ecosystem"
 import type { RelationshipType } from "@/lib/vocab"
 
 export type BrokerOrgRow = FunctionReturnType<typeof api.broker.orgs.page>["page"][number]
@@ -16,7 +17,7 @@ export type BrokerOrgDetail = NonNullable<FunctionReturnType<typeof api.broker.o
 export type BrokerPerson = FunctionReturnType<typeof api.broker.people.list>[number]
 export type BrokerInteraction = FunctionReturnType<typeof api.broker.interactions.list>[number]
 export type BrokerIntroduction = FunctionReturnType<typeof api.broker.introductions.list>[number]
-export type BrokerGraph = FunctionReturnType<typeof api.broker.graph.relationships>
+export type BrokerEcosystem = FunctionReturnType<typeof api.broker.graph.ecosystem>
 export type BrokerMatch = FunctionReturnType<typeof api.broker.graph.matches>[number]
 export type BrokerListingRequest = FunctionReturnType<
   typeof api.broker.listingRequests.list
@@ -76,8 +77,13 @@ export function useBrokerIntroductions() {
   return useQuery(api.broker.introductions.list)
 }
 
-export function useBrokerGraph(types: RelationshipType[]) {
-  return useQuery(api.broker.graph.relationships, types.length ? { types } : {})
+/** The graph page's ecosystem map: the chosen layers (lib/broker/ecosystem.ts),
+ * the relationship layer narrowed to `types` when any are chosen. */
+export function useBrokerEcosystem(layers: EcosystemLayer[], types: RelationshipType[]) {
+  return useQuery(api.broker.graph.ecosystem, {
+    ...(layers.length ? { layers } : {}),
+    ...(types.length ? { types } : {}),
+  })
 }
 
 export function useBrokerMatches() {
@@ -133,6 +139,26 @@ export function useBrokerIntroductionMutations() {
   }
 }
 
+/** Open requests for the sidebar badge (ENG-104). The sidebar sits outside
+ * BrokerGate, so it passes `enabled` only once the caller is a broker. */
+export function useOpenRequestCount(enabled: boolean) {
+  return useQuery(api.broker.listingRequests.openCount, enabled ? {} : "skip")
+}
+
+/** Where new requests are announced, the test send and "Notify again". */
+export function useRequestNotifications() {
+  return {
+    channels: useQuery(api.broker.listingRequests.notificationChannels),
+    sendTest: useMutation(api.broker.listingRequests.sendTestNotification),
+    notifyAgain: useMutation(api.broker.listingRequests.notifyAgain),
+  }
+}
+
+/** A test notification's outcomes as they arrive; skipped without a key. */
+export function useNotificationTest(key: string | null) {
+  return useQuery(api.broker.listingRequests.notificationTest, key ? { key } : "skip")
+}
+
 export function useSetListingRequestStatus() {
   return useMutation(api.broker.listingRequests.setStatus)
 }
@@ -144,6 +170,21 @@ export function useListingRequestMutations() {
     acceptRemoval: useMutation(api.broker.listingRequests.acceptRemoval),
     liftSuppression: useMutation(api.broker.suppressions.lift),
   }
+}
+
+/** The overview's website traffic (PostHog and Search Console). */
+export function useBrokerTraffic() {
+  return useQuery(api.broker.overview.traffic)
+}
+
+/** The daily indexing check's latest summary (convex/indexing.ts). */
+export function useIndexingSummary() {
+  return useQuery(api.indexing.summary)
+}
+
+/** Reads the website traffic again on the server now. */
+export function useRefreshTraffic() {
+  return useMutation(api.broker.overview.refreshTraffic)
 }
 
 /** Recomputes the overview's directory coverage on the server now. */

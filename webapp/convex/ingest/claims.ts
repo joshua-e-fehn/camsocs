@@ -26,7 +26,7 @@ import {
   writeOrgCard,
 } from "../lib/entityStore"
 import { FIELD_SPECS, KEY_PREFIXES } from "../lib/fields"
-import { assertBatchSize, sameFields } from "../lib/ingest"
+import { assertBatchSize, sameContent, sameFields } from "../lib/ingest"
 import { materialise, requiredFields } from "../lib/materialise"
 import { baseConfidence, type Resolution, resolveField, storedStatus } from "../lib/resolve"
 import { loadSuppressionIndex, suppressedClaim } from "../lib/suppressions"
@@ -558,8 +558,12 @@ async function writeEntity(
   let outcome: "created" | "updated" | "unchanged"
   let id: EntityDoc["_id"]
   if (existing) {
-    if (sameFields(existing as unknown as Record<string, unknown>, row)) return "unchanged"
-    await ctx.db.patch(table, existing._id as never, { ...row, updatedAt: context.now } as never)
+    const before = existing as unknown as Record<string, unknown>
+    if (sameFields(before, row)) return "unchanged"
+    // Only a change a reader would see moves `updatedAt` (lib/ingest.ts
+    // `sameContent`); a re-seen row keeps its stamp.
+    const updatedAt = sameContent(before, row) ? (existing.updatedAt as number) : context.now
+    await ctx.db.patch(table, existing._id as never, { ...row, updatedAt } as never)
     id = existing._id
     outcome = "updated"
   } else {

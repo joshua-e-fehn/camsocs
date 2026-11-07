@@ -227,3 +227,130 @@ def test_a_shell_variable_may_not_override_a_named_env_file(
     monkeypatch.setenv(variable, "https://hushed-rhinoceros-215.convex.site")
     with pytest.raises(ConfigError, match="would override"):
         load_settings(EnvChoice("prod", env_file))
+
+
+# --- the campus (decision D8) -------------------------------------------------------------------
+
+
+@pytest.fixture
+def zz_campus():
+    from tests.campus_zz import registered
+
+    with registered() as profile:
+        yield profile
+
+
+def test_the_campus_defaults_to_cambridge(make_settings) -> None:
+    from camsocs_pipeline.campuses import CAMBRIDGE
+
+    settings = make_settings()
+    assert settings.campus == "cam"
+    assert settings.profile() is CAMBRIDGE
+
+
+def test_the_campus_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CAMSOCS_CAMPUS", "cam")
+    assert Settings(_env_file=None).campus == "cam"
+
+
+@pytest.mark.parametrize("campus", ["ox", "zz", "CAM", "cam.ac.uk"])
+def test_an_unknown_campus_is_refused(campus: str) -> None:
+    with pytest.raises(ValidationError, match="unknown campus"):
+        Settings(_env_file=None, campus=campus)
+
+
+@pytest.mark.parametrize("blank", ["", "  "])
+def test_a_blank_campus_is_unset(tmp_path, blank: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # As the env-file guards read it: `CAMSOCS_CAMPUS=` copied from a template
+    # or exported empty is no campus stated, so Cambridge, never an error.
+    monkeypatch.setenv("CAMSOCS_CAMPUS", blank)
+    from_shell = Settings(_env_file=None)
+    monkeypatch.delenv("CAMSOCS_CAMPUS")
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"CAMSOCS_CAMPUS={blank}\n")
+    from_file = Settings(_env_file=env_file)
+    for settings in (from_shell, from_file):
+        assert settings.campus == "cam"
+        assert "campus" not in settings.model_fields_set
+    assert load_settings(EnvChoice(DEFAULT_ENV, env_file), environ={}).campus == "cam"
+
+
+def test_an_unknown_campus_flag_is_a_config_error(base_env) -> None:
+    with pytest.raises(ConfigError, match="Unknown campus"):
+        load_settings(EnvChoice(DEFAULT_ENV, base_env), environ={}, campus="ox")
+
+
+def test_the_campus_flag_wins_over_an_unset_file(base_env, zz_campus) -> None:
+    settings = load_settings(EnvChoice(DEFAULT_ENV, base_env), environ={}, campus="zz")
+    assert settings.campus == "zz"
+    assert settings.staging_dir == zz_campus.paths.staging
+    assert settings.reports_dir == zz_campus.paths.reports
+    # Its run state too: a zz run on the default env never overwrites
+    # Cambridge's `.camsocs-state.json` (watermarks, per-stage data).
+    assert settings.state_path == zz_campus.paths.state
+    assert settings.state_path == REPO_ROOT / "var" / "campus" / "zz" / "state.json"
+    cambridge = load_settings(EnvChoice(DEFAULT_ENV, base_env), environ={})
+    assert cambridge.state_path == REPO_ROOT / ".camsocs-state.json"
+
+
+def test_a_campus_flag_contradicting_the_env_file_is_refused(base_env, zz_campus) -> None:
+    base_env.write_text(base_env.read_text() + "CAMSOCS_CAMPUS=cam\n")
+    with pytest.raises(ConfigError, match="--campus zz disagrees with CAMSOCS_CAMPUS=cam"):
+        load_settings(EnvChoice(DEFAULT_ENV, base_env), environ={}, campus="zz")
+
+
+def test_a_named_env_file_of_another_campus_states_it(tmp_path, base_env, zz_campus) -> None:
+    deployment = "CONVEX_HTTP_URL=https://calm-heron-42.convex.site\nPIPELINE_API_KEY=zz-key\n"
+    env_file = tmp_path / ".env.zz-prod"
+    env_file.write_text(deployment)
+    with pytest.raises(ConfigError, match=r"\.env\.zz-prod must state CAMSOCS_CAMPUS=zz"):
+        load_settings(EnvChoice("zz-prod", env_file), environ={}, campus="zz")
+
+    env_file.write_text(deployment + "CAMSOCS_CAMPUS=zz\n")
+    settings = load_settings(EnvChoice("zz-prod", env_file), environ={})
+    assert settings.campus == "zz"
+    assert settings.staging_dir == REPO_ROOT / "var" / "campus" / "zz" / "staging"
+    assert settings.state_path == REPO_ROOT / ".camsocs-state.zz-prod.json"
+    # The same campus named twice is fine; another one is not.
+    assert load_settings(EnvChoice("zz-prod", env_file), environ={}, campus="zz").campus == "zz"
+    with pytest.raises(ConfigError, match="--campus cam disagrees with CAMSOCS_CAMPUS=zz"):
+        load_settings(EnvChoice("zz-prod", env_file), environ={}, campus="cam")
+
+
+def test_a_shell_campus_may_not_override_the_env_file(
+    tmp_path, base_env, zz_campus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env_file = tmp_path / ".env.zz-prod"
+    env_file.write_text(
+        "CONVEX_HTTP_URL=https://calm-heron-42.convex.site\nPIPELINE_API_KEY=zz-key\n"
+        "CAMSOCS_CAMPUS=zz\n"
+    )
+    monkeypatch.setenv("CAMSOCS_CAMPUS", "cam")
+    with pytest.raises(ConfigError, match="would override"):
+        load_settings(EnvChoice("zz-prod", env_file))
+
+
+def test_a_campus_flag_contradicting_the_shell_is_refused(
+    base_env, zz_campus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CAMSOCS_CAMPUS", "cam")
+    with pytest.raises(ConfigError, match="in the shell"):
+        load_settings(EnvChoice(DEFAULT_ENV, base_env), campus="zz")
+
+
+def test_a_cambridge_env_file_needs_no_campus(tmp_path, base_env) -> None:
+    env_file = tmp_path / ".env.prod"
+    env_file.write_text(
+        "CONVEX_HTTP_URL=https://calm-heron-42.convex.site\nPIPELINE_API_KEY=prod-key\n"
+    )
+    settings = load_settings(EnvChoice("prod", env_file), environ={})
+    assert settings.campus == "cam"
+    assert "campus" not in settings.model_fields_set
+
+
+def test_the_user_agent_rule_reads_the_campus_about_page(zz_campus, caplog) -> None:
+    settings = Settings(_env_file=None, campus="zz", user_agent=DOCUMENTED_USER_AGENT)
+    with caplog.at_level("WARNING"):
+        assert settings.require_user_agent() == DOCUMENTED_USER_AGENT
+    # Cambridge's documented User-Agent does not link zz's About page.
+    assert zz_campus.branding.about_url in caplog.text

@@ -1,6 +1,8 @@
 """PostHog dashboards as code (ENG-10, `ops/posthog/dashboards.py`): the
 payloads it builds, and that `--apply` creates or updates by name against a
-fake PostHog (an in-memory opener here, never the network).
+fake PostHog (an in-memory opener here, never the network). Every harvest
+insight leaves out dry runs and breaks down by campus (D8), and the
+scraper-health dashboard reads the counters the pipeline actually sends (L6).
 """
 
 from __future__ import annotations
@@ -16,6 +18,9 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+
+from camsocs_pipeline import monitor
+from camsocs_pipeline.fetch_stats import CLASS_COUNTERS, EXTRA_COUNTERS
 
 REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "ops" / "posthog" / "dashboards.py"
@@ -46,12 +51,13 @@ def ids(pairs) -> list[str]:
 # --- the payloads -------------------------------------------------------------------------
 
 
-def test_there_are_four_dashboards() -> None:
+def test_there_are_five_dashboards() -> None:
     assert [d.name for d in dashboards.DASHBOARDS] == [
         "camsocs: Traffic",
         "camsocs: Content",
         "camsocs: Search",
         "camsocs: Reliability",
+        "camsocs: Scraper health",
     ]
     assert "accepted analytics" in dashboards.TRAFFIC.description
 
@@ -83,14 +89,7 @@ def test_insight_names_are_unique_on_each_dashboard() -> None:
 
 
 def events_used() -> set[str]:
-    found: set[str] = set()
-    for _dashboard, insight in ALL:
-        source = insight.query["source"]
-        if source["kind"] == "TrendsQuery":
-            found.update(series["event"] for series in source["series"])
-        else:
-            found.update(re.findall(r"event = '([^']+)'", source["query"]))
-    return found
+    return set().union(*(events_of(insight) for _dashboard, insight in ALL))
 
 
 def test_the_dashboards_cover_the_taxonomy_and_the_server_events() -> None:
@@ -107,7 +106,10 @@ def test_the_dashboards_cover_the_taxonomy_and_the_server_events() -> None:
         "$exception",
         "harvest_run_finished",
         "harvest_stage_completed",
+        "harvest_source_fetched",
         "$ai_generation",
+        "$ai_trace",
+        "$ai_span",
         "listing_request_received",
     }
 
@@ -133,6 +135,20 @@ ALLOWED_PROPERTIES = {
     "$ai_latency",
     "$ai_is_error",
     "$lib",
+    # Harvest events (telemetry.py): ids, enums and counts.
+    "campus",
+    "dryRun",
+    "runKey",
+    "group",
+    "pillar",
+    "hostClass",
+    "inserted",
+    "updated",
+    "unchanged",
+    "yield",
+    "metrics",
+    "$ai_trace_id",
+    *CLASS_COUNTERS,
 }
 
 
@@ -140,6 +156,8 @@ def properties_read(insight) -> set[str]:
     source = insight.query["source"]
     if source["kind"] == "TrendsQuery":
         read = {s["math_property"] for s in source["series"] if "math_property" in s}
+        for condition in source.get("properties", []):
+            read |= set(re.findall(r"properties\.(\$?\w+)", condition["key"]))
         breakdown = source.get("breakdownFilter", {})
         if breakdown.get("breakdown_type") == "hogql":
             read |= set(re.findall(r"properties\.(\$?\w+)", breakdown["breakdown"]))
@@ -172,6 +190,98 @@ def test_exceptions_split_browser_from_server() -> None:
     breakdown = exceptions.query["source"]["breakdownFilter"]
     assert breakdown["breakdown_type"] == "hogql"
     assert "distinct_id = 'camsocs-server'" in breakdown["breakdown"]
+
+
+# --- harvest insights: dry runs out, campus in (D8) -----------------------------------------
+
+
+def events_of(insight) -> set[str]:
+    """The events an insight counts: its series, or the names its SQL compares."""
+    source = insight.query["source"]
+    if source["kind"] == "TrendsQuery":
+        return {series["event"] for series in source["series"]}
+    query = source["query"]
+    found = set(re.findall(r"event = '([^']+)'", query))
+    for listed in re.findall(r"event IN \(([^)]*)\)", query):
+        found.update(re.findall(r"'([^']+)'", listed))
+    return found
+
+
+HARVEST_INSIGHTS = [
+    (d, i)
+    for d, i in ALL
+    if d is dashboards.SCRAPER_HEALTH or any(e.startswith("harvest_") for e in events_of(i))
+]
+
+
+def test_the_harvest_insights_are_the_reliability_ones_and_every_scraper_health_tile() -> None:
+    assert [i.name for d, i in HARVEST_INSIGHTS if d is dashboards.RELIABILITY] == [
+        "Harvest runs by status",
+        "Harvest stage duration per day (average, by stage)",
+        "Harvest stages (30 days)",
+    ], "names unchanged, so --apply updates them in place"
+    assert len(HARVEST_INSIGHTS) == 3 + len(dashboards.SCRAPER_HEALTH.insights)
+
+
+@pytest.mark.parametrize("dashboard, insight", HARVEST_INSIGHTS, ids=ids(HARVEST_INSIGHTS))
+def test_every_harvest_insight_leaves_out_dry_runs_and_breaks_down_by_campus(
+    dashboard, insight
+) -> None:
+    source = insight.query["source"]
+    campus = "ifNull(properties.campus, 'cam')"
+    if source["kind"] == "TrendsQuery":
+        assert {"type": "hogql", "key": dashboards.NOT_DRY_RUN} in source["properties"]
+        breakdown = source["breakdownFilter"]
+        assert breakdown["breakdown_type"] == "hogql"
+        assert breakdown["breakdown"].startswith(f"concat({campus}, ")
+    else:
+        query = source["query"]
+        assert query.count(dashboards.NOT_DRY_RUN) == query.count(" FROM events WHERE ") >= 1
+        assert f"{campus} AS campus" in query
+        assert re.search(r"(GROUP BY|SELECT) [^)]*\bcampus\b", query)
+
+
+def test_the_harvest_expressions_match_the_monitors() -> None:
+    """The dashboards are standard-library only, so they cannot import the
+    monitor; the shared expressions must still agree."""
+    assert f" AND {dashboards.NOT_DRY_RUN}" == monitor.NOT_DRY_RUN
+    assert monitor.YIELD == dashboards.YIELD
+    assert dict(monitor.GROUP_TIME_LIMIT_S) == dict(dashboards.GROUP_TIME_LIMIT_S)
+    assert monitor.campus_filter("cam") == f" AND {dashboards.CAMPUS} = 'cam'"
+
+
+def test_the_scraper_health_dashboard_has_the_specified_tiles() -> None:
+    assert [i.name for i in dashboards.SCRAPER_HEALTH.insights] == [
+        "Yield against the 7/28-day median",
+        "Hours since the last productive run",
+        "Fetch outcomes per stage per day",
+        "HTTP status class by host class",
+        "Robots blocks and overrides per week",
+        "Retries, 429s and wait",
+        "Run duration against the limit by group",
+        "Stage duration p50/p90 weekly",
+        "LLM generations against cache hits",
+        "Traces per run",
+    ]
+    yield_tile = dashboards.SCRAPER_HEALTH.insights[0].query["source"]["query"]
+    assert yield_tile.startswith("SELECT campus, stage, pillar, latest,")
+    assert all(f" AS {column}" in yield_tile for column in ("median", "ratio", "runs"))
+
+
+def test_scraper_health_reads_only_counters_the_pipeline_sends() -> None:
+    sent = set(CLASS_COUNTERS) | set(EXTRA_COUNTERS)
+    for insight in dashboards.SCRAPER_HEALTH.insights:
+        query = insight.query["source"]["query"]
+        for name in re.findall(r"properties\.metrics\.(\w+)", query):
+            assert name in sent, (insight.name, name)
+        for name in re.findall(r"properties\.(fetch\w+)", query):
+            assert name in CLASS_COUNTERS, (insight.name, name)
+
+
+def test_the_run_duration_tile_uses_the_runners_limits() -> None:
+    [tile] = [i for i in dashboards.SCRAPER_HEALTH.insights if i.name.startswith("Run duration")]
+    query = tile.query["source"]["query"]
+    assert "run_group = 'events', 7200" in query and "run_group = 'full', 21600" in query
 
 
 def test_an_sql_insight_without_the_filters_placeholder_is_refused() -> None:

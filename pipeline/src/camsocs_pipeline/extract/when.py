@@ -22,6 +22,13 @@ module turns that into instants:
 Anything implausible (more than two weeks before the anchor — usually a recap
 of a past event — or more than ~13 months after) is refused with a reason
 rather than guessed.
+
+**Campus** (decision D8): the term dates, the weekday a student week starts
+on, the term codes of a week label and the place and week rule the prompt's
+calendar line names are the active campus's (`campuses.active().terms`). The
+constants below are Cambridge's, which its profile imports; for Cambridge
+every date, label and calendar line is byte-identical (the calendar line is
+memo-key material: tests/test_calendar_context_snapshot.py).
 """
 
 from __future__ import annotations
@@ -30,9 +37,13 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from camsocs_pipeline.models.wire import TermDate
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.campuses.profile import TermCalendar as CampusTerms
 
 LONDON = ZoneInfo("Europe/London")
 
@@ -45,6 +56,8 @@ WEEKDAYS: tuple[str, ...] = (
     "saturday",
     "sunday",
 )
+#: Cambridge's student week starts on a Thursday (its profile's
+#: `week_start_weekday`; the runtime reads the active campus's).
 _THURSDAY = 3
 #: Full names, three-letter forms and the common British abbreviations.
 _WEEKDAY_FORMS: dict[str, str] = {
@@ -68,8 +81,17 @@ MAX_DAYS_AFTER_ANCHOR = 400
 #: A term still counts as "the current one" this long after Full Term ends.
 TERM_GRACE_DAYS = 3
 
+#: Cambridge's term codes (its profile's `codes`; the runtime reads the active campus's).
 _TERM_PREFIX = {"michaelmas": "MT", "lent": "LT", "easter": "ET"}
 _HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+
+
+def _campus_terms() -> CampusTerms:
+    """The active campus's term model. Imported here, not at the top: the
+    campus profiles are built from this module's constants."""
+    from camsocs_pipeline.campuses import active
+
+    return active().terms
 
 
 def normalise_weekday(value: str | None) -> str | None:
@@ -99,11 +121,15 @@ class Term:
     term: str
     start: date
     end: date
+    #: Python ``weekday()`` a student week starts on (Cambridge: Thursday).
+    week_start_weekday: int = _THURSDAY
+    #: The term's code in a week label (``MT``); None: Cambridge's `_TERM_PREFIX`.
+    code: str | None = None
 
     @property
     def week1_start(self) -> date:
-        """The first Thursday of Full Term."""
-        return self.start + timedelta(days=(_THURSDAY - self.start.weekday()) % 7)
+        """The first week-start day (Cambridge: Thursday) of Full Term."""
+        return self.start + timedelta(days=(self.week_start_weekday - self.start.weekday()) % 7)
 
     @property
     def last_week(self) -> int:
@@ -114,12 +140,13 @@ class Term:
         return self.start.year
 
     def week_start(self, week: int) -> date:
-        """The Thursday that begins `week` (Week 0 is the week before Week 1)."""
+        """The day (Cambridge: Thursday) that begins `week` (Week 0 is the
+        week before Week 1)."""
         return self.week1_start + timedelta(days=7 * (week - 1))
 
     def date_of(self, week: int, weekday: str) -> date:
-        """The `weekday` of term week `week` (weeks run Thursday → Wednesday)."""
-        offset = (WEEKDAYS.index(weekday) - _THURSDAY) % 7
+        """The `weekday` of term week `week` (Cambridge weeks run Thursday → Wednesday)."""
+        offset = (WEEKDAYS.index(weekday) - self.week_start_weekday) % 7
         return self.week_start(week) + timedelta(days=offset)
 
     def week_of(self, day: date) -> int | None:
@@ -131,7 +158,8 @@ class Term:
 
     def label(self, week: int) -> str:
         """`MT26 Wk 3` — the same label Convex derives (data-model §6)."""
-        return f"{_TERM_PREFIX[self.term]}{self.calendar_year % 100:02d} Wk {week}"
+        code = self.code if self.code is not None else _TERM_PREFIX[self.term]
+        return f"{code}{self.calendar_year % 100:02d} Wk {week}"
 
     def describe(self) -> str:
         return (
@@ -146,9 +174,11 @@ def _long(day: date) -> str:
 
 
 class TermCalendar:
-    """The verified Full Terms, in order (`seeds.term_dates.TERM_DATES`)."""
+    """The verified Full Terms, in order (Cambridge: `seeds.term_dates.TERM_DATES`),
+    under a campus's term model (`rules`; default: the active campus's)."""
 
-    def __init__(self, terms: Iterable[TermDate]) -> None:
+    def __init__(self, terms: Iterable[TermDate], rules: CampusTerms | None = None) -> None:
+        self.rules: CampusTerms = rules if rules is not None else _campus_terms()
         self.terms: list[Term] = sorted(
             (
                 Term(
@@ -156,6 +186,8 @@ class TermCalendar:
                     term=t.term,
                     start=date.fromisoformat(t.full_term_start),
                     end=date.fromisoformat(t.full_term_end),
+                    week_start_weekday=self.rules.week_start_weekday,
+                    code=self.rules.codes[t.term],
                 )
                 for t in terms
             ),
@@ -164,9 +196,9 @@ class TermCalendar:
 
     @classmethod
     def default(cls) -> TermCalendar:
-        from camsocs_pipeline.seeds.term_dates import TERM_DATES
-
-        return cls(TERM_DATES)
+        """The active campus's verified terms (Cambridge: `TERM_DATES`)."""
+        rules = _campus_terms()
+        return cls(rules.dates, rules)
 
     def term_for(self, anchor: date) -> Term | None:
         """The term a bare "Week N" written on `anchor` refers to: the first term
@@ -201,9 +233,8 @@ class TermCalendar:
         if term is not None:
             week = term.week_of(anchor)
             where = f" It is in Week {week} of that term." if week is not None else ""
-            lines.append(
-                f"Cambridge {term.describe()}. A student week runs Thursday to Wednesday.{where}"
-            )
+            rules = self.rules
+            lines.append(f"{rules.prompt_place} {term.describe()}. {rules.prompt_hint}{where}")
         return " ".join(lines)
 
 
@@ -268,7 +299,7 @@ def _resolve_day(
             raise Unresolvable(f"not an ISO date: {spec.date!r}") from error
     weekday = normalise_weekday(spec.weekday)
     if spec.term_week is not None:
-        if not MIN_TERM_WEEK <= spec.term_week <= MAX_TERM_WEEK:
+        if not calendar.rules.min_week <= spec.term_week <= calendar.rules.max_week:
             raise Unresolvable(f"no such term week: {spec.term_week}")
         if weekday is None:
             raise Unresolvable(f"Week {spec.term_week} without a weekday")
@@ -288,11 +319,13 @@ def _resolve_day(
 
 
 def week_anchor(day: date) -> date:
-    """The Thursday that starts `day`'s student week (weeks run Thursday to
-    Wednesday). LLM stages give the model this as the reference date rather
-    than the day itself, so a page or card read again within the week asks
-    nothing new (`extract.memo` keys on the whole request)."""
-    return day - timedelta(days=(day.weekday() - _THURSDAY) % 7)
+    """The day that starts `day`'s student week on the active campus
+    (Cambridge: the Thursday; weeks run Thursday to Wednesday). LLM stages
+    give the model this as the reference date rather than the day itself, so
+    a page or card read again within the week asks nothing new
+    (`extract.memo` keys on the whole request)."""
+    start = _campus_terms().week_start_weekday
+    return day - timedelta(days=(day.weekday() - start) % 7)
 
 
 def term_of_dates(days: Iterable[date], calendar: TermCalendar) -> Term | None:

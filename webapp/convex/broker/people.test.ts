@@ -16,6 +16,7 @@ import { nameHash, suppressionKey } from "../lib/suppressions"
 
 const BROKER = "broker@example.com"
 const NOW = Date.now()
+const DAY = 86_400_000
 const LIMIT = nextHandoverDate(NOW)
 const OWN_PAGE = "https://www.quokkafaith.example.org/committee"
 
@@ -338,6 +339,169 @@ describe("broker.people: suppressions", () => {
           role: "Secretary",
         }),
       ).rejects.toThrow("removed on request")
+    })
+  })
+})
+
+/**
+ * A society whose website's latest reading failed (production, 2026-11-04:
+ * 67 officers of 4 college bodies, read from the bodies' own sites, were
+ * flagged once one `colleges.home` reading recorded the site `missing`
+ * (unreachable or 404) and so blanked the recorded `website`). The site it
+ * was last found at is still its own, so those rows meet the rules; a page
+ * anywhere else does not, and `removeOffSiteSensitiveOfficers` removes such
+ * pipeline rows (dry run first).
+ */
+describe("broker.people: officers when the society's website reading failed", () => {
+  const JCR_SITE = "https://jcr.quokka.example.org/"
+  const JCR_PAGE = "https://jcr.quokka.example.org/committee"
+
+  function reading(field: string, value: unknown, at: number, extra: Partial<ClaimInput> = {}) {
+    return {
+      ...claim("org-jcr", field, value),
+      sourceKey: "src-jcr-home",
+      sourceUrl: JCR_SITE,
+      retrievedAt: at,
+      ...extra,
+    }
+  }
+
+  /** The JCR's site found, then unreachable on a later run (same page). */
+  async function seedJcr(t: TestConvex) {
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        reading("name", "Quokka College JCR", NOW - 3 * DAY),
+        reading("categories", ["identity_wellbeing"], NOW - 3 * DAY),
+        reading("website", JCR_SITE, NOW - 3 * DAY),
+      ],
+    })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        reading("website", undefined, NOW - DAY, {
+          status: "missing",
+          missingReason: "unreachable",
+        }),
+      ],
+    })
+  }
+
+  const pipelinePerson = (name: string, sourceUrl: string, orgKey = "org-jcr") => ({
+    key: personKey(orgKey, name),
+    orgKey,
+    name,
+    role: "Welfare Officer",
+    sourceUrl,
+    seenAt: NOW - 2 * DAY,
+    method: "llm" as const,
+  })
+
+  test("the site it was last found at still counts as its own", async () => {
+    await asBroker(async (t, broker) => {
+      await seedJcr(t)
+      const rules = await broker.query(api.broker.people.rules, { orgKey: "org-jcr" })
+      expect(rules).toMatchObject({
+        sensitiveBecause: ["Identity, Community & Wellbeing"],
+        website: JCR_SITE,
+      })
+      await t.mutation(internal.ingest.broker.ingest, {
+        people: [pipelinePerson("Jo Example", JCR_PAGE)],
+      })
+      const listed = (await broker.query(api.broker.people.list, {})).find(
+        (p) => p.name === "Jo Example",
+      )
+      expect(listed?.sensitiveProblem).toBeNull()
+      expect(await t.query(internal.coverage.sensitiveOfficers, {})).toMatchObject({
+        sensitive: 1,
+        withProblem: 0,
+      })
+      // By hand too, from that site only.
+      await broker.mutation(api.broker.people.create, {
+        orgKey: "org-jcr",
+        name: "Kit Example",
+        role: "Chair",
+        sourceUrl: JCR_PAGE,
+      })
+      await expect(
+        broker.mutation(api.broker.people.create, {
+          orgKey: "org-jcr",
+          name: "Lou Example",
+          role: "Chair",
+          sourceUrl: "https://elsewhere.example.org/committee",
+        }),
+      ).rejects.toThrow("Give the page of jcr.quokka.example.org")
+    })
+  })
+
+  test("a society that never had a website found has none to fall back on", async () => {
+    await asBroker(async (t, broker) => {
+      await t.mutation(internal.ingest.broker.ingest, {
+        people: [pipelinePerson("Max Example", "https://pride.example.org/team", "org-pride")],
+      })
+      const listed = (await broker.query(api.broker.people.list, {})).find(
+        (p) => p.name === "Max Example",
+      )
+      expect(listed?.sensitiveProblem).toContain("no website on record")
+      expect(
+        (await broker.query(api.broker.people.rules, { orgKey: "org-pride" }))?.website,
+      ).toBeUndefined()
+    })
+  })
+
+  test("removeOffSiteSensitiveOfficers: a dry run counts, apply deletes pipeline rows only", async () => {
+    await asBroker(async (t, broker) => {
+      await seedJcr(t)
+      await t.mutation(internal.ingest.broker.ingest, {
+        people: [
+          pipelinePerson("Jo Example", JCR_PAGE),
+          pipelinePerson("Ned Example", "https://www.cambridgesu.co.uk/organisation/quokka"),
+          pipelinePerson("Ola Example", "https://pride.example.org/team", "org-pride"),
+          pipelinePerson("Pia Example", "https://chess.example.org/committee", "org-chess"),
+        ],
+      })
+      // A broker's own row from elsewhere (stored before the guard) is left.
+      const legacy = await broker.mutation(api.broker.people.create, {
+        ...officer,
+        name: "Quin Example",
+        sourceUrl: OWN_PAGE,
+      })
+      await t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("people")
+          .withIndex("by_key", (q) => q.eq("key", legacy.key))
+          .unique()
+        if (row) await ctx.db.patch("people", row._id, { sourceUrl: "https://example.com/x" })
+      })
+      const expected = {
+        complete: true,
+        people: 5,
+        sensitive: 4,
+        offSite: 2,
+        societies: 2,
+        leftForReview: 1,
+        otherProblems: 0,
+      }
+      const names = async () =>
+        (await broker.query(api.broker.people.list, {})).map((p) => p.name).sort()
+      const before = await names()
+
+      const dry = await t.mutation(internal.retention.removeOffSiteSensitiveOfficers, {})
+      expect(dry).toEqual({ ...expected, applied: false, deleted: 0 })
+      expect(await names()).toEqual(before)
+
+      const applied = await t.mutation(internal.retention.removeOffSiteSensitiveOfficers, {
+        apply: true,
+      })
+      expect(applied).toEqual({ ...expected, applied: true, deleted: 2 })
+      expect(await names()).toEqual(["Jo Example", "Pia Example", "Quin Example"])
+      expect(await t.query(internal.coverage.sensitiveOfficers, {})).toMatchObject({
+        withProblem: 1, // the broker's own row, for Joshua
+        societiesWithProblem: 1,
+      })
+
+      // Idempotent: nothing left to remove.
+      expect(
+        await t.mutation(internal.retention.removeOffSiteSensitiveOfficers, { apply: true }),
+      ).toMatchObject({ offSite: 0, deleted: 0, leftForReview: 1 })
     })
   })
 })

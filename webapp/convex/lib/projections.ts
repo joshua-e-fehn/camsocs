@@ -457,6 +457,10 @@ const eventOrganiserValidator = v.object({
   slug: v.string(),
   name: v.string(),
   role: literalUnion(EVENT_ORGANISER_ROLES),
+  /** The organisation's own website (http(s) only), on an event's page
+   * (`eventPublic`) for its JSON-LD `organizer.url` (Search Console,
+   * 2026-11-07). Never in a list. */
+  website: v.optional(v.string()),
 })
 
 /**
@@ -589,6 +593,26 @@ async function eventOrganisers(
   return organisers
 }
 
+/** Each organiser with its own website, when it has an http(s) one: an
+ * event page's JSON-LD names it as `organizer.url`. One read per organiser,
+ * on one event's page only. */
+async function withWebsites(
+  ctx: QueryCtx,
+  organisers: EventPublic["organisers"],
+): Promise<EventPublic["organisers"]> {
+  return Promise.all(
+    organisers.map(async (organiser) => {
+      const org = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", organiser.key))
+        .unique()
+      return org?.website && isHttpUrl(org.website)
+        ? { ...organiser, website: org.website }
+        : organiser
+    }),
+  )
+}
+
 /** The page a visitor may follow: none for mail (a private inbox), never a non-http value. */
 function eventSourceUrl(event: Doc<"events">): string | undefined {
   return event.source === "mailing_list" || !isHttpUrl(event.sourceUrl)
@@ -651,7 +675,7 @@ export async function eventPublic(
   event: Doc<"events">,
   lookup: ReturnType<typeof orgRefCache>,
 ): Promise<EventPublic> {
-  const organisers = await eventOrganisers(event, lookup)
+  const organisers = await withWebsites(ctx, await eventOrganisers(event, lookup))
   return {
     key: event.key,
     title: event.title,

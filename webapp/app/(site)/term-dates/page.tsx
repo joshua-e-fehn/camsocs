@@ -1,18 +1,27 @@
 import { CalendarOffIcon } from "lucide-react"
 import type { Metadata } from "next"
+import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { ExternalLink } from "@/components/molecules/external-link"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { formatDayShort } from "@/lib/calendar"
+import { CATEGORIES_PATH } from "@/lib/directory-hubs"
 import { pageMetadata } from "@/lib/page-metadata"
 import { DISCLAIMER } from "@/lib/site"
 import {
   academicYearLabel,
   byAcademicYear,
   formatDayWithYear,
+  leadingYear,
+  nextTerm,
+  termAnswer,
+  termDatesDescription,
+  termDatesTitle,
+  termSeasons,
   termTitle,
   termWeeks,
+  upcomingTerms,
 } from "@/lib/term-calendar"
 import { fetchTermDates } from "@/lib/term-dates"
 import { startsIn, TEACHING_WEEKS, TERM_NAMES, termClock, weekOfTerm } from "@/lib/term-week"
@@ -41,23 +50,14 @@ async function loadRows(): Promise<Rows | null> {
   }
 }
 
-/** The academic year whose dates lead the page: the one the current or next
- * term belongs to, else the latest. */
-function currentYear(rows: Rows, now: number): string | undefined {
-  const clock = termClock(now, rows)
-  const start = clock.kind === "term" ? clock.fullTermStart : clock.next?.fullTermStart
-  return rows.find((row) => row.fullTermStart === start)?.academicYear ?? rows.at(-1)?.academicYear
-}
-
 export async function generateMetadata(): Promise<Metadata> {
   const rows = await loadRows()
-  const year = rows && rows.length > 0 ? currentYear(rows, Date.now()) : undefined
+  const now = Date.now()
+  // Title and description carry the dates themselves (lib/term-calendar.ts),
+  // so a search result answers "when is Lent 2027?" before the click.
   const metadata = pageMetadata({
-    title: year
-      ? `Cambridge term dates ${academicYearLabel(year)}: what week is it?`
-      : "Cambridge term dates: what week is it?",
-    description:
-      "Cambridge Full Term dates for Michaelmas, Lent and Easter, the week of term today and when each week starts, from the University's published dates.",
+    title: termDatesTitle(rows ?? [], now),
+    description: termDatesDescription(rows ?? [], now),
     path: "/term-dates",
   })
   return rows && rows.length > 0 ? metadata : { ...metadata, robots: { index: false } }
@@ -93,7 +93,11 @@ export default async function TermDatesPage() {
 
   const clock = termClock(now, rows)
   const years = byAcademicYear(rows)
-  const year = currentYear(rows, now)
+  const year = leadingYear(rows, now)
+  const yearTerms = years.find((entry) => entry.academicYear === year)?.terms ?? []
+  const next = nextTerm(rows, clock.date)
+  // The terms still to come or under way, as questions searchers ask.
+  const answers = upcomingTerms(rows, clock.date).slice(0, 3).map(termAnswer)
   // The term whose weeks are listed: the current one, else the next.
   const focusStart = clock.kind === "term" ? clock.fullTermStart : clock.next?.fullTermStart
   const focus = rows.find((row) => row.fullTermStart === focusStart)
@@ -104,7 +108,7 @@ export default async function TermDatesPage() {
       <div className="flex max-w-3xl min-w-0 flex-col gap-10">
         <header className="flex flex-col gap-3">
           <h1 className="font-serif text-4xl leading-tight font-normal tracking-[-0.02em] text-balance sm:text-5xl">
-            Cambridge term dates
+            Cambridge term dates{year ? ` ${academicYearLabel(year)}` : ""}
           </h1>
           <p className="text-lg text-muted-foreground">
             Full Term for Michaelmas, Lent and Easter
@@ -135,7 +139,24 @@ export default async function TermDatesPage() {
                 ? ` · Full Term from ${formatDayWithYear(clock.next.fullTermStart)}`
                 : ""}
           </p>
+          {clock.kind === "term" && next && (
+            <p className="text-sm text-muted-foreground">
+              Next: {TERM_NAMES[next.term]} Full Term starts {formatDayWithYear(next.fullTermStart)}
+              .
+            </p>
+          )}
         </section>
+
+        {answers.length > 0 && (
+          <ProseSection id="key-dates" title="Key dates">
+            {answers.map(({ id, question, answer }) => (
+              <div key={id} id={id} className="flex scroll-mt-20 flex-col gap-1">
+                <h3>{question}</h3>
+                <p>{answer}</p>
+              </div>
+            ))}
+          </ProseSection>
+        )}
 
         {years.map(({ academicYear, terms }) => (
           <section
@@ -236,6 +257,16 @@ export default async function TermDatesPage() {
           </section>
         )}
 
+        {yearTerms.length > 1 && (
+          <ProseSection id="terms" title="Three terms, not semesters">
+            <p>
+              The Cambridge academic year has three terms rather than two semesters:{" "}
+              {termSeasons(yearTerms)}. The tables above give each term’s Full Term, about eight
+              weeks long.
+            </p>
+          </ProseSection>
+        )}
+
         <ProseSection id="weeks" title="How Cambridge numbers its weeks">
           <p>
             Full Term starts on a Tuesday. <strong>Week 1</strong> begins on the first Thursday of
@@ -252,6 +283,27 @@ export default async function TermDatesPage() {
       </div>
 
       <aside className="flex flex-col gap-4 text-sm">
+        <nav aria-labelledby="plan-title" className="flex flex-col gap-2 rounded-xl border p-5">
+          <h2 id="plan-title" className="font-semibold">
+            Plan your term
+          </h2>
+          <ul className="flex flex-col gap-1.5 [&_a]:text-brand-text [&_a]:underline-offset-4 [&_a:hover]:underline">
+            <li>
+              <Link href="/events?preset=week">Events this week</Link>
+            </li>
+            {clock.kind === "term" && (
+              <li>
+                <Link href="/events?preset=term">Events for the rest of term</Link>
+              </li>
+            )}
+            <li>
+              <Link href="/societies">All societies and clubs</Link>
+            </li>
+            <li>
+              <Link href={CATEGORIES_PATH}>Societies by category</Link>
+            </li>
+          </ul>
+        </nav>
         <div className="flex flex-col gap-2 rounded-xl border p-5">
           <h2 className="font-semibold">Where these dates come from</h2>
           <p className="text-muted-foreground">

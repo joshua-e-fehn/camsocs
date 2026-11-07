@@ -118,6 +118,9 @@ describe("Privacy notice", () => {
     expect(what).toContain("person named in the title of a University event")
     // The Art 14 notice to societies (J7) has not gone out yet.
     expect(what).toContain("We are writing to every society we list")
+    // Group 5 of dpia-lite §4: societies with no address we can use (ENG-40).
+    expect(what).toContain("Some societies publish no address we can write to")
+    expect(what).toContain("this notice is how its committee is told")
   })
 
   test("names the VPS host, and says how the AI model is reached without implying a DPA", async () => {

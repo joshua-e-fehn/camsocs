@@ -4,7 +4,6 @@ import {
   descriptionAttribution,
   isInCambridge,
   isThinProfile,
-  jsonLdEvents,
   KIND_NOUNS,
   profileLead,
   profileSources,
@@ -13,8 +12,7 @@ import {
   societyJsonLd,
   societyTitle,
 } from "./directory-profile"
-import { eventHasStructuredData } from "./events"
-import type { EventListItem, OrgPublic } from "./public-api"
+import type { OrgPublic } from "./public-api"
 import { ORG_LEVELS, ORG_TYPES } from "./vocab"
 
 // Synthetic listings only.
@@ -347,56 +345,6 @@ describe("provenance (provenance-not-crawlable)", () => {
 })
 
 describe("societyJsonLd (org-jsonld-thin, jsonld-graph-breadcrumbs)", () => {
-  const listed = (key: string, overrides: Partial<EventListItem> = {}) =>
-    ({
-      key,
-      title: "Invented social",
-      visibility: "public",
-      status: "confirmed",
-      source: "ics",
-      allDay: false,
-      talksDerived: false,
-      ...overrides,
-    }) as EventListItem
-  const events = [
-    listed("evt-1"),
-    listed("evt-2", { visibility: "cam_only" }),
-    listed("evt-3", { source: "talks_cam", talksDerived: true }),
-    // Convex's verdict, from provenance this list item does not show.
-    listed("evt-4", { talksDerived: true }),
-  ]
-
-  test("links only public events not from talks.cam", () => {
-    expect(jsonLdEvents(events)).toEqual(["evt-1"])
-  })
-
-  test("links only events whose own page has the Event node (no dangling @id)", () => {
-    const candidates = [
-      listed("evt-read", { meta: { startsAt: { status: "found" } } }),
-      listed("evt-inferred", { meta: { startsAt: { status: "inferred" } } }),
-      listed("evt-tbc-title", { title: "Winter formal (date TBC)" }),
-      listed("evt-tbc-status", { status: "tbc" }),
-      // A day-long event read from its source has an Event node (a date).
-      listed("evt-all-day", { allDay: true }),
-      // A model's start is the source's dated words where the pipeline asked
-      // for a dated quote; an Instagram caption's or a parser's guess is not.
-      listed("evt-model-day", {
-        allDay: true,
-        meta: { startsAt: { status: "inferred", method: "llm", sourceType: "society_website" } },
-      }),
-      listed("evt-caption-guess", {
-        allDay: true,
-        meta: { startsAt: { status: "inferred", method: "llm", sourceType: "instagram_api" } },
-      }),
-      listed("evt-parser-guess", { meta: { startsAt: { status: "inferred", method: "parser" } } }),
-    ]
-    expect(jsonLdEvents(candidates)).toEqual(["evt-read", "evt-all-day", "evt-model-day"])
-    // The same predicate as the event page's, so the two can never disagree.
-    for (const event of candidates) {
-      expect(jsonLdEvents([event]).length === 1).toBe(eventHasStructuredData(event))
-    }
-  })
-
   test("types by org type; never an educational institution", () => {
     expect(schemaType("sports_club")).toBe("SportsOrganization")
     expect(schemaType("college_boat_club")).toBe("SportsOrganization")
@@ -421,7 +369,6 @@ describe("societyJsonLd (org-jsonld-thin, jsonld-graph-breadcrumbs)", () => {
       }),
       title: "Cambridge University Chess Club",
       description: "A lead.",
-      eventKeys: ["evt-1"],
     })
     const [page, organization, breadcrumbs] = data["@graph"] as Record<string, unknown>[]
     expect(page).toMatchObject({
@@ -454,8 +401,10 @@ describe("societyJsonLd (org-jsonld-thin, jsonld-graph-breadcrumbs)", () => {
         address: { "@type": "PostalAddress", addressLocality: "Cambridge", addressCountry: "GB" },
       },
       keywords: "Sport & Fitness",
-      event: [{ "@id": "https://camsocs.uk/events/evt-1#event" }],
     })
+    // Google reads Organization.event nodes as this page's Event items and
+    // never follows an @id (Search Console, 2026-11-07).
+    expect(organization).not.toHaveProperty("event")
     expect(organization).not.toHaveProperty("isPartOf")
     expect(organization).not.toHaveProperty("mainEntityOfPage")
     expect(breadcrumbs).toMatchObject({

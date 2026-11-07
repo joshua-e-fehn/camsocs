@@ -9,6 +9,9 @@ new event ids. So a reply is stored under
 inputs (and the prompt version) are unchanged.
 
 The cache lives under `var/` (gitignored): replies may quote list mail.
+
+Each hit and each stored reply is counted for the running stage
+(``llmCacheHits`` / ``llmGenerations``, `camsocs_pipeline.fetch_stats`).
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
+
+from camsocs_pipeline import fetch_stats
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +54,21 @@ class LLMMemo:
         path = self._path(prompt_version, key)
         try:
             stored = json.loads(path.read_text(encoding="utf-8"))
-            return schema.model_validate(stored["value"]), str(stored["model"])
+            value = schema.model_validate(stored["value"]), str(stored["model"])
         except FileNotFoundError:
             return None
         except (OSError, ValueError, KeyError, ValidationError) as error:
             logger.warning("Ignoring unreadable LLM cache entry %s (%s)", path, error)
             return None
+        fetch_stats.count("llmCacheHits")
+        return value
 
     def put(self, prompt_version: str, key: str, value: BaseModel, model: str) -> None:
         write_json_atomic(
             self._path(prompt_version, key),
             {"model": model, "value": value.model_dump(mode="json")},
         )
+        fetch_stats.count("llmGenerations")
 
 
 def write_json_atomic(path: Path, payload: object) -> None:

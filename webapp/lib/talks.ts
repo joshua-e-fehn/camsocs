@@ -419,7 +419,15 @@ export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, un
         }
       : {}),
     ...(department
-      ? { organizer: { "@type": "Organization", name: department.name ?? department.shortName } }
+      ? {
+          organizer: {
+            "@type": "Organization",
+            name: department.name ?? department.shortName,
+            // Google asks an organizer's `url` (Search Console, 2026-11-07):
+            // the department's own website, from the registry.
+            ...(department.website ? { url: department.website } : {}),
+          },
+        }
       : {}),
     ...(talk.series ? { superEvent: { "@type": "EventSeries", name: talk.series } } : {}),
   }

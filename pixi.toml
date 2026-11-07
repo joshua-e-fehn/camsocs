@@ -12,6 +12,7 @@
 ##   pixi run harvest-events [-- --env prod]      the daily events run (sync --group events)
 ##   pixi run prune-cache [-- --dry-run]      retention R7 for var/cache and staging
 ##   pixi run posthog-dashboards -- --dry-run | --validate | --apply   PostHog dashboards (ENG-10)
+##   pixi run pipeline-graph                  regenerate the pipeline graph JSON + docs/pipeline-map.md
 
 [workspace]
 name = "camsocs"
@@ -74,9 +75,17 @@ cmd = "python -m camsocs_pipeline.cli prune-cache"
 cwd = "pipeline"
 description = "Retention R7: delete var/cache files (and superseded staging) older than 90 days."
 
+[tasks.pipeline-graph]
+cmd = "python -m camsocs_pipeline.cli graph --json ../webapp/lib/generated/pipeline-graph.cam.json --mermaid ../docs/pipeline-map.md"
+cwd = "pipeline"
+# The stage registry as a graph (spec §5A): offline, deterministic. Re-run it
+# after changing a stage, a group or campuses/cam_sources.json and commit both
+# files; tests/test_graph_export.py fails while they are stale.
+description = "Regenerate webapp/lib/generated/pipeline-graph.cam.json and docs/pipeline-map.md."
+
 [tasks.posthog-dashboards]
 cmd = "python ops/posthog/dashboards.py"
-# The four PostHog dashboards as code (ENG-10): `-- --dry-run` prints the
+# The five PostHog dashboards as code (ENG-10): `-- --dry-run` prints the
 # JSON, `-- --validate` runs every query once (read-only), `-- --apply`
 # creates or updates them by name. Needs POSTHOG_PERSONAL_API_KEY and
 # POSTHOG_PROJECT_ID in the environment (docs/deploy.md "PostHog").

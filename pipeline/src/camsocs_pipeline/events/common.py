@@ -575,9 +575,36 @@ def count_organisers(observations: Iterable[EventObservation], tally: Tally) -> 
         tally.unresolved_organisers += len(observation.unresolved_organisers)
 
 
+_WORD = re.compile(r"[A-Za-z0-9]+")
+
+
+def dropped_metric(reason: str) -> str:
+    """A drop reason (code-defined text, `Tally.drop`) as a metric name:
+    ``"a room booking, not an event"`` → ``droppedARoomBookingNotAnEvent``
+    (letters and digits only, at most 64 characters)."""
+    words = "".join(word[:1].upper() + word[1:] for word in _WORD.findall(reason))
+    return ("dropped" + (words or "Other"))[:64]
+
+
+def tally_metrics(tally: Tally) -> dict[str, int]:
+    """The tally as named counts for `StageReport.metrics` (yield, L6)."""
+    metrics = {
+        "eventsStaged": tally.staged,
+        "venues": tally.venues,
+        "organisersResolved": tally.resolved_organisers,
+        "organisersUnresolved": tally.unresolved_organisers,
+        "linkInBio": tally.link_in_bio,
+    }
+    for reason, count in sorted(tally.dropped.items()):
+        name = dropped_metric(reason)
+        metrics[name] = metrics.get(name, 0) + count
+    return metrics
+
+
 def write_staging(ctx: StageContext, records: Sequence[Record], tally: Tally) -> None:
     """Writes the stage's records to ``<source_type>.events`` (one directory
-    per source type among them) and adds the stage notes."""
+    per source type among them) and adds the stage notes and the tally's
+    counts as metrics (`tally_metrics`)."""
     events = [r for r in records if isinstance(r, EventObservation)]
     tally.staged += len(events)
     count_organisers(events, tally)
@@ -591,6 +618,7 @@ def write_staging(ctx: StageContext, records: Sequence[Record], tally: Tally) ->
             events_directory(source_type), ctx.run.run_key, subset
         )
     ctx.report.notes.extend(tally.notes())
+    ctx.report.metrics.update(tally_metrics(tally))
 
 
 __all__ = [
@@ -606,6 +634,7 @@ __all__ = [
     "clean_text",
     "default_window",
     "describe_failure",
+    "dropped_metric",
     "fetch_info",
     "fetched_at",
     "finalise",
@@ -617,6 +646,7 @@ __all__ = [
     "polite_client",
     "redact_personal_emails",
     "single_line",
+    "tally_metrics",
     "withhold_personal_contacts",
     "write_staging",
 ]

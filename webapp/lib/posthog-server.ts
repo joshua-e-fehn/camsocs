@@ -1,6 +1,7 @@
 import { waitUntil } from "@vercel/functions"
 import type { Instrumentation } from "next"
 import { type EventMessage, PostHog, type PostHogOptions } from "posthog-node"
+import { currentCampus } from "@/lib/campus"
 import { isUntrackedPath } from "@/lib/consent"
 import { scrubErrorText, scrubExceptionProps, stripUrlTail } from "@/lib/error-scrub"
 
@@ -58,12 +59,16 @@ export function serverEnvironment(env: Env = process.env): "production" | "devel
  *  - `ics_feed_fetched` (ENG-7, `lib/ics-telemetry.ts`): `feed` is `talks`,
  *    `events`, `event` or `talk`; `key` the event or talk key, never the
  *    feed filters.
+ *  - `page_visit` (2026-11-07, proxy.ts, `lib/visit-count.ts`): `page` is a
+ *    kind of page (`VISIT_PAGES`), `source` a kind of referring site
+ *    (`VISIT_SOURCES`); never a path, key, query or full referrer.
  *
  * (`listing_request_received` is sent by Convex, `convex/analytics.ts`, not
  * from here.)
  */
 export const SERVER_EVENTS: Readonly<Record<string, readonly string[]>> = {
   ics_feed_fetched: ["feed", "key"],
+  page_visit: ["page", "source"],
 }
 
 /** Request facts an error report may carry (spec "Errors"), as PostHog /
@@ -78,7 +83,7 @@ export const ERROR_CONTEXT_PROPS = [
 ] as const
 
 /** Kept on every event: our tags, and what PostHog needs to place the event. */
-const BASE_PROPS = ["environment", "$process_person_profile", "$geoip_disable"] as const
+const BASE_PROPS = ["environment", "campus", "$process_person_profile", "$geoip_disable"] as const
 /** Kept on `$exception` besides the request facts: the exception itself and
  * the release its stack belongs to (source maps). */
 const EXCEPTION_PROPS = ["$exception_list", "$exception_level", "$release_id"] as const
@@ -175,7 +180,9 @@ export function serverEventProperties(
  * The client's `before_send`: the last word on what leaves the server.
  * Drops anything that is neither `$exception` nor a `SERVER_EVENTS` event,
  * pins the distinct id, keeps only allow-listed properties, scrubs the
- * exception list and turns person processing and GeoIP off.
+ * exception list, tags the campus this build serves (`campus`, decision D8;
+ * Convex's sender does the same, convex/lib/posthog.ts) and turns person
+ * processing and GeoIP off.
  */
 export function sanitizeServerEvent(
   message: EventMessage,
@@ -191,6 +198,7 @@ export function sanitizeServerEvent(
   const props: Record<string, unknown> = { ...message.properties }
   for (const key of Object.keys(props)) if (!keep.has(key)) delete props[key]
   if (isException) scrubExceptionProps(props)
+  props.campus = currentCampus().id
   props.$process_person_profile = false
   props.$geoip_disable = true
   return {

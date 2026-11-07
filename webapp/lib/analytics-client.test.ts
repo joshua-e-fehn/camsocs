@@ -419,6 +419,19 @@ describe("before_send", () => {
     expect(out?.properties.environment).toBe("test")
     expect(out?.properties.$geoip_disable).toBe(true)
   })
+
+  test("tags every event, ours too, with the campus this build serves", () => {
+    // Decision D8: `NEXT_PUBLIC_CAMPUS` is unset here, so the build serves
+    // Cambridge, and a spoofed value is overwritten.
+    expect(clean(pageview({ campus: "ox" }))?.properties.campus).toBe("cam")
+    const search = {
+      ...pageview({ surface: "talks", queryLength: 5, resultCount: 0 }),
+      event: "search_performed",
+    } as CaptureResult
+    expect(sanitizeEvent(search, { environment: "test", origin: ORIGIN })?.properties.campus).toBe(
+      "cam",
+    )
+  })
 })
 
 /** A browser error as posthog-js builds it (`$exception_list`, @posthog/core
@@ -606,7 +619,10 @@ describe("loading", () => {
     expect(loads).toBe(1)
     expect(calls.filter(([method]) => method === "init")).toEqual([["init", KEY]])
     expect(initConfig?.api_host).toBe("/relay")
-    expect(calls).toContainEqual(["register", { environment: "test", $geoip_disable: true }])
+    expect(calls).toContainEqual([
+      "register",
+      { environment: "test", campus: "cam", $geoip_disable: true },
+    ])
     expect(getPostHog()).toBe(fakePostHog as never)
   })
 

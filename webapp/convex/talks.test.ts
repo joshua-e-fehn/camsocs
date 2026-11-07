@@ -598,6 +598,8 @@ describe("public queries", () => {
     expect(one?.abstract).toBe("Abstract of 1")
     expect(one?.specialMessage).toBeNull()
     expect(one?.sourceUrl).toBe(talks.cst.sourceUrl)
+    // The page (not a list) names the department's website: its JSON-LD organizer.url.
+    expect(one?.departments[0]?.website).toBe(CST.website)
     expect(await t.query(api.talks.get, { key: talks.gone.key })).toBeNull()
     expect(await t.query(api.talks.get, { key: "talk-nope" })).toBeNull()
   })

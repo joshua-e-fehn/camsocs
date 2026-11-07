@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  ActivityIcon,
   ClipboardListIcon,
   FileWarningIcon,
   HandshakeIcon,
@@ -9,6 +10,7 @@ import {
   MessageSquareTextIcon,
   NetworkIcon,
   UsersIcon,
+  WorkflowIcon,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import type * as React from "react"
@@ -22,6 +24,8 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useBrokerAccess } from "@/hooks/convex"
+import { useOpenRequestCount } from "@/hooks/convex/broker"
 import { authClient } from "@/lib/auth-client"
 
 const teams = [{ name: "CAMsocs", logo: <UsersIcon />, plan: "Broker" }]
@@ -36,6 +40,8 @@ const SECTIONS = [
   { title: "Graph", url: "/dashboard/graph", icon: <NetworkIcon /> },
   { title: "Missing data", url: "/dashboard/reports", icon: <FileWarningIcon /> },
   { title: "Requests", url: "/dashboard/requests", icon: <InboxIcon /> },
+  { title: "Pipeline", url: "/dashboard/pipeline", icon: <WorkflowIcon /> },
+  { title: "Status", url: "/dashboard/status", icon: <ActivityIcon /> },
 ] as const
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -48,8 +54,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     avatar: session?.user?.image ?? "",
   }
 
+  // The sidebar is outside BrokerGate: ask for the count only as a broker.
+  const access = useBrokerAccess()
+  const openRequests = useOpenRequestCount(access?.isBroker === true)
+
   const items = SECTIONS.map((section) => ({
     ...section,
+    ...(section.url === "/dashboard/requests" && openRequests
+      ? { badge: openRequests, badgeLabel: "open requests" }
+      : {}),
     isActive:
       section.url === "/dashboard"
         ? pathname === "/dashboard"

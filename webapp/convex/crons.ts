@@ -18,6 +18,17 @@ import { internal } from "./_generated/api"
  *  - `talks-stats-daily` (00:10): the talks counts (this London week, next 28
  *    days, per department), which move with the day even when no run came
  *    (`refreshStats`; a finished sweep refreshes them too).
+ *  - `traffic-hourly` (:20): the broker overview's website traffic from
+ *    PostHog and Search Console (convex/traffic.ts); a no-op read where their
+ *    env vars are unset.
+ *  - `sitemaps-resubmit-daily` (06:10): after the 04:30 events harvest has
+ *    loaded, submits the sitemap index and `/events.atom` to Search Console
+ *    when an event was stored since their last submission, or weekly
+ *    (convex/searchConsole.ts); a no-op where the `GSC_*` vars are unset.
+ *  - `indexing-check-daily` (07:00): what Google says about every URL the
+ *    sitemaps list (URL Inspection, ≤ 1,400 a day, key pages daily) and our
+ *    own read of the key pages; the broker overview shows it and the VPS
+ *    monitor pages on its alerts (convex/indexing.ts).
  */
 const crons = cronJobs()
 
@@ -36,5 +47,14 @@ crons.daily(
   internal.ingest.talks.refreshStatsDaily,
   {},
 )
+
+crons.hourly("traffic-hourly", { minuteUTC: 20 }, internal.traffic.refresh, {})
+crons.daily(
+  "sitemaps-resubmit-daily",
+  { hourUTC: 6, minuteUTC: 10 },
+  internal.searchConsole.resubmit,
+  {},
+)
+crons.daily("indexing-check-daily", { hourUTC: 7, minuteUTC: 0 }, internal.indexing.run, {})
 
 export default crons

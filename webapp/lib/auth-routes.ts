@@ -34,6 +34,7 @@ export const PUBLIC_PATHS = [
   "/privacy",
   "/terms",
   "/term-dates",
+  "/colleges",
   "/guides",
 ] as const
 

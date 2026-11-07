@@ -10,6 +10,7 @@ import type { ClaimInput } from "../ingest/claims"
 import { requireBrokerUser } from "../lib/auth"
 import { brokerOrgRefs, orgRefValidator } from "../lib/brokerRows"
 import { withoutSystemFields } from "../lib/ingest"
+import { emailConfig, RELAY_STALE_MS } from "../lib/requestNotify"
 import { createSuppression } from "../lib/suppressionEffects"
 import {
   contactHash,
@@ -19,7 +20,8 @@ import {
   type SuppressionTarget,
 } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
-import { listingRequestFields } from "../schema"
+import { relayState, resend, startTest } from "../notifications"
+import { listingRequestFields, requestNotificationValidator } from "../schema"
 
 /**
  * The inbox of claim / correct / remove / object / add requests from the
@@ -78,6 +80,86 @@ export const list = query({
       })
     }
     return out
+  },
+})
+
+/** Open requests, for the sidebar's badge; counted up to `OPEN_CAP` (the
+ * badge then reads "99+"). */
+export const OPEN_CAP = 100
+
+export const openCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const rows = await ctx.db
+      .query("listingRequests")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "open"))
+      .take(OPEN_CAP)
+    return rows.length
+  },
+})
+
+/** Where new requests are announced (ENG-104): email from Convex when Resend
+ * is set up, Slack and WhatsApp through the VPS relay (Mya) when it has
+ * called recently. No secrets. */
+export const notificationChannels = query({
+  args: {},
+  returns: v.object({
+    email: v.boolean(),
+    relay: v.union(
+      v.null(),
+      v.object({
+        channels: v.array(v.union(v.literal("slack"), v.literal("whatsapp"))),
+        lastSeenAt: v.number(),
+        stale: v.boolean(),
+      }),
+    ),
+  }),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const relay = await relayState(ctx)
+    return {
+      email: emailConfig() !== null,
+      relay: relay ? { ...relay, stale: Date.now() - relay.lastSeenAt > RELAY_STALE_MS } : null,
+    }
+  },
+})
+
+/** Sends a request's notification again on every channel. */
+export const notifyAgain = mutation({
+  args: { key: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireBrokerUser(ctx)
+    await resend(ctx, await findRequest(ctx, args.key))
+    return null
+  },
+})
+
+/** Queues a synthetic request for every channel; returns its key, whose
+ * outcomes `notificationTest` reads as they arrive (the relay sends within
+ * about a minute). Nothing is stored as a request. */
+export const sendTestNotification = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    return await startTest(ctx)
+  },
+})
+
+/** A test's outcomes so far, per channel. */
+export const notificationTest = query({
+  args: { key: v.string() },
+  returns: v.union(v.null(), v.array(requestNotificationValidator)),
+  handler: async (ctx, { key }) => {
+    await requireBrokerUser(ctx)
+    const row = await ctx.db
+      .query("notificationTests")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique()
+    return row ? row.notifications : null
   },
 })
 

@@ -8,6 +8,7 @@ import {
   londonTime,
   spanEndOf,
 } from "./calendar"
+import { currentCampus } from "./campus"
 import type { CategoryTone } from "./category-tone"
 import { universityListingLine, utcStamp } from "./ics"
 import { summary } from "./rich-text"
@@ -245,9 +246,10 @@ type CalendarEvent = Timed & {
 }
 
 /** The University as the organiser of its own listings (ENG-24), in words
- * and in JSON-LD: a factual credit, never our branding. */
-export const UNIVERSITY_NAME = "University of Cambridge"
-const UNIVERSITY_URL = "https://www.cam.ac.uk"
+ * and in JSON-LD: a factual credit, never our branding. The campus's own
+ * (lib/campus, decision D8). */
+export const UNIVERSITY_NAME = currentCampus().university.name
+const UNIVERSITY_URL = currentCampus().university.url
 
 /** The words a calendar entry carries: who runs it (or takes part; for one
  * of the University's own listings, the programme and its page there), the
@@ -335,7 +337,7 @@ export function eventOutlookCalendarUrl(
  * has all of it; the tests pass less). */
 export type PageEvent = Omit<CalendarEvent, "organisers"> & {
   eventType: EventType
-  organisers: readonly (Organiser & { key?: string; slug?: string })[]
+  organisers: readonly (Organiser & { key?: string; slug?: string; website?: string })[]
   status?: string
   visibility?: string
   source: string
@@ -419,6 +421,13 @@ export function eventHasEnded(event: Timed, now: number): boolean {
 /** Whether search engines should drop the page: ended over 30 days ago (G4). */
 export function eventEndedLongAgo(event: Timed, now: number): boolean {
   return now - eventEnd(event) > ENDED_NOINDEX_MS
+}
+
+/** When search engines should stop showing an event's page: G4's moment,
+ * the end of `ENDED_NOINDEX_MS` after it ended, as ISO 8601 for the robots
+ * meta `unavailable_after` (lib/event-page.ts `eventMetadata`). */
+export function eventUnavailableAfter(event: Timed): string {
+  return new Date(eventEnd(event) + ENDED_NOINDEX_MS).toISOString()
 }
 
 /** A document title, at most this long with the " · CAMsocs" the layout's
@@ -639,9 +648,7 @@ function startIsStated(
  * "event-tbc-marked-scheduled"): only a public, confirmed event with a start
  * the source states (`startIsStated`) and whose title does not say "TBC" —
  * an Event rich result with a guessed date would mislead. Never a
- * talks.cam-derived event (owner decision G1). Over a list item too, so a
- * profile links by `@id` only the Event nodes that exist
- * (lib/directory-profile.ts `jsonLdEvents`).
+ * talks.cam-derived event (owner decision G1).
  */
 export function eventHasStructuredData(event: StructuredDataFacts): boolean {
   return (
@@ -670,8 +677,12 @@ function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
   const name = venue?.name ?? usableVenueText(event.venueText)
   if (!name) return undefined
   const local = placeIsInCambridge(venue, event.venueText)
+  // Google wants an address on every Place (Search Console, 2026-11-07). When
+  // neither a street address nor the town is known, it is the place as the
+  // source wrote it: no town is asserted that no source gave.
+  const street = venue?.address ?? (local ? undefined : name)
   const address = {
-    ...(venue?.address ? { streetAddress: venue.address } : {}),
+    ...(street ? { streetAddress: street } : {}),
     ...(local
       ? { addressLocality: "Cambridge", addressRegion: "Cambridgeshire", addressCountry: "GB" }
       : {}),
@@ -679,9 +690,7 @@ function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
   return {
     "@type": "Place",
     name,
-    ...(Object.keys(address).length > 0
-      ? { address: { "@type": "PostalAddress", ...address } }
-      : {}),
+    address: { "@type": "PostalAddress", ...address },
     ...(venue?.lat !== undefined && venue.lng !== undefined
       ? { geo: { "@type": "GeoCoordinates", latitude: venue.lat, longitude: venue.lng } }
       : {}),
@@ -769,18 +778,25 @@ export function eventJsonLd(
       ? { organizer: [{ "@type": "Organization", name: UNIVERSITY_NAME, url: UNIVERSITY_URL }] }
       : organizers.length > 0
         ? {
-            // A reference to the society's node on its profile, by `@id`.
-            // No `url` here: that node's `url` is the society's own website
-            // (lib/directory-profile.ts societyJsonLd), and one `@id` must not
-            // carry two (integration of the SEO audit lanes, 2026-11-02).
+            // A reference to the society's node on its profile, by `@id`,
+            // with the `url` Google asks of an organizer (Search Console,
+            // 2026-11-07): the society's own website, which is that node's
+            // `url` too (lib/directory-profile.ts societyJsonLd), so one
+            // `@id` never carries two (integration of the SEO audit lanes,
+            // 2026-11-02); else its profile here, the node having no `url`.
             organizer: organizers.map((organiser) =>
               organiser.slug
                 ? {
                     "@type": "Organization",
                     "@id": organizationId(organiser.slug),
                     name: organiser.name,
+                    url: organiser.website ?? pageId(`/societies/${organiser.slug}`),
                   }
-                : { "@type": "Organization", name: organiser.name },
+                : {
+                    "@type": "Organization",
+                    name: organiser.name,
+                    ...(organiser.website ? { url: organiser.website } : {}),
+                  },
             ),
           }
         : {}),

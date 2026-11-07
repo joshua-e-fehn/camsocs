@@ -7,7 +7,7 @@ import { linkProps } from "@/lib/crawl-traps"
 import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 
-const COLUMNS = [
+export const COLUMNS = [
   {
     title: "Browse",
     links: [
@@ -16,6 +16,8 @@ const COLUMNS = [
       { href: "/societies", label: "Societies and clubs" },
       { href: "/talks/departments", label: "Departments" },
       { href: "/term-dates", label: "Term dates" },
+      { href: "/colleges", label: "Colleges" },
+      { href: "/guides", label: "Guides" },
       { href: "/guides/join-a-society", label: "Joining a society" },
     ],
   },
@@ -34,7 +36,6 @@ const COLUMNS = [
     title: "CAMsocs",
     links: [
       { href: "/about", label: "How CAMsocs works" },
-      { href: "/guides", label: "Guides" },
       { href: "/privacy", label: "Privacy notice" },
       { href: "/terms", label: "Terms of use" },
     ],

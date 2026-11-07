@@ -329,6 +329,11 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     fake = FakeLLM(lambda _text, _tier: REPLY)
     monkeypatch.setattr(website, "LLMClient", lambda _settings: fake)
     monkeypatch.setattr(type(settings), "require_llm", lambda _self: None)
+    # The page's retrieval time anchors the year of a year-less date
+    # ("Thursday 15 October"), so the crawler's clock is pinned to NOW as
+    # well; the wall clock would move those dates into next year.
+    real_client = website.PoliteClient
+    monkeypatch.setattr(website, "PoliteClient", lambda **kw: real_client(**kw, now=lambda: NOW))
 
     website.run(ctx, now=NOW)
 

@@ -44,7 +44,8 @@ export function websiteJsonLd(): Record<string, unknown> {
         "@id": WEBSITE_ID,
         url: pageId("/"),
         name: SITE_NAME,
-        alternateName: [new URL(SITE_URL).host],
+        // No alternateName: the domain listed there invited Google to show
+        // "camsocs.uk" as the site name instead of CAMsocs (2026-11-07).
         description: SITE_DESCRIPTION,
         inLanguage: "en-GB",
         publisher: { "@id": PUBLISHER_ID },

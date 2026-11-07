@@ -6,6 +6,7 @@ import { londonIsoDate } from "@/lib/calendar"
 import {
   eventMetadata,
   loadEvent,
+  loadNextEvents,
   loadRepeatsThatDay,
   loadTerms,
   loadVenue,
@@ -74,7 +75,12 @@ export default async function EventRoute({ params }: Props) {
   const away = talksBoundaryRedirect(event, false)
   if (away) permanentRedirect(away)
 
-  const [terms, venue] = await Promise.all([loadTerms(), loadVenue(event.venueKey)])
+  const now = Date.now()
+  const [terms, venue, next] = await Promise.all([
+    loadTerms(),
+    loadVenue(event.venueKey),
+    loadNextEvents(event, now),
+  ])
   const structured = eventStructuredData(event, venue)
 
   return (
@@ -90,7 +96,8 @@ export default async function EventRoute({ params }: Props) {
         event={event}
         venueName={venueNameOf(event, venue)}
         termWeek={termWeekTag(londonIsoDate(event.startsAt), terms)}
-        now={Date.now()}
+        now={now}
+        nextEvents={next}
       />
     </>
   )

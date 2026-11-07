@@ -1,7 +1,10 @@
 "use client"
 
 import {
+  ArrowLeftIcon,
   BanIcon,
+  BellIcon,
+  BellRingIcon,
   CheckIcon,
   EyeIcon,
   EyeOffIcon,
@@ -10,7 +13,8 @@ import {
   UndoIcon,
 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import {
   AcceptCorrectionsDialog,
@@ -44,9 +48,12 @@ import {
   useBrokerOrgMutations,
   useBrokerSuppressions,
   useListingRequestMutations,
+  useNotificationTest,
+  useRequestNotifications,
   useSetListingRequestStatus,
 } from "@/hooks/convex/broker"
 import { formatDateTime, humanize } from "@/lib/broker/format"
+import { cn } from "@/lib/utils"
 import {
   LISTING_REQUEST_STATUSES,
   ORGANISATION_FIELD_LABELS,
@@ -73,15 +80,24 @@ const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
  * one made in error.
  */
 export function BrokerRequests() {
+  // `?request=<key>`: the link in a notification (ENG-104) opens that request.
+  const focus = useSearchParams().get("request")
   const [filter, setFilter] = useState<Filter>("open")
-  const requests = useBrokerListingRequests(filter === "all" ? undefined : filter)
+  const requests = useBrokerListingRequests(
+    focus || filter === "all" ? undefined : (filter as BrokerListingRequest["status"]),
+  )
+
+  if (focus) return <FocusedRequest requestKey={focus} requests={requests} />
 
   return (
     <>
       <BrokerPageHeader
         title="Requests"
         description="Claims, corrections, removals and objections from the listing form."
-      />
+      >
+        <TestNotificationButton />
+      </BrokerPageHeader>
+      <NotificationChannels />
       <ToggleGroup
         type="single"
         variant="outline"
@@ -120,7 +136,156 @@ export function BrokerRequests() {
   )
 }
 
-function RequestCard({ request }: { request: BrokerListingRequest }) {
+/** One request, opened from a notification's link. */
+function FocusedRequest({
+  requestKey,
+  requests,
+}: {
+  requestKey: string
+  requests: BrokerListingRequest[] | undefined
+}) {
+  const request = requests?.find((row) => row.key === requestKey)
+  return (
+    <>
+      <BrokerPageHeader title="Request" description={`Opened from a notification · ${requestKey}`}>
+        <Button size="sm" variant="outline" asChild>
+          <Link href="/dashboard/requests" prefetch={false}>
+            <ArrowLeftIcon />
+            All requests
+          </Link>
+        </Button>
+      </BrokerPageHeader>
+      {requests === undefined ? (
+        <Skeleton className="h-64 rounded-xl" />
+      ) : request ? (
+        <RequestCard request={request} highlighted />
+      ) : (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <InboxIcon />
+            </EmptyMedia>
+            <EmptyTitle>Request not found</EmptyTitle>
+            <EmptyDescription>
+              It may have been removed by the retention job, or the link is wrong.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+    </>
+  )
+}
+
+const CHANNEL_LABEL = { slack: "Slack", email: "Email", whatsapp: "WhatsApp" } as const
+
+/** Where a new request is announced (docs/deploy.md "Request notifications"). */
+function NotificationChannels() {
+  const { channels } = useRequestNotifications()
+  if (!channels) return null
+  const relay = channels.relay
+  const via =
+    relay && relay.channels.length > 0
+      ? `${relay.channels.map((c) => CHANNEL_LABEL[c]).join(" and ")} through Mya${
+          relay.stale ? ` (relay silent since ${formatDateTime(relay.lastSeenAt)})` : ""
+        }`
+      : null
+  const on = [via, channels.email && "email"].filter(Boolean)
+  return (
+    <p
+      className={cn(
+        "flex items-center gap-2 text-sm text-muted-foreground",
+        relay?.stale && "text-destructive",
+      )}
+    >
+      <BellIcon className="size-4" />
+      {on.length > 0
+        ? `New requests are announced on ${on.join(", ")}.`
+        : "No notification channel is set up yet: new requests show only here and in the hourly Slack summary."}
+    </p>
+  )
+}
+
+function TestNotificationButton() {
+  const { channels, sendTest } = useRequestNotifications()
+  const [testKey, setTestKey] = useState<string | null>(null)
+  const results = useNotificationTest(testKey)
+  const expected = [
+    ...(channels?.relay && !channels.relay.stale ? channels.relay.channels : []),
+    ...(channels?.email ? (["email"] as const) : []),
+  ]
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={expected.length === 0}
+        title={
+          expected.length > 0
+            ? "Sends a marked test request on every channel"
+            : "No channel is set up"
+        }
+        onClick={async () => {
+          const key = await runWithToast(
+            sendTest({}),
+            "Test queued: Slack and WhatsApp send within a minute",
+          )
+          if (key) setTestKey(key)
+        }}
+      >
+        <BellRingIcon />
+        Send test notification
+      </Button>
+      {testKey && (
+        <span className="text-xs text-muted-foreground">
+          {expected
+            .map((channel) => {
+              const r = results?.find((d) => d.channel === channel)
+              return `${CHANNEL_LABEL[channel]} ${r ? (r.ok ? "✓" : `✗ ${r.error ?? ""}`) : "…"}`
+            })
+            .join(" · ")}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** Where the request's notification went, and a way to send it again. */
+function NotificationLine({ request }: { request: BrokerListingRequest }) {
+  const { notifyAgain } = useRequestNotifications()
+  const deliveries = request.notifications ?? []
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <BellIcon className="size-3.5" />
+      {deliveries.length === 0
+        ? "No notification sent"
+        : deliveries.map((d) => (
+            <span key={d.channel} className={d.ok ? undefined : "text-destructive"}>
+              {CHANNEL_LABEL[d.channel]} {d.ok ? "✓" : `✗ ${d.error ?? ""}`}
+            </span>
+          ))}
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 px-2 text-xs"
+        onClick={() => runWithToast(notifyAgain({ key: request.key }), "Notification sent again")}
+      >
+        Notify again
+      </Button>
+    </p>
+  )
+}
+
+function RequestCard({
+  request,
+  highlighted = false,
+}: {
+  request: BrokerListingRequest
+  highlighted?: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (highlighted) ref.current?.scrollIntoView({ block: "start" })
+  }, [highlighted])
   const setStatus = useSetListingRequestStatus()
   const { setHidden, updateProfile } = useBrokerOrgMutations()
   const [dialog, setDialog] = useState<"corrections" | "removal" | null>(null)
@@ -130,7 +295,11 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
   const applied = request.outcome?.appliedFields ?? []
 
   return (
-    <Card>
+    <Card
+      ref={ref}
+      id={request.key}
+      className={cn(highlighted && "ring-2 ring-primary ring-offset-2")}
+    >
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
           <Badge variant={removal ? "destructive" : "secondary"}>{request.kind}</Badge>
@@ -186,6 +355,7 @@ function RequestCard({ request }: { request: BrokerListingRequest }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm whitespace-pre-wrap">{request.message}</p>
+        <NotificationLine request={request} />
         {request.eventKey && (
           // Sent from the event's page (event-correction-link); /events/<key>
           // forwards a talks.cam-derived one to /talks/events/<key>.

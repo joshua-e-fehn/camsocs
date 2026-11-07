@@ -1,6 +1,17 @@
 """The ordered stage registry — the one list `sync` runs.
 
-    seed → harvest → resolve → enrich → classify → events → talks → inbox → load → report
+    seed → harvest → resolve → enrich → classify → events → inbox → load → talks → report
+
+(`PHASES` in `pipeline/context.py`; the talks pillar's `talks` stage runs after
+`load`, which posts the other two pillars.)
+
+Each entry also says what it is (decision D8): its `phase`, its `pillar`
+(societies / events / talks, or shared), its `campus` (``"cam"`` for a
+Cambridge source, `None` for an engine stage every campus runs: `ENGINE`),
+what it reads and writes in staging, the Convex routes it posts to, whether
+it uses the network or a model, and the docs § that governs it. `registry`
+and `groups` give a campus its stages and scheduled runs; Cambridge's are
+`STAGES` and `GROUPS` themselves.
 
 ## Convention for adding a stage (parallel agents: read this)
 
@@ -16,16 +27,32 @@
    `run_harvest` does all of this for a harvest function. They never call
    the loader and never mint organisation keys; `resolve` assigns keys and
    `load` posts.
-3. Edit **exactly one line** below: uncomment your reserved line. There is
-   no import to add. The reserved lines are separated by comment lines on
-   purpose, so two branches that each uncomment their own line merge without
-   conflict. If your stage has no reserved line, add one in its phase with a
-   comment line above it.
-4. A stage that reads public sources says ``fetches=True`` (offline runner
+3. Add **one entry** below, in its phase, with a comment line above it.
+   There is no import to add. The entries are separated by comment lines on
+   purpose, so two branches that each add their own merge without conflict.
+4. Every entry states, explicitly (tests/test_stage_metadata.py checks them):
+
+   - ``phase=`` — its place in the order above; the registry is in phase order;
+   - ``pillar=`` — ``"societies"``, ``"events"``, ``"talks"`` or ``"shared"``;
+     the pillars stay distinct;
+   - ``campus=`` — ``"cam"`` for a Cambridge source; leave it `None` only for
+     an engine stage that reads no campus-specific source;
+   - ``reads=`` / ``writes=`` — its staging directories (a source type,
+     ``<type>.events``, ``_resolved``) or selectors (``@org_lookup``,
+     ``@event_index``, ``@all_observations``); a group's `needs` must cover
+     what its stages read and none of them writes;
+   - ``docs=`` — the governing ``"source-research§N"``;
+   - and, when true, ``network=True`` (real network use, a robots.txt check
+     included), ``llm=True`` and ``sinks=``: every ``/api/pipeline/<route>``
+     it calls on a real run, by its exact route name in
+     ``webapp/convex/http.ts`` (``claims``, ``inbound/mark``…), the routes it
+     reads back from (``crosswalk``, ``suppressions``…) included; the graph
+     tells the two apart (`graph.READ_ROUTES`).
+5. A stage that reads public sources says ``fetches=True`` (offline runner
    tests leave it out). Order matters only *between* phases; within the harvest phase, stages are
    independent. Use ``requires=(...)`` only when your stage cannot run on the
    previous run's output of another stage.
-5. Cite your `docs/source-research.md` § in the comment and in the module
+6. Cite your `docs/source-research.md` § in the comment and in the module
    docstring; re-verify the § live before writing the harvester.
 
 A stage that is commented out does not exist for `sync` (not even as "not
@@ -81,110 +108,387 @@ still holds):
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
-from camsocs_pipeline.pipeline.context import Stage, StageGroup
-from camsocs_pipeline.staging.store import RESOLVED
+from camsocs_pipeline.pipeline.context import PHASES, Stage, StageGroup
+from camsocs_pipeline.staging.store import RESOLVED, TALKS
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.campuses.profile import CampusProfile
+
+#: Every source directory, at once (resolve, classify, load).
+_ALL = "@all_observations"
+#: The organisations known so far: ``_resolved`` and the crosswalk.
+_ORGS = "@org_lookup"
+#: The events already staged (the inbox and termcards match against them).
+_EVENTS = "@event_index"
 
 STAGES: list[Stage] = [
     # ── seed ─────────────────────────────────────────────────────────────────
     # Full Term dates, verified (source-research §19).
-    Stage("term_dates", description="Full Term dates → termDates"),
+    Stage(
+        "term_dates",
+        description="Full Term dates → termDates",
+        phase="seed",
+        pillar="shared",
+        sinks=("termDates",),
+        docs=("source-research§19",),
+    ),
     #
     # ── harvest (T3): who exists — each writes var/staging/<source_type>/ ──────
     # SU Find a Society directory + profiles (§1).
-    Stage("su_directory", description="SU directory + every profile → staging"),
+    Stage(
+        "su_directory",
+        description="SU directory + every profile → staging",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("su_directory", "su_profile"),
+        network=True,
+        docs=("source-research§1",),
+    ),
     #
     # Proctors' register (§2).
-    Stage("proctors_register", description="Proctors' register → staging"),
+    Stage(
+        "proctors_register",
+        description="Proctors' register → staging",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("proctors_register",),
+        network=True,
+        docs=("source-research§2",),
+    ),
     #
     # Sport Cambridge A–Z + club pages (§3).
-    Stage("sport_clubs"),
+    Stage(
+        "sport_clubs",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("sport_az", "sport_club_page"),
+        network=True,
+        docs=("source-research§3",),
+    ),
     #
     # Sports Club Guide 2026-27 PDF (§4).
-    Stage("sport_guide_pdf"),
+    Stage(
+        "sport_guide_pdf",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        reads=("sport_club_page",),
+        writes=("sport_guide_pdf",),
+        network=True,
+        docs=("source-research§4",),
+    ),
     #
     # Camdram societies (§5).
-    Stage("camdram_societies"),
+    Stage(
+        "camdram_societies",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("camdram",),
+        network=True,
+        docs=("source-research§5",),
+    ),
     #
     # CUCBC clubs (§7).
-    Stage("cucbc_clubs"),
+    Stage(
+        "cucbc_clubs",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("cucbc",),
+        network=True,
+        docs=("source-research§7",),
+    ),
     #
     # Colleges and their JCR/MCR bodies (§8).
-    Stage("colleges"),
+    Stage(
+        "colleges",
+        phase="harvest",
+        pillar="societies",
+        campus="cam",
+        writes=("college_list", "society_website"),
+        network=True,
+        docs=("source-research§8",),
+    ),
     #
     # ── resolve (T4): identities → keys, writes var/staging/_resolved/ ────────
-    Stage("resolve", description="staged identities → organisation keys + quarantine"),
+    Stage(
+        "resolve",
+        description="staged identities → organisation keys + quarantine",
+        phase="resolve",
+        pillar="societies",
+        reads=(_ALL,),
+        writes=(RESOLVED,),
+        sinks=("crosswalk",),
+    ),
     #
     # ── enrich (T5): websites, Linktree; writes keyed observations ────────────
     # Society websites + Linktree: links, JSON-LD, LLM extraction (§13, §14).
     Stage(
-        "enrich", fetches=True, description="websites + Linktree → keyed enrichment observations"
+        "enrich",
+        fetches=True,
+        description="websites + Linktree → keyed enrichment observations",
+        phase="enrich",
+        pillar="societies",
+        reads=(RESOLVED,),
+        writes=("society_website", "linktree"),
+        network=True,
+        llm=True,
+        docs=("source-research§13", "source-research§14"),
     ),
     #
     # ── classify (R2): type, level and facets of every listed organisation ─────
     # Sources first, rules next, the bulk model with quotes for the rest.
+    # It restates every source type (part ``classify``): its writes are a wildcard.
     Stage(
         "classify",
         description="orgType, level, categories, activities, audiences, languages, tags",
+        phase="classify",
+        pillar="societies",
+        reads=(_ALL,),
+        writes=(_ALL,),
+        # A real run reads general sources' robots.txt for AI opt-outs
+        # (`extract.ai_gate`); a dry run fetches nothing.
+        network=True,
+        llm=True,
     ),
     #
     # ── events (T6): camsocs_pipeline/events/; each writes <source_type>.events ──
     # Camdram diary (§5).
-    Stage("camdram_events", fetches=True, description="Camdram diary → performance events"),
+    Stage(
+        "camdram_events",
+        fetches=True,
+        description="Camdram diary → performance events",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=(_ORGS,),
+        writes=("camdram.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§5",),
+    ),
     #
-    # talks.cam — parser only, never the LLM, Crawl-delay 10 (§6).
-    Stage("talks_cam", fetches=True, description="talks.cam lists → talks (parser only)"),
+    # talks.cam — parser only, never the LLM, Crawl-delay 10 (§6). The events
+    # pillar's talks.cam lists (G1), not the talks pillar (`talks` below).
+    Stage(
+        "talks_cam",
+        fetches=True,
+        description="talks.cam lists → talks (parser only)",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=(_ORGS,),
+        writes=("talks_list.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§6",),
+    ),
     #
     # CUCBC calendar, Bumps dates and fixed timetable (§7).
-    Stage("cucbc_events", fetches=True, description="CUCBC calendar, Bumps, timetable → events"),
+    Stage(
+        "cucbc_events",
+        fetches=True,
+        description="CUCBC calendar, Bumps, timetable → events",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=(_ORGS,),
+        writes=("cucbc.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§7",),
+    ),
     #
     # Playwaze leagues (§9).
-    Stage("playwaze", fetches=True, description="Playwaze college leagues → matches"),
+    Stage(
+        "playwaze",
+        fetches=True,
+        description="Playwaze college leagues → matches",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=(_ORGS,),
+        writes=("playwaze.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§9",),
+    ),
     #
     # University events programme, read with recorded permission (§10, D3a).
-    Stage("uni_events", fetches=True, description="University events programme → public events"),
+    Stage(
+        "uni_events",
+        fetches=True,
+        description="University events programme → public events",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=(_ORGS,),
+        writes=("uni_events_api.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§10",),
+    ),
     #
-    # Society ICS / Luma / Google feeds (§11).
-    Stage("calendar_feeds", fetches=True, description="society ICS / Luma / Google feeds → events"),
+    # Society ICS / Luma / Google feeds (§11). An engine stage: Cambridge's
+    # seed feed (`events/seeds.FEED_SEEDS`) is read for cam only.
+    Stage(
+        "calendar_feeds",
+        fetches=True,
+        description="society ICS / Luma / Google feeds → events",
+        phase="events",
+        pillar="events",
+        reads=(_ORGS,),
+        writes=("ics_feed.events", "luma.events"),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§11",),
+    ),
     #
     # SU What's On (§12).
-    Stage("su_whatson", fetches=True, description="SU What's On → student-group events"),
+    Stage(
+        "su_whatson",
+        fetches=True,
+        description="SU What's On → student-group events",
+        phase="events",
+        pillar="events",
+        campus="cam",
+        reads=("su_profile", _ORGS),
+        writes=("su_whatson.events",),
+        sinks=("crosswalk",),
+        network=True,
+        docs=("source-research§12",),
+    ),
     #
     # Society websites' events pages: structured data, then the LLM (§14).
     Stage(
         "website_events",
         fetches=True,
         description="society websites' events pages → events (structured data, then LLM)",
+        phase="events",
+        pillar="events",
+        reads=("society_website",),
+        writes=("society_website.events",),
+        network=True,
+        llm=True,
+        docs=("source-research§14",),
     ),
     #
     # ── inbox (T7), Instagram + termcards (T8) ────────────────────────────────
-    # Forwarded mailing-list mail (§16).
-    Stage("inbox"),
+    # Forwarded mailing-list mail (§16): reads the pending mails and their
+    # attachments, posts what it read as `load` does, then marks the mails.
+    Stage(
+        "inbox",
+        phase="inbox",
+        pillar="events",
+        reads=(_ORGS, _EVENTS),
+        writes=("mailing_list_email",),
+        sinks=(
+            "crosswalk",
+            "inbound/pending",
+            "inbound/file",
+            "suppressions",
+            "sources",
+            "files",
+            "claims",
+            "orgInternal",
+            "relationships",
+            "eventOrganisers",
+            "events/superseded",
+            "brokerInferences",
+            "inbound/mark",
+        ),
+        llm=True,
+        docs=("source-research§16", "source-research§20"),
+    ),
     #
-    # Instagram Business Discovery (§17).
-    Stage("instagram"),
+    # Instagram Business Discovery (§17); stores post images itself.
+    Stage(
+        "instagram",
+        phase="inbox",
+        pillar="events",
+        reads=(_ORGS, _EVENTS),
+        writes=("instagram_api",),
+        sinks=("crosswalk", "files"),
+        network=True,
+        llm=True,
+        docs=("source-research§17",),
+    ),
     #
     # Termcard OCR (§21).
-    Stage("termcards"),
+    Stage(
+        "termcards",
+        phase="inbox",
+        pillar="events",
+        reads=(_ORGS, _EVENTS),
+        writes=("termcard",),
+        sinks=("crosswalk",),
+        network=True,
+        llm=True,
+        docs=("source-research§21",),
+    ),
     #
     # ── load: every keyed observation → Convex ──────────────────────────────────
-    Stage("load", requires=("resolve",), description="staged observations → Convex"),
+    Stage(
+        "load",
+        requires=("resolve",),
+        description="staged observations → Convex",
+        phase="load",
+        pillar="shared",
+        reads=(_ALL,),
+        sinks=(
+            "suppressions",
+            "sources",
+            "files",
+            "claims",
+            "orgInternal",
+            "relationships",
+            "eventOrganisers",
+            "events/superseded",
+            "brokerInferences",
+        ),
+    ),
     #
     # ── talks (D7): the academic talks pillar; posts its own tables ───────────
     # talks.cam API + department sites → talks/* routes (talks-redesign-spec §2–§4).
     # After load: it needs nothing load does, and a slow talks.cam day must
     # never keep the day's events from reaching Convex before the time limit.
+    # Campus `cam` until its talks.cam aggregator step is split off. It
+    # stages its own ``var/staging/talks/`` file (`TALKS`): beside the source
+    # directories, never read as observations.
     Stage(
         "talks",
         fetches=True,
         description="talks.cam + department sites → talks (parser only, posts itself)",
+        phase="talks",
+        pillar="talks",
+        campus="cam",
+        writes=(TALKS,),
+        sinks=("talks/departments", "talks/batch", "talks/sweep", "talks/runs"),
+        network=True,
+        docs=("talks-redesign-spec",),
     ),
     #
     # ── report (T14): coverage report ───────────────────────────────────────────
     # Reads the directory back from Convex → var/reports/coverage-<date>.md.
-    Stage("report", description="coverage → var/reports/coverage-<date>.md (read-only)"),
+    Stage(
+        "report",
+        description="coverage → var/reports/coverage-<date>.md (read-only)",
+        phase="report",
+        pillar="shared",
+        sinks=("coverage", "coverage/events"),
+    ),
 ]
+
+#: The engine: stages every campus runs (``campus is None``).
+ENGINE: tuple[Stage, ...] = tuple(stage for stage in STAGES if stage.campus is None)
 
 
 #: The scheduled runs (docs/ops-vps.md): `camsocs sync --group <name>`.
@@ -229,4 +533,24 @@ def stage_names() -> list[str]:
     return [stage.name for stage in STAGES]
 
 
-__all__ = ["GROUPS", "STAGES", "stage_names"]
+def registry(profile: CampusProfile) -> list[Stage]:
+    """The stages a run of `profile` may execute, in run order.
+
+    Cambridge's is `STAGES` itself. Another campus runs the engine plus its
+    own stages, stable-sorted by phase and then by declared position (engine
+    first)."""
+    if profile.id == "cam":
+        return STAGES
+    taken = {stage.name for stage in ENGINE}
+    clashes = [stage.name for stage in profile.stages if stage.name in taken]
+    if clashes:
+        raise ValueError(f"Campus {profile.id}: stages named like engine stages: {clashes}")
+    return sorted([*ENGINE, *profile.stages], key=lambda stage: PHASES.index(stage.phase))
+
+
+def groups(profile: CampusProfile) -> Mapping[str, StageGroup]:
+    """The scheduled runs of `profile`: `GROUPS` for Cambridge."""
+    return GROUPS if profile.id == "cam" else profile.groups
+
+
+__all__ = ["ENGINE", "GROUPS", "STAGES", "groups", "registry", "stage_names"]

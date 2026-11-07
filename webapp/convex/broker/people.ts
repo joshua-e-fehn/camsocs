@@ -11,6 +11,7 @@ import {
   cleanText,
   orgClassesOf,
   orgRefValidator,
+  ownWebsiteOf,
   storedSensitiveProblems,
 } from "../lib/brokerRows"
 import { academicYearOf, londonIsoDate, nextHandoverDate } from "../lib/derived"
@@ -40,9 +41,11 @@ import { personFields } from "../schema"
  *    national, health or disability identity: lib/broker/sensitive.ts) are
  *    kept under Art 9(2)(e) only as the society's own website lists them
  *    (DPIA-lite §5, R-7, ENG-42). For them the source must be a page of that
- *    website; no profile links and no notes; `staleAfter` no later than the
- *    next 30 June (R5) and never moved later; and `consent` (which R5 never
- *    deletes) only with the explicit consent recorded (`consentRecord`).
+ *    website (the recorded one, else the one it was last found at when its
+ *    latest reading failed: `ownWebsiteOf`); no profile links and no notes;
+ *    `staleAfter` no later than the next 30 June (R5) and never moved later;
+ *    and `consent` (which R5 never deletes) only with the explicit consent
+ *    recorded (`consentRecord`).
  *    The checks run on the row as it would be after the edit, so an edit
  *    that moves someone into such a society meets them too.
  *
@@ -112,7 +115,8 @@ export const rules = query({
       name: v.string(),
       /** Empty unless it is a sensitive society. */
       sensitiveBecause: v.array(v.string()),
-      /** Its recorded website: a sensitive society's officers come only from it. */
+      /** Its own website (`ownWebsiteOf`: the recorded one, else the one it
+       * was last found at): a sensitive society's officers come only from it. */
       website: v.optional(v.string()),
       /** The latest `staleAfter` a sensitive society's officer may have. */
       staleAfterLimit: v.string(),
@@ -125,7 +129,7 @@ export const rules = query({
     return {
       name: org.name,
       sensitiveBecause: sensitiveBecause(org),
-      website: org.website,
+      website: await ownWebsiteOf(ctx, org),
       staleAfterLimit: nextHandoverDate(Date.now()),
     }
   },
@@ -200,16 +204,21 @@ async function checkNotSuppressed(ctx: MutationCtx, draft: Draft, keys: readonly
 }
 
 /**
- * The sensitive-society rules (module comment) for `draft` at `org`.
- * `previousStaleAfter`: the row's date before an edit, which may not move later.
+ * The sensitive-society rules (module comment) for `draft` at `org`, whose
+ * own website is `ownWebsiteOf`'s (the recorded one, else the one it was
+ * last found at). `previousStaleAfter`: the row's date before an edit, which
+ * may not move later.
  */
-function checkSensitiveOfficer(
-  org: Pick<Doc<"organisations">, "name" | "website" | "categories" | "audiences">,
+async function checkSensitiveOfficer(
+  ctx: MutationCtx,
+  org: Doc<"organisations">,
   draft: Draft,
   now: number,
   previousStaleAfter?: string,
-): void {
-  const society = { name: org.name, website: org.website, because: sensitiveBecause(org) }
+): Promise<void> {
+  const because = sensitiveBecause(org)
+  if (because.length === 0) return
+  const society = { name: org.name, website: await ownWebsiteOf(ctx, org), because }
   const problem = sensitiveOfficerProblem(society, draft, nextHandoverDate(now), previousStaleAfter)
   if (problem) refuse(problem)
 }
@@ -257,7 +266,7 @@ export const create = mutation({
       notes: cleanText(args.notes, LIMITS.notes, "note"),
     } satisfies Draft
     await checkNotSuppressed(ctx, draft, [key])
-    checkSensitiveOfficer(org, draft, now)
+    await checkSensitiveOfficer(ctx, org, draft, now)
     await ctx.db.insert("people", {
       ...draft,
       key,
@@ -333,7 +342,7 @@ export const update = mutation({
     if (args.notes !== undefined) patch.notes = cleanText(args.notes, LIMITS.notes, "note")
     const after = { ...person, ...patch }
     await checkNotSuppressed(ctx, after, [person.key, personKey(after.orgKey, after.name)])
-    checkSensitiveOfficer(org, after, now, person.staleAfter)
+    await checkSensitiveOfficer(ctx, org, after, now, person.staleAfter)
     await ctx.db.patch("people", person._id, patch)
     return null
   },

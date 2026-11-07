@@ -1,6 +1,7 @@
 import type { GenericCtx } from "@convex-dev/better-auth/utils"
 import { isBrokerEmail } from "../../lib/broker-access"
-import { isCamEmail } from "../../lib/cam-email"
+import { deploymentProfile } from "../../lib/campus/deployment"
+import { isMemberEmail } from "../../lib/campus/member-email"
 import type { DataModel } from "../_generated/dataModel"
 import { authComponent } from "../betterAuth/auth"
 
@@ -10,10 +11,13 @@ import { authComponent } from "../betterAuth/auth"
  *
  *  - `isBroker`: verified email on `BROKER_EMAILS` (same rule as
  *    `requireBrokerUser`, convex/lib/auth.ts).
- *  - `isCamVerified`: a *verified* email ending `@cam.ac.uk` — the tier that
- *    sees `cam_only` events (mailing-list events). Subdomains such as
- *    `@srcf.cam.ac.uk` do not count: the sign-in link is sent to `@cam.ac.uk`
- *    only (lib/cam-email.ts is the one rule for both).
+ *  - `isCamVerified`: a *verified* member address of the deployment's campus
+ *    (Cambridge: exactly `@cam.ac.uk`) — the tier that sees `cam_only`
+ *    events (mailing-list events), "members of this deployment's campus
+ *    only". Subdomains such as `@srcf.cam.ac.uk` do not count: the sign-in
+ *    link is sent to the member domain only (lib/campus/member-email.ts
+ *    `isMemberEmail` is the one rule for both; the name stays for the
+ *    stored `cam_only` literal, decision D8).
  *
  * Pass the result down; do not re-derive access in each query.
  */
@@ -34,7 +38,7 @@ export async function getViewer(ctx: GenericCtx<DataModel>): Promise<Viewer> {
     userId: user._id,
     email: user.email,
     isBroker: verified && isBrokerEmail(user.email, process.env.BROKER_EMAILS),
-    isCamVerified: verified && isCamEmail(user.email),
+    isCamVerified: verified && isMemberEmail(user.email, deploymentProfile()),
   }
 }
 

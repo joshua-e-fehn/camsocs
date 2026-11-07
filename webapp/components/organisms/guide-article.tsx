@@ -1,8 +1,8 @@
 import Link from "next/link"
-import { DraftNotice, GuideSourceList } from "@/components/molecules/guide-parts"
+import { GuideSourceList } from "@/components/molecules/guide-parts"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { formatDate } from "@/lib/calendar"
-import { GUIDES_PATH, type Guide, guideJsonLd } from "@/lib/guides"
+import { GUIDES_PATH, type Guide, type GuideSource, guideJsonLd } from "@/lib/guides"
 import { DISCLAIMER } from "@/lib/site"
 import { jsonLdScript } from "@/lib/structured-data"
 
@@ -16,9 +16,12 @@ export function GuideArticle({
   lede,
   toc,
   aside,
+  sources,
   children,
 }: {
   guide: Guide
+  /** Every source the page cites, in the order the source list shows them. */
+  sources: readonly GuideSource[]
   lede: React.ReactNode
   /** The page's sections: anchor and label. */
   toc: readonly (readonly [string, string])[]
@@ -30,7 +33,7 @@ export function GuideArticle({
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD, escaped by jsonLdScript
-        dangerouslySetInnerHTML={{ __html: jsonLdScript(guideJsonLd(guide)) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(guideJsonLd(guide, sources)) }}
       />
       <article className="flex max-w-3xl min-w-0 flex-col gap-10">
         <header className="flex flex-col gap-3">
@@ -46,7 +49,6 @@ export function GuideArticle({
           <p className="font-mono text-xs text-muted-foreground tabular-nums">
             Facts checked {formatDate(guide.updated)} · every fact links its source
           </p>
-          <DraftNotice slug={guide.slug} />
         </header>
 
         {children}
@@ -57,7 +59,7 @@ export function GuideArticle({
             read. Their publishers are the authority: check them for anything that matters, as dates
             and rules change from year to year.
           </p>
-          <GuideSourceList ids={guide.sources} />
+          <GuideSourceList sources={sources} />
         </ProseSection>
 
         <p className="text-sm text-muted-foreground [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4">

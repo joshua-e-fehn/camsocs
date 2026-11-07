@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import { StatTile } from "@/components/molecules/stat-tile"
+import { BrokerIndexing } from "@/components/organisms/broker-indexing"
+import { BrokerTraffic } from "@/components/organisms/broker-traffic"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -86,7 +88,7 @@ export function BrokerOverview() {
     <>
       <BrokerPageHeader
         title="Overview"
-        description="Directory coverage, upcoming events, pipeline runs and what needs attention."
+        description="Directory coverage, upcoming events, website traffic, pipeline runs and what needs attention."
       >
         {summary?.coverage && (
           <Badge variant="outline" className="font-mono">
@@ -283,6 +285,10 @@ export function BrokerOverview() {
           </CardContent>
         </Card>
       </div>
+
+      <BrokerTraffic />
+
+      <BrokerIndexing />
 
       <Card>
         <CardHeader>

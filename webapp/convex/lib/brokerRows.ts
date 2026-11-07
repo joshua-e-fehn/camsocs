@@ -29,7 +29,8 @@ import { literalUnion } from "./validators"
  * with one exception kept even here: the outreach (the Art 14 notice) goes
  * to a role address only — never a personal CRSid address, a lists.cam.ac.uk
  * mailing list (it would reach every member) or a webmail address (often one
- * officer's own).
+ * officer's own). The webmail addresses are listed apart (`webmailAddresses`)
+ * for the webmail-only export, which Joshua sends or not by his own choice.
  */
 
 /** Statuses that mean "we hold a value". */
@@ -53,29 +54,21 @@ const isPersonal = (email: string) => classifyEmail(email) === "personal_crsid"
 /** Address kinds the outreach never writes to (see the module comment). */
 const NOT_FOR_OUTREACH: ReadonlySet<EmailType> = new Set(["personal_crsid", "lists_cam", "webmail"])
 
-/** The address's kind when the outreach may write to it, else undefined. */
-function outreachKind(email: string): EmailType | undefined {
-  const kind = classifyEmail(email)
-  return NOT_FOR_OUTREACH.has(kind) ? undefined : kind
-}
-
 type OutreachAddress = { email: string; role: Role | "general"; kind: EmailType }
+type Addressed = Pick<Doc<"organisations">, "email" | "roleEmails">
 
-/**
- * Every published address the outreach may write to, best first: role
- * addresses in `ROLE_PREFERENCE` order, then the general address, each once.
- * The first is the one the notice goes to; the rest are where it goes next
- * when that one bounces (the export's `next_emails`).
- */
-export function outreachAddresses(
-  org: Pick<Doc<"organisations">, "email" | "roleEmails">,
+/** The published addresses whose kind `accept` takes, best first: role
+ * addresses in `ROLE_PREFERENCE` order, then the general address, each once. */
+function publishedAddresses(
+  org: Addressed,
+  accept: (kind: EmailType) => boolean,
 ): OutreachAddress[] {
   const out: OutreachAddress[] = []
   const seen = new Set<string>()
   const add = (email: string, role: Role | "general") => {
-    const kind = outreachKind(email)
+    const kind = classifyEmail(email)
     const id = email.trim().toLowerCase()
-    if (!kind || seen.has(id)) return
+    if (!accept(kind) || seen.has(id)) return
     seen.add(id)
     out.push({ email, role, kind })
   }
@@ -86,16 +79,34 @@ export function outreachAddresses(
   return out
 }
 
+/**
+ * Every published address the outreach may write to, best first. The first
+ * is the one the notice goes to; the rest are where it goes next when that
+ * one bounces (the export's `next_emails`).
+ */
+export function outreachAddresses(org: Addressed): OutreachAddress[] {
+  return publishedAddresses(org, (kind) => !NOT_FOR_OUTREACH.has(kind))
+}
+
+/**
+ * Every published webmail address (a society's @gmail.com and the like),
+ * best first. The outreach never picks one; the webmail-only export
+ * (`lib/broker/outreach.ts` `webmailOutreachCsv`) offers them for societies
+ * with no other usable address. A CRSid or alumni address on any domain is
+ * `personal_crsid`, not webmail (`classifyEmail`), so it is never here.
+ */
+export function webmailAddresses(org: Addressed): OutreachAddress[] {
+  return publishedAddresses(org, (kind) => kind === "webmail")
+}
+
 /** The best published role address to send the outreach to, or undefined. */
-export function bestRoleAddress(
-  org: Pick<Doc<"organisations">, "email" | "roleEmails">,
-): OutreachAddress | undefined {
+export function bestRoleAddress(org: Addressed): OutreachAddress | undefined {
   return outreachAddresses(org)[0]
 }
 
 /** Whether the listing publishes any non-personal address (coverage's
  * "email"), whether or not the outreach may use it. */
-function hasPublishedAddress(org: Pick<Doc<"organisations">, "email" | "roleEmails">): boolean {
+function hasPublishedAddress(org: Addressed): boolean {
   if (org.email && !isPersonal(org.email)) return true
   return org.roleEmails.some((item) => !isPersonal(item.email))
 }
@@ -123,6 +134,12 @@ const needOfferChip = v.object({
   status: literalUnion(NEED_OFFER_STATUSES),
 })
 
+const addressValidator = v.object({
+  email: v.string(),
+  role: v.union(literalUnion(ROLES), v.literal("general")),
+  kind: literalUnion(EMAIL_TYPES),
+})
+
 /** One organisation in the broker's table, coverage and outreach export. */
 export const brokerOrgRowValidator = v.object({
   key: v.string(),
@@ -144,16 +161,13 @@ export const brokerOrgRowValidator = v.object({
   missingFields: v.array(v.string()),
   /** The outreach address (`bestRoleAddress`): a role address, never a
    * personal, mailing-list or webmail one. */
-  bestAddress: v.optional(
-    v.object({
-      email: v.string(),
-      role: v.union(literalUnion(ROLES), v.literal("general")),
-      kind: literalUnion(EMAIL_TYPES),
-    }),
-  ),
+  bestAddress: v.optional(addressValidator),
   /** The other outreach addresses, in the order to try them when the notice
    * to `bestAddress` bounces (`outreachAddresses`). */
   nextAddresses: v.array(v.string()),
+  /** The published webmail addresses, best first (`webmailAddresses`); the
+   * webmail-only export uses them when there is no `bestAddress`. */
+  webmailAddresses: v.array(addressValidator),
   heldFields: v.array(v.string()),
   sourceHosts: v.array(v.string()),
   /** Rejected entries are left out. */
@@ -214,6 +228,7 @@ export function brokerOrgRow(
     missingFields: org.missingFields,
     bestAddress: best,
     nextAddresses: next.map((address) => address.email),
+    webmailAddresses: webmailAddresses(org),
     heldFields: heldFields(org.meta),
     sourceHosts: sourceHosts(org.meta),
     needs: chips(profile?.needs ?? []),
@@ -345,25 +360,75 @@ export function orgClassesOf(ctx: QueryCtx) {
   }
 }
 
+/** Website claims read per organisation when looking for the last one found. */
+const WEBSITE_CLAIMS = 100
+
+/**
+ * The website a sensitive society's officers must come from (DPIA-lite §5,
+ * ENG-42): its recorded `website`, or, when none is recorded because the
+ * latest reading of it failed (the site was unreachable or answered 404 on
+ * one run), the website it was last found at: the newest `found` reading,
+ * accepted or superseded. The pipeline read the officers from that site
+ * while it answered, so it is still the society's own; a failed fetch says
+ * nothing about whose pages they were. A reading a suppression set aside
+ * (`rejected`) never counts. Undefined when no website was ever found.
+ *
+ * Found on production 2026-11-04: 67 officers of 4 college bodies, all read
+ * from the bodies' own sites, were flagged only because one failed reading
+ * (`colleges.home`, `missing` / `unreachable` or `not_found`) had replaced
+ * the site's `found` reading.
+ */
+export async function ownWebsiteOf(
+  ctx: QueryCtx,
+  org: Pick<Doc<"organisations">, "key" | "website">,
+): Promise<string | undefined> {
+  if (org.website !== undefined) return org.website
+  let newest: { url: string; at: number } | undefined
+  for (const reviewStatus of ["accepted", "superseded"] as const) {
+    const claims = await ctx.db
+      .query("fieldClaims")
+      .withIndex("by_entity_field", (q) =>
+        q
+          .eq("entityType", "organisation")
+          .eq("entityKey", org.key)
+          .eq("field", "website")
+          .eq("reviewStatus", reviewStatus),
+      )
+      .take(WEBSITE_CLAIMS)
+    for (const claim of claims) {
+      if (claim.status !== "found" || claim.setAsideBy !== undefined) continue
+      if (typeof claim.value !== "string" || !isHttpUrl(claim.value)) continue
+      if (!newest || claim.retrievedAt > newest.at) {
+        newest = { url: claim.value, at: claim.retrievedAt }
+      }
+    }
+  }
+  return newest?.url
+}
+
 /**
  * Why each stored row at a sensitive society breaks the rules a manual entry
  * meets (`sensitiveOfficerProblem`), or null. The guard runs only on writes,
  * so a row stored before 2026-11-04, or before its society became sensitive,
  * may still hold notes, links or an off-site source; `broker.people.list`
  * flags those and `coverage.sensitiveOfficers` counts them (DPIA-lite §5).
+ * The society's site is `ownWebsiteOf`'s.
  */
 export function storedSensitiveProblems(ctx: QueryCtx) {
   const limit = nextHandoverDate(Date.now())
-  const sites = new Map<string, Promise<Doc<"organisations"> | null>>()
+  const societies = new Map<string, Promise<{ name?: string; website?: string }>>()
   return async (person: Doc<"people">, because: readonly string[]): Promise<string | null> => {
     if (because.length === 0) return null
-    let hit = sites.get(person.orgKey)
+    let hit = societies.get(person.orgKey)
     if (!hit) {
-      hit = findOrganisation(ctx, person.orgKey)
-      sites.set(person.orgKey, hit)
+      hit = (async () => {
+        const org = await findOrganisation(ctx, person.orgKey)
+        return org ? { name: org.name, website: await ownWebsiteOf(ctx, org) } : {}
+      })()
+      societies.set(person.orgKey, hit)
     }
     const org = await hit
-    const society = { name: org?.name ?? person.orgKey, website: org?.website, because }
+    const society = { name: org.name ?? person.orgKey, website: org.website, because }
     return sensitiveOfficerProblem(society, person, limit)
   }
 }

@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { SignInCard, type SignInOptions, signInMethods } from "@/components/organisms/login-form"
+import {
+  acceptsMemberAddress,
+  SignInCard,
+  type SignInOptions,
+  signInMethods,
+} from "@/components/organisms/login-form"
+import { CAMBRIDGE } from "@/lib/campus"
+import { TESTFORD } from "@/lib/campus/profiles/zz.testing"
 
 /**
  * /sign-in offers only what the deployment has switched on
@@ -28,6 +35,19 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   document.body.innerHTML = ""
+})
+
+describe("acceptsMemberAddress", () => {
+  test("follows the campus profile, as the server's gate does", () => {
+    // This build's campus is Cambridge: exactly @cam.ac.uk.
+    expect(acceptsMemberAddress(" AB123@Cam.ac.uk ")).toBe(true)
+    expect(acceptsMemberAddress("ab123@cam.ac.uk", CAMBRIDGE)).toBe(true)
+    expect(acceptsMemberAddress("ab123@hermes.cam.ac.uk", CAMBRIDGE)).toBe(false)
+    expect(acceptsMemberAddress("jane.doe@testford.ac.uk", CAMBRIDGE)).toBe(false)
+    // Another campus takes its own member domain and refuses Cambridge's.
+    expect(acceptsMemberAddress("jane.doe@testford.ac.uk", TESTFORD)).toBe(true)
+    expect(acceptsMemberAddress("ab123@cam.ac.uk", TESTFORD)).toBe(false)
+  })
 })
 
 describe("signInMethods", () => {

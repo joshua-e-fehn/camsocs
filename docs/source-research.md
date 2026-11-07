@@ -1,5 +1,7 @@
 # Source research
 
+> **Campus: Cambridge (`cam`).** This file is the Cambridge campus's source research (`docs/campuses/cambridge.md`, decision D8); it stays at this path because code and docs cite its sections as `§N`. Another campus gets its own file under `docs/campuses/`.
+
 Code cites the sections here as `§N`. All facts below were checked on **2026-10-07** unless stated otherwise. The full evidence, with URLs, is in `research/2026-10-07-landscape-brief.md` (abbreviated LB below).
 
 **Rule:** before a harvester for a source is written or changed, its section here is re-verified live. Record the robots.txt verdict (quoted, with date), the terms, the rate limit, the fields it yields and the traps.

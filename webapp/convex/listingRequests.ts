@@ -58,6 +58,9 @@ import { literalUnion } from "./lib/validators"
  * tests, a deployment before the rollout in docs/deploy.md), every call is
  * accepted as before. The limits above apply either way.
  *
+ * An accepted request is announced to the broker on every configured channel
+ * (`notifications.listingRequest`, ENG-104), scheduled the same way.
+ *
  * An accepted request is counted in PostHog by kind only
  * (`listing_request_received`, `analytics.captureListingRequest`, ENG-7,
  * record of processing P6/P12): scheduled with the insert, so a refusal is
@@ -280,6 +283,8 @@ export const submit = mutation({
       .take(PRUNE_BATCH)
     for (const row of expired) await ctx.db.delete("listingRequestSubmits", row._id)
     await ctx.scheduler.runAfter(0, internal.analytics.captureListingRequest, { kind: args.kind })
+    // Slack / email / WhatsApp to the broker, each where configured (ENG-104).
+    await ctx.scheduler.runAfter(0, internal.notifications.listingRequest, { key })
     return { key }
   },
 })

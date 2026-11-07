@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { sha1Hex } from "../../lib/hash"
+import { isHttpUrl } from "../../lib/syntax"
 import { TALK_KINDS, TALK_SCHOOLS, type TalkSchool } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
@@ -143,6 +144,9 @@ export const talkDepartmentRefValidator = v.object({
    * "talk-jsonld-details"). Optional only for rows built before it. */
   name: v.optional(v.string()),
   school: literalUnion(TALK_SCHOOLS),
+  /** The department's own website (the registry's), for the talk page's
+   * JSON-LD `organizer.url` (Search Console, 2026-11-07). */
+  website: v.optional(v.string()),
 })
 
 /** What a list, the week agenda and the `.ics` feed show of a talk. No abstract. */
@@ -181,6 +185,7 @@ export type TalkDepartmentRef = {
   shortName: string
   name?: string
   school: TalkSchool
+  website?: string
 }
 export type TalkListItem = {
   key: string
@@ -215,9 +220,12 @@ export function departmentCache(ctx: QueryCtx) {
   }
 }
 
+/** `websites`: each department's own website too, on a talk's page only
+ * (its JSON-LD organizer); a list leaves it out. */
 export async function talkListItem(
   talk: Doc<"talks">,
   lookup: ReturnType<typeof departmentCache>,
+  { websites = false }: { websites?: boolean } = {},
 ): Promise<TalkListItem> {
   const departments: TalkDepartmentRef[] = []
   for (const key of talk.departmentKeys) {
@@ -229,6 +237,7 @@ export async function talkListItem(
         shortName: department.shortName,
         name: department.name,
         school: department.school,
+        ...(websites && isHttpUrl(department.website) ? { website: department.website } : {}),
       })
     }
   }

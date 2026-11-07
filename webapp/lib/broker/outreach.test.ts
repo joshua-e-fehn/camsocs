@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  asWebmailRow,
   csvField,
   fieldLabel,
   OUTREACH_COLUMNS,
@@ -12,11 +13,14 @@ import {
   sendLogDate,
   sentOnProblem,
   UnclosedQuoteError,
+  webmailOutreachCsv,
 } from "./outreach"
 
 const SITE = "https://camsocs.vercel.app/"
 /** "Today" for the send-log tests, after every date they use. */
 const TODAY = "2026-11-10"
+
+const GMAIL = { email: "cu.rowing.soc@gmail.com", role: "general", kind: "webmail" }
 
 function row(overrides: Partial<OutreachRow> = {}): OutreachRow {
   return {
@@ -109,6 +113,102 @@ describe("outreachGroups (the reports page)", () => {
     expect(keys(groups.noAddress)).toEqual(["org-webmail-done", "org-list-gaps"])
     expect(groups.withAddress).toBe(2)
     expect(groups.excluded).toBe(1)
+    expect(groups.webmailOnly).toBe(0)
+  })
+
+  test("webmailOnly counts the no-address listings the webmail-only export holds", () => {
+    const groups = outreachGroups([
+      row({ webmailAddresses: [GMAIL] }),
+      row({ key: "org-webmail", bestAddress: undefined, webmailAddresses: [GMAIL] }),
+      row({ key: "org-list", bestAddress: undefined }),
+      row({ key: "org-hidden", bestAddress: undefined, hidden: true, webmailAddresses: [GMAIL] }),
+    ])
+    expect(groups.noAddress).toHaveLength(2)
+    expect(groups.webmailOnly).toBe(1)
+  })
+})
+
+describe("the webmail-only export", () => {
+  const webmailRow = (overrides: Partial<OutreachRow> = {}) =>
+    row({
+      key: "org-cu-rowing",
+      name: "CU Rowing Society",
+      bestAddress: undefined,
+      webmailAddresses: [
+        GMAIL,
+        { email: "rowing.sec@outlook.com", role: "secretary", kind: "webmail" },
+      ],
+      ...overrides,
+    })
+
+  test("asWebmailRow sends to the first webmail address, the rest after a bounce", () => {
+    expect(asWebmailRow(webmailRow())).toMatchObject({
+      bestAddress: GMAIL,
+      nextAddresses: ["rowing.sec@outlook.com"],
+    })
+    // Only for a candidate with no outreach address.
+    expect(asWebmailRow(row({ webmailAddresses: [GMAIL] }))).toBeUndefined()
+    expect(asWebmailRow(webmailRow({ suppressed: true }))).toBeUndefined()
+    expect(asWebmailRow(webmailRow({ hidden: true }))).toBeUndefined()
+    expect(asWebmailRow(webmailRow({ isCounterpart: true }))).toBeUndefined()
+    expect(asWebmailRow(webmailRow({ webmailAddresses: [] }))).toBeUndefined()
+  })
+
+  test("the same columns as the outreach CSV, only webmail-only rows, email_kind webmail", () => {
+    const rows = [
+      row(),
+      webmailRow(),
+      webmailRow({ key: "org-a", name: "A Webmail Soc", webmailAddresses: [GMAIL] }),
+      row({ key: "org-list", name: "List Soc", bestAddress: undefined }),
+      webmailRow({ key: "org-supp", name: "Suppressed Soc", suppressed: true }),
+    ]
+    const parsed = parseCsv(webmailOutreachCsv(rows, SITE))
+    expect(parsed[0]).toEqual([...OUTREACH_COLUMNS])
+    const lines = parsed
+      .slice(1)
+      .map((cells) => Object.fromEntries(OUTREACH_COLUMNS.map((column, i) => [column, cells[i]])))
+    expect(lines.map((line) => line.org_key)).toEqual(["org-a", "org-cu-rowing"])
+    expect(lines[1]).toMatchObject({
+      role: "general",
+      email: "cu.rowing.soc@gmail.com",
+      email_kind: "webmail",
+      next_emails: "rowing.sec@outlook.com",
+      sent_on: "",
+      bounced: "",
+    })
+    // The outreach CSV itself is unchanged: no webmail row in it.
+    const outreach = parseCsv(outreachCsv(rows, SITE))
+    expect(outreach.slice(1).map((cells) => cells[1])).toEqual(["org-cu-chess-club"])
+  })
+
+  test("its notice says it went to the society's published contact address", () => {
+    const [header, first] = parseCsv(webmailOutreachCsv([webmailRow()], SITE))
+    const notice = first[header.indexOf("notice")]
+    expect(notice).toStartWith("Hello CU Rowing Society,")
+    expect(notice).toContain("because it is the contact address your society publishes")
+    expect(notice).toContain("please pass this message on to your committee")
+    expect(notice).toContain("https://camsocs.vercel.app/request")
+    // The rest is the same notice as the outreach CSV's.
+    expect(notice).toContain("object to this, or ask us to remove the listing")
+    expect(outreachNotice(row(), SITE)).not.toContain("contact address your society publishes")
+  })
+
+  test("its filled-in send log imports like the outreach CSV's", () => {
+    const [header, ...cells] = parseCsv(webmailOutreachCsv([webmailRow()], SITE))
+    cells[0][header.indexOf("sent_on")] = "2026-11-06"
+    const log = parseSendLog(
+      [header, ...cells].map((line) => line.map(csvField).join(",")).join("\r\n"),
+      TODAY,
+    )
+    expect(log.errors).toEqual([])
+    expect(log.entries).toEqual([
+      {
+        orgKey: "org-cu-rowing",
+        email: "cu.rowing.soc@gmail.com",
+        sentOn: "2026-11-06",
+        bounced: false,
+      },
+    ])
   })
 })
 

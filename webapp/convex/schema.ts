@@ -1,5 +1,5 @@
 import { defineSchema, defineTable } from "convex/server"
-import { type Infer, v } from "convex/values"
+import { type Infer, type Validator, v } from "convex/values"
 import {
   ACTIVITY_TYPES,
   AUDIENCES,
@@ -152,6 +152,10 @@ export const harvestStageResult = v.object({
    * stage's quarantine (`quarantineHeld`, `quarantineDropped`,
    * `quarantineReview`), read by the broker overview. Omitted when none. */
   metrics: v.optional(v.record(v.string(), v.number())),
+  /** Wall-clock time the stage took, in milliseconds. Optional (widen-only,
+   * deploy.md §5): rows and posts from before it was recorded omit it, and
+   * readers treat it as "not recorded". */
+  durationMs: v.optional(v.number()),
 })
 export type HarvestStageResult = Infer<typeof harvestStageResult>
 
@@ -168,6 +172,13 @@ export const harvestRunFields = {
   requestedStages: v.array(v.string()),
   /** `camsocs_pipeline.__version__` of the code that ran. */
   pipelineVersion: v.string(),
+  /** The stage group that ran (`events`, `full`, `talks`), when the run was a
+   * `sync --group`. Optional (widen-only, deploy.md §5): absent on older rows
+   * and ad-hoc runs; readers then fall back to parsing `command`. */
+  group: v.optional(v.string()),
+  /** The code revision that ran (a git commit sha, or `CAMSOCS_REVISION`).
+   * Optional (widen-only): absent means "not recorded". */
+  revision: v.optional(v.string()),
   status: literalUnion(HARVEST_RUN_STATUSES),
   startedAt: v.number(),
   /** null until `runs.finish`. */
@@ -679,6 +690,34 @@ export const listingRequestOutcomeValidator = v.object({
   acceptedAt: v.number(),
 })
 
+/** Where a request's notification went (convex/notifications.ts, ENG-104):
+ * each configured channel's last outcome. No message text, no address. */
+export const requestNotificationValidator = v.object({
+  channel: v.union(v.literal("slack"), v.literal("email"), v.literal("whatsapp")),
+  ok: v.boolean(),
+  error: v.optional(v.string()),
+  at: v.number(),
+  /** Tries so far (a failed channel is retried up to three times). */
+  attempts: v.optional(v.number()),
+})
+
+/** A broker's "Send test notification" (convex/notifications.ts): a synthetic
+ * request the relay and the email sender deliver like a real one. */
+export const notificationTestFields = {
+  /** `nt-<hex>`. */
+  key: v.string(),
+  createdAt: v.number(),
+  notifications: v.array(requestNotificationValidator),
+}
+
+/** The VPS relay that sends Slack and WhatsApp through Mya: which channels it
+ * serves and when it last asked for work (one row, `name` "vps"). */
+export const notifyRelayFields = {
+  name: v.string(),
+  channels: v.array(v.union(v.literal("slack"), v.literal("whatsapp"))),
+  lastSeenAt: v.number(),
+}
+
 export const listingRequestFields = {
   key: v.string(),
   orgKey: v.optional(v.string()),
@@ -696,6 +735,8 @@ export const listingRequestFields = {
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
   outcome: v.optional(listingRequestOutcomeValidator),
+  /** The new-request notification's delivery, per channel (ENG-104). */
+  notifications: v.optional(v.array(requestNotificationValidator)),
   /** When the retention job reduced an accepted correction its owner claims
    * cite (`request:<key>`) to a stub: key, kind, listing, role, outcome and
    * dates stay; the submitter's address, message and fields are gone (R8). */
@@ -888,6 +929,142 @@ export const coverageSnapshotFields = {
   computedAt: v.number(),
 }
 
+/** Clicks, impressions, CTR (0..1) and average position in Google Search. */
+const searchRowFields = {
+  clicks: v.number(),
+  impressions: v.number(),
+  ctr: v.number(),
+  position: v.number(),
+}
+
+export const posthogTrafficValidator = v.object({
+  windowDays: v.number(),
+  visitors: v.number(),
+  visitors7d: v.number(),
+  pageviews: v.number(),
+  pageviews7d: v.number(),
+  sessions: v.number(),
+  daily: v.array(v.object({ day: v.string(), visitors: v.number(), pageviews: v.number() })),
+  referrers: v.array(v.object({ domain: v.string(), sessions: v.number(), visitors: v.number() })),
+  pages: v.array(v.object({ path: v.string(), pageviews: v.number(), visitors: v.number() })),
+  /** The server's `page_visit` count (lib/visit-count.ts); absent in
+   * snapshots read before it existed. */
+  serverVisits: v.optional(
+    v.object({
+      visits: v.number(),
+      visits7d: v.number(),
+      daily: v.array(v.object({ day: v.string(), visits: v.number() })),
+      sources: v.array(v.object({ source: v.string(), visits: v.number(), visits7d: v.number() })),
+      pages: v.array(v.object({ page: v.string(), visits: v.number(), visits7d: v.number() })),
+    }),
+  ),
+})
+
+export const searchConsoleTrafficValidator = v.object({
+  ...searchRowFields,
+  siteUrl: v.string(),
+  startDate: v.string(),
+  endDate: v.string(),
+  daily: v.array(v.object({ day: v.string(), ...searchRowFields })),
+  queries: v.array(v.object({ query: v.string(), ...searchRowFields })),
+  pages: v.array(v.object({ path: v.string(), ...searchRowFields })),
+})
+
+export const trafficSourceStatuses = ["ok", "not_configured", "failed"] as const
+
+/** One traffic source in the snapshot: its latest outcome, and the data of
+ * its latest success (kept when a later read fails). */
+function trafficSource<T extends Validator<unknown, "required", string>>(data: T) {
+  return v.object({
+    status: literalUnion(trafficSourceStatuses),
+    /** The last read, successful or not. */
+    checkedAt: v.number(),
+    /** A short reason for the last failure (an HTTP status, an OAuth code). */
+    error: v.optional(v.string()),
+    /** When `data` was read. */
+    fetchedAt: v.optional(v.number()),
+    data: v.optional(data),
+  })
+}
+
+/**
+ * The website traffic the broker overview shows (convex/traffic.ts,
+ * convex/lib/traffic.ts): aggregate numbers read from PostHog and Google
+ * Search Console, one row per deployment, replaced hourly. Paths, referring
+ * domains and Google's search queries, no visitor-level data.
+ */
+/** The daily indexing check (convex/indexing.ts, convex/lib/indexing.ts):
+ * one row per URL our sitemaps list, with Google's last verdict on it. */
+const urlKind = v.union(
+  v.literal("page"),
+  v.literal("hub"),
+  v.literal("society"),
+  v.literal("event"),
+)
+const indexState = v.union(
+  v.literal("indexed"),
+  v.literal("waiting"),
+  v.literal("not_indexed"),
+  v.literal("problem"),
+)
+export const indexCheckFields = {
+  url: v.string(),
+  kind: urlKind,
+  /** When the check first found it in a sitemap. */
+  listedSince: v.number(),
+  checkedAt: v.optional(v.number()),
+  state: v.optional(indexState),
+  /** Google's coverage state, as it words it. */
+  coverage: v.optional(v.string()),
+  problem: v.optional(v.string()),
+  lastCrawlAt: v.optional(v.number()),
+  /** Our own read of a key page (`ownProblem`); absent when it was fine. */
+  ownProblem: v.optional(v.string()),
+  ownCheckedAt: v.optional(v.number()),
+}
+const stateCounts = v.object({
+  indexed: v.number(),
+  waiting: v.number(),
+  not_indexed: v.number(),
+  problem: v.number(),
+  unchecked: v.number(),
+})
+export const indexingSummaryFields = {
+  scope: v.literal("site"),
+  runAt: v.number(),
+  inspected: v.number(),
+  counts: v.object({
+    page: stateCounts,
+    hub: stateCounts,
+    society: stateCounts,
+    event: stateCounts,
+  }),
+  problems: v.array(v.object({ url: v.string(), kind: urlKind, problem: v.string() })),
+  lagging: v.array(
+    v.object({
+      url: v.string(),
+      kind: urlKind,
+      listedSince: v.number(),
+      state: v.union(indexState, v.literal("unchecked")),
+    }),
+  ),
+  sitemaps: v.array(
+    v.object({
+      path: v.string(),
+      issue: v.optional(v.string()),
+      lastDownloaded: v.optional(v.number()),
+    }),
+  ),
+  alerts: v.array(v.string()),
+}
+
+export const trafficSnapshotFields = {
+  scope: v.literal("site"),
+  posthog: trafficSource(posthogTrafficValidator),
+  searchConsole: trafficSource(searchConsoleTrafficValidator),
+  computedAt: v.number(),
+}
+
 /**
  * One accepted listing request, stamped for the form's rate limits
  * (convex/listingRequests.ts): which budget it used and the listing it was
@@ -1029,6 +1206,15 @@ export default defineSchema({
     .index("by_orgKey", ["orgKey"])
     .index("by_scope", ["scope"]),
   coverageSnapshots: defineTable(coverageSnapshotFields).index("by_scope", ["scope"]),
+  trafficSnapshots: defineTable(trafficSnapshotFields).index("by_scope", ["scope"]),
+  // The daily indexing check (convex/indexing.ts).
+  indexChecks: defineTable(indexCheckFields).index("by_url", ["url"]),
+  indexingSummaries: defineTable(indexingSummaryFields).index("by_scope", ["scope"]),
+  // Request notifications (ENG-104): broker test sends and the VPS relay's heartbeat.
+  notificationTests: defineTable(notificationTestFields)
+    .index("by_key", ["key"])
+    .index("by_createdAt", ["createdAt"]),
+  notifyRelays: defineTable(notifyRelayFields).index("by_name", ["name"]),
 
   // internal, written by the inbound webhook and the public form
   inboundEmails: defineTable(inboundEmailFields)

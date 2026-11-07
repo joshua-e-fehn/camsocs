@@ -2,7 +2,8 @@
 # Install, or upgrade, the camsocs harvest runner on the VPS host (decision D5;
 # the runbook is docs/ops-vps.md). Run as root. Every step checks before it
 # acts, so running it again changes only what differs: that is the upgrade.
-# It never touches Docker, Mya's container or cliproxy.
+# It never touches Docker, Mya's container or cliproxy (the request relay it
+# installs calls Mya's WhatsApp bridge at run time; docs/ops-vps.md §12).
 #
 #   install.sh --revision SHA [--deploy-key FILE] [--pipeline-env FILE]
 #              [--prod-env FILE] [--backup-env FILE] [--enable | --no-enable] [--diff]
@@ -39,7 +40,8 @@
 #   --diff               show what installing SHA would change, change nothing.
 #   --refresh-alert-env  copy the three Slack values from Mya's env file into
 #                        /etc/camsocs/alert.env again (after Mya's token
-#                        changed), and nothing else.
+#                        changed), and assemble /etc/camsocs/notify.env again,
+#                        and nothing else.
 #
 # Steps:
 #   1. tools: git, flock, timeout, curl, sha256sum, tar, ssh, python3, logrotate, systemctl
@@ -58,7 +60,11 @@
 #   7. the env files given (0600, camsocs; written as camsocs); their values are
 #      never printed
 #   8. /etc/camsocs/alert.env (0600 root): SLACK_BOT_TOKEN, SLACK_HOME_CHANNEL
-#      and SLACK_ALLOWED_USERS from Mya's env file, nothing else
+#      and SLACK_ALLOWED_USERS from Mya's env file, nothing else; and
+#      /etc/camsocs/notify.env (0600 root) for the request relay (ENG-104):
+#      those three and WHATSAPP_ALLOWED_USERS from Mya's env file, and
+#      CONVEX_HTTP_URL and PIPELINE_API_KEY from pipeline/.env.prod (read as
+#      camsocs), nothing else
 #   9. the runner's scripts → /usr/local/lib/camsocs-ops (root-owned), with the
 #      revision in REVISION; /var/lib/camsocs, /var/log/camsocs and
 #      /etc/logrotate.d/camsocs
@@ -84,7 +90,7 @@ LOG_DIR="/var/log/camsocs"
 KEY_PATH="$HOME_DIR/.ssh/camsocs_deploy"
 KNOWN_HOSTS="$HOME_DIR/.ssh/known_hosts"
 UNIT_DIR="/etc/systemd/system"
-TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer)
+TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer camsocs-notify.timer)
 MYA_ENV="/docker/hermes-agent-vspa/data/.env"
 # Root's own: the installed runner, its keys and its mirror of the repository.
 OPS_DIR="/usr/local/lib/camsocs-ops"
@@ -93,7 +99,7 @@ ALERT_ENV="$ETC_DIR/alert.env"
 ROOT_KEY="$ETC_DIR/deploy_key"
 ROOT_KNOWN_HOSTS="$ETC_DIR/known_hosts"
 MIRROR="/var/lib/camsocs-ops/camsocs.git"
-OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py install.sh)
+OPS_FILES=(camsocs-harvest.sh camsocs-alert.py camsocs-status.py camsocs-notify.py install.sh)
 # The backup (ENG-44): its script and toolchain, installed when the revision
 # has them (an earlier revision, installed for a rollback, has not).
 BACKUP_SCRIPT="camsocs-backup.py"
@@ -110,6 +116,11 @@ CONVEX_BACKEND_ASSET="convex-local-backend-x86_64-unknown-linux-gnu.zip"
 CONVEX_BACKEND_SHA256="7be627d8a8c9175b66a55cf6c4ab63c5f6bde1c412f59fbbe93f64a24a11bd13"
 CONVEX_BACKEND_URL="https://github.com/get-convex/convex-backend/releases/download/$CONVEX_BACKEND_RELEASE/$CONVEX_BACKEND_ASSET"
 ALERT_KEYS="SLACK_BOT_TOKEN|SLACK_HOME_CHANNEL|SLACK_ALLOWED_USERS"
+# The request relay's (ENG-104): the Slack values and the WhatsApp number from
+# Mya's env file, production's Convex URL and pipeline key from .env.prod.
+NOTIFY_ENV="$ETC_DIR/notify.env"
+NOTIFY_MYA_KEYS="SLACK_BOT_TOKEN|SLACK_HOME_CHANNEL|SLACK_ALLOWED_USERS|WHATSAPP_ALLOWED_USERS"
+NOTIFY_PROD_KEYS="CONVEX_HTTP_URL|PIPELINE_API_KEY"
 
 PIXI_VERSION="0.73.0"
 PIXI_ASSET="pixi-x86_64-unknown-linux-musl.tar.gz"
@@ -132,7 +143,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,75p' "$0"
+  sed -n '2,81p' "$0"
   exit 0
 }
 
@@ -175,6 +186,39 @@ refresh_alert_env() {
   fi
   grep -Eq '^[[:space:]]*(export[[:space:]]+)?SLACK_BOT_TOKEN[[:space:]]*=.' "$ALERT_ENV" ||
     warn "$MYA_ENV names no SLACK_BOT_TOKEN: failure alerts cannot be sent"
+}
+
+# The request relay's lines (ENG-104): the Slack values and the WhatsApp number
+# from Mya's env file, then production's Convex URL and pipeline key. .env.prod
+# lives in the camsocs checkout, so it is read as camsocs: a link planted
+# there cannot make root copy another file.
+notify_env_lines() {
+  if [[ -r "$MYA_ENV" ]]; then
+    grep -E "^[[:space:]]*(export[[:space:]]+)?($NOTIFY_MYA_KEYS)[[:space:]]*=" "$MYA_ENV" || true
+  fi
+  runuser -u "$USER_NAME" -- cat "$ROOT/pipeline/.env.prod" 2>/dev/null |
+    grep -E "^[[:space:]]*(export[[:space:]]+)?($NOTIFY_PROD_KEYS)[[:space:]]*=" || true
+}
+
+# The request relay's settings, assembled into one root-owned file.
+refresh_notify_env() {
+  install -d -m 0750 -o root -g root "$ETC_DIR"
+  local tmp
+  tmp="$(mktemp "$ETC_DIR/.notify.env.XXXXXX")"
+  chmod 0600 "$tmp"
+  notify_env_lines >"$tmp"
+  chown root:root "$tmp"
+  if [[ -f "$NOTIFY_ENV" ]] && cmp -s "$tmp" "$NOTIFY_ENV"; then
+    rm -f "$tmp"
+    say "$NOTIFY_ENV is up to date"
+  else
+    mv -f "$tmp" "$NOTIFY_ENV"
+    say "wrote $NOTIFY_ENV (0600 root: Slack, the WhatsApp number, Convex URL and pipeline key only)"
+  fi
+  grep -Eq '^[[:space:]]*(export[[:space:]]+)?SLACK_BOT_TOKEN[[:space:]]*=.' "$NOTIFY_ENV" ||
+    warn "$MYA_ENV names no SLACK_BOT_TOKEN: the request relay cannot use Slack"
+  grep -Eq '^[[:space:]]*(export[[:space:]]+)?PIPELINE_API_KEY[[:space:]]*=.' "$NOTIFY_ENV" ||
+    warn "no PIPELINE_API_KEY for the request relay: install --prod-env, then --refresh-alert-env"
 }
 
 # Fetches main into root's mirror, checks that REVISION is a commit on it and
@@ -545,8 +589,9 @@ install_runner() {
     warn "no $ROOT/pipeline/.env.prod yet: runs fail until --prod-env installs it"
   fi
 
-  # --- 8. the alert's three Slack values ---------------------------------------------------
+  # --- 8. the alert's three Slack values, the request relay's settings ----------------------
   refresh_alert_env
+  refresh_notify_env
 
   # --- 9. the runner's scripts and logs ---------------------------------------------------
   say "installing the runner of ${revision:0:12} → $OPS_DIR (root-owned)"
@@ -633,6 +678,7 @@ main() {
   [[ $EUID -eq 0 ]] || die "run as root (sudo $0 …)"
   if [[ $refresh_only -eq 1 ]]; then
     refresh_alert_env
+    refresh_notify_env
   else
     install_runner
   fi

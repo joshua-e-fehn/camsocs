@@ -8,10 +8,12 @@ import {
   eventEndedLongAgo,
   eventMetaDescription,
   eventPageTitle,
+  eventUnavailableAfter,
   repeatsThatDay,
   spokenTitle,
   titleSearchWords,
 } from "./events"
+import { type NextEvent, nextEvents } from "./next-events"
 import { pageMetadata } from "./page-metadata"
 import type { EventPublic } from "./public-api"
 import { publicQuery } from "./public-data"
@@ -75,6 +77,38 @@ export async function loadRepeatsThatDay(event: EventPublic): Promise<boolean> {
   }
 }
 
+/** Days of a society's programme read for "Next from" (`events.list`'s
+ * widest window). */
+const NEXT_WINDOW_DAYS = 180
+/** The University lists many events a day: a shorter look ahead. */
+const NEXT_UNIVERSITY_DAYS = 28
+
+/**
+ * The host's next events after this one (lib/next-events.ts): one anonymous,
+ * cached `events.list` read of its lead society's programme (or the
+ * University's listings) from the event's London day, or from today once it
+ * has passed, so the events of one day share the read. Never for a
+ * talks.cam-derived event (G1). Decoration: a failed read shows none.
+ */
+export async function loadNextEvents(event: EventPublic, now: number): Promise<NextEvent[]> {
+  if (event.talksDerived) return []
+  const lead = event.organisers.find((o) => o.role !== "sponsor")
+  if (!event.fromUniversity && !lead) return []
+  const from = londonMidnight(londonIsoDate(Math.max(event.startsAt, now)))
+  const days = event.fromUniversity ? NEXT_UNIVERSITY_DAYS : NEXT_WINDOW_DAYS
+  try {
+    const listed = await publicQuery(api.events.list, {
+      from,
+      to: londonMidnight(addDays(londonIsoDate(from), days)),
+      ...(event.fromUniversity ? { university: "only" as const } : { orgKey: lead?.key }),
+    })
+    return nextEvents(event, listed, now)
+  } catch (error) {
+    unstable_rethrow(error)
+    return []
+  }
+}
+
 /** Term dates for the week tag. Decoration: without them the page renders. */
 export async function loadTerms(): Promise<TermDatesRow[]> {
   try {
@@ -98,7 +132,11 @@ export function venueNameOf(event: EventPublic, venue: EventVenue | undefined) {
  * canonical URL on its side of the talks boundary, its `.ics` advertised as a
  * calendar alternate (public events), and robots:
  *  - a Cambridge-only event is for signed-in readers, not search;
- *  - one that ended over 30 days ago is noindex, follow (owner decision G4).
+ *  - one that ended over 30 days ago is noindex, follow (owner decision G4);
+ *  - before that, `unavailable_after` names that same moment (event
+ *    indexing, 2026-11-07), so Google drops the page on time without having
+ *    to recrawl it to find the noindex, and crawls the URL less after it
+ *    (Search Central, "Robots meta tag"): its crawling goes to new events.
  */
 export function eventMetadata(
   event: EventPublic,
@@ -130,7 +168,7 @@ export function eventMetadata(
   if (event.visibility === "cam_only")
     return { ...metadata, robots: { index: false, follow: false } }
   if (eventEndedLongAgo(event, now)) return { ...metadata, robots: { index: false, follow: true } }
-  return metadata
+  return { ...metadata, robots: { unavailable_after: eventUnavailableAfter(event) } }
 }
 
 /** The metadata of a page whose event this viewer may not see. */

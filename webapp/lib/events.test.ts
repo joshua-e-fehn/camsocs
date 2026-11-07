@@ -17,6 +17,7 @@ import {
   eventStructuredData,
   eventsListStructuredData,
   eventTimes,
+  eventUnavailableAfter,
   isEventIdentityUrl,
   matchesEventQuery,
   mergeByStart,
@@ -489,12 +490,28 @@ describe("the event's page", () => {
           "@type": "Organization",
           "@id": "https://camsocs.uk/societies/jazz#organization",
           name: "Cambridge University Jazz Society",
+          // No website known: its profile here (the node has no url).
+          url: "https://camsocs.uk/societies/jazz",
         },
       ],
-      location: { "@type": "Place", name: "The Union Chamber" },
+      location: {
+        "@type": "Place",
+        name: "The Union Chamber",
+        address: { "@type": "PostalAddress", streetAddress: "The Union Chamber" },
+      },
     })
-    // The society's node (its profile) holds the url, its own website.
-    expect((hosted.organizer as Record<string, unknown>[])[0]).not.toHaveProperty("url")
+    // With a website: that, the same url as the society's node on its profile.
+    const withSite = eventJsonLd(
+      {
+        ...PAGE,
+        organisers: PAGE.organisers.map((o) => ({ ...o, website: "https://jazz.example.org" })),
+      },
+      "x",
+    )
+    expect((withSite.organizer as Record<string, unknown>[])[0]).toMatchObject({
+      "@id": "https://camsocs.uk/societies/jazz#organization",
+      url: "https://jazz.example.org",
+    })
     const external = eventJsonLd({ ...PAGE, hosting: "takes_part", cancelled: true }, "x")
     expect(external.organizer).toBeUndefined()
     expect(external.eventStatus).toBe("https://schema.org/EventCancelled")
@@ -667,8 +684,19 @@ describe("the event's page", () => {
     }
     // Free text: only when it names Cambridge; an away fixture is not asserted.
     expect(address("Fenner's, Cambridge")).toEqual(cambridge)
-    expect(address("Iffley Road, Oxford")).toBeUndefined()
-    expect(address("The Union Chamber")).toBeUndefined()
+    // Every Place has an address (Search Console): else the source's own text.
+    expect(address("Iffley Road, Oxford")).toEqual({
+      "@type": "PostalAddress",
+      streetAddress: "Iffley Road, Oxford",
+    })
+    expect(address("The Union Chamber")).toEqual({
+      "@type": "PostalAddress",
+      streetAddress: "The Union Chamber",
+    })
+    expect(address(undefined, { name: "Invented Ground" })).toEqual({
+      "@type": "PostalAddress",
+      streetAddress: "Invented Ground",
+    })
     // A keyed venue: a college's, inside the city, or an address naming it.
     expect(address(undefined, { name: "Invented Hall", collegeKey: "col-x" })).toEqual(cambridge)
     expect(address(undefined, { name: "Invented Hall", lat: 52.2, lng: 0.12 })).toMatchObject(
@@ -717,6 +745,14 @@ describe("the event's page", () => {
     expect(eventHasEnded(EVENT, end)).toBe(true)
     expect(eventEndedLongAgo(EVENT, end + 30 * 86_400_000)).toBe(false)
     expect(eventEndedLongAgo(EVENT, end + 30 * 86_400_000 + 1)).toBe(true)
+  })
+
+  test("unavailable_after names the moment the page turns noindex (G4)", () => {
+    const after = Date.parse(eventUnavailableAfter(EVENT))
+    expect(after).toBe(EVENT.endsAt + 30 * 86_400_000)
+    expect(eventEndedLongAgo(EVENT, after)).toBe(false)
+    expect(eventEndedLongAgo(EVENT, after + 1)).toBe(true)
+    expect(eventUnavailableAfter(EVENT)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   })
 })
 

@@ -367,14 +367,19 @@ These are never returned by public queries.
   | Field | Type |
   |---|---|
   | runKey | string |
-  | mode | |
-  | stages | string[] |
-  | startedAt / finishedAt | number |
+  | command | string (the CLI command, e.g. `sync --group events`) |
+  | requestedStages | string[] |
+  | pipelineVersion | string |
+  | group? | string (the `sync --group` that ran) |
+  | revision? | string (git sha or `CAMSOCS_REVISION`) |
   | status | `running \| success \| partial \| failed` |
-  | counts | Record |
-  | warnings, failedUrls | string[] |
+  | startedAt | number |
+  | finishedAt | number \| null |
+  | stages | stage result[] |
+  | warnings | string[] |
+  | error | string \| null |
 
-  Each stage's result is `{name, status, inserted, updated, unchanged, skipped, error, notes, metrics?}`; `metrics` holds named counts beyond the four (the resolve stage's quarantine: `quarantineHeld`, `quarantineDropped`, `quarantineReview`, which the broker overview shows; the report stage's `listed`, `upcomingEvents`). A stage that stages observations counts them as `inserted`; `load` counts what reached Convex. Rows are deleted after a year (R10).
+  `group` and `revision` are optional (widen-only, deploy.md §5): absent means "not recorded", and a blank posted value is stored as absent. Readers get a run's group from `runGroup` (`convex/runs.ts`), which falls back to parsing `sync --group <g>` from `command` for older rows and returns null for an ad-hoc `--stages` run. Each stage's result is `{name, status, inserted, updated, unchanged, skipped, error, notes, metrics?, durationMs?}`; `durationMs` is the stage's wall-clock time in milliseconds, absent when not recorded; `metrics` holds named counts beyond the four (the resolve stage's quarantine: `quarantineHeld`, `quarantineDropped`, `quarantineReview`, which the broker overview shows; the report stage's `listed`, `upcomingEvents`). A stage that stages observations counts them as `inserted`; `load` counts what reached Convex. Rows are deleted after a year (R10).
 - **inboundEmails**: forwarded society list mail.
 
   | Field | Type |
@@ -545,7 +550,7 @@ These are computed in Convex by `convex/derive.ts`, which runs on ingest and fro
 
 - **status**
   - `archived` if the organisation is marked `defunct`.
-  - `active` if `lastActiveAt` falls within 180 days, or if the organisation is on a register for the current academic year (`registrations.*.registered` with `year` equal to it, or with no `year` but reported by a claim retrieved in it). The registers that count are those that list only the current year's groups: the SU directory, the Proctors' register, the Sports Service and CUCBC (`CURRENT_YEAR_REGISTERS` in `convex/lib/derived.ts`). **A Camdram listing alone does not count** (ENG-36, 2026-11-03): Camdram keeps every society that ever put on a show, so before this every Camdram-listed group was `active`. A theatre group's Camdram shows count as activity through its events (`lastActiveAt`), like any group's; a group listed only on Camdram, with no event, is `unknown`. On 2026-11-03 this moved 64 groups from `active` to `unknown` (750 / 50 / 0 → 686 / 114 / 0 active / unknown / dormant, estimated from the public data of all 800 listed groups); none is `dormant` until events older than 180 days exist (from about April 2027), since event history starts in October 2026. Statuses are re-derived by the daily cron (`derive-daily`) and by the weekly full run (`sync --group full`, `derive=True`; `camsocs derive` does it at once).
+  - `active` if `lastActiveAt` falls within 180 days, or if the organisation is on a register for the current academic year (`registrations.*.registered` with `year` equal to it, or with no `year` but reported by a claim retrieved in it). The registers that count are those that list only the current year's groups: the SU directory, the Proctors' register, the Sports Service and CUCBC (`currentYearRegisters(profile)` in `convex/lib/derived.ts`; Cambridge's list is `CAMBRIDGE.currentYearRegisters` in `webapp/lib/campus/profiles/cam.ts`). **A Camdram listing alone does not count** (ENG-36, 2026-11-03): Camdram keeps every society that ever put on a show, so before this every Camdram-listed group was `active`. A theatre group's Camdram shows count as activity through its events (`lastActiveAt`), like any group's; a group listed only on Camdram, with no event, is `unknown`. On 2026-11-03 this moved 64 groups from `active` to `unknown` (750 / 50 / 0 → 686 / 114 / 0 active / unknown / dormant, estimated from the public data of all 800 listed groups); none is `dormant` until events older than 180 days exist (from about April 2027), since event history starts in October 2026. Statuses are re-derived by the daily cron (`derive-daily`) and by the weekly full run (`sync --group full`, `derive=True`; `camsocs derive` does it at once).
   - `dormant` if the last activity was more than 180 days ago and there is no current registration.
   - Otherwise `unknown`.
   - Academic years turn over on **1 July** (London), e.g. `2026-27` runs 1 Jul 2026 – 30 Jun 2027.
