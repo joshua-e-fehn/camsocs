@@ -423,6 +423,13 @@ export function eventEndedLongAgo(event: Timed, now: number): boolean {
   return now - eventEnd(event) > ENDED_NOINDEX_MS
 }
 
+/** When search engines should stop showing an event's page: G4's moment,
+ * the end of `ENDED_NOINDEX_MS` after it ended, as ISO 8601 for the robots
+ * meta `unavailable_after` (lib/event-page.ts `eventMetadata`). */
+export function eventUnavailableAfter(event: Timed): string {
+  return new Date(eventEnd(event) + ENDED_NOINDEX_MS).toISOString()
+}
+
 /** A document title, at most this long with the " · CAMsocs" the layout's
  * template adds (owner decision G2's limit, applied to events too). */
 export const TITLE_MAX = MAX_TITLE_LENGTH

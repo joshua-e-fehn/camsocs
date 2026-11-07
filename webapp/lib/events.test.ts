@@ -17,6 +17,7 @@ import {
   eventStructuredData,
   eventsListStructuredData,
   eventTimes,
+  eventUnavailableAfter,
   isEventIdentityUrl,
   matchesEventQuery,
   mergeByStart,
@@ -744,6 +745,14 @@ describe("the event's page", () => {
     expect(eventHasEnded(EVENT, end)).toBe(true)
     expect(eventEndedLongAgo(EVENT, end + 30 * 86_400_000)).toBe(false)
     expect(eventEndedLongAgo(EVENT, end + 30 * 86_400_000 + 1)).toBe(true)
+  })
+
+  test("unavailable_after names the moment the page turns noindex (G4)", () => {
+    const after = Date.parse(eventUnavailableAfter(EVENT))
+    expect(after).toBe(EVENT.endsAt + 30 * 86_400_000)
+    expect(eventEndedLongAgo(EVENT, after)).toBe(false)
+    expect(eventEndedLongAgo(EVENT, after + 1)).toBe(true)
+    expect(eventUnavailableAfter(EVENT)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   })
 })
 

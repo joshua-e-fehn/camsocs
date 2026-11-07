@@ -24,6 +24,7 @@ import type * as broker_suppressions from "../broker/suppressions.js";
 import type * as coverage from "../coverage.js";
 import type * as crons from "../crons.js";
 import type * as derive from "../derive.js";
+import type * as eventFeed from "../eventFeed.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
 import type * as ingest_broker from "../ingest/broker.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   coverage: typeof coverage;
   crons: typeof crons;
   derive: typeof derive;
+  eventFeed: typeof eventFeed;
   events: typeof events;
   http: typeof http;
   "ingest/broker": typeof ingest_broker;
