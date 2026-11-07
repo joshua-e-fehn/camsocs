@@ -265,7 +265,7 @@ export const get = query({
     const { contacts, names } = await loadSuppressed(ctx)
     return scrubTalkItem(
       {
-        ...(await talkListItem(talk, departmentCache(ctx))),
+        ...(await talkListItem(talk, departmentCache(ctx), { websites: true })),
         abstract: details?.abstract ?? null,
         specialMessage: details?.specialMessage ?? null,
         sourceUrl: talk.sourceUrl,

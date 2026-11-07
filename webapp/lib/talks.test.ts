@@ -166,6 +166,15 @@ describe("JSON-LD", () => {
       "@type": "Organization",
       name: "Earth Sciences",
     })
+    // The department's website is the organizer's url (Search Console).
+    const withSite = talkJsonLd(
+      {
+        ...talk,
+        departments: [{ ...talk.departments[0], website: "https://dept.example.ac.uk" }],
+      },
+      PAGE,
+    )
+    expect(withSite.organizer).toMatchObject({ url: "https://dept.example.ac.uk" })
   })
 
   test("the page's graph: WebPage in the site, the Event, and Talks › department › talk", () => {

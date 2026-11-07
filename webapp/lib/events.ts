@@ -337,7 +337,7 @@ export function eventOutlookCalendarUrl(
  * has all of it; the tests pass less). */
 export type PageEvent = Omit<CalendarEvent, "organisers"> & {
   eventType: EventType
-  organisers: readonly (Organiser & { key?: string; slug?: string })[]
+  organisers: readonly (Organiser & { key?: string; slug?: string; website?: string })[]
   status?: string
   visibility?: string
   source: string
@@ -672,8 +672,12 @@ function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
   const name = venue?.name ?? usableVenueText(event.venueText)
   if (!name) return undefined
   const local = placeIsInCambridge(venue, event.venueText)
+  // Google wants an address on every Place (Search Console, 2026-11-07). When
+  // neither a street address nor the town is known, it is the place as the
+  // source wrote it: no town is asserted that no source gave.
+  const street = venue?.address ?? (local ? undefined : name)
   const address = {
-    ...(venue?.address ? { streetAddress: venue.address } : {}),
+    ...(street ? { streetAddress: street } : {}),
     ...(local
       ? { addressLocality: "Cambridge", addressRegion: "Cambridgeshire", addressCountry: "GB" }
       : {}),
@@ -681,9 +685,7 @@ function eventLocation(event: PageEvent, venue: EventVenue | undefined) {
   return {
     "@type": "Place",
     name,
-    ...(Object.keys(address).length > 0
-      ? { address: { "@type": "PostalAddress", ...address } }
-      : {}),
+    address: { "@type": "PostalAddress", ...address },
     ...(venue?.lat !== undefined && venue.lng !== undefined
       ? { geo: { "@type": "GeoCoordinates", latitude: venue.lat, longitude: venue.lng } }
       : {}),
@@ -771,18 +773,25 @@ export function eventJsonLd(
       ? { organizer: [{ "@type": "Organization", name: UNIVERSITY_NAME, url: UNIVERSITY_URL }] }
       : organizers.length > 0
         ? {
-            // A reference to the society's node on its profile, by `@id`.
-            // No `url` here: that node's `url` is the society's own website
-            // (lib/directory-profile.ts societyJsonLd), and one `@id` must not
-            // carry two (integration of the SEO audit lanes, 2026-11-02).
+            // A reference to the society's node on its profile, by `@id`,
+            // with the `url` Google asks of an organizer (Search Console,
+            // 2026-11-07): the society's own website, which is that node's
+            // `url` too (lib/directory-profile.ts societyJsonLd), so one
+            // `@id` never carries two (integration of the SEO audit lanes,
+            // 2026-11-02); else its profile here, the node having no `url`.
             organizer: organizers.map((organiser) =>
               organiser.slug
                 ? {
                     "@type": "Organization",
                     "@id": organizationId(organiser.slug),
                     name: organiser.name,
+                    url: organiser.website ?? pageId(`/societies/${organiser.slug}`),
                   }
-                : { "@type": "Organization", name: organiser.name },
+                : {
+                    "@type": "Organization",
+                    name: organiser.name,
+                    ...(organiser.website ? { url: organiser.website } : {}),
+                  },
             ),
           }
         : {}),

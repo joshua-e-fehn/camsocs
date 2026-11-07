@@ -261,6 +261,9 @@ describe("events.list / events.get", () => {
   test("a window of events the viewer may see, with organisers and no internal source URL", async () => {
     const t = newTest()
     const keys = await seed(t)
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [claim("org-chess", "website", "https://cuchess.example.org/")],
+    })
     const window = { from: NOW, to: NOW + 30 * DAY }
     const anonymous = await t.query(api.events.list, window)
     expect(anonymous.map((e) => e.title)).toEqual(["Open simul"])
@@ -292,6 +295,10 @@ describe("events.list / events.get", () => {
     expect(Object.keys(anonymous[0])).not.toContain("description")
     const details = await t.query(api.events.get, { key: anonymous[0].key })
     expect(details?.meta.title?.status).toBe("found")
+    // The page names the organiser's own website (JSON-LD organizer.url); a list does not.
+    const chess = details?.organisers.find((organiser) => organiser.key === "org-chess")
+    expect(chess?.website).toBe("https://cuchess.example.org/")
+    expect(anonymous.flatMap((event) => event.organisers).some((o) => "website" in o)).toBe(false)
 
     expect(await t.query(api.events.get, { key: keys.cam })).toBeNull()
     expect(await t.query(api.events.get, { key: keys.members })).toBeNull()
