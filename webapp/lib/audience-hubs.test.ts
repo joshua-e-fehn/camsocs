@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { AUDIENCE_PAGES, audienceIntro, unionCards } from "./audience-hubs"
+import { AUDIENCE_PAGES, audienceIntro, joinLabels, unionCards } from "./audience-hubs"
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from "./page-metadata"
 import { PAGE_PATHS } from "./sitemap"
 
@@ -34,4 +34,14 @@ describe("audience pages", () => {
     expect(text).toEndWith(page.how)
     expect(audienceIntro(page, [])).toBe("CAMsocs lists no societies for beginners yet.")
   })
+})
+
+test("joinLabels keeps a label's own comma readable", () => {
+  expect(joinLabels(["Sport", "Music", "Drama"])).toBe("Sport, Music and Drama")
+  expect(joinLabels(["Academic", "Identity, Community & Wellbeing"])).toBe(
+    "Academic and Identity, Community & Wellbeing",
+  )
+  expect(joinLabels(["A", "Identity, Community & Wellbeing", "C"])).toBe(
+    "A; Identity, Community & Wellbeing and C",
+  )
 })

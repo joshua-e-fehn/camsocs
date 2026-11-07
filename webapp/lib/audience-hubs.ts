@@ -90,6 +90,14 @@ export function unionCards<T extends HubCard>(lists: readonly (readonly T[])[]):
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name, "en-GB"))
 }
 
+/** "A, B and C", or "A; B and C" when a label has a comma of its own
+ * ("Identity, Community & Wellbeing"). */
+export function joinLabels(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels.join("")
+  const sep = labels.some((label) => label.includes(",")) ? "; " : ", "
+  return `${labels.slice(0, -1).join(sep)} and ${labels[labels.length - 1]}`
+}
+
 /** "CAMsocs lists 131 societies and clubs for beginners, most of them in Sport, Music and …". */
 export function audienceIntro(page: AudiencePage, cards: readonly HubCard[]): string {
   if (cards.length === 0) return `CAMsocs lists no societies for ${page.who} yet.`
@@ -100,7 +108,6 @@ export function audienceIntro(page: AudiencePage, cards: readonly HubCard[]): st
     .slice(0, 3)
     .map(([c]) => CATEGORY_LABELS[c])
   const many = cards.length === 1 ? "society or club" : "societies and clubs"
-  const areas =
-    top.length > 0 ? `, most of them in ${top.join(", ").replace(/, ([^,]*)$/, " and $1")}` : ""
+  const areas = top.length > 0 ? `, most of them in ${joinLabels(top)}` : ""
   return `CAMsocs lists ${cards.length} ${many} for ${page.who}${areas}. ${page.how}`
 }
