@@ -2,7 +2,10 @@
 
 Runs the ordered registry in `camsocs_pipeline.stages` (`STAGES`)::
 
-    seed → harvest → resolve → enrich → events → inbox → load → report
+    seed → harvest → resolve → enrich → classify → events → inbox → load → talks → report
+
+— the campus's registry (`stages.registry(profile)`, decision D8): Cambridge's
+is `STAGES` itself; another campus runs the engine stages plus its own.
 
 Each stage runs inside `_guard`, which records a failure on the stage's report
 instead of ending the run: one source being down must not cost the others. A
@@ -10,11 +13,12 @@ stage whose `requires` include a stage that *failed in this run* is reported
 `not_run` instead (e.g. `load` after a failed `resolve`), rather than
 producing a cascade of errors that buries the cause.
 
-A **group** (`camsocs sync --group events|full`, `stages.GROUPS`) names the
-stages one scheduled run executes. Before a group runs, `group_inputs` checks
-that what it reads from earlier runs is on disk (`StageGroup.needs`): a daily
-events run on a host that never ran the full harvest stops with that message
-instead of succeeding with nothing.
+A **group** (`camsocs sync --group events|full|talks`, `stages.GROUPS`, or the
+campus's `stages.groups(profile)`) names the stages one scheduled run
+executes. Before a group runs, `group_inputs` checks that what it reads from
+earlier runs is on disk (`StageGroup.needs`): a daily events run on a host
+that never ran the full harvest stops with that message instead of
+succeeding with nothing.
 
 A real run is bracketed by the run log in Convex: `health()` first (a rotated
 key is one clean 401 before any work), then `runs.start`, the stages, and
@@ -40,21 +44,24 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from camsocs_pipeline import __version__
-from camsocs_pipeline.config import Settings
+from camsocs_pipeline import __version__, campuses
+from camsocs_pipeline.campuses.cam import CAMBRIDGE
+from camsocs_pipeline.campuses.profile import CampusProfile
+from camsocs_pipeline.config import ConfigError, Settings
 from camsocs_pipeline.pipeline.context import Stage, StageContext, StageFn, StageGroup
 from camsocs_pipeline.pipeline.load import ConvexError, ConvexLoader
 from camsocs_pipeline.pipeline.report import RunReport, StageReport, mint_run_key
 from camsocs_pipeline.pipeline.state import SyncState, load_state, save_state
 from camsocs_pipeline.stages import GROUPS, STAGES
+from camsocs_pipeline.stages import registry as campus_registry
 from camsocs_pipeline.staging.store import StagingStore
 from camsocs_pipeline.telemetry import HarvestTelemetry
 
 logger = logging.getLogger(__name__)
 
-#: Canonical order of the registered stages. A subset requested with
-#: `--stages` still runs in this order.
-STAGE_ORDER: tuple[str, ...] = tuple(stage.name for stage in STAGES)
+#: Canonical order of Cambridge's registered stages (`registry(CAMBRIDGE)`,
+#: which is `STAGES`). A subset requested with `--stages` still runs in this order.
+STAGE_ORDER: tuple[str, ...] = tuple(stage.name for stage in campus_registry(CAMBRIDGE))
 
 
 def resolve_stages(
@@ -145,9 +152,23 @@ def run_sync(
     `runs.start`); stage failures are recorded on the report instead.
 
     `telemetry` receives the run's start, stage and finish events; default
-    none. The caller closes it."""
+    none. The caller closes it.
+
+    The run belongs to the process's campus (`campuses.active()`, which the
+    CLI configures from `settings.campus`): its registry is the default, and
+    every stage sees its profile. Settings of another campus are refused."""
     if group is not None and stages:
         raise ValueError("Give --stages or --group, not both.")
+    profile = campuses.active()
+    if settings.campus != profile.id:
+        raise ConfigError(
+            f"The settings are for campus {settings.campus}, but the process is configured "
+            f"for {profile.id} (campuses.configure)."
+        )
+    if registry is None and profile.id != CAMBRIDGE.id:
+        # Cambridge's registry is `STAGES` itself, which `resolve_stages`
+        # reads from this module (so a test may replace it here).
+        registry = campus_registry(profile)
     if group is not None:
         selected = resolve_stages(group.stages or None, registry)
         warnings = group_inputs(group, StagingStore(settings.staging_dir), now)
@@ -191,7 +212,7 @@ def run_sync(
                 pipeline_version=__version__,
             )
 
-        _run_stages(selected, report, settings, loader, state, limit, telemetry)
+        _run_stages(selected, report, settings, loader, state, limit, telemetry, profile)
 
         if not loader.dry_run:
             try:
@@ -223,6 +244,7 @@ def _run_stages(
     state: SyncState,
     limit: int | None,
     telemetry: HarvestTelemetry,
+    profile: CampusProfile,
 ) -> None:
     staging = StagingStore(settings.staging_dir)
     failed: set[str] = set()
@@ -243,6 +265,7 @@ def _run_stages(
             staging=staging,
             dry_run=loader.dry_run,
             limit=limit,
+            profile=profile,
         )
         telemetry.stage_started(stage.name)  # the stage its LLM generations carry
         started = time.monotonic()

@@ -179,3 +179,85 @@ def test_the_summary_json_records_the_run(make_settings, tmp_path) -> None:
     assert written["summary"][0].startswith("term_dates:")
     assert written["coverage"] is None
     assert not list(tmp_path.glob(".*.tmp")), "written whole, through a temporary file"
+
+
+# --- the campus (decision D8) -------------------------------------------------------------------
+
+
+@pytest.fixture
+def zz_campus():
+    from camsocs_pipeline import campuses
+    from tests.campus_zz import registered
+
+    with registered() as profile:
+        yield profile
+    assert campuses.active().id == "cam"
+
+
+@pytest.fixture
+def dev_env(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """A stand-in for pipeline/.env, which a test never reads."""
+    import camsocs_pipeline.config as config
+
+    base = tmp_path / ".env"
+    base.write_text(f"CAMSOCS_STAGING_DIR={tmp_path / 'staging'}\n")
+    monkeypatch.setattr(config, "ENV_FILE", base)
+    return base
+
+
+def test_the_help_names_the_three_pillars() -> None:
+    result = CliRunner().invoke(cli, ["--help"], obj={})
+    assert result.exit_code == 0
+    assert "camsocs: societies, events and talks pipeline" in result.output
+    assert "--campus" in result.output
+
+
+def test_status_names_the_campus(make_settings) -> None:
+    result = invoke(make_settings(), "status")
+    assert result.exit_code == 0, result.output
+    assert "Campus:" in result.output and "cam (University of Cambridge)" in result.output
+
+
+def test_an_unknown_campus_flag_fails_before_anything_runs(dev_env) -> None:
+    result = CliRunner().invoke(cli, ["--campus", "ox", "status"], obj={})
+    assert result.exit_code == 1
+    assert "Unknown campus" in result.output
+
+
+def test_a_campus_flag_contradicting_the_env_file_fails(dev_env, zz_campus) -> None:
+    dev_env.write_text(dev_env.read_text() + "CAMSOCS_CAMPUS=cam\n")
+    result = CliRunner().invoke(cli, ["--campus", "zz", "status"], obj={})
+    assert result.exit_code == 1
+    assert "--campus zz disagrees with CAMSOCS_CAMPUS=cam" in result.output
+
+
+def test_the_campus_flag_configures_the_process(dev_env, zz_campus) -> None:
+    from camsocs_pipeline import campuses
+
+    result = CliRunner().invoke(cli, ["--campus", "zz", "status"], obj={})
+    assert result.exit_code == 0, result.output
+    assert "zz (Testford University)" in result.output
+    assert campuses.active() is zz_campus
+    campuses.reset_for_tests()
+
+
+def test_a_campus_runs_its_own_groups(dev_env, zz_campus) -> None:
+    from camsocs_pipeline import campuses
+
+    result = CliRunner().invoke(
+        cli, ["--campus", "zz", "sync", "--group", "events", "--dry-run"], obj={}
+    )
+    assert result.exit_code == 1
+    # zz's events group, not Cambridge's: it needs what zz's full run stages.
+    assert "holds no _resolved, manual yet" in result.output
+    unknown = CliRunner().invoke(cli, ["--campus", "zz", "sync", "--stages", "su_directory"])
+    assert "Unknown stage(s): su_directory" in unknown.output
+    campuses.reset_for_tests()
+
+
+def test_injected_settings_refuse_another_campus_flag(make_settings) -> None:
+    result = CliRunner().invoke(
+        cli, ["--campus", "zz", "status"], obj={"settings": make_settings()}
+    )
+    assert result.exit_code == 2
+    assert "disagrees" in result.output
