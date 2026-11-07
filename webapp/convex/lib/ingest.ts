@@ -108,6 +108,46 @@ export function sameFields(existing: Record<string, unknown>, incoming: Record<s
   return Object.keys(incoming).every((key) => valuesEqual(existing[key], incoming[key]))
 }
 
+/**
+ * Bookkeeping stamps a harvest refreshes on every run whatever the source
+ * says: when the row was last seen, when each field was retrieved, when a
+ * health check last ran. A row that differs only in these has not changed
+ * for a reader.
+ */
+export const VOLATILE_KEYS: ReadonlySet<string> = new Set([
+  "lastSeenAt",
+  "retrievedAt",
+  "checkedAt",
+])
+
+function withoutVolatile(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutVolatile)
+  if (value !== null && typeof value === "object" && !(value instanceof ArrayBuffer)) {
+    const kept: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (!VOLATILE_KEYS.has(key)) kept[key] = withoutVolatile(item)
+    }
+    return kept
+  }
+  return value
+}
+
+/**
+ * `sameFields` ignoring the `VOLATILE_KEYS` stamps at any depth: whether what
+ * a page shows would change. An entity's `updatedAt` moves only when this is
+ * false, so the sitemap's `lastmod`, a profile's `dateModified` and its
+ * "updated" date stay honest instead of reading "today" after every harvest
+ * (Search Console review 2026-11-07: 601 of 612 events carried the day's
+ * date). Google trusts `lastmod` only when it is reliably accurate.
+ */
+export function sameContent(existing: Record<string, unknown>, incoming: Record<string, unknown>) {
+  return Object.keys(incoming).every(
+    (key) =>
+      VOLATILE_KEYS.has(key) ||
+      valuesEqual(withoutVolatile(existing[key]), withoutVolatile(incoming[key])),
+  )
+}
+
 /** What happened to one row. */
 export type UpsertOutcome = "inserted" | "updated" | "unchanged"
 

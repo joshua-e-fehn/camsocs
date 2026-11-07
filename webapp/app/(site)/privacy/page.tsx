@@ -259,11 +259,13 @@ export default function PrivacyPage() {
           Separately, and without storing anything in or reading anything from your browser, our
           servers report their own errors to PostHog (the page path, the error and its message, and
           where in our code it happened; never your IP address, cookies or anything you sent) and
-          count calendar-feed downloads (which feed, and which event or talk) and request-form
-          submissions (only the kind of request). None of these carries your IP address, browser
-          details, cookies or anything you typed, and they are built to contain no personal data. A
-          request-form count is sent the moment we store your request, so we could match the two by
-          time; it adds nothing to what the stored request already says.
+          count calendar-feed downloads (which feed, and which event or talk), request-form
+          submissions (only the kind of request) and the pages browsers load from us (only the kind
+          of page, such as “a society page”, and the kind of site the visitor came from, such as “a
+          search engine”; never the address of the page or the site). None of these carries your IP
+          address, browser details, cookies or anything you typed, and they are built to contain no
+          personal data. A request-form count is sent the moment we store your request, so we could
+          match the two by time; it adds nothing to what the stored request already says.
         </p>
         <h3>Sources</h3>
         <p>

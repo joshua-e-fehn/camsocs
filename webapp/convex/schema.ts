@@ -928,6 +928,17 @@ export const posthogTrafficValidator = v.object({
   daily: v.array(v.object({ day: v.string(), visitors: v.number(), pageviews: v.number() })),
   referrers: v.array(v.object({ domain: v.string(), sessions: v.number(), visitors: v.number() })),
   pages: v.array(v.object({ path: v.string(), pageviews: v.number(), visitors: v.number() })),
+  /** The server's `page_visit` count (lib/visit-count.ts); absent in
+   * snapshots read before it existed. */
+  serverVisits: v.optional(
+    v.object({
+      visits: v.number(),
+      visits7d: v.number(),
+      daily: v.array(v.object({ day: v.string(), visits: v.number() })),
+      sources: v.array(v.object({ source: v.string(), visits: v.number(), visits7d: v.number() })),
+      pages: v.array(v.object({ page: v.string(), visits: v.number(), visits7d: v.number() })),
+    }),
+  ),
 })
 
 export const searchConsoleTrafficValidator = v.object({

@@ -65,6 +65,17 @@ function posthogStub(calls: Call[]): typeof fetch {
         ],
       })
     }
+    if (query.includes("AS source,")) {
+      return json({
+        results: [
+          ["google", 30, 12],
+          ["direct", 10, 4],
+        ],
+      })
+    }
+    if (query.includes("AS page,")) {
+      return json({ results: [["society", 25, 9]] })
+    }
     return json({
       results: [
         ["/", 40, 12],
@@ -148,13 +159,27 @@ describe("PostHog", () => {
   test("reads totals, days, referrers and pages", async () => {
     const calls: Call[] = []
     const traffic = await fetchPostHogTraffic(posthogConfig, posthogStub(calls), "cam")
-    expect(calls).toHaveLength(4)
+    expect(calls).toHaveLength(7)
     expect(calls[0]?.url).toBe("https://eu.posthog.com/api/projects/330133/query/")
     expect(new Headers(calls[0]?.init.headers).get("Authorization")).toBe(`Bearer ${POSTHOG_KEY}`)
     expect(traffic).toMatchObject({ visitors: 17, visitors7d: 9, pageviews: 97, sessions: 29 })
     expect(traffic.daily.map((d) => d.day)).toEqual(["2026-11-06", "2026-11-07"])
     expect(traffic.referrers.map((r) => r.domain)).toEqual(["$direct", "www.google.com", "$direct"])
     expect(traffic.pages[0]).toEqual({ path: "/", pageviews: 40, visitors: 12 })
+    // The server's consent-free count, summed from its kinds of source.
+    expect(traffic.serverVisits).toEqual({
+      visits: 40,
+      visits7d: 16,
+      daily: [
+        { day: "2026-11-06", visits: 5 },
+        { day: "2026-11-07", visits: 4 },
+      ],
+      sources: [
+        { source: "google", visits: 30, visits7d: 12 },
+        { source: "direct", visits: 10, visits7d: 4 },
+      ],
+      pages: [{ page: "society", visits: 25, visits7d: 9 }],
+    })
   })
 
   test("a refusal is a short reason, never the key", async () => {

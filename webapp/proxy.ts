@@ -1,5 +1,5 @@
 import { fetchQuery } from "convex/nextjs"
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextFetchEvent, type NextRequest, NextResponse } from "next/server"
 import { api } from "@/convex/_generated/api"
 import { refusesAiAgent } from "@/lib/crawlers"
 import {
@@ -11,6 +11,8 @@ import {
   rememberFound,
   withTimeout,
 } from "@/lib/missing-listing"
+import { captureServerEvent } from "@/lib/posthog-server"
+import { visitFacts } from "@/lib/visit-count"
 
 /**
  * Next.js middleware (named `proxy` since Next 16), on listing pages only:
@@ -25,12 +27,17 @@ import {
  * `refusesAiAgent`): robots.txt asks them to stay out, and not every
  * user-triggered fetcher reads it.
  *
+ * On the public pages it also counts a visit (lib/visit-count.ts): a
+ * browser's top-level page load, reduced to the kind of page and the kind of
+ * site it came from, sent to PostHog after the response (`waitUntil`) as the
+ * `page_visit` server event. Nothing is read from or stored on the device.
+ *
  * It decides nothing about access: Convex functions enforce that, and the
  * existence queries are public and viewer-independent. Everything else
  * bypasses it (the matcher), as before the catch-all no-op proxy was removed
  * for CPU (docs/deploy.md "CPU protection").
  */
-export async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest, event?: NextFetchEvent) {
   if (refusesAiAgent(request.nextUrl.pathname, request.headers.get("user-agent"))) {
     return new NextResponse("AI agents may not read the talks pages (see /robots.txt).", {
       status: 403,
@@ -42,8 +49,24 @@ export async function proxy(request: NextRequest) {
     listingLookup,
   )
   if (gate.action === "redirect") return boundaryRedirect(request.nextUrl, gate.path)
-  if (gate.action === "next") return NextResponse.next()
+  if (gate.action === "next") {
+    countVisit(request, event)
+    return NextResponse.next()
+  }
   return NextResponse.rewrite(new URL(MISSING_LISTING_PATH, request.url))
+}
+
+/** One `page_visit` for a page we serve as it is (never a 404 or a
+ * redirect), sent after the response; `captureServerEvent` never rejects and
+ * is a no-op without a PostHog key. */
+function countVisit(request: NextRequest, event: NextFetchEvent | undefined): void {
+  const facts = visitFacts({
+    method: request.method,
+    pathname: request.nextUrl.pathname,
+    headers: request.headers,
+    siteHost: request.nextUrl.hostname,
+  })
+  if (facts && event) event.waitUntil(captureServerEvent("page_visit", facts))
 }
 
 /**
@@ -106,6 +129,88 @@ export const config = {
     },
     {
       source: "/events/:key",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    // The other public pages, for the visit count only (lib/visit-count.ts);
+    // the gate lets them through untouched.
+    {
+      source: "/",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/societies",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/events",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/categories/:path*",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/term-dates",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/about",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/privacy",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/terms",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/request",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+        { type: "header", key: "sec-purpose", value: ".*prefetch.*" },
+      ],
+    },
+    {
+      source: "/guides/:path*",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

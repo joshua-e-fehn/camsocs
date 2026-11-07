@@ -11,7 +11,10 @@
  *    sessions, per day and in total; sessions by the domain they entered from;
  *    pageviews by path. Browser events exist only for visitors who accepted
  *    analytics, so every number undercounts (docs/analytics.md). Paths and
- *    domains are all it returns: no person, no device, no title.
+ *    domains are all it returns: no person, no device, no title. Besides,
+ *    the server's own `page_visit` count (every browser page load, no
+ *    consent needed: lib/visit-count.ts) per day, by kind of source and by
+ *    kind of page.
  *  - **Search Console** (the property `GSC_SITE_URL`, else `SITE_URL` + "/"):
  *    clicks, impressions, CTR and average position in Google Search, in total,
  *    per day, by search query and by page. Google aggregates them and leaves
@@ -101,6 +104,16 @@ export type PostHogTraffic = {
   daily: { day: string; visitors: number; pageviews: number }[]
   referrers: { domain: string; sessions: number; visitors: number }[]
   pages: { path: string; pageviews: number; visitors: number }[]
+  serverVisits?: ServerVisits
+}
+
+/** The server's `page_visit` count (lib/visit-count.ts) over the window. */
+export type ServerVisits = {
+  visits: number
+  visits7d: number
+  daily: { day: string; visits: number }[]
+  sources: { source: string; visits: number; visits7d: number }[]
+  pages: { page: string; visits: number; visits7d: number }[]
 }
 
 export type SearchRow = { clicks: number; impressions: number; ctr: number; position: number }
@@ -190,6 +203,11 @@ async function errorDetail(response: Response): Promise<string> {
 const PAGEVIEWS =
   "event = '$pageview' AND ifNull(properties.campus, 'cam') = {campus} AND {filters}"
 
+/** The server's `page_visit` events (proxy.ts, lib/visit-count.ts): every
+ * browser page load, consent or not, as two enums. Server events carry
+ * `environment`, so the internal/test filter applies to them as well. */
+const VISITS = "event = 'page_visit' AND ifNull(properties.campus, 'cam') = {campus} AND {filters}"
+
 export const POSTHOG_QUERIES = {
   totals:
     "SELECT uniq(person_id), uniqIf(person_id, timestamp >= now() - INTERVAL 7 DAY)," +
@@ -207,6 +225,17 @@ export const POSTHOG_QUERIES = {
     "SELECT coalesce(toString(properties.$pathname), '') AS path, count() AS pageviews," +
     " uniq(person_id) AS visitors" +
     ` FROM events WHERE ${PAGEVIEWS} GROUP BY path ORDER BY pageviews DESC, path LIMIT ${TOP_ROWS}`,
+  visitsDaily:
+    "SELECT toString(toDate(toTimeZone(timestamp, 'Europe/London'))) AS day, count() AS visits" +
+    ` FROM events WHERE ${VISITS} GROUP BY day ORDER BY day`,
+  visitsBySource:
+    "SELECT coalesce(nullIf(toString(properties.source), ''), 'direct') AS source, count() AS visits," +
+    " countIf(timestamp >= now() - INTERVAL 7 DAY) AS visits7d" +
+    ` FROM events WHERE ${VISITS} GROUP BY source ORDER BY visits DESC, source LIMIT ${TOP_ROWS}`,
+  visitsByPage:
+    "SELECT coalesce(nullIf(toString(properties.page), ''), 'other') AS page, count() AS visits," +
+    " countIf(timestamp >= now() - INTERVAL 7 DAY) AS visits7d" +
+    ` FROM events WHERE ${VISITS} GROUP BY page ORDER BY visits DESC, page LIMIT ${TOP_ROWS}`,
 } as const
 
 /** The body of one HogQL query over the last `POSTHOG_WINDOW_DAYS` days. A
@@ -259,12 +288,21 @@ export async function fetchPostHogTraffic(
   timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<PostHogTraffic> {
   const run = (query: string) => hogql(config, query, campus, fetchImpl, timeoutMs)
-  const [totals, daily, referrers, pages] = await Promise.all([
-    run(POSTHOG_QUERIES.totals),
-    run(POSTHOG_QUERIES.daily),
-    run(POSTHOG_QUERIES.referrers),
-    run(POSTHOG_QUERIES.pages),
-  ])
+  const [totals, daily, referrers, pages, visitsDaily, visitsBySource, visitsByPage] =
+    await Promise.all([
+      run(POSTHOG_QUERIES.totals),
+      run(POSTHOG_QUERIES.daily),
+      run(POSTHOG_QUERIES.referrers),
+      run(POSTHOG_QUERIES.pages),
+      run(POSTHOG_QUERIES.visitsDaily),
+      run(POSTHOG_QUERIES.visitsBySource),
+      run(POSTHOG_QUERIES.visitsByPage),
+    ])
+  const visitSources = visitsBySource.map(([source, n, n7]) => ({
+    source: label(source) || "direct",
+    visits: num(n),
+    visits7d: num(n7),
+  }))
   const [visitors, visitors7d, pageviews, pageviews7d, sessions] = (totals[0] ?? []).map(num)
   return {
     windowDays: POSTHOG_WINDOW_DAYS,
@@ -286,6 +324,19 @@ export async function fetchPostHogTraffic(
       pageviews: num(p),
       visitors: num(v),
     })),
+    serverVisits: {
+      visits: visitSources.reduce((sum, row) => sum + row.visits, 0),
+      visits7d: visitSources.reduce((sum, row) => sum + row.visits7d, 0),
+      daily: visitsDaily
+        .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(String(row[0])))
+        .map(([day, n]) => ({ day: String(day), visits: num(n) })),
+      sources: visitSources,
+      pages: visitsByPage.map(([page, n, n7]) => ({
+        page: label(page) || "other",
+        visits: num(n),
+        visits7d: num(n7),
+      })),
+    },
   }
 }
 

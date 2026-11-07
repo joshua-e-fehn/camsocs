@@ -52,7 +52,9 @@ The broker overview (`/dashboard`) reads these numbers back as aggregates: `conv
 queries PostHog hourly for `$pageview` visitors, sessions, referring domains and paths, beside
 Google Search Console's search terms (`docs/deploy.md` "Website traffic").
 
-Server-side counts without consent (`ics_feed_fetched`, `listing_request_received`, ENG-7) and
+Server-side counts without consent (`ics_feed_fetched`, `listing_request_received`, ENG-7;
+`page_visit`, every browser page load as a kind of page and a kind of referring site, which the
+broker overview shows beside the consented numbers because those undercount) and
 errors (ENG-6) are separate: see `docs/webapp.md` "Server counts" and
 `docs/compliance/record-of-processing.md` P12.
 
