@@ -17,7 +17,6 @@ import {
 import { isThinListing } from "@/lib/directory-indexing"
 import {
   alternateNames,
-  jsonLdEvents,
   profileLead,
   profileSources,
   societyJsonLd,
@@ -261,7 +260,6 @@ export default async function SocietyPage({ params }: Props) {
     org,
     title: titleBase(societyTitle(org)),
     description,
-    eventKeys: jsonLdEvents(page.events),
   })
 
   return (

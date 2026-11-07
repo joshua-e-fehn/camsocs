@@ -1,18 +1,10 @@
 import { dayName, formatInstantDate } from "./calendar"
 import { categoryHubPath, listWords } from "./directory-hubs"
 import { fitTitle, MAX_TITLE } from "./directory-title"
-import { eventHasStructuredData } from "./events"
-import type { EventListItem, OrgPublic, SessionPublic } from "./public-api"
+import type { OrgPublic, SessionPublic } from "./public-api"
 import { plainLine, summary } from "./rich-text"
 import { displayHost } from "./source-line"
-import {
-  breadcrumbList,
-  eventId,
-  organizationId,
-  PUBLISHER_ID,
-  pageId,
-  WEBSITE_ID,
-} from "./structured-data"
+import { breadcrumbList, organizationId, PUBLISHER_ID, pageId, WEBSITE_ID } from "./structured-data"
 import { isTalksCamUrl } from "./talks-boundary"
 import {
   CATEGORY_LABELS,
@@ -410,19 +402,6 @@ const CAMBRIDGE_PLACE = {
   address: { "@type": "PostalAddress", addressLocality: "Cambridge", addressCountry: "GB" },
 }
 
-/** The upcoming events a profile's JSON-LD links to by `@id`: exactly those
- * whose own page has the Event node (`eventHasStructuredData`: public,
- * confirmed, a start the source states, no "TBC" in the title, never
- * talks.cam-derived), so no reference dangles (review of the SEO
- * audit, profile-jsonld-dangling-event-ids). getBySlug leaves talks.cam-
- * derived events out already; this is the second pass. */
-export function jsonLdEvents(events: readonly EventListItem[], limit = 20): string[] {
-  return events
-    .filter(eventHasStructuredData)
-    .slice(0, limit)
-    .map((event) => event.key)
-}
-
 /**
  * A profile's JSON-LD (org-jsonld-thin, jsonld-graph-breadcrumbs): one
  * `@graph` of the ProfilePage, the Organization it is about and its
@@ -430,18 +409,22 @@ export function jsonLdEvents(events: readonly EventListItem[], limit = 20): stri
  * (lib/structured-data.ts). Public facts only: the projected general address
  * (never a personal one), no person, no registration as `memberOf` (that
  * would read as an affiliation).
+ *
+ * No `event` property (Search Console, 2026-11-07): Google reads every node
+ * under `Organization.event` as an Event item of this page and does not
+ * follow an `@id` to the event's own page, so `{ "@id": … }` references were
+ * reported as Events missing name, startDate and location (70 invalid
+ * items). Each event's page carries its full Event node, organiser included.
  */
 export function societyJsonLd({
   org,
   title,
   description,
-  eventKeys,
 }: {
   org: Org
   /** The page title as shown (without " · CAMsocs"). */
   title: string
   description: string
-  eventKeys: string[]
 }): Record<string, unknown> {
   const path = `/societies/${org.slug}`
   const orgId = organizationId(org.slug)
@@ -468,7 +451,6 @@ export function societyJsonLd({
       org.categories.length > 0
         ? org.categories.map((item) => CATEGORY_LABELS[item]).join(", ")
         : undefined,
-    event: eventKeys.length > 0 ? eventKeys.map((key) => ({ "@id": eventId(key) })) : undefined,
   }
   const crumbs = [
     { name: "Societies", path: "/societies" },
