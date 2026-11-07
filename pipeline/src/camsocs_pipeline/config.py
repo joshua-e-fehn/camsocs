@@ -14,6 +14,15 @@ then come from it alone: exported in the shell they would override the file
 web cache and the staging area are shared, so one harvest can be loaded into
 both deployments.
 
+**Which campus** (decision D8, `camsocs_pipeline.campuses`). `CAMSOCS_CAMPUS`
+(or the CLI's `--campus`) names the tenant a run belongs to; unset, it is
+``cam``, so production needs no change. Each campus has its own deployment and
+env file (``--campus ox --env ox-prod`` reads ``pipeline/.env.ox-prod``, which
+must state ``CAMSOCS_CAMPUS=ox``): `--campus` disagreeing with the campus its
+env file states is an error, never an override. The staging and reports
+directories and the User-Agent default to the campus profile's; Cambridge's
+are the constants below.
+
 Every setting the pipeline needs to reach the outside world lives here, so a
 misconfigured host fails once with a readable message rather than at the first
 HTTP call with a `None` in the URL. Pattern from Bundestracker config.py.
@@ -36,11 +45,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 # python-dotenv is pydantic-settings' own dotenv reader (a required dependency).
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.campuses.profile import CampusProfile
 
 #: `<repo>/pipeline/src/camsocs_pipeline/config.py` → `<repo>`.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -58,6 +79,11 @@ ENV_FILE_VARIABLE = "CAMSOCS_ENV_FILE"
 #: than `pipeline/.env` they must not be exported in the shell.
 TARGET_VARIABLES = ("CONVEX_URL", "CONVEX_HTTP_URL", "PIPELINE_API_KEY")
 _ENV_NAME = re.compile(r"[a-z][a-z0-9-]{0,31}")
+
+#: The campus a run belongs to (decision D8), and its value when unset.
+CAMPUS_VARIABLE = "CAMSOCS_CAMPUS"
+DEFAULT_CAMPUS = "cam"
+_CAMPUS_ID = re.compile(r"[a-z]{2,8}")
 
 #: Raw response cache. Under the repo, gitignored (`var/`), never committed.
 DEFAULT_CACHE_DIR = REPO_ROOT / "var" / "cache"
@@ -121,6 +147,9 @@ class Settings(BaseSettings):
         validate_by_alias=True,
     )
 
+    #: The campus (`camsocs_pipeline.campuses`); its profile supplies the
+    #: defaults of `staging_dir`, `reports_dir` and `user_agent`.
+    campus: str = Field(default=DEFAULT_CAMPUS, validation_alias=CAMPUS_VARIABLE)
     convex_url: str = Field(default="", validation_alias="CONVEX_URL")
     convex_http_url: str = Field(default="", validation_alias="CONVEX_HTTP_URL")
     pipeline_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="PIPELINE_API_KEY")
@@ -182,6 +211,38 @@ class Settings(BaseSettings):
     #: Unset (dev, CI, tests) → nothing is sent: only the production
     #: deployment's data is what the site shows.
     indexnow_site_url: str = Field(default="", validation_alias="INDEXNOW_SITE_URL")
+
+    @field_validator("campus")
+    @classmethod
+    def _known_campus(cls, value: str) -> str:
+        from camsocs_pipeline import campuses
+
+        value = value.strip()
+        if not _CAMPUS_ID.fullmatch(value) or value not in campuses.known_ids():
+            raise ValueError(f"unknown campus {value!r}; known: {', '.join(campuses.known_ids())}")
+        return value
+
+    @model_validator(mode="after")
+    def _campus_defaults(self) -> Settings:
+        """Paths and User-Agent not set explicitly come from the campus
+        profile. Cambridge's equal the field defaults, so nothing changes."""
+        profile = self.profile()
+        defaults = {
+            "staging_dir": profile.paths.staging,
+            "reports_dir": profile.paths.reports,
+            "user_agent": profile.branding.user_agent,
+        }
+        for name, value in defaults.items():
+            if name not in self.model_fields_set and getattr(self, name) != value:
+                # Not through __setattr__: the field stays "not set explicitly".
+                self.__dict__[name] = value
+        return self
+
+    def profile(self) -> CampusProfile:
+        """The campus profile `campus` names."""
+        from camsocs_pipeline import campuses
+
+        return campuses.get_profile(self.campus)
 
     @field_validator(
         "convex_url", "convex_http_url", "llm_base_url", "posthog_host", "posthog_app_host"
@@ -292,8 +353,9 @@ class Settings(BaseSettings):
     def require_user_agent(self) -> str:
         """The crawler's User-Agent, or a readable error.
 
-        Unset, it is `DOCUMENTED_USER_AGENT`; set to anything that does not
-        link `ABOUT_URL`, it is used with a warning (once per process).
+        Unset, it is `DOCUMENTED_USER_AGENT` (the campus profile's); set to
+        anything that does not link `ABOUT_URL` (the profile's About page), it
+        is used with a warning (once per process).
 
         Honest by rule: it names this crawler and a page about it, so a
         webmaster can recognise it and ask us to slow down. A browser-like
@@ -303,10 +365,11 @@ class Settings(BaseSettings):
         (source-research "Global rules"); the contact is the About page.
         """
         ua = self.user_agent
+        branding = self.profile().branding
+        documented, about = branding.user_agent, branding.about_url
         if not ua:
             raise ConfigError(
-                "CAMSOCS_USER_AGENT is not set. Use the documented crawler token, "
-                f'"{DOCUMENTED_USER_AGENT}".'
+                f'CAMSOCS_USER_AGENT is not set. Use the documented crawler token, "{documented}".'
             )
         if "mozilla/" in ua.lower():
             raise ConfigError(
@@ -315,16 +378,16 @@ class Settings(BaseSettings):
         if "@" in ua or "mailto:" in ua.lower():
             raise ConfigError(
                 "CAMSOCS_USER_AGENT contains an email address. It must not: link the About "
-                f'page instead, "{DOCUMENTED_USER_AGENT}".'
+                f'page instead, "{documented}".'
             )
-        if ABOUT_URL not in ua and ua not in _warned_user_agents:
+        if about not in ua and ua not in _warned_user_agents:
             # Still honest (the old host redirects), but not the page the site shows.
             _warned_user_agents.add(ua)
             logger.warning(
                 "CAMSOCS_USER_AGENT does not link %s, the About page the site names as the "
                 'crawler\'s contact; the documented value is "%s".',
-                ABOUT_URL,
-                DOCUMENTED_USER_AGENT,
+                about,
+                documented,
             )
         return ua
 
@@ -393,11 +456,73 @@ def choose_env(env: str | None, environ: Mapping[str, str] | None = None) -> Env
     return EnvChoice(name if _ENV_NAME.fullmatch(name) else "custom", path)
 
 
-def load_settings(choice: EnvChoice, environ: Mapping[str, str] | None = None) -> Settings:
-    """The settings of one environment, with the guards in the module docstring."""
+def _build(env_file: Path | tuple[Path, ...], campus: str | None) -> Settings:
+    """`Settings` from `env_file`, `--campus` winning; an unknown campus is a
+    `ConfigError` (the CLI prints it), every other invalid value a `ValidationError`."""
+    overrides = {} if campus is None else {"campus": campus}
+    try:
+        return Settings(_env_file=env_file, **overrides)
+    except ValidationError as error:
+        if any(
+            entry["loc"] and entry["loc"][0] in ("campus", CAMPUS_VARIABLE)
+            for entry in error.errors()
+        ):
+            from camsocs_pipeline import campuses
+
+            raise ConfigError(
+                f"Unknown campus: set {CAMPUS_VARIABLE} / --campus to one of "
+                f"{', '.join(campuses.known_ids())}."
+            ) from None
+        raise
+
+
+def _stated_campus(path: Path) -> str | None:
+    """The `CAMSOCS_CAMPUS` an env file states, if it states one."""
+    if not path.is_file():
+        return None
+    return (dotenv_values(path).get(CAMPUS_VARIABLE) or "").strip() or None
+
+
+def _check_campus(
+    choice: EnvChoice, settings: Settings, campus: str | None, environ: Mapping[str, str]
+) -> None:
+    """A run's campus agrees with its env file (decision D8): `--campus` and
+    an exported `CAMSOCS_CAMPUS` may not contradict the file, and a named env
+    file of another campus than Cambridge must state its campus."""
+    stated = _stated_campus(choice.path)
+    shell = (environ.get(CAMPUS_VARIABLE) or "").strip() or None
+    if campus is not None and stated is not None and campus != stated:
+        raise ConfigError(
+            f"--campus {campus} disagrees with {CAMPUS_VARIABLE}={stated} in "
+            f"{choice.path.name}: a campus's env file names its deployment."
+        )
+    if campus is not None and shell is not None and campus != shell:
+        raise ConfigError(
+            f"--campus {campus} disagrees with {CAMPUS_VARIABLE}={shell} in the shell."
+        )
+    if stated is not None and settings.campus != stated:
+        raise ConfigError(
+            f"{CAMPUS_VARIABLE} is set in the shell and would override {choice.path.name}'s "
+            f"{CAMPUS_VARIABLE}={stated}. Unset it: a run's campus comes from its env file."
+        )
+    if not choice.is_default and settings.campus != DEFAULT_CAMPUS and stated is None:
+        raise ConfigError(
+            f"{choice.path.name} must state {CAMPUS_VARIABLE}={settings.campus}: each "
+            "campus has its own deployment and env file (docs/campuses/README.md)."
+        )
+
+
+def load_settings(
+    choice: EnvChoice, environ: Mapping[str, str] | None = None, *, campus: str | None = None
+) -> Settings:
+    """The settings of one environment, with the guards in the module
+    docstring. `campus` is the CLI's `--campus`: it wins over the
+    environment, and may not contradict the campus the env file states."""
     environ = os.environ if environ is None else environ
     if choice.is_default:
-        return Settings(_env_file=choice.path)
+        settings = _build(choice.path, campus)
+        _check_campus(choice, settings, campus, environ)
+        return settings
 
     if not choice.path.is_file():
         raise ConfigError(
@@ -413,7 +538,8 @@ def load_settings(choice: EnvChoice, environ: Mapping[str, str] | None = None) -
             "comes from its env file only."
         )
     files = (ENV_FILE, choice.path) if ENV_FILE.is_file() else (choice.path,)
-    settings = Settings(_env_file=files)
+    settings = _build(files, campus)
+    _check_campus(choice, settings, campus, environ)
 
     own = dotenv_values(choice.path)
     resolved = {

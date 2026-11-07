@@ -2,6 +2,8 @@
 
     camsocs [--env NAME] <command>       NAME selects pipeline/.env.<NAME> (default dev:
                                          pipeline/.env, or CAMSOCS_ENV_FILE); docs/deploy.md
+    camsocs [--campus ID] <command>      the campus (tenant, decision D8): CAMSOCS_CAMPUS,
+                                         default cam; must agree with the env file
     camsocs status                       resolved config + local state; no network
     camsocs health                       GET /api/pipeline/health with the Bearer key
     camsocs sync [--stages a,b | --group events|full|talks] [--dry-run] [--limit N]
@@ -40,7 +42,7 @@ from pathlib import Path
 
 import click
 
-from camsocs_pipeline import __version__
+from camsocs_pipeline import __version__, campuses
 from camsocs_pipeline.config import (
     DEFAULT_ENV,
     ENV_FILE,
@@ -79,11 +81,12 @@ from camsocs_pipeline.pipeline.load import (
 )
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
-from camsocs_pipeline.pipeline.sync import GROUPS, STAGE_ORDER, resolve_group, run_sync
+from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
+from camsocs_pipeline.stages import groups as campus_groups
 from camsocs_pipeline.staging.store import StagingStore
 from camsocs_pipeline.telemetry import HarvestTelemetry
 from camsocs_pipeline.worklist import (
@@ -120,33 +123,63 @@ def _configure_logging(verbose: bool) -> None:
         "Default: CAMSOCS_ENV_FILE if set, else pipeline/.env."
     ),
 )
+@click.option(
+    "--campus",
+    "campus",
+    metavar="ID",
+    help=(
+        "The campus (tenant) this run belongs to: cam (default) or another registered id. "
+        "Overrides CAMSOCS_CAMPUS; may not contradict the campus the env file states."
+    ),
+)
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool, env_name: str | None) -> None:
-    """camsocs — Cambridge societies harvesting pipeline."""
+def cli(ctx: click.Context, verbose: bool, env_name: str | None, campus: str | None) -> None:
+    """camsocs: societies, events and talks pipeline."""
     _configure_logging(verbose)
     ctx.ensure_object(dict)
     if "settings" in ctx.obj:
         # Injected (tests): the environment is whatever the caller says.
         ctx.obj.setdefault("env", EnvChoice(DEFAULT_ENV, ENV_FILE))
+        if campus is not None and campus != ctx.obj["settings"].campus:
+            raise click.UsageError(
+                f"--campus {campus} disagrees with the settings' campus "
+                f"{ctx.obj['settings'].campus}."
+            )
         return
     # Read when the command first needs it (`_loaded`), so that `--env` may
     # also follow the command.
     ctx.obj["env_name"] = env_name
+    ctx.obj["campus"] = campus
 
 
 def _loaded(ctx: click.Context) -> dict:
     """The command's settings and environment, read once: `--env` before or
-    after the command, else `CAMSOCS_ENV_FILE`, else `pipeline/.env`."""
+    after the command, else `CAMSOCS_ENV_FILE`, else `pipeline/.env`.
+
+    The settings' campus becomes the process's (`campuses.configure`) here,
+    once, before any stage or thread pool starts."""
     obj = ctx.find_object(dict)
     if "settings" not in obj:
         env_name = obj.get("env_name")
+        campus = obj.get("campus")
         try:
             choice = choose_env(env_name)
-            settings = get_settings() if env_name is None else load_settings(choice)
+            settings = (
+                get_settings()
+                if env_name is None and campus is None
+                else load_settings(choice, campus=campus)
+            )
         except ConfigError as error:
             raise click.ClickException(str(error)) from error
         obj["env"] = choice
         obj["settings"] = settings
+    if "profile" not in obj:
+        try:
+            profile = campuses.get_profile(obj["settings"].campus)
+            campuses.configure(profile)
+        except ConfigError as error:
+            raise click.ClickException(str(error)) from error
+        obj["profile"] = profile
     return obj
 
 
@@ -206,6 +239,7 @@ def status(ctx: click.Context) -> None:
 
     rows = [
         ("Environment", _env(ctx).describe()),
+        ("Campus", f"{settings.campus} ({_loaded(ctx)['profile'].name})"),
         ("Convex HTTP", _convex_http_url(settings)),
         ("Pipeline key", secret(settings.pipeline_api_key)),
         ("LLM base URL", settings.llm_base_url or "(unset)"),
@@ -330,8 +364,8 @@ def harvest(
     ctx: click.Context, dry_run: bool, limit: int | None, summary_json: Path | None
 ) -> None:
     """The full harvest, `sync --group full`: every stage in registry order
-    (seed → harvest → resolve → enrich → events → inbox / Instagram /
-    termcards → load → report), then a re-derivation, and the coverage report
+    (seed → harvest → resolve → enrich → classify → events → inbox /
+    Instagram / termcards → load → talks → report), then a re-derivation, and the coverage report
     var/reports/coverage-<date>.md. What `pixi run harvest` runs."""
     _run(ctx, stages=None, group="full", dry_run=dry_run, limit=limit, summary=summary_json)
 
@@ -358,7 +392,8 @@ def _run(
     telemetry = HarvestTelemetry.from_settings(settings)
     try:
         try:
-            chosen = resolve_group(group) if group is not None else None
+            groups = campus_groups(_loaded(ctx)["profile"])
+            chosen = resolve_group(group, groups) if group is not None else None
             report = run_sync(
                 settings=settings,
                 stages=stages,
@@ -395,7 +430,7 @@ def _run(
         # The ClickException above wraps the real failure; send its class.
         cause = error.__cause__ if isinstance(error, click.ClickException) else None
         # An unknown --group is operator-typed text: never sent.
-        known = group if group in GROUPS else None
+        known = group if group in campus_groups(campuses.active()) else None
         command = "sync" if known is None else f"sync --group {known}"
         telemetry.run_aborted(cause or error, group=known, command=command)
         raise

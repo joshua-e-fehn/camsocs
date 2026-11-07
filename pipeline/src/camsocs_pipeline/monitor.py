@@ -100,6 +100,7 @@ from typing import Any, Literal, Protocol
 
 import httpx
 
+from camsocs_pipeline.campuses.cam import SITE_CHECKS as CAMBRIDGE_SITE_CHECKS
 from camsocs_pipeline.config import ABOUT_URL, ConfigError, Settings
 from camsocs_pipeline.models.vocab import LISTING_REQUEST_KINDS
 
@@ -127,10 +128,8 @@ REALERT_AFTER = timedelta(hours=6)
 QUERY_TIMEOUT = 30.0
 
 #: The site checks: a name and a public page that must answer 200 (ENG-33).
-SITE_CHECKS: tuple[tuple[str, str], ...] = (
-    ("site_home", "https://camsocs.uk/"),
-    ("site_societies", "https://camsocs.uk/societies"),
-)
+#: Cambridge's, defined with its campus profile (`campuses/cam.py`).
+SITE_CHECKS: tuple[tuple[str, str], ...] = CAMBRIDGE_SITE_CHECKS
 #: Seconds one site request may take, …
 SITE_TIMEOUT = 10.0
 #: … how often it is asked in all, …

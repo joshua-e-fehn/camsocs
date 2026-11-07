@@ -451,3 +451,38 @@ def test_the_summary_payload_has_one_line_per_stage_and_the_coverage(make_settin
     assert payload["coverage"] == {"listed": 793, "counterparts": 168, "upcomingEvents": 533}
     assert all("notes" not in stage for stage in payload["stages"])
     json.dumps(payload)  # serialisable as it is
+
+
+# --- the campus's registry (decision D8) ----------------------------------------------------------
+
+
+def test_the_stage_order_is_cambridges_registry() -> None:
+    from camsocs_pipeline.campuses import CAMBRIDGE
+    from camsocs_pipeline.stages import groups as campus_groups
+    from camsocs_pipeline.stages import registry as campus_registry
+
+    assert campus_registry(CAMBRIDGE) is STAGES
+    assert campus_groups(CAMBRIDGE) is GROUPS
+    assert tuple(stage.name for stage in campus_registry(CAMBRIDGE)) == STAGE_ORDER
+
+
+def test_every_stage_sees_the_runs_campus_profile(make_settings) -> None:
+    from camsocs_pipeline.campuses import CAMBRIDGE
+
+    seen = []
+    report = run_sync(
+        settings=make_settings(),
+        dry_run=True,
+        registry=registry(fetch=lambda ctx: seen.append(ctx.profile)),
+    )
+    assert report.ok
+    assert seen == [CAMBRIDGE]
+
+
+def test_the_default_registry_is_the_campus_registry(make_settings) -> None:
+    """Without `registry=`, a run resolves stage names against the active
+    campus's registry: Cambridge's real stages here."""
+    report = run_sync(settings=make_settings(), dry_run=True, stages=["term_dates"])
+    assert [stage.name for stage in report.stages] == ["term_dates"]
+    with pytest.raises(ValueError, match="Unknown stage"):
+        run_sync(settings=make_settings(), dry_run=True, stages=["discover"])
