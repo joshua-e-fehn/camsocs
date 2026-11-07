@@ -1,10 +1,14 @@
-import { DAY_MS, isoDateMs, londonIsoDate, londonOffsetMs } from "../../lib/calendar"
+import { DAY_MS, londonIsoDate, londonOffsetMs } from "../../lib/calendar"
+import type { CampusProfile } from "../../lib/campus"
+import { deploymentProfile } from "../../lib/campus/deployment"
+import { classifyMemberEmail, NAME_SHAPED_LOCAL } from "../../lib/campus/member-email"
+import { termWeekLabel as campusTermWeekLabel } from "../../lib/campus/terms"
 import {
   CATEGORY_LABELS,
   type Category,
   type EmailType,
   type OrgStatus,
-  REGISTRATION_BODIES,
+  type RegistrationBody,
   type Term,
 } from "../../lib/vocab"
 import { type ApplicabilityContext, type FieldSpec, normaliseUrl } from "./fields"
@@ -14,6 +18,12 @@ import type { FieldMeta } from "./resolve"
  * Derived fields (docs/data-model.md §6), as pure functions of an entity's
  * resolved values and a clock. convex/derive.ts applies them on ingest and
  * from the daily cron; nothing here reads the database.
+ *
+ * The campus rules (term weeks, member addresses, the university's own
+ * listings, current registers) come from the deployment's campus profile
+ * (lib/campus, decision D8): `cam` unless `CAMSOCS_CAMPUS` says otherwise.
+ * Each takes the profile as a last, defaulted argument, so tests can pass
+ * another campus's.
  */
 
 /** An organisation is `active` with dated activity within this window. */
@@ -51,10 +61,9 @@ export type TermDates = {
   fullTermEnd: string
 }
 
-const TERM_PREFIX: Record<Term, string> = { michaelmas: "MT", lent: "LT", easter: "ET" }
-
 /**
- * "MT26 Wk 3" for an instant inside a term's teaching weeks, else undefined.
+ * "MT26 Wk 3" for an instant inside a term's teaching weeks, else undefined
+ * (lib/campus/terms.ts, under the campus's term model).
  *
  * Cambridge convention (as Camdram and CUCBC label weeks): Full Term starts
  * on a Tuesday, and a "week" runs Thursday to Wednesday, so Week 1 begins on
@@ -62,18 +71,12 @@ const TERM_PREFIX: Record<Term, string> = { michaelmas: "MT", lent: "LT", easter
  * Week 0 to the last day of Full Term: the last week ends with Full Term
  * (Michaelmas 2026: Week 9 = Thu 3 – Fri 4 Dec; source-research §19).
  */
-export function termWeekLabel(ms: number, terms: readonly TermDates[]): string | undefined {
-  const day = isoDateMs(londonIsoDate(ms))
-  for (const term of terms) {
-    const start = isoDateMs(term.fullTermStart)
-    const end = isoDateMs(term.fullTermEnd)
-    const firstThursday = start + ((4 - new Date(start).getUTCDay() + 7) % 7) * DAY_MS
-    const week = Math.floor((day - firstThursday) / (7 * DAY_MS)) + 1
-    if (week < 0 || day > end) continue
-    const year = new Date(start).getUTCFullYear() % 100
-    return `${TERM_PREFIX[term.term]}${String(year).padStart(2, "0")} Wk ${week}`
-  }
-  return undefined
+export function termWeekLabel(
+  ms: number,
+  terms: readonly TermDates[],
+  profile: CampusProfile = deploymentProfile(),
+): string | undefined {
+  return campusTermWeekLabel(ms, terms, profile.facts.terms)
 }
 
 // --- withdrawn events --------------------------------------------------------------------------
@@ -180,20 +183,24 @@ export function isWithdrawn(
 
 /**
  * Whether an event is the University's own listing (ENG-24): read from the
- * University of Cambridge's public events programme (`uni_events_api`) and
- * credited to no student group as organiser or co-host. Such an event is
+ * university's public events programme (the campus's
+ * `officialEventSources`; Cambridge: `uni_events_api`) and credited to no
+ * student group as organiser or co-host. Such an event is
  * shown as "University of Cambridge" and is what the calendar's University
  * switch selects. The projection derives `fromUniversity` from the row with
  * this at every read; the stored, indexed copy is `events.stream`
  * (`eventStreamOf`, ENG-31), which only selects rows.
  */
-export function isUniversityListing(event: {
-  source: string
-  organiserKeys: readonly string[]
-  coHostKeys: readonly string[]
-}): boolean {
+export function isUniversityListing(
+  event: {
+    source: string
+    organiserKeys: readonly string[]
+    coHostKeys: readonly string[]
+  },
+  profile: CampusProfile = deploymentProfile(),
+): boolean {
   return (
-    event.source === "uni_events_api" &&
+    profile.facts.officialEventSources.includes(event.source) &&
     event.organiserKeys.length === 0 &&
     event.coHostKeys.length === 0
   )
@@ -215,12 +222,15 @@ export type EventStream = (typeof EVENT_STREAMS)[number]
  * daily walk (convex/derive.ts `recomputeEvents`) fills it in on rows written
  * before it existed.
  */
-export function eventStreamOf(event: {
-  source: string
-  organiserKeys: readonly string[]
-  coHostKeys: readonly string[]
-}): EventStream {
-  return isUniversityListing(event) ? "university" : "society"
+export function eventStreamOf(
+  event: {
+    source: string
+    organiserKeys: readonly string[]
+    coHostKeys: readonly string[]
+  },
+  profile: CampusProfile = deploymentProfile(),
+): EventStream {
+  return isUniversityListing(event, profile) ? "university" : "society"
 }
 
 // --- organisation status --------------------------------------------------------------------
@@ -228,18 +238,23 @@ export function eventStreamOf(event: {
 type RegistrationLike = { registered: boolean; year?: string }
 
 /**
- * The registers that list only the current year's groups (the SU directory,
- * the Proctors' register, the Sports Service, CUCBC). Camdram is a directory
- * that keeps every society that ever put on a show (ENG-36: "Sketch Club"
- * listed since 2017, and 0 of 801 groups dormant), so a Camdram listing is
- * not a current registration; a theatre group's shows count through its
- * events (`lastActiveAt`), like any group's.
+ * The registers that list only the current year's groups (the campus's
+ * `currentYearRegisters`; Cambridge: the SU directory, the Proctors'
+ * register, the Sports Service, CUCBC). Camdram is a directory that keeps
+ * every society that ever put on a show (ENG-36: "Sketch Club" listed since
+ * 2017, and 0 of 801 groups dormant), so a Camdram listing is not a current
+ * registration; a theatre group's shows count through its events
+ * (`lastActiveAt`), like any group's.
  */
-export const CURRENT_YEAR_REGISTERS = REGISTRATION_BODIES.filter((body) => body !== "camdram")
+export function currentYearRegisters(
+  profile: CampusProfile = deploymentProfile(),
+): readonly RegistrationBody[] {
+  return profile.currentYearRegisters
+}
 
 /**
  * `active` if dated activity falls within 180 days or the organisation is on
- * a register for the current academic year (`CURRENT_YEAR_REGISTERS`);
+ * a register for the current academic year (`currentYearRegisters`);
  * `dormant` if its last activity is older and it is on no current register;
  * `archived` if marked defunct; otherwise `unknown` (data-model §6).
  *
@@ -251,14 +266,15 @@ export function deriveOrgStatus(
   org: {
     defunct?: boolean
     lastActiveAt?: number
-    registrations?: Partial<Record<(typeof REGISTRATION_BODIES)[number], RegistrationLike>>
+    registrations?: Partial<Record<RegistrationBody, RegistrationLike>>
     meta?: Record<string, FieldMeta | undefined>
   },
   now: number,
+  profile: CampusProfile = deploymentProfile(),
 ): OrgStatus {
   if (org.defunct === true) return "archived"
   const currentYear = academicYearOf(now)
-  const registeredNow = CURRENT_YEAR_REGISTERS.some((body) => {
+  const registeredNow = currentYearRegisters(profile).some((body) => {
     const registration = org.registrations?.[body]
     if (!registration?.registered) return false
     if (registration.year !== undefined) return registration.year === currentYear
@@ -293,24 +309,19 @@ const WEBMAIL_DOMAINS = new Set([
   "aol.com",
 ])
 
-/** A Cambridge CRSid: 2–5 letters then digits (e.g. `jf123`). */
-const CRSID_LOCAL = /^[a-z]{2,5}[0-9]{1,5}$/
+// The member-id rule (Cambridge: a CRSid, 2–5 letters then digits, on
+// cam.ac.uk, its subdomains, SRCF user mail and the alumni forwarding
+// services) is the campus's `memberEmail` (lib/campus/member-email.ts
+// `classifyMemberEmail`).
 
-/** Domains outside cam.ac.uk that give every member an address at their
- * CRSid: SRCF user mail (`<crsid>@srcf.net`) and the alumni forwarding
- * services. A CRSid there names a person just as on cam.ac.uk. */
-const CRSID_MAIL_DOMAINS = new Set(["srcf.net", "srcf.ucam.org", "cantab.ac.uk", "cantab.net"])
-
-/** Alumni addresses: the forwarding services (Cambridge's cantab.ac.uk and
- * cantab.net, Oxford's oxon.org) and any `alumni.` / `alum.` host
- * (alumni.cam.ac.uk, alum.example.edu). Each address there is one
- * graduate's, whatever its shape (`jane.smith2@`, `janesmith@`,
+/** Alumni addresses: the campus's forwarding services (`memberEmail.alumni`;
+ * Cambridge's cantab.ac.uk and cantab.net, Oxford's oxon.org) and any
+ * `alumni.` / `alum.` host (alumni.cam.ac.uk, alum.example.edu). Each address
+ * there is one graduate's, whatever its shape (`jane.smith2@`, `janesmith@`,
  * `anna.lena.van.berg@`, `jane+chess@`), unless it is named after a post. */
-const ALUMNI_DOMAINS = new Set(["cantab.ac.uk", "cantab.net", "oxon.org"])
-
-function isAlumniDomain(domain: string): boolean {
+function isAlumniDomain(domain: string, profile: CampusProfile): boolean {
   return (
-    ALUMNI_DOMAINS.has(domain) ||
+    profile.facts.memberEmail.alumni.includes(domain) ||
     domain.split(".").some((label) => label === "alumni" || label === "alum")
   )
 }
@@ -347,9 +358,6 @@ const POST_WORDS = new Set([
   "news",
 ])
 
-/** A name-shaped local part: two or three plain words (`jane.smith`). */
-const NAME_SHAPED_LOCAL = /^[a-z]+[._-][a-z]+(?:[._-][a-z]+)?$/
-
 /** Whether an alumni address is named after a post: one of its words (runs
  * of letters) is a post word, and it is not name-shaped (`jane.president@`
  * still names Jane). */
@@ -362,27 +370,31 @@ function isPostAddress(local: string): boolean {
  * What kind of address an email is (`EMAIL_TYPES`). Derived on the server from
  * the resolved address — never claimed — because the public projection
  * depends on it: a `personal_crsid` address names a person and is never shown.
+ *
+ * In order: the campus's member rule (`classifyMemberEmail`: Cambridge's
+ * CRSid on cam.ac.uk or any subdomain, SRCF or cantab), alumni addresses,
+ * the campus's own domain kinds (`emailDomainTypes`; Cambridge: legacy CUSU,
+ * Cambridge SU, SRCF), its list host (`memberEmail.excluded`: `lists_cam`),
+ * a subdomain of a member domain (`college_domain`), webmail, else a role
+ * address on the society's own domain.
  */
-export function classifyEmail(email: string): EmailType {
+export function classifyEmail(
+  email: string,
+  profile: CampusProfile = deploymentProfile(),
+): EmailType {
   const address = email.trim().toLowerCase()
   const at = address.lastIndexOf("@")
   const local = address.slice(0, at)
   const domain = address.slice(at + 1)
-  // On cam.ac.uk or any subdomain (hermes, college domains), SRCF or cantab:
-  // a CRSid-shaped local part names a person. Errs toward hiding a role
-  // address like `jcr1@`.
-  const camDomain =
-    (domain === "cam.ac.uk" || domain.endsWith(".cam.ac.uk")) && domain !== "lists.cam.ac.uk"
-  if ((camDomain || CRSID_MAIL_DOMAINS.has(domain)) && CRSID_LOCAL.test(local)) {
-    return "personal_crsid"
-  }
+  const member = classifyMemberEmail(local, domain, profile)
+  if (member) return member
   // An alumni address is one person's unless it is named after a post.
-  if (isAlumniDomain(domain) && !isPostAddress(local)) return "personal_crsid"
-  if (/(^|\.)cusu\./.test(domain) || domain === "cusu.org") return "legacy_cusu"
-  if (domain === "cambridgesu.co.uk" || domain.endsWith(".cambridgesu.co.uk")) return "cambridgesu"
-  if (domain === "lists.cam.ac.uk") return "lists_cam"
-  if (/(^|\.)srcf\.(net|ucam\.org)$/.test(domain)) return "srcf"
-  if (domain.endsWith(".cam.ac.uk")) return "college_domain"
+  if (isAlumniDomain(domain, profile) && !isPostAddress(local)) return "personal_crsid"
+  const kind = profile.emailDomainTypes.find((rule) => rule.matches(domain))
+  if (kind) return kind.type
+  const { domains, excluded } = profile.facts.memberEmail
+  if (excluded.includes(domain)) return "lists_cam"
+  if (domains.some((base) => domain.endsWith(`.${base}`))) return "college_domain"
   if (WEBMAIL_DOMAINS.has(domain)) return "webmail"
   return "role_own_domain"
 }

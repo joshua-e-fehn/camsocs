@@ -1,4 +1,7 @@
 import { addDays, isoDateMs, londonIsoDate, londonMidnight, startOfWeek } from "../../lib/calendar"
+import type { CampusProfile } from "../../lib/campus"
+import { deploymentProfile } from "../../lib/campus/deployment"
+import { firstWeekStart } from "../../lib/campus/terms"
 import { sha1Hex } from "../../lib/hash"
 import type { EventHosting, EventOrganiserRole, EventVisibility } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
@@ -34,33 +37,42 @@ export type ActivityWindow = {
   inTerm: boolean
 }
 
-/** The Thursday Week 1 starts on (lib/derived.ts `termWeekLabel`): a week
- * runs Thursday to Wednesday, from the first Thursday of Full Term. */
-function firstThursday(term: TermDates): string {
-  const weekday = new Date(isoDateMs(term.fullTermStart)).getUTCDay()
-  return addDays(term.fullTermStart, (4 - weekday + 7) % 7)
+/**
+ * A term's labelled weeks as ISO dates: Week 0's first day to the last day of
+ * Full Term, inclusive. The week rule is the campus's (lib/campus/terms.ts
+ * `firstWeekStart`, as lib/derived.ts `termWeekLabel` stamps it): Cambridge's
+ * week runs Thursday to Wednesday, from the first Thursday of Full Term.
+ */
+export function termSpan(
+  term: TermDates,
+  profile: CampusProfile = deploymentProfile(),
+): { start: string; end: string } {
+  const weekOne = firstWeekStart(term.fullTermStart, profile.facts.terms)
+  return { start: addDays(weekOne, -7), end: term.fullTermEnd }
 }
 
-/** A term's labelled weeks as ISO dates: Week 0's Thursday to the last day of
- * Full Term, inclusive. */
-export function termSpan(term: TermDates): { start: string; end: string } {
-  return { start: addDays(firstThursday(term), -7), end: term.fullTermEnd }
-}
-
-function termOf(terms: readonly TermDates[], today: string): TermDates | undefined {
+function termOf(
+  terms: readonly TermDates[],
+  today: string,
+  profile: CampusProfile,
+): TermDates | undefined {
   return terms.find((term) => {
-    const span = termSpan(term)
+    const span = termSpan(term, profile)
     return today >= span.start && today <= span.end
   })
 }
 
 /** The term `now` falls in (Week 0 to the end of Full Term), else the next
  * eight weeks from the start of today (London). */
-export function activityWindow(terms: readonly TermDates[], now: number): ActivityWindow {
+export function activityWindow(
+  terms: readonly TermDates[],
+  now: number,
+  profile: CampusProfile = deploymentProfile(),
+): ActivityWindow {
   const today = londonIsoDate(now)
-  const term = termOf(terms, today)
+  const term = termOf(terms, today, profile)
   if (term) {
-    const span = termSpan(term)
+    const span = termSpan(term, profile)
     return {
       from: londonMidnight(span.start),
       to: londonMidnight(addDays(span.end, 1)),
@@ -74,13 +86,17 @@ export function activityWindow(terms: readonly TermDates[], now: number): Activi
   }
 }
 
-/** The term week `now` falls in (Thursday to Wednesday), else the seven days
- * from the start of today (London). */
-export function weekWindow(terms: readonly TermDates[], now: number): ActivityWindow {
+/** The term week `now` falls in (Cambridge: Thursday to Wednesday), else the
+ * seven days from the start of today (London). */
+export function weekWindow(
+  terms: readonly TermDates[],
+  now: number,
+  profile: CampusProfile = deploymentProfile(),
+): ActivityWindow {
   const today = londonIsoDate(now)
-  const term = termOf(terms, today)
+  const term = termOf(terms, today, profile)
   if (term) {
-    const week0 = termSpan(term).start
+    const week0 = termSpan(term, profile).start
     const days = Math.floor((isoDateMs(today) - isoDateMs(week0)) / 86_400_000)
     const start = addDays(week0, days - (days % 7))
     return { from: londonMidnight(start), to: londonMidnight(addDays(start, 7)), inTerm: true }
@@ -219,36 +235,30 @@ type RelatedCard = Pick<
   Partial<Pick<Doc<"orgCards">, "orgType" | "sport" | "activityTypes" | "audiences">>
 
 /** Words that say nothing about what a group does ("Cambridge University
- * Chess Club" and "Cambridge University Netball Club" share only these). */
-const NAME_STOPWORDS = new Set([
-  "a",
-  "and",
-  "association",
-  "cambridge",
-  "club",
-  "college",
-  "cu",
-  "for",
-  "group",
-  "in",
-  "of",
-  "society",
-  "soc",
-  "student",
-  "students",
-  "team",
-  "the",
-  "uni",
-  "university",
-])
+ * Chess Club" and "Cambridge University Netball Club" share only these): the
+ * campus's `nameStopwords`, as a set built once per profile. */
+const nameStopwords = new WeakMap<CampusProfile, ReadonlySet<string>>()
+
+function stopwordsOf(profile: CampusProfile): ReadonlySet<string> {
+  let words = nameStopwords.get(profile)
+  if (!words) {
+    words = new Set(profile.nameStopwords)
+    nameStopwords.set(profile, words)
+  }
+  return words
+}
 
 /** A name's telling words: "Cambridge University Boat Club" → {"boat"}. */
-export function nameTokens(nameSort: string): Set<string> {
+export function nameTokens(
+  nameSort: string,
+  profile: CampusProfile = deploymentProfile(),
+): Set<string> {
+  const stopwords = stopwordsOf(profile)
   return new Set(
     nameSort
       .toLowerCase()
       .split(/[^a-z0-9]+/)
-      .filter((word) => word.length > 2 && !NAME_STOPWORDS.has(word)),
+      .filter((word) => word.length > 2 && !stopwords.has(word)),
   )
 }
 

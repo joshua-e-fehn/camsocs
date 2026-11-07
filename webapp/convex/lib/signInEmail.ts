@@ -1,5 +1,10 @@
+import type { CampusProfile } from "../../lib/campus"
+import { deploymentProfile } from "../../lib/campus/deployment"
+
 /**
- * The `@cam.ac.uk` sign-in link email, sent through Resend's HTTP API.
+ * The member sign-in link email (Cambridge: `@cam.ac.uk`), sent through
+ * Resend's HTTP API. Its product name and closing disclaimer are the
+ * deployment's campus's (lib/campus, decision D8).
  *
  * Called from Better Auth's magic-link plugin (convex/betterAuth/auth.ts),
  * which runs inside the `/api/auth/*` HTTP action — a Convex action, so
@@ -50,28 +55,35 @@ function escapeHtml(text: string): string {
 }
 
 /** The message, as Resend's `POST /emails` body. Pure. */
-export function buildSignInEmail(from: string, to: string, url: string): SignInEmail {
+export function buildSignInEmail(
+  from: string,
+  to: string,
+  url: string,
+  profile: CampusProfile = deploymentProfile(),
+): SignInEmail {
   const minutes = SIGN_IN_LINK_TTL_SECONDS / 60
+  const product = profile.brand.name
+  const disclaimer = profile.brand.emailDisclaimer
   const lines = [
-    "Sign in to CAMsocs with this link:",
+    `Sign in to ${product} with this link:`,
     "",
     url,
     "",
     `It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.`,
     "",
-    "CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.",
+    disclaimer,
   ]
   const href = escapeHtml(url)
   const html = [
     '<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1f1d24">',
-    "<p>Sign in to CAMsocs with this link:</p>",
-    `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to CAMsocs</a></p>`,
+    `<p>Sign in to ${escapeHtml(product)} with this link:</p>`,
+    `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to ${escapeHtml(product)}</a></p>`,
     `<p style="font-size:13px;color:#5f5a66">Or paste this address into your browser:<br><span style="word-break:break-all">${href}</span></p>`,
     `<p style="font-size:13px;color:#5f5a66">It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.</p>`,
-    '<p style="font-size:12px;color:#8a8590">CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU.</p>',
+    `<p style="font-size:12px;color:#8a8590">${escapeHtml(disclaimer)}</p>`,
     "</div>",
   ].join("")
-  return { from, to: [to], subject: "Your CAMsocs sign-in link", text: lines.join("\n"), html }
+  return { from, to: [to], subject: `Your ${product} sign-in link`, text: lines.join("\n"), html }
 }
 
 /**
