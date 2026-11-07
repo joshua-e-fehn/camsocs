@@ -18,6 +18,7 @@ import type * as broker_listingRequests from "../broker/listingRequests.js";
 import type * as broker_orgs from "../broker/orgs.js";
 import type * as broker_overview from "../broker/overview.js";
 import type * as broker_people from "../broker/people.js";
+import type * as broker_pipeline from "../broker/pipeline.js";
 import type * as broker_session from "../broker/session.js";
 import type * as broker_suppressions from "../broker/suppressions.js";
 import type * as coverage from "../coverage.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   "broker/orgs": typeof broker_orgs;
   "broker/overview": typeof broker_overview;
   "broker/people": typeof broker_people;
+  "broker/pipeline": typeof broker_pipeline;
   "broker/session": typeof broker_session;
   "broker/suppressions": typeof broker_suppressions;
   coverage: typeof coverage;
