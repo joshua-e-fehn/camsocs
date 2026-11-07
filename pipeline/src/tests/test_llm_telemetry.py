@@ -30,8 +30,11 @@ from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.telemetry import (
     AI_GENERATION,
+    AI_SPAN,
+    AI_TRACE,
     ALLOWED,
     DISTINCT_ID,
+    FORBIDDEN_AI_KEYS,
     HarvestTelemetry,
     active_telemetry,
 )
@@ -118,7 +121,10 @@ def test_a_call_sends_one_generation_with_numbers_and_ids_only(net: respx.MockRo
         "runKey": RUN_KEY,
         "group": "events",
         "dryRun": False,
+        "campus": "cam",
         "$ai_trace_id": RUN_KEY,
+        "$ai_span_id": generation["$ai_span_id"],
+        "$ai_parent_id": f"{RUN_KEY}.enrich",
         "$ai_span_name": "enrich",
         "stage": "enrich",
         "$ai_model": "bulk-model-1",
@@ -376,6 +382,80 @@ def test_a_runs_stages_report_their_generations_and_then_stop(
     names = [name for name, _ in fake.events]
     assert names.index(AI_GENERATION) < len(names) - 1  # before the run finished
     assert_private(fake)
+
+
+def test_a_run_is_one_trace_with_a_span_per_stage_and_generations_under_them(
+    make_settings, net: respx.MockRouter
+) -> None:
+    """L6: `$ai_trace` for the run, `$ai_span` per stage (parent the run),
+    each generation's parent its stage's span — and never any content."""
+    net.post(COMPLETIONS).mock(return_value=completion(json.dumps({"name": REPLY_SECRET})))
+
+    def extracting(ctx: StageContext) -> None:
+        client = LLMClient(llm_settings(), sleep=lambda _s: None)
+        client.complete_json(schema=Society, messages=messages(), prompt_version="classify_v1")
+
+    def failing(_ctx: StageContext) -> None:
+        raise RuntimeError(SCRAPED)
+
+    fake = FakeClient()
+    telemetry = HarvestTelemetry(fake, environment="production")
+    registry = [
+        Stage("classify", extracting, phase="classify", pillar="societies"),
+        Stage("broken", failing, phase="events", pillar="events"),
+    ]
+    report = run_sync(
+        settings=make_settings(), dry_run=True, registry=registry, telemetry=telemetry
+    )
+
+    run_key = report.run_key
+    spans = {props["$ai_span_name"]: props for props in fake.named(AI_SPAN)}
+    assert set(spans) == {"classify", "broken"}
+    for name, span in spans.items():
+        assert span["$ai_trace_id"] == run_key and span["$ai_parent_id"] == run_key
+        assert span["$ai_span_id"] == f"{run_key}.{name}"
+        assert span["$ai_latency"] >= 0 and span["campus"] == "cam"
+    assert spans["classify"]["$ai_is_error"] is False
+    assert spans["classify"]["pillar"] == "societies"
+    assert spans["broken"]["$ai_is_error"] is True and spans["broken"]["pillar"] == "events"
+
+    (generation,) = generations(fake)
+    assert generation["$ai_parent_id"] == spans["classify"]["$ai_span_id"]
+    assert len(generation["$ai_span_id"]) == 32 and generation["$ai_span_id"] != run_key
+
+    (trace,) = fake.named(AI_TRACE)
+    assert trace["$ai_trace_id"] == run_key and trace["$ai_span_name"] == "sync"
+    assert trace["$ai_is_error"] is True, "a partial run is not a success"
+    assert trace["$ai_latency"] >= 0 and trace["campus"] == "cam"
+    assert_private(fake)
+    for _event, kwargs in fake.events:
+        assert not FORBIDDEN_AI_KEYS & set(kwargs["properties"])
+
+
+def test_the_forbidden_content_keys_are_never_allowed_or_sent() -> None:
+    """`$ai_input`, `$ai_output_choices`, `$ai_input_state` and
+    `$ai_output_state` are in no allow-list, and are dropped even if passed."""
+    assert {
+        "$ai_input",
+        "$ai_output_choices",
+        "$ai_input_state",
+        "$ai_output_state",
+    } == FORBIDDEN_AI_KEYS
+    for keys in ALLOWED.values():
+        assert not FORBIDDEN_AI_KEYS & keys
+    for event in (AI_GENERATION, AI_SPAN, AI_TRACE):
+        leaked = dict.fromkeys(FORBIDDEN_AI_KEYS, "x")
+        assert telemetry_module.clean_properties(event, leaked) == {}
+
+
+def test_a_generation_outside_a_stage_has_no_parent_span() -> None:
+    client = FakeClient()
+    telemetry = HarvestTelemetry(client, environment="production")
+    telemetry.run_started(RunReport(RUN_KEY, "sync"), group=None, stages=[])
+    telemetry.generation(model="m-1", tier="bulk", prompt_version="v1", latency_s=0.1, attempts=1)
+    (generation,) = generations(client)
+    assert "$ai_parent_id" not in generation and generation["$ai_trace_id"] == RUN_KEY
+    assert len(generation["$ai_span_id"]) == 32
 
 
 def test_close_also_ends_the_active_run() -> None:
