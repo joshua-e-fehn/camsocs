@@ -20,6 +20,10 @@ export type GuideSlug =
   | "may-balls"
   | "rowing"
   | "varsity"
+  | "glossary"
+  | "university-sport"
+  | "theatre"
+  | "postgraduates"
 
 export type GuideSource = {
   /** Who published it, short: shown inline as the citation. */
@@ -49,7 +53,7 @@ export type Guide = {
 export const GUIDES_PATH = "/guides"
 export const GUIDES_TITLE = "Guides to student life in Cambridge"
 export const GUIDES_DESCRIPTION =
-  "Plain guides for Cambridge students: joining and starting societies, formal hall, May Balls, rowing and Varsity. Unofficial; every fact links its source."
+  "Plain guides for Cambridge students: societies, formal hall, May Balls, sport, theatre, postgraduate life and a glossary. Unofficial; every fact links its source."
 
 export const GUIDES: readonly Guide[] = [
   {
@@ -115,6 +119,50 @@ export const GUIDES: readonly Guide[] = [
       "Cambridge v Oxford: the Boat Race, the Varsity Match and other Varsity fixtures, the Varsity ski trip, and how to watch, with this season's dates.",
     summary:
       "What Varsity means, Blues, the Boat Race, the rugby Varsity Match and other fixtures, the Varsity ski trip, and the fixtures coming up.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "university-sport",
+    path: "/guides/university-sport",
+    title: "University sport in Cambridge: trials, Blues and the Hawks",
+    description:
+      "How to play sport at Cambridge: University clubs and college teams, trials and beginners, Cuppers, Full and Half Blues, the Hawks' Club and the facilities.",
+    summary:
+      "University clubs and college teams, how trials work, beginners, Cuppers, what Blues and Half Blues are, and the facilities.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "theatre",
+    path: "/guides/theatre",
+    title: "Student theatre and comedy in Cambridge: ADC and Footlights",
+    description:
+      "Student theatre and comedy in Cambridge: the ADC Theatre, Footlights and drama societies, auditions on Camdram, backstage roles and pitching a show.",
+    summary:
+      "The ADC and other stages, the main drama and comedy societies, auditions, backstage roles, putting on your own show, and tickets.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "postgraduates",
+    path: "/guides/postgraduates",
+    title: "Postgraduate life in Cambridge: colleges, MCRs and support",
+    description:
+      "For new MPhil and PhD students: how department and college fit together, graduate colleges, the MCR and your Tutor, the SU, supervision, welfare and money.",
+    summary:
+      "Department and college, graduate colleges, the MCR and your Tutor, the SU, terms and supervision, social life, welfare and money.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "glossary",
+    path: "/guides/glossary",
+    title: "Cambridge words explained: a student glossary",
+    description:
+      "What Cambridge words mean: Full Term, Tripos, supervisions, bedders, the Porters' Lodge, JCR and MCR, formals, May Week and Blues, each with its source.",
+    summary:
+      "An A–Z of the words Cambridge students meet, from bedder and buttery to Tripos and Week 5, each linked to its source.",
     published: "2026-11-08",
     updated: "2026-11-08",
   },
