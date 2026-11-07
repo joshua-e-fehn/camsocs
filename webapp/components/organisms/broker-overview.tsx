@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { BrokerPageHeader } from "@/components/molecules/broker-page-header"
 import { StatTile } from "@/components/molecules/stat-tile"
+import { BrokerIndexing } from "@/components/organisms/broker-indexing"
 import { BrokerTraffic } from "@/components/organisms/broker-traffic"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -286,6 +287,8 @@ export function BrokerOverview() {
       </div>
 
       <BrokerTraffic />
+
+      <BrokerIndexing />
 
       <Card>
         <CardHeader>

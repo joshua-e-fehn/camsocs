@@ -62,6 +62,7 @@ from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
 from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
+    check_indexing,
     check_sites,
     checks_for,
     count_requests,
@@ -633,6 +634,10 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
         requests = count_requests(client, *requests_window(previous, now=now), profile.id)
         with site_client(branding.about_url) as site:
             results += check_sites(site, branding.monitor_urls)
+        # Google indexing (webapp/convex/indexing.ts), where Convex is configured.
+        if settings.convex_http_url and settings.pipeline_api_key.get_secret_value():
+            with _loader(settings) as loader:
+                results.append(check_indexing(lambda: loader.post("indexing/summary", {}), now=now))
         verdict = assess(
             results, previous, now=now, requests=requests, campus=profile.id, site=branding.site_url
         )

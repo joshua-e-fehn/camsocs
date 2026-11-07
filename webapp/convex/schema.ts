@@ -993,6 +993,71 @@ function trafficSource<T extends Validator<unknown, "required", string>>(data: T
  * Search Console, one row per deployment, replaced hourly. Paths, referring
  * domains and Google's search queries, no visitor-level data.
  */
+/** The daily indexing check (convex/indexing.ts, convex/lib/indexing.ts):
+ * one row per URL our sitemaps list, with Google's last verdict on it. */
+const urlKind = v.union(
+  v.literal("page"),
+  v.literal("hub"),
+  v.literal("society"),
+  v.literal("event"),
+)
+const indexState = v.union(
+  v.literal("indexed"),
+  v.literal("waiting"),
+  v.literal("not_indexed"),
+  v.literal("problem"),
+)
+export const indexCheckFields = {
+  url: v.string(),
+  kind: urlKind,
+  /** When the check first found it in a sitemap. */
+  listedSince: v.number(),
+  checkedAt: v.optional(v.number()),
+  state: v.optional(indexState),
+  /** Google's coverage state, as it words it. */
+  coverage: v.optional(v.string()),
+  problem: v.optional(v.string()),
+  lastCrawlAt: v.optional(v.number()),
+  /** Our own read of a key page (`ownProblem`); absent when it was fine. */
+  ownProblem: v.optional(v.string()),
+  ownCheckedAt: v.optional(v.number()),
+}
+const stateCounts = v.object({
+  indexed: v.number(),
+  waiting: v.number(),
+  not_indexed: v.number(),
+  problem: v.number(),
+  unchecked: v.number(),
+})
+export const indexingSummaryFields = {
+  scope: v.literal("site"),
+  runAt: v.number(),
+  inspected: v.number(),
+  counts: v.object({
+    page: stateCounts,
+    hub: stateCounts,
+    society: stateCounts,
+    event: stateCounts,
+  }),
+  problems: v.array(v.object({ url: v.string(), kind: urlKind, problem: v.string() })),
+  lagging: v.array(
+    v.object({
+      url: v.string(),
+      kind: urlKind,
+      listedSince: v.number(),
+      state: v.union(indexState, v.literal("unchecked")),
+    }),
+  ),
+  sitemaps: v.array(
+    v.object({
+      path: v.string(),
+      issue: v.optional(v.string()),
+      lastDownloaded: v.optional(v.number()),
+    }),
+  ),
+  alerts: v.array(v.string()),
+}
+
 export const trafficSnapshotFields = {
   scope: v.literal("site"),
   posthog: trafficSource(posthogTrafficValidator),
@@ -1142,6 +1207,9 @@ export default defineSchema({
     .index("by_scope", ["scope"]),
   coverageSnapshots: defineTable(coverageSnapshotFields).index("by_scope", ["scope"]),
   trafficSnapshots: defineTable(trafficSnapshotFields).index("by_scope", ["scope"]),
+  // The daily indexing check (convex/indexing.ts).
+  indexChecks: defineTable(indexCheckFields).index("by_url", ["url"]),
+  indexingSummaries: defineTable(indexingSummaryFields).index("by_scope", ["scope"]),
   // Request notifications (ENG-104): broker test sends and the VPS relay's heartbeat.
   notificationTests: defineTable(notificationTestFields)
     .index("by_key", ["key"])

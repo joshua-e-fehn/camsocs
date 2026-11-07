@@ -822,6 +822,12 @@ edge-cached an hour, and the calendar and event pages advertise their `.ics` as 
 events first (ENG-31), so in a Cambridge Festival window the feed can lose only the
 University's later days; `university: "hide"` would read the society stream alone.
 
+**Getting every page indexed (2026-11-07).** Three layers, so a page cannot quietly stay out of Google:
+
+1. *Before merge* — `lib/route-indexing.ts` names, for every `page.tsx` under `app/(site)`, the sitemap that lists it (or why none does) and, for a single page, where it is linked from. `lib/route-indexing.test.ts` fails CI when a page has no entry, when pages.xml (`PAGE_PATHS`) and the entries disagree, or when a single page is linked from neither the header, the footer nor a page that is. **Adding a page:** an entry there, the path in `PAGE_PATHS`, a footer (or parent page) link; or `{ excluded }` with the reason and a noindex.
+2. *Every day* — the sitemaps are built per request from Convex (societies, events) or `PAGE_PATHS`, so they are never stale; `sitemaps-resubmit-daily` tells Search Console when they changed. `indexing-check-daily` (07:00 UTC, `convex/indexing.ts`) inspects what Google says about every sitemap URL through the URL Inspection API (≤ 1,400 a day of the 2,000 quota: key pages daily, new URLs at once, the rest every 2–10 days) and reads the key pages itself (200, no noindex, a self canonical). The broker overview's "Google indexing" card shows the counts, the URLs that cannot be indexed and the key pages still waiting after 10 days; the VPS monitor's `search_indexing` check pages on the first two (docs/ops-vps.md §6).
+3. *By hand* — "Request indexing" in Search Console for a key page the card lists as waiting (the API cannot; a few a day). Google decides what it indexes: "Discovered/unknown" on a new domain is its crawl queue, not a fault, and only links from other sites shorten it.
+
 For search engines the calendar is two pages (`lib/url-state.ts` `eventsIndexing`): `/events`
 and one society's `/events?org=<slug>` (which loads four weeks, `ORG_WEEKS`), each canonical
 with its own title; every other combination of the URL's filters is noindex, follow with the

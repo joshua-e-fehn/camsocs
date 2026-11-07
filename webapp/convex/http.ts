@@ -205,6 +205,8 @@ ingestionRoute("purge", internal.ingest.purge.purge)
 // what to send on Slack / WhatsApp now, and how each send went.
 ingestionRoute("notify/pending", internal.notifications.relayPending)
 ingestionRoute("notify/ack", internal.notifications.relayAck)
+// The daily indexing check's alerts, for the VPS monitor (convex/indexing.ts).
+readRoute("indexing/summary", internal.indexing.monitorSummary)
 // Events a corrected reader will never restate (`camsocs clean-events`,
 // convex/ingest/cleanup.ts): read them all; remove some, by key, confirmed.
 readRoute("events/scan", internal.ingest.cleanup.eventsPage)

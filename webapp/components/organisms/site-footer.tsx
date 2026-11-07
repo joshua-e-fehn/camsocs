@@ -7,7 +7,7 @@ import { linkProps } from "@/lib/crawl-traps"
 import { CONTACT_EMAIL, DISCLAIMER } from "@/lib/site"
 import { TERM_NAMES, type TermClock, weekOfTerm } from "@/lib/term-week"
 
-const COLUMNS = [
+export const COLUMNS = [
   {
     title: "Browse",
     links: [
