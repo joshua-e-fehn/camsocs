@@ -54,7 +54,7 @@ export const CAMBRIDGE: CampusProfile = {
   origin: "https://camsocs.uk",
   icsUidDomain: "camsocs.uk",
   botUserAgent: "camsocs-bot/0.1 (+https://camsocs.uk/about)",
-  contactEmail: "camsocs@joshua-fehn.de",
+  contactEmail: "privacy@camsocs.uk",
   university: {
     name: "University of Cambridge",
     url: "https://www.cam.ac.uk",

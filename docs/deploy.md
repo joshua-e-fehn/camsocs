@@ -187,7 +187,7 @@ What each channel carries (the request's text is the public's and unverified): S
 ```bash
 bunx convex env set --prod RESEND_API_KEY          # prompts
 bunx convex env set --prod RESEND_FROM "CAMsocs <requests@camsocs.uk>"
-bunx convex env set --prod REQUEST_NOTIFY_EMAIL admin@joshua-fehn.de   # comma-separated for several
+bunx convex env set --prod REQUEST_NOTIFY_EMAIL requests@camsocs.uk   # comma-separated for several
 ```
 
 Switching email off: `bunx convex env remove --prod REQUEST_NOTIFY_EMAIL`. Switching the relay off: `systemctl disable --now camsocs-notify.timer` on the VPS.

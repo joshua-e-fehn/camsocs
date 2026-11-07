@@ -24,7 +24,10 @@
  * Install: in the sheet, Extensions → Apps Script, replace Code.gs with this
  * file, save, reload the sheet; the "Art 14 notice" menu appears. The script
  * runs as the signed-in Google account, which must have `CONFIG.from` as its
- * own address or as a "Send mail as" address.
+ * own address or as a "Send mail as" address: since D11 that is
+ * joshua@camsocs.uk (CAMsocs' own Workspace), where privacy@ is set up as one.
+ * The first notice (ENG-40, 4 Nov 2026) went out from camsocs@joshua-fehn.de,
+ * which forwards to the camsocs.uk mailbox.
  *
  * Limits: Apps Script sends to at most 1,500 recipients a day from a Google
  * Workspace account (100 from a consumer account); each batch is capped by
@@ -37,7 +40,7 @@
 
 const CONFIG = {
   /** The published contact address (webapp/lib/site.ts `CONTACT_EMAIL`). */
-  from: "camsocs@joshua-fehn.de",
+  from: "privacy@camsocs.uk",
   name: "Joshua Fehn (CAMsocs)",
   /** Rows per "Send the next batch". */
   batchSize: 100,

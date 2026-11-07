@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { securityTxt } from "@/lib/security-txt"
-import { CONTACT_EMAIL, SECURITY_TXT_EXPIRES } from "@/lib/site"
+import { SECURITY_CONTACT_EMAIL, SECURITY_TXT_EXPIRES } from "@/lib/site"
 
 describe("security.txt", () => {
   test("names the contact address, an Expires date and the policy, one field per line", () => {
@@ -10,7 +10,7 @@ describe("security.txt", () => {
       .trimEnd()
       .split("\n")
       .filter((line) => !line.startsWith("#"))
-    expect(lines).toContain(`Contact: mailto:${CONTACT_EMAIL}`)
+    expect(lines).toContain(`Contact: mailto:${SECURITY_CONTACT_EMAIL}`)
     expect(lines).toContain(`Expires: ${SECURITY_TXT_EXPIRES}`)
     expect(lines).toContain("Policy: https://camsocs.uk/about#security")
     for (const line of lines) expect(line).toMatch(/^[A-Z][A-Za-z-]+: \S+$/)

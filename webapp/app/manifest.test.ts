@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { CONTACT_EMAIL, THEME_COLOR } from "@/lib/site"
+import { SECURITY_CONTACT_EMAIL, THEME_COLOR } from "@/lib/site"
 import manifest from "./manifest"
 
 /** The files phones, browsers and security researchers probe for
@@ -29,7 +29,7 @@ test("an apple-touch-icon is served where iOS looks without a link tag", () => {
 test("security.txt (RFC 9116) gives the contact address and a valid expiry", () => {
   const text = readFileSync(join(PUBLIC, ".well-known", "security.txt"), "utf8")
   const field = (name: string) => text.match(new RegExp(`^${name}: (.+)$`, "m"))?.[1]
-  expect(field("Contact")).toBe(`mailto:${CONTACT_EMAIL}`)
+  expect(field("Contact")).toBe(`mailto:${SECURITY_CONTACT_EMAIL}`)
   const expires = Date.parse(field("Expires") ?? "")
   expect(Number.isNaN(expires)).toBe(false)
   // RFC 9116 2.5.5: less than a year ahead, so a stale file cannot linger.
