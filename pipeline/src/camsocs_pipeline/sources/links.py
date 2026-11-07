@@ -626,7 +626,7 @@ def email_domain(email: str) -> str:
 
 #: The alumni forwarding services also give name-shaped addresses
 #: (``jane.smith@cantab.net``): such an address names its person.
-#: Alumni addresses (`classifyEmail`'s `ALUMNI_DOMAINS`): the forwarding
+#: Alumni addresses (`memberEmail.alumni` in webapp/lib/campus): the forwarding
 #: services and any ``alumni.`` / ``alum.`` host. Each address there is one
 #: graduate's, whatever its shape, unless it is named after a post.
 _ALUMNI_DOMAINS = frozenset({"cantab.ac.uk", "cantab.net", "oxon.org"})
