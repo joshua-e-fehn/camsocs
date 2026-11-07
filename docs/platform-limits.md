@@ -50,7 +50,7 @@ One project, `camsocs` (id 330133), on **EU Cloud**, on the free plan (one proje
 ## 5. Domain and the rest
 
 - **camsocs.uk** at IONOS (registrar tag `1AND1`), name servers `ui-dns`, registered 31 Oct 2026, **expires 31 Oct 2027**. Nominet WHOIS on 2026-11-04: "Registrant contact details waiting to be checked" — a .uk domain whose registrant cannot be validated can be suspended, so finish the validation IONOS or Nominet asks for (ENG-43). Whether to auto-renew in 2027 is a docs/continuity.md decision; until then leave IONOS's auto-renew on so the name is never lost by accident (a lapsed name can be registered by anyone and made to look like camsocs).
-- **Contact mail** `camsocs@joshua-fehn.de` is an alias on Joshua's own Google Workspace, independent of Cambridge.
+- **Contact mail** is CAMsocs' own Google Workspace on camsocs.uk (D11, Business Starter, one licence: joshua@camsocs.uk with the aliases hello@, privacy@, security@, requests@, dmarc@), independent of Cambridge and of joshua-fehn.de. Gmail sending limit: 2,000 a day for the user; Apps Script mail merges 1,500 recipients a day. DNS stays at IONOS: MX `smtp.google.com`, SPF Google only, DKIM selector `google`, DMARC `p=none` with reports to dmarc@.
 - **cliproxy** runs on Joshua's ChatGPT subscription: no per-call cost, a weekly quota (exhausting it is acceptable by decision); when it runs out the model stages fail and alert, the parser stages and talks are unaffected.
 - **GitHub**: public repository, Actions free; nothing to cap.
 

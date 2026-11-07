@@ -176,7 +176,7 @@ describe("listingRequests.submit — a flood aimed at one listing", () => {
     await fill(t, PER_LISTING_PER_HOUR, () => junk("correct", "org-chess"))
     await expect(
       t.mutation(api.listingRequests.submit, junk("claim", "org-chess")),
-    ).rejects.toThrow(/This listing has had a lot of requests.*camsocs@joshua-fehn\.de/)
+    ).rejects.toThrow(/This listing has had a lot of requests.*privacy@camsocs\.uk/)
     // Removals have their own budget, on the listing as overall.
     const removal = await t.mutation(api.listingRequests.submit, junk("remove", "org-chess"))
     expect(removal.key).toMatch(/^lr-/)
@@ -208,7 +208,7 @@ describe("listingRequests.submit — a flood spread over the site", () => {
     await fill(t, GLOBAL_PER_HOUR, () => junk("correct", `org-soc-${n++ % listings}`))
     // An addition has no listing, so no reserve: the form is busy.
     await expect(t.mutation(api.listingRequests.submit, junk("add"))).rejects.toThrow(
-      /The form is busy; please try again later, or write to camsocs@joshua-fehn\.de/,
+      /The form is busy; please try again later, or write to privacy@camsocs\.uk/,
     )
     // A flooded listing is at its own cap.
     await expect(

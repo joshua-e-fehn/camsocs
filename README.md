@@ -23,4 +23,4 @@ Start with [`AGENTS.md`](AGENTS.md) for the architecture and conventions, then [
 
 ## Contact
 
-To ask for a correction or removal, use the [request form](https://camsocs.uk/request). For anything else, email camsocs@joshua-fehn.de.
+To ask for a correction or removal, use the [request form](https://camsocs.uk/request). For anything else, email hello@camsocs.uk; privacy requests can also go to privacy@camsocs.uk.
