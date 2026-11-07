@@ -15,6 +15,7 @@ import { jsonLdScript } from "@/lib/structured-data"
 export async function AudienceHub({ page }: { page: AudiencePage }) {
   let lists: Awaited<ReturnType<typeof publicQuery<typeof api.orgs.hub>>>[] = []
   let colleges: { key: string; name: string }[] = []
+  let failed = false
   try {
     ;[lists, colleges] = await Promise.all([
       Promise.all(page.queries.map((query) => publicQuery(api.orgs.hub, query))),
@@ -23,9 +24,13 @@ export async function AudienceHub({ page }: { page: AudiencePage }) {
   } catch (error) {
     unstable_rethrow(error)
     console.error(`orgs.hub failed; ${page.path} without listings`, error)
+    failed = true
   }
   const cards = unionCards(lists)
-  const intro = audienceIntro(page, cards)
+  // A failed read must not look like an empty list, nor be indexed as one.
+  const intro = failed
+    ? `The list of societies for ${page.who} could not be loaded right now. Please try again in a few minutes.`
+    : audienceIntro(page, cards)
   const jsonLd = collectionJsonLd({
     path: page.path,
     title: page.title,
@@ -38,6 +43,7 @@ export async function AudienceHub({ page }: { page: AudiencePage }) {
   })
   return (
     <>
+      {failed && <meta name="robots" content="noindex, follow" />}
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD, `<` escaped by jsonLdScript

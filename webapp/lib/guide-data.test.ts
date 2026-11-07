@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { collegeInfo } from "./colleges"
+import { FRESHERS_DATES, FRESHERS_LINKS, FRESHERS_SECTIONS } from "./freshers"
 import { GLOSSARY, GLOSSARY_INTRO, termAnchor } from "./glossary"
 import type { GuideSection } from "./guide-content"
 import { MAY_BALL_SECTIONS, MAY_BALLS, MAY_WEEK } from "./may-balls"
@@ -89,4 +90,15 @@ test("glossary words are sourced, unique by anchor and link only to real guide p
         entry.term,
         true,
       ])
+})
+
+test("the Freshers' guide is sourced and links only to real pages", () => {
+  checkSections(FRESHERS_SECTIONS)
+  const paths = new Set(PAGE_PATHS as readonly string[])
+  for (const links of Object.values(FRESHERS_LINKS))
+    for (const [href] of links) expect(paths.has(href)).toBe(true)
+  for (const row of FRESHERS_DATES) {
+    if (row.date) expect(row.date).toMatch(ISO)
+    expect(row.sources.length).toBeGreaterThan(0)
+  }
 })

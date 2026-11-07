@@ -48,6 +48,7 @@ export const ROUTE_INDEXING: Record<string, RouteIndexing> = {
   "/guides/theatre": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/guides/postgraduates": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/guides/glossary": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
+  "/guides/freshers": { sitemap: "pages.xml", linkedFrom: "page:/guides" },
   "/privacy": { sitemap: "pages.xml", linkedFrom: "footer" },
   "/request": { sitemap: "pages.xml", linkedFrom: "footer" },
   "/societies": { sitemap: "pages.xml", linkedFrom: "header" },

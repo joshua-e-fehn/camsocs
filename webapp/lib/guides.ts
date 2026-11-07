@@ -24,6 +24,7 @@ export type GuideSlug =
   | "university-sport"
   | "theatre"
   | "postgraduates"
+  | "freshers"
 
 export type GuideSource = {
   /** Who published it, short: shown inline as the citation. */
@@ -152,6 +153,17 @@ export const GUIDES: readonly Guide[] = [
       "For new MPhil and PhD students: how department and college fit together, graduate colleges, the MCR and your Tutor, the SU, supervision, welfare and money.",
     summary:
       "Department and college, graduate colleges, the MCR and your Tutor, the SU, terms and supervision, social life, welfare and money.",
+    published: "2026-11-08",
+    updated: "2026-11-08",
+  },
+  {
+    slug: "freshers",
+    path: "/guides/freshers",
+    title: "Freshers' Week and Refreshers' in Cambridge",
+    description:
+      "Starting at Cambridge: before you arrive, Freshers' Week, the fairs, postgraduate inductions, the Refreshers' Fair in January, and settling in.",
+    summary:
+      "What happens before you arrive and in Freshers' Week, the fairs, postgraduate inductions, the Refreshers' Fair and settling in.",
     published: "2026-11-08",
     updated: "2026-11-08",
   },

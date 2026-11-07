@@ -42,6 +42,7 @@ export const PAGE_PATHS = [
   "/guides/theatre",
   "/guides/postgraduates",
   "/guides/glossary",
+  "/guides/freshers",
   "/about",
   "/privacy",
   "/terms",
