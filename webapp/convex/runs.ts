@@ -34,6 +34,33 @@ export function deriveRunStatus(
   return failed === stages.length ? "failed" : "partial"
 }
 
+/** `sync --group <name>`: the command the pipeline posts for a group run
+ * (pipeline/sync.py). */
+const GROUP_COMMAND = /^sync --group ([a-z][a-z0-9_-]{0,39})$/
+
+/**
+ * The stage group a run belongs to, or null when none was recorded.
+ *
+ * `group` is optional on the row (added after the run log existed, widen-only):
+ * older rows, and rows from a pipeline that does not send it yet, fall back to
+ * the group named in `command`. An ad-hoc `sync --stages …` run has neither.
+ */
+export function runGroup(run: {
+  readonly group?: string
+  readonly command: string
+}): string | null {
+  if (run.group !== undefined) return run.group
+  return GROUP_COMMAND.exec(run.command)?.[1] ?? null
+}
+
+/** A posted optional string, or undefined when blank: an empty `group` or
+ * `revision` records nothing, so readers see "not recorded" rather than "". */
+function recorded(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  const trimmed = value.trim()
+  return trimmed === "" ? undefined : trimmed
+}
+
 async function findRun(ctx: MutationCtx, runKey: string): Promise<Doc<"harvestRuns"> | null> {
   return await ctx.db
     .query("harvestRuns")
@@ -54,6 +81,10 @@ export const start = internalMutation({
     command: v.string(),
     requestedStages: v.array(v.string()),
     pipelineVersion: v.string(),
+    /** Optional: the stage group (`sync --group <g>`); absent from older pipelines. */
+    group: v.optional(v.string()),
+    /** Optional: the code revision that ran; absent from older pipelines. */
+    revision: v.optional(v.string()),
   },
   returns: v.object({ runKey: v.string(), created: v.boolean() }),
   handler: async (ctx, args) => {
@@ -64,12 +95,18 @@ export const start = internalMutation({
     if ((await findRun(ctx, args.runKey)) !== null) {
       throw new Error(`Run ${args.runKey} already exists; run keys are minted per invocation`)
     }
+    const group = recorded(args.group)
+    const revision = recorded(args.revision)
     const now = Date.now()
     await ctx.db.insert("harvestRuns", {
       runKey: args.runKey,
       command: args.command,
       requestedStages: args.requestedStages,
       pipelineVersion: args.pipelineVersion,
+      // Omitted, not stored as undefined, when not posted: the row then looks
+      // exactly like one written before these fields existed.
+      ...(group === undefined ? {} : { group }),
+      ...(revision === undefined ? {} : { revision }),
       status: "running",
       startedAt: now,
       finishedAt: null,
