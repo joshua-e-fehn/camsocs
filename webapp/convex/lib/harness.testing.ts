@@ -22,6 +22,7 @@ const appModules = {
   "./coverage.ts": () => import("../coverage"),
   "./crons.ts": () => import("../crons"),
   "./derive.ts": () => import("../derive"),
+  "./eventFeed.ts": () => import("../eventFeed"),
   "./events.ts": () => import("../events"),
   "./http.ts": () => import("../http"),
   "./listingRequests.ts": () => import("../listingRequests"),

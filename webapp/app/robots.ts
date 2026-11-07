@@ -7,6 +7,7 @@ import {
   TRAP_DISALLOWS,
 } from "@/lib/crawl-traps"
 import { AI_SEARCH_CRAWLERS, AI_TRAINING_CRAWLERS, AI_USER_AGENTS, SCRAPERS } from "@/lib/crawlers"
+import { FEED_PATH } from "@/lib/event-feed"
 import { SITE_URL } from "@/lib/site"
 
 /**
@@ -29,6 +30,10 @@ import { SITE_URL } from "@/lib/site"
  * `/talks?school=`) as allowing their `…&…` slices, since Next writes every
  * Allow before the Disallows. Accepted: the T3 group has no Allow, and the
  * firewall holds the line there.
+ *
+ * Two `Sitemap:` lines: the sitemap index, every page, and the Atom feed of
+ * newly listed events (lib/event-feed.ts), which Google reads as a sitemap
+ * and fetches more often (event indexing, 2026-11-07).
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -46,6 +51,6 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: [...AI_TRAINING_CRAWLERS], disallow: [...TRAINING_DISALLOWS] },
       { userAgent: [...SCRAPERS], disallow: "/" },
     ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    sitemap: [`${SITE_URL}/sitemap.xml`, `${SITE_URL}${FEED_PATH}`],
   }
 }

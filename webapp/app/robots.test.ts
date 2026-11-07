@@ -55,6 +55,7 @@ const CACHED_CANONICAL = [
   "/robots.txt",
   "/sitemap.xml",
   "/sitemaps/events.xml",
+  "/events.atom",
 ]
 /** Canonical pages rendered per request, and the other paths the firewall
  * denies a training crawler. */
@@ -201,7 +202,7 @@ describe("robots.txt", () => {
     expect(allowed("Googlebot", "/societies")).toBe(true)
   })
 
-  test("every agent is in exactly one group, and the sitemap is named", () => {
+  test("every agent is in exactly one group, and the sitemap and new-events feed are named", () => {
     const named = [robots().rules]
       .flat()
       .flatMap((rule) => [rule.userAgent].flat())
@@ -209,7 +210,10 @@ describe("robots.txt", () => {
       .map((agent) => agent.toLowerCase())
     expect(new Set(named).size).toBe(named.length)
     expect(named).toHaveLength(AI_CRAWLERS.length + SCRAPERS.length)
-    expect(robots().sitemap).toMatch(/\/sitemap\.xml$/)
+    expect(robots().sitemap).toEqual([
+      expect.stringMatching(/^https:\/\/[^/]+\/sitemap\.xml$/),
+      expect.stringMatching(/^https:\/\/[^/]+\/events\.atom$/),
+    ])
   })
 })
 
@@ -285,6 +289,7 @@ describe("robots.txt as served", () => {
 
   test("names the sitemap and one group per tier", () => {
     expect(text).toMatch(/^Sitemap: https:\/\/[^\s]+\/sitemap\.xml$/m)
+    expect(text).toMatch(/^Sitemap: https:\/\/[^\s]+\/events\.atom$/m)
     expect(groups).toHaveLength(4)
   })
 

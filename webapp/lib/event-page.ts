@@ -8,6 +8,7 @@ import {
   eventEndedLongAgo,
   eventMetaDescription,
   eventPageTitle,
+  eventUnavailableAfter,
   repeatsThatDay,
   spokenTitle,
   titleSearchWords,
@@ -98,7 +99,11 @@ export function venueNameOf(event: EventPublic, venue: EventVenue | undefined) {
  * canonical URL on its side of the talks boundary, its `.ics` advertised as a
  * calendar alternate (public events), and robots:
  *  - a Cambridge-only event is for signed-in readers, not search;
- *  - one that ended over 30 days ago is noindex, follow (owner decision G4).
+ *  - one that ended over 30 days ago is noindex, follow (owner decision G4);
+ *  - before that, `unavailable_after` names that same moment (event
+ *    indexing, 2026-11-07), so Google drops the page on time without having
+ *    to recrawl it to find the noindex, and crawls the URL less after it
+ *    (Search Central, "Robots meta tag"): its crawling goes to new events.
  */
 export function eventMetadata(
   event: EventPublic,
@@ -130,7 +135,7 @@ export function eventMetadata(
   if (event.visibility === "cam_only")
     return { ...metadata, robots: { index: false, follow: false } }
   if (eventEndedLongAgo(event, now)) return { ...metadata, robots: { index: false, follow: true } }
-  return metadata
+  return { ...metadata, robots: { unavailable_after: eventUnavailableAfter(event) } }
 }
 
 /** The metadata of a page whose event this viewer may not see. */

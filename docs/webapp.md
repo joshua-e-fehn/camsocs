@@ -62,6 +62,10 @@ app/                         Next.js App Router pages
                              lib/sitemap-societies.ts, convex/sitemap.ts, orgs.sitemap): lastmod, edge-cached
                              an hour, 503 on a backend failure; category hubs and college pages listed; thin
                              profiles (G3), ended and talks.cam-derived events (G1) left out
+  events.atom/               Newly listed events (first stored in the last 14 days, ≤ 100) as Atom
+                             (lib/event-feed.ts, eventFeed.newest): the second `Sitemap:` line in
+                             robots.txt, since Google reads a feed as a sitemap and fetches it more
+                             often; entries dated by first storage, never by a harvest; edge-cached an hour
   robots.ts                  robots disallows /dashboard, /api/, /sign-in, /relay and the parameter traps
                              (/events?, /societies?, /talks?, /request?, /talks/departments?, /events/*/ics;
                              canonical ?org= / ?page= / ?dept= / ?school= views allowed); AI agents
@@ -719,6 +723,7 @@ Counterparts (`isCounterpart`: colleges, companies, offices) are never listed.
 | `orgs.getBySlug` | `{ slug }` | `null` or `{ org: OrgPublic, teams: TeamPublic[], sessions: SessionPublic[], events: EventListItem[], relationships: RelationshipPublic[], hasPublicEvents? }`; events are upcoming (from London midnight today, plus multi-day runs still on), at most 50, gated by the viewer, without withdrawn or talks.cam-derived ones (`isTalksDerivedEvent`); relationships are public edges with `direction` and the counterpart's `{key, slug, name}`, whose evidence never links a talks.cam page (an edge seen only on talks.cam pages is left out); `hasPublicEvents`: any public event not from talks.cam, past or upcoming, viewer-independent (decision G3). The whole result is passed through the talks guard (decision G1) |
 | `orgs.hub` | `{ category?, collegeKey? }` | Every listing of one category or one college, by name: `{ key, slug, name, shortName?, shortDescription?, orgType?, level?, status, collegeKeys, categories, sport?: {sport?} }[]` (no logo, no activity); the directory's rules (no counterparts, nothing archived). For the hub pages (decision G13) |
 | `orgs.sitemap` | `{ cursor?, numItems? }` | `{ page: { slug, kind: "listing" \| "college", updatedAt, indexable }[], isDone, continueCursor }` (offset cursor, ≤ 100 a page): every listing and college page; `indexable` false for a thin profile (no description, no public event, no website: decision G3, `lib/directory-indexing.ts` `isThinListing`, judged on the same guarded projection the profile shows, so suppressed fields, talks.cam websites and talks.cam events do not count) and a college that lists nobody; a listing removed on request is left out. Read by `lib/sitemap-societies.ts` |
+| `eventFeed.newest` | `{ limit? }` (≤ 100) | `{ key, title, startsAt, allDay, listedAt, host?, fromUniversity }[]`, newest first by first storage (`_creationTime`), stored in the last 14 days: the events sitemap's pages (public, from today on or still running; never withdrawn, superseded, suppressed, hosted only by hidden organisations or talks.cam-derived, G1) less cancelled ones. Read by `/events.atom` and `/events` |
 | `orgs.colleges` | `{}` | `{ key, slug, name }[]` of colleges, by name (for the college filter) |
 | `orgs.busy` | `{ limit? }` | `{ label?, from, to, orgs: { card: OrgCardPublic, count }[] }` — the "Busy this week" shelf: listings with the most counted, not cancelled events this term week (Thu–Wed; `label` "MT26 Wk 4"), else the next 7 days; at most 12 |
 | `orgs.related` | `{ slug, limit? }` | `OrgCardPublic[]` (≤ 6): the same college first, then what the group does: the same sport, shared categories, telling words shared in the name, the same specific kind, shared activities and audiences (`relatedScore`); ties in a fixed per-pair hash order, never the alphabet; empty for an unknown or hidden slug |
@@ -823,7 +828,13 @@ department index's A-Z view; `/events?org=<slug>`, `/societies?page=N`, `/talks?
 `/talks?school=` alone stay followed. An event page's "All its events" link is its lead
 society's canonical calendar, `/events?org=<slug>` (`eventsIndexing(...).canonical`), never a
 slice. Event pages are found through the sitemap
-(`sitemaps/events.xml`), the canonical calendars and the society profiles, whose rows link them;
+(`sitemaps/events.xml`), the new-events feed (`/events.atom`), the canonical calendars, the
+society profiles, whose rows link them, and the plain `/events` page's "Newly listed" list
+(`components/molecules/newly-listed.tsx`, the 30 newest from `eventFeed.newest`): the calendar
+itself links one week, so without it an event weeks away (above all one of the University's,
+which no profile links) had no link from any indexed page (crawl of 7 Nov 2026: 311 of 612). An
+event page's robots meta carries `unavailable_after` at G4's moment (30 days after it ended,
+`eventUnavailableAfter`), so Google drops it then without a recrawl;
 an event page's breadcrumb is "Events" alone (no day crumb, which would point at a trap), the same
 in its JSON-LD BreadcrumbList. Neither `/events` nor `/events/[key]` has a
 `loading.tsx`: their H1, text and JSON-LD are in the first HTML chunk.
