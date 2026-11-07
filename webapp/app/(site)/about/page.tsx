@@ -101,6 +101,12 @@ export default async function AboutPage() {
           <p>
             It is a personal project by <strong>{CONTROLLER_NAME}</strong>, a student at Cambridge.
           </p>
+          <p>
+            New here? The <Link href="/guides">guides</Link> explain{" "}
+            <Link href="/guides/join-a-society">how to find and join a society</Link> and{" "}
+            <Link href="/guides/start-a-society">how to start one</Link>, with every fact linked to
+            the SU’s, the Proctors’ or the Sports Service’s own pages.
+          </p>
         </ProseSection>
 
         <ProseSection id="unofficial" title="Unofficial and independent">

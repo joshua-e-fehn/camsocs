@@ -1,4 +1,5 @@
 import { CATEGORIES_PATH, categoryHubPath } from "./directory-hubs"
+import { GUIDES, GUIDES_PATH } from "./guides"
 import { CONTACT_EMAIL, DISCLAIMER, SITE_NAME, SITE_URL } from "./site"
 import { CATEGORIES, CATEGORY_LABELS } from "./vocab"
 
@@ -40,6 +41,12 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "Full Term dates and the week of term, from the University's published dates",
   },
   {
+    path: GUIDES_PATH,
+    name: "Guides",
+    about:
+      "plain guides to finding, joining and starting a society, every fact linked to its source",
+  },
+  {
     path: "/about",
     name: "About CAMsocs",
     about: "who runs it, where every fact comes from and how the data is collected",
@@ -74,6 +81,12 @@ export function llmsTxt(): string {
     ...CATEGORIES.map(
       (category) => `- [${CATEGORY_LABELS[category]}](${SITE_URL}${categoryHubPath(category)})`,
     ),
+    "",
+    // The guides (lib/guides.ts): unofficial summaries of what the SU, the
+    // Proctors and the Sports Service publish, each fact linked to its source.
+    "## Guides",
+    "",
+    ...GUIDES.map((entry) => `- [${entry.title}](${SITE_URL}${entry.path}): ${entry.summary}`),
     "",
     "## Citing CAMsocs",
     "",

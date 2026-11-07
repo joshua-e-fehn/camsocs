@@ -53,6 +53,12 @@ app/                         Next.js App Router pages
     about/page.tsx, privacy/page.tsx   About (how data is collected) and the UK GDPR notice
     term-dates/page.tsx      Full Term dates by academic year, the week of term today and each week's
                              dates (`termDates` + lib/term-calendar.ts; no hand-written dates)
+    guides/page.tsx, guides/join-a-society/page.tsx, guides/start-a-society/page.tsx
+                             Editorial guides (lib/guides.ts): every fact cites a source (`<Cite id>`), the
+                             page lists them with read dates; open REVIEW_NOTES show as "[Joshua: …]"
+                             boxes, mark the pages draft + noindex, and fail lib/guides.test.ts until
+                             resolved. Article + BreadcrumbList JSON-LD (no HowTo/FAQPage). Live counts
+                             via the same cached orgs.facets read as /categories
   sign-in/page.tsx           Google (admin) + @cam.ac.uk email link (accounts are created on first use)
   dashboard/                 Private broker area (session required; BrokerGate shows non-brokers why
                              it is closed): overview, organisations (?org=<key> opens the drawer),

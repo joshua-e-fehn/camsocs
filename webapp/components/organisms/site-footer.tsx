@@ -16,6 +16,7 @@ const COLUMNS = [
       { href: "/societies", label: "Societies and clubs" },
       { href: "/talks/departments", label: "Departments" },
       { href: "/term-dates", label: "Term dates" },
+      { href: "/guides/join-a-society", label: "Joining a society" },
     ],
   },
   {
@@ -24,6 +25,7 @@ const COLUMNS = [
       // The bare form opens on "claim": the one /request URL to crawl.
       { href: "/request", label: "Claim or correct a listing" },
       { href: "/request?kind=add", label: "Add a missing society" },
+      { href: "/guides/start-a-society", label: "Starting a society" },
       { href: "/request?kind=remove", label: "Ask for removal" },
       { href: "/request?kind=object", label: "Object or complain" },
     ],
@@ -32,6 +34,7 @@ const COLUMNS = [
     title: "CAMsocs",
     links: [
       { href: "/about", label: "How CAMsocs works" },
+      { href: "/guides", label: "Guides" },
       { href: "/privacy", label: "Privacy notice" },
       { href: "/terms", label: "Terms of use" },
     ],
