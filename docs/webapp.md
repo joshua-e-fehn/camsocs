@@ -914,6 +914,7 @@ everyone when `BROKER_EMAILS` is unset. No internal functions live there. Read m
 | `broker/overview` | `summary` (events next 14 days by source, latest runs, open requests, due follow-ups, stale people, introductions by status, the latest `coverage` snapshot, the latest resolve stage's `quarantine` counts), `refreshCoverage` (schedules the fold now) |
 | `broker/listingRequests` | `list({status?})`, `setStatus`, `acceptCorrections({key, corrections: {field, value}[]})` (claim / correct → `owner_submitted` claims through `internal.ingest.claims.ingest`, run as a sub-transaction; all or nothing), `acceptRemoval({key, scope, fields?, address?, personKeys?, eventKeys?, name?})` (remove / object → suppressions, enforced at once; `event` and `name` need no listing) |
 | `broker/suppressions` | `list({orgKey?})` (an address shows only as `contact: true`), `lift({key})` |
+| `broker/pipeline` | `stageStatus({group?})` (per-stage status over the newest 40 `harvestRuns`: lastStatus `ok`/`failed`/`not_run`/`not_requested`/`running`, counts, durationMs, failStreak, yield and 7d/28d medians, `fetch` (`null` = not recorded, never zeros), `talkRun` joined from `talkRuns` on `talks`; no notes or errors), `runs({group?, limit?≤30})` (newest first, no notes/errors/warnings), `stageDetail({runKey, stage})` (notes and the error; `null` for an unknown run or stage) |
 | `broker/session` | `me` |
 
 ### Sending the Art 14 notice
