@@ -22,8 +22,14 @@
  * `POSTHOG_ENV=development` on a deployment given a key for a test, and the
  * project's internal/test filter hides its events.
  *
+ * Every event carries `campus`, the deployment's campus (decision D8,
+ * `CAMSOCS_CAMPUS`, unset: `cam`), so a query can split campuses with
+ * `ifNull(properties.campus,'cam')`.
+ *
  * ⚠ Never log the key or the request body.
  */
+
+import { deploymentCampus } from "../../lib/campus/deployment"
 
 /** The documented single-event capture path (research-api §5). */
 export const CAPTURE_PATH = "/i/v0/e/"
@@ -57,7 +63,8 @@ export function posthogConfig(
 
 export type CaptureProps = Readonly<Record<string, string | number | boolean>>
 
-/** The capture API's body for one event. Pure. */
+/** The capture API's body for one event. Pure but for the deployment's
+ * campus, read from its env. */
 export function captureBody(config: PostHogConfig, event: string, props: CaptureProps) {
   return {
     api_key: config.key,
@@ -65,6 +72,7 @@ export function captureBody(config: PostHogConfig, event: string, props: Capture
     distinct_id: SERVER_DISTINCT_ID,
     properties: {
       ...props,
+      campus: deploymentCampus(),
       environment: config.environment,
       $process_person_profile: false,
       $geoip_disable: true,

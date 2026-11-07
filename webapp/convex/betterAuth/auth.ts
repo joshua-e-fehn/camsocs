@@ -6,7 +6,9 @@ import type { BetterAuthOptions } from "better-auth"
 import { betterAuth } from "better-auth"
 import { APIError, createAuthMiddleware } from "better-auth/api"
 import { magicLink } from "better-auth/plugins/magic-link"
-import { isCamEmail, normaliseCamEmail } from "../../lib/cam-email"
+import { CAMBRIDGE } from "../../lib/campus"
+import { deploymentProfile } from "../../lib/campus/deployment"
+import { isMemberEmail, normaliseEmail } from "../../lib/campus/member-email"
 import { components, internal } from "../_generated/api"
 import type { DataModel } from "../_generated/dataModel"
 import authConfig from "../auth.config"
@@ -56,11 +58,16 @@ function googleProvider() {
 }
 
 export const MAGIC_LINK_PATH = "/sign-in/magic-link"
-export const NOT_CAM_EMAIL = "Use your @cam.ac.uk address"
+/** Cambridge's refusal text. A deployment refuses with its own campus's
+ * (`memberTier.rejectMessage`, decision D8); for `cam` it is this. */
+export const NOT_CAM_EMAIL = CAMBRIDGE.memberTier.rejectMessage
 
+/** Refuses any address outside the deployment campus's member tier
+ * (Cambridge: exactly `@cam.ac.uk`, lib/campus/member-email.ts). */
 function refuseNonCamEmail(email: unknown): void {
-  if (typeof email !== "string" || !isCamEmail(email)) {
-    throw new APIError("BAD_REQUEST", { message: NOT_CAM_EMAIL })
+  const campus = deploymentProfile()
+  if (typeof email !== "string" || !isMemberEmail(email, campus)) {
+    throw new APIError("BAD_REQUEST", { message: campus.memberTier.rejectMessage })
   }
 }
 
@@ -99,7 +106,7 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
           throw new APIError("INTERNAL_SERVER_ERROR", { message: "Cannot send email here" })
         }
         const known = await endpoint?.context.internalAdapter
-          .findUserByEmail(normaliseCamEmail(email))
+          .findUserByEmail(normaliseEmail(email))
           .catch(() => null)
         const verdict = await ctx.runMutation(internal.authEmail.reserveSignInLink, {
           email,
@@ -115,10 +122,7 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
           })
         }
         try {
-          await sendSignInEmail(
-            config,
-            buildSignInEmail(config.from, normaliseCamEmail(email), url),
-          )
+          await sendSignInEmail(config, buildSignInEmail(config.from, normaliseEmail(email), url))
         } catch (error) {
           // The message names the HTTP status only — never the link or key.
           console.error(error instanceof Error ? error.message : "Sign-in email failed")
@@ -132,7 +136,8 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
 // Better Auth Options
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   return {
-    appName: "CAMsocs",
+    // The deployment's campus (CAMSOCS_CAMPUS, unset: cam → "CAMsocs").
+    appName: deploymentProfile().brand.name,
     baseURL: process.env.SITE_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     // The browser calls the auth API from the Next.js origin while this backend
