@@ -21,6 +21,7 @@ import {
 } from "../lib/suppressions"
 import { literalUnion } from "../lib/validators"
 import { relayState, resend, startTest } from "../notifications"
+import { agentState } from "../requestAgent"
 import { listingRequestFields, requestNotificationValidator } from "../schema"
 
 /**
@@ -133,6 +134,31 @@ export const notifyAgain = mutation({
   handler: async (ctx, args) => {
     await requireBrokerUser(ctx)
     await resend(ctx, await findRequest(ctx, args.key))
+    return null
+  },
+})
+
+/** The request agent's state (ENG-126): when it last called and whether
+ * that is too long ago; null when it never has. */
+export const requestAgent = query({
+  args: {},
+  returns: v.union(v.null(), v.object({ lastSeenAt: v.number(), stale: v.boolean() })),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    return await agentState(ctx)
+  },
+})
+
+/** Throws a request's draft away, so the agent drafts it again (within
+ * about a minute). */
+export const redraft = mutation({
+  args: { key: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireBrokerUser(ctx)
+    const row = await findRequest(ctx, args.key)
+    if (row.status !== "open") throw new ConvexError("Only an open request is drafted")
+    await ctx.db.patch("listingRequests", row._id, { draft: undefined })
     return null
   },
 })

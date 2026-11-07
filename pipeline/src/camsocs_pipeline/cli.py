@@ -19,6 +19,8 @@
                                          the site, new listing requests (ENG-10, ENG-33);
                                          exits 1 when it pages; shadow checks never page
                                          (D9, docs/ops-vps.md)
+    camsocs request-drafts               the request agent, one round: drafts for open listing
+                                         requests, posted for the broker to confirm (ENG-126)
     camsocs graph [--json PATH] [--mermaid PATH]   the stage registry as a graph (JSON,
                                          Mermaid); offline (`pixi run pipeline-graph`)
 
@@ -58,7 +60,7 @@ from camsocs_pipeline.config import (
 )
 from camsocs_pipeline.coverage_report import report_path
 from camsocs_pipeline.events.common import london_today
-from camsocs_pipeline.extract.llm import ModelRefused, assert_model_allowed
+from camsocs_pipeline.extract.llm import LLMClient, ModelRefused, assert_model_allowed
 from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
@@ -90,6 +92,7 @@ from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
+from camsocs_pipeline.request_agent import run_drafts
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
@@ -657,6 +660,28 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
         )
     if verdict.page:
         raise click.ClickException("; ".join(verdict.reasons()))
+
+
+@cli.command("request-drafts")
+@_env_option
+@click.pass_context
+def request_drafts(ctx: click.Context) -> None:
+    """The request agent (request_agent.py, ENG-126), one round: drafts what
+    to apply for the open listing requests that need it, with the strong
+    model, and posts each draft to Convex for the broker to confirm. Applies
+    nothing. Prints counts only. Run every minute by
+    camsocs-request-agent.timer on the VPS."""
+    settings = _settings(ctx)
+    try:
+        llm = LLMClient(settings.require_llm())
+    except ConfigError as error:
+        raise click.ClickException(str(error)) from error
+    try:
+        with _loader(settings) as loader:
+            counts = run_drafts(loader, llm)
+    except ConvexError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"request-drafts: {counts.line()}")
 
 
 @cli.command()

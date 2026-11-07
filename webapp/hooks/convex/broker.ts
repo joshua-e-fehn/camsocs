@@ -169,7 +169,14 @@ export function useListingRequestMutations() {
     acceptCorrections: useMutation(api.broker.listingRequests.acceptCorrections),
     acceptRemoval: useMutation(api.broker.listingRequests.acceptRemoval),
     liftSuppression: useMutation(api.broker.suppressions.lift),
+    redraft: useMutation(api.broker.listingRequests.redraft),
   }
+}
+
+/** The request agent's state (ENG-126): when it last called, and whether that
+ * is too long ago; null when it never has. */
+export function useRequestAgent() {
+  return useQuery(api.broker.listingRequests.requestAgent)
 }
 
 /** The overview's website traffic (PostHog and Search Console). */

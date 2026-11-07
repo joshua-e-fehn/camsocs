@@ -701,6 +701,55 @@ export const requestNotificationValidator = v.object({
   attempts: v.optional(v.number()),
 })
 
+/**
+ * The request agent's draft of what to apply (ENG-126, convex/lib/requestDraft.ts):
+ * written by the agent on the VPS through `/api/pipeline/requests/draft`,
+ * read by the accept dialogs, which it pre-fills. Values are the dialog's
+ * editor text, already checked; the broker confirms. Cleared by "Redraft"
+ * and by the retention job with the request's contents.
+ */
+export const requestDraftValidator = v.object({
+  state: v.union(v.literal("ready"), v.literal("failed")),
+  at: v.number(),
+  /** Tries so far (a failed draft is tried again, three times at most). */
+  attempts: v.number(),
+  model: v.optional(v.string()),
+  promptVersion: v.optional(v.string()),
+  /** A failed try's error class, never its text. */
+  error: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  concerns: v.optional(v.array(v.string())),
+  checks: v.optional(
+    v.object({
+      domain: v.string(),
+      cam: v.boolean(),
+      listed: v.boolean(),
+      siteDomain: v.boolean(),
+    }),
+  ),
+  corrections: v.optional(
+    v.array(
+      v.object({
+        field: v.string(),
+        text: v.string(),
+        current: v.optional(v.string()),
+        reason: v.optional(v.string()),
+      }),
+    ),
+  ),
+  removal: v.optional(
+    v.object({
+      scope: literalUnion(SUPPRESSION_SCOPES),
+      fields: v.optional(v.array(v.string())),
+      address: v.optional(v.string()),
+      name: v.optional(v.string()),
+      eventKeys: v.optional(v.array(v.string())),
+    }),
+  ),
+  dropped: v.optional(v.array(v.object({ field: v.string(), reason: v.string() }))),
+  reply: v.optional(v.string()),
+})
+
 /** A broker's "Send test notification" (convex/notifications.ts): a synthetic
  * request the relay and the email sender deliver like a real one. */
 export const notificationTestFields = {
@@ -710,8 +759,9 @@ export const notificationTestFields = {
   notifications: v.array(requestNotificationValidator),
 }
 
-/** The VPS relay that sends Slack and WhatsApp through Mya: which channels it
- * serves and when it last asked for work (one row, `name` "vps"). */
+/** A VPS process that calls in (its heartbeat): the notification relay
+ * (`vps`, with the channels it serves) and the request agent
+ * (`request-agent`, no channels). */
 export const notifyRelayFields = {
   name: v.string(),
   channels: v.array(v.union(v.literal("slack"), v.literal("whatsapp"))),
@@ -737,6 +787,8 @@ export const listingRequestFields = {
   outcome: v.optional(listingRequestOutcomeValidator),
   /** The new-request notification's delivery, per channel (ENG-104). */
   notifications: v.optional(v.array(requestNotificationValidator)),
+  /** The request agent's draft (ENG-126). */
+  draft: v.optional(requestDraftValidator),
   /** When the retention job reduced an accepted correction its owner claims
    * cite (`request:<key>`) to a stub: key, kind, listing, role, outcome and
    * dates stay; the submitter's address, message and fields are gone (R8). */

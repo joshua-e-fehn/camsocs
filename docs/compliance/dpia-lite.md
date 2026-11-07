@@ -32,7 +32,7 @@ Joshua's @cam.ac.uk list mail ──▶ Resend inbound ──▶│ inboundEmail
                                                     │
                        public projection only ──────┴──▶ Next.js on Vercel ──▶ visitors
                        broker tables (requireBrokerUser) ──▶ /dashboard (Joshua only)
-request form ──▶ listingRequests (internal) ──▶ review by Joshua
+request form ──▶ listingRequests (internal) ──(addresses and phone numbers masked)──▶ LLM draft (ENG-126) ──▶ review and confirm by Joshua
 talks.cam API + department sites ──(parser only, never an LLM)──▶ var/staging/talks (90 d) ──▶ /api/pipeline/talks/* ──▶ Convex talks (30 d after the talk) ──▶ /talks
 visitor's browser ──(only after "Accept analytics"; ph_* cookie 180 d; query, title, element text stripped)──▶ /relay on Vercel ──▶ PostHog EU (Frankfurt; IP discarded, no replay, keys only, 1 y)
 Next.js server errors, .ics fetches, Convex listing-request counts ──(fixed id, no IP/UA/cookies/body)──▶ PostHog EU

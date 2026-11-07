@@ -3,6 +3,7 @@
 import { PlusIcon, XIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { FieldValueEditor } from "@/components/molecules/field-value-editor"
+import { readyDraft } from "@/components/organisms/broker-request-draft"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -75,11 +76,18 @@ export function AcceptCorrectionsDialog({
 }) {
   const { acceptCorrections } = useListingRequestMutations()
   const proposed = Object.entries(request.fields ?? {})
+  // The request agent's draft (ENG-126) pre-fills the values when it has
+  // any; otherwise the form's proposed values do.
+  const draft = readyDraft(request)
+  const drafted = (draft?.corrections ?? []).filter((item) => isOwnerField(item.field))
   const [rows, setRows] = useState<Row[]>(() =>
-    proposed.flatMap(([field, value]) =>
-      isOwnerField(field) ? [{ field, text: initialText(field, value) }] : [],
-    ),
+    drafted.length > 0
+      ? drafted.map((item) => ({ field: item.field as OwnerField, text: item.text }))
+      : proposed.flatMap(([field, value]) =>
+          isOwnerField(field) ? [{ field, text: initialText(field, value) }] : [],
+        ),
   )
+  const notes = new Map(drafted.map((item) => [item.field, item]))
   const ignored = proposed.filter(([field]) => !isOwnerField(field)).map(([field]) => field)
   const [adding, setAdding] = useState<string>("")
   const [saving, setSaving] = useState(false)
@@ -101,7 +109,7 @@ export function AcceptCorrectionsDialog({
     })
     const done = await runWithToast(
       acceptCorrections({ key: request.key, corrections }),
-      `${rows.length} field${rows.length === 1 ? "" : "s"} recorded as owner-confirmed`,
+      `${rows.length} field${rows.length === 1 ? "" : "s"} applied: live on the site within 5 minutes`,
     )
     setSaving(false)
     if (done) onClose()
@@ -112,13 +120,19 @@ export function AcceptCorrectionsDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>Accept corrections</DialogTitle>
+            <DialogTitle>{draft ? "Review and confirm" : "Accept corrections"}</DialogTitle>
             <DialogDescription>
+              {draft
+                ? "The request agent drafted these values: edit or drop any, then confirm. "
+                : ""}
               Each value becomes an owner-confirmed claim on {request.org?.name ?? "the listing"}{" "}
               and outranks every harvested source. The sender&apos;s address is unverified — check
               the values first.
             </DialogDescription>
           </DialogHeader>
+          {draft?.summary && (
+            <p className="rounded-lg border bg-muted/30 p-3 text-sm">{draft.summary}</p>
+          )}
           <FieldGroup>
             {rows.length === 0 && (
               <p className="text-sm text-muted-foreground">
@@ -142,10 +156,18 @@ export function AcceptCorrectionsDialog({
                       <XIcon />
                     </Button>
                   </div>
+                  {notes.get(row.field)?.current !== undefined && (
+                    <FieldDescription className="break-words whitespace-pre-wrap">
+                      Now: {notes.get(row.field)?.current}
+                    </FieldDescription>
+                  )}
                   {request.fields?.[row.field] !== undefined && (
                     <FieldDescription className="break-words">
                       Proposed: {request.fields[row.field]}
                     </FieldDescription>
+                  )}
+                  {notes.get(row.field)?.reason && (
+                    <FieldDescription>Why: {notes.get(row.field)?.reason}</FieldDescription>
                   )}
                   <FieldValueEditor
                     id={id}
@@ -161,6 +183,12 @@ export function AcceptCorrectionsDialog({
               <FieldDescription>
                 Not applied here: {ignored.map(label).join(", ")} (registers, derived fields and
                 logos come from their sources).
+              </FieldDescription>
+            )}
+            {(draft?.dropped?.length ?? 0) > 0 && (
+              <FieldDescription>
+                Left out of the draft:{" "}
+                {draft?.dropped?.map((item) => `${label(item.field)} (${item.reason})`).join("; ")}
               </FieldDescription>
             )}
             <Field orientation="horizontal">
@@ -197,7 +225,8 @@ export function AcceptCorrectionsDialog({
             </Button>
             <Button type="submit" disabled={saving || !ready}>
               {saving && <Spinner />}
-              Apply {rows.length} field{rows.length === 1 ? "" : "s"}
+              {draft ? "Confirm and apply" : "Apply"} {rows.length} field
+              {rows.length === 1 ? "" : "s"}
             </Button>
           </DialogFooter>
         </form>
@@ -229,19 +258,26 @@ export function AcceptRemovalDialog({
   onClose: () => void
 }) {
   const { acceptRemoval } = useListingRequestMutations()
+  // The request agent's draft (ENG-126) pre-fills what to remove.
+  const draft = readyDraft(request)
+  const proposal = draft?.removal
   const [scope, setScope] = useState<SuppressionScope>(
-    request.kind === "remove" ? "organisation" : "contact",
+    proposal?.scope ?? (request.kind === "remove" ? "organisation" : "contact"),
   )
-  const [fields, setFields] = useState<string[]>(() =>
-    Object.keys(request.fields ?? {}).filter((field) =>
-      (REMOVABLE_FIELDS as readonly string[]).includes(field),
-    ),
+  const [fields, setFields] = useState<string[]>(
+    () =>
+      proposal?.fields ??
+      Object.keys(request.fields ?? {}).filter((field) =>
+        (REMOVABLE_FIELDS as readonly string[]).includes(field),
+      ),
   )
-  const [address, setAddress] = useState("")
+  const [address, setAddress] = useState(proposal?.address ?? "")
   const [personKeys, setPersonKeys] = useState<string[]>([])
   // A request sent from an event's page names it (event-correction-link).
-  const [eventKeysText, setEventKeysText] = useState(request.eventKey ?? "")
-  const [name, setName] = useState("")
+  const [eventKeysText, setEventKeysText] = useState(
+    proposal?.eventKeys?.join("\n") ?? request.eventKey ?? "",
+  )
+  const [name, setName] = useState(proposal?.name ?? "")
   const eventKeys = eventKeysText
     .split(/[\s,]+/)
     .map((key) => key.trim())
@@ -286,12 +322,22 @@ export function AcceptRemovalDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>Accept {request.kind === "remove" ? "removal" : "objection"}</DialogTitle>
+            <DialogTitle>
+              {draft
+                ? "Review and confirm"
+                : `Accept ${request.kind === "remove" ? "removal" : "objection"}`}
+            </DialogTitle>
             <DialogDescription>
               Takes effect at once on {request.org?.name ?? "the listing"} and stays: no later
               harvest brings it back. Reply to the (unverified) sender first.
             </DialogDescription>
           </DialogHeader>
+          {draft?.summary && (
+            <p className="rounded-lg border bg-muted/30 p-3 text-sm">
+              {draft.summary}
+              {!proposal && " The agent proposes nothing to remove: choose by hand."}
+            </p>
+          )}
           <FieldSet>
             <FieldLegend variant="label">What to remove</FieldLegend>
             <RadioGroup
@@ -420,7 +466,7 @@ export function AcceptRemovalDialog({
             </Button>
             <Button type="submit" variant="destructive" disabled={saving || !ready}>
               {saving && <Spinner />}
-              Remove and suppress
+              {draft ? "Confirm: remove and suppress" : "Remove and suppress"}
             </Button>
           </DialogFooter>
         </form>
