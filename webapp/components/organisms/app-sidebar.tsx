@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  ActivityIcon,
   ClipboardListIcon,
   FileWarningIcon,
   HandshakeIcon,
@@ -9,6 +10,7 @@ import {
   MessageSquareTextIcon,
   NetworkIcon,
   UsersIcon,
+  WorkflowIcon,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import type * as React from "react"
@@ -36,6 +38,8 @@ const SECTIONS = [
   { title: "Graph", url: "/dashboard/graph", icon: <NetworkIcon /> },
   { title: "Missing data", url: "/dashboard/reports", icon: <FileWarningIcon /> },
   { title: "Requests", url: "/dashboard/requests", icon: <InboxIcon /> },
+  { title: "Pipeline", url: "/dashboard/pipeline", icon: <WorkflowIcon /> },
+  { title: "Status", url: "/dashboard/status", icon: <ActivityIcon /> },
 ] as const
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
