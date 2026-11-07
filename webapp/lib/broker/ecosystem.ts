@@ -29,7 +29,8 @@ import { isSensitiveSociety } from "./sensitive"
  *    default (which shows the broker what it always did);
  *  - nothing read from talks.cam counts (owner decision G1,
  *    lib/talks-boundary.ts): a relationship sighting on talks.cam or from a
- *    talks.cam-derived event, and a talks.cam-derived co-hosted event;
+ *    talks.cam-derived event (or from an event that was not read, so cannot
+ *    be cleared), and a talks.cam-derived co-hosted event;
  *  - at most `MAX_NODES` organisations are drawn (`limitView`).
  *
  * Pure: no React and no server imports, so the Convex query
@@ -133,9 +134,19 @@ export type EcosystemInput = {
   /** Listings under an `organisation` suppression. */
   suppressedOrgs: ReadonlySet<string>
   relationships?: readonly EcosystemRelationship[]
-  /** Events read whole, for the `cohosting` layer and to judge relationship
-   * sightings by their event. */
+  /** Events read whole: the co-hosted ones of the window, and those
+   * relationship sightings name (read to judge the sighting by its event). */
   events?: readonly EcosystemEvent[]
+  /** The events the `cohosting` layer counts: those the server's windowed
+   * organiser scan selected. An event read only because a relationship
+   * sighting names it never counts as co-hosting, so the layer's yearly counts
+   * do not depend on which other layers are on. Absent: every one of `events`. */
+  cohostEventKeys?: ReadonlySet<string>
+  /** Every event key the server looked up, found or not. A sighting naming an
+   * event outside it is not counted: an event left unread (over a read limit,
+   * or suppressed) cannot be cleared of talks.cam, so the boundary fails
+   * closed. Absent: the keys of `events`. */
+  judgedEventKeys?: ReadonlySet<string>
   profiles?: readonly { orgKey: string; pastSponsorKeys: readonly string[] }[]
   interactions?: readonly (EcosystemParty & { date: number })[]
   introductions?: readonly {
@@ -216,10 +227,13 @@ export function buildEcosystem(input: EcosystemInput): Ecosystem {
   const talksEvents = new Set(
     (input.events ?? []).filter((event) => isTalksDerivedEvent(event)).map((event) => event.key),
   )
-  /** A relationship sighting not read from talks.cam. */
+  const judged = input.judgedEventKeys ?? new Set((input.events ?? []).map((event) => event.key))
+  /** A relationship sighting not read from talks.cam: not on talks.cam itself
+   * and, when it names an event, one that was read and is not talks-derived. */
   const usable = (evidence: EcosystemRelationship["evidence"][number]) =>
     !isTalksCamUrl(evidence.sourceUrl) &&
-    !(evidence.eventKey !== undefined && talksEvents.has(evidence.eventKey))
+    (evidence.eventKey === undefined ||
+      (judged.has(evidence.eventKey) && !talksEvents.has(evidence.eventKey)))
 
   const edges = new Map<string, Draft>()
   const add = (draft: Omit<Draft, "years">, year?: string) => {
@@ -257,7 +271,9 @@ export function buildEcosystem(input: EcosystemInput): Ecosystem {
   }
 
   if (layers.includes("cohosting")) {
+    const counted = input.cohostEventKeys
     for (const event of input.events ?? []) {
+      if (counted && !counted.has(event.key)) continue
       if (event.hosting === "takes_part" || event.cancelled || event.supersededBy) continue
       if (event.visibility === "members_only" || talksEvents.has(event.key)) continue
       const organisers = event.organisers.filter(({ orgKey }) => listed(orgKey))

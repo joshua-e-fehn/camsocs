@@ -199,6 +199,37 @@ describe("layers", () => {
     expect(map.nodes).toEqual([])
   })
 
+  test("cohosting counts only the window's events, whatever else was read", () => {
+    // evt-old was read only because a relationship sighting names it.
+    const input = base({
+      relationships: [
+        relationship("rel-1", "org-chess", "org-go", "co_hosted", [
+          { sourceUrl: "https://example.org/old", eventKey: "evt-old" },
+        ]),
+      ],
+      events: [
+        event("evt-old", { academicYear: "2020-21", startsAt: Date.UTC(2020, 10, 1) }),
+        event("evt-new"),
+      ],
+      cohostEventKeys: new Set(["evt-new"]),
+    })
+    const cohosting = (layers: EcosystemInput["layers"]) =>
+      buildEcosystem({ ...input, layers }).edges.filter((e) => e.layer === "cohosting")
+    const alone = cohosting(["cohosting"])
+    expect(alone).toEqual([
+      expect.objectContaining({
+        type: "co_host",
+        weight: 1,
+        years: [{ academicYear: "2026-27", count: 1 }],
+      }),
+    ])
+    expect(cohosting(["cohosting", "relationships"])).toEqual(alone)
+    expect(cohosting(["cohosting", "sponsors"])).toEqual(alone)
+    expect(cohosting(ECOSYSTEM_LAYERS)).toEqual(alone)
+    // The sighting itself still counts: its event was read and is no talk.
+    expect(buildEcosystem({ ...input, layers: ["relationships"] }).edges).toHaveLength(1)
+  })
+
   test("sponsors joins the broker's past sponsors and sponsor relationships", () => {
     const map = buildEcosystem(
       base({
@@ -397,6 +428,33 @@ describe("the talks boundary", () => {
     expect(map.edges.map((e) => [e.layer, e.type, e.from, e.to, e.weight])).toEqual([
       ["relationships", "sponsors", "cam:org-bank", "cam:org-chess", 1],
       ["sponsors", "sponsors", "cam:org-bank", "cam:org-chess", 1],
+    ])
+  })
+
+  test("a sighting naming an event that was not read does not count (fails closed)", () => {
+    const map = buildEcosystem(
+      base({
+        layers: ["relationships", "sponsors"],
+        relationships: [
+          // Over the server's read limit: cannot be cleared of talks.cam.
+          relationship("rel-1", "org-bank", "org-chess", "sponsors", [
+            { sourceUrl: "https://example.org/e", eventKey: "evt-unread" },
+          ]),
+          // Looked up, but no such event: nothing to judge, the URL decides.
+          relationship("rel-2", "org-bank", "org-quiz", "sponsors", [
+            { sourceUrl: "https://example.org/f", eventKey: "evt-missing" },
+          ]),
+          // No event named: the URL decides.
+          relationship("rel-3", "org-chess", "org-go", "sister_of"),
+        ],
+        events: [],
+        judgedEventKeys: new Set(["evt-missing"]),
+      }),
+    )
+    expect(map.edges.map((e) => [e.layer, e.type, e.from, e.to])).toEqual([
+      ["relationships", "sponsors", "cam:org-bank", "cam:org-quiz"],
+      ["relationships", "sister_of", "cam:org-chess", "cam:org-go"],
+      ["sponsors", "sponsors", "cam:org-bank", "cam:org-quiz"],
     ])
   })
 

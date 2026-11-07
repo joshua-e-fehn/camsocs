@@ -194,8 +194,11 @@ export const matches = query({
 const COHOST_YEARS = 3
 /** Organiser rows scanned per visibility, newest first. */
 const MAX_ORGANISER_ROWS = { public: 4_000, cam_only: 1_000 } as const
-/** Whole events read: co-hosted ones and those relationship sightings name. */
-const MAX_EVENTS = 500
+/** Whole events read, under separate budgets: the window's co-hosted ones,
+ * and those relationship sightings name (a sighting whose event was not read
+ * does not count, lib/broker/ecosystem.ts). */
+const MAX_COHOST_EVENTS = 500
+const MAX_EVIDENCE_EVENTS = 500
 const MAX_PEOPLE = 5_000
 const MAX_INTERACTIONS = 2_000
 const MAX_INTRODUCTIONS = 1_000
@@ -203,12 +206,18 @@ const MAX_INTRODUCTIONS = 1_000
 const ecosystemLayer = literalUnion(ECOSYSTEM_LAYERS)
 const edgeVisibility = literalUnion(RELATIONSHIP_VISIBILITIES)
 
-/** The first instant of the academic year `years - 1` years before `now`'s
- * (years turn over on 1 July, `academicYearOf`), a day early so no London
- * offset loses an event; `academicYearOf` then sorts each event exactly. */
-function cohostWindowStart(now: number, years: number): number {
-  const start = Number(academicYearOf(now).slice(0, 4)) - (years - 1)
-  return Date.UTC(start, 5, 30)
+/** The co-hosting window: the first academic year's starting calendar year
+ * (years turn over on 1 July, `academicYearOf`) and an instant a day before it
+ * for the index scan, so no London offset loses an event. The scan's rows are
+ * then kept only when `academicYearOf` puts them in the window. */
+function cohostWindow(now: number, years: number): { firstYear: number; scanFrom: number } {
+  const firstYear = Number(academicYearOf(now).slice(0, 4)) - (years - 1)
+  return { firstYear, scanFrom: Date.UTC(firstYear, 5, 30) }
+}
+
+/** Reads `limit + 1` rows and reports whether the limit cut them off. */
+function capped<T>(rows: T[], limit: number): { rows: T[]; over: boolean } {
+  return { rows: rows.slice(0, limit), over: rows.length > limit }
 }
 
 function asEcosystemEvent(event: Doc<"events">): EcosystemEvent {
@@ -239,7 +248,11 @@ function asEcosystemEvent(event: Doc<"events">): EcosystemEvent {
  * organisations, with node ids `${campus}:${key}`. People appear only as a
  * count per organisation; sensitive societies are flagged; hidden and
  * suppressed listings stay out of every layer but `relationships`; nothing
- * read from talks.cam counts. `truncated` says a read stopped at its limit.
+ * read from talks.cam counts (a sighting whose event was not read does not
+ * count either). Co-hosting counts only the events of the last
+ * `COHOST_YEARS` academic years, whatever other layers are on. `truncated`
+ * says a read stopped at its limit: relationships, organiser rows, events,
+ * profiles, interactions, introductions or people.
  */
 export const ecosystem = query({
   args: {
@@ -295,63 +308,99 @@ export const ecosystem = query({
       relationships.push(...all.slice(0, MAX_EDGES))
     }
 
-    // Whole events: the co-hosted ones, then those relationship sightings
-    // name (so a sighting of a talks.cam-derived event is judged by it).
-    const eventKeys = new Set<string>()
-    if (layers.has("cohosting")) {
-      const from = cohostWindowStart(Date.now(), COHOST_YEARS)
-      for (const visibility of ["public", "cam_only"] as const) {
-        const limit = MAX_ORGANISER_ROWS[visibility]
-        const rows = await ctx.db
-          .query("eventOrganisers")
-          .withIndex("by_visibility_startsAt", (q) =>
-            q.eq("visibility", visibility).gte("startsAt", from),
-          )
-          .order("desc")
-          .take(limit + 1)
-        truncated ||= rows.length > limit
-        for (const row of rows.slice(0, limit)) {
-          if (row.role === "organiser" || row.hosting === "takes_part") continue
-          if (row.cancelled || row.superseded) continue
-          eventKeys.add(row.eventKey)
+    // Whole events, each looked up once (`null`: no such event). A
+    // suppressed event is never read, so a sighting naming it does not count.
+    const read = new Map<string, EcosystemEvent | null>()
+    const readEvents = async (keys: Iterable<string>, limit: number) => {
+      const wanted = new Set<string>()
+      let lookups = 0
+      for (const key of keys) {
+        if (suppressions.events.has(key)) continue
+        if (!read.has(key)) {
+          if (lookups === limit) {
+            truncated = true
+            break
+          }
+          lookups += 1
+          const event = await ctx.db
+            .query("events")
+            .withIndex("by_key", (q) => q.eq("key", key))
+            .unique()
+          read.set(key, event ? asEcosystemEvent(event) : null)
         }
+        wanted.add(key)
       }
-    }
-    for (const edge of relationships) {
-      for (const evidence of edge.evidence) {
-        if (evidence.eventKey) eventKeys.add(evidence.eventKey)
-      }
-    }
-    const events: EcosystemEvent[] = []
-    let read = 0
-    for (const key of eventKeys) {
-      if (suppressions.events.has(key)) continue
-      if (read === MAX_EVENTS) {
-        truncated = true
-        break
-      }
-      read += 1
-      const event = await ctx.db
-        .query("events")
-        .withIndex("by_key", (q) => q.eq("key", key))
-        .unique()
-      if (event) events.push(asEcosystemEvent(event))
+      return wanted
     }
 
+    // Those relationship sightings name, so a sighting of a talks.cam-derived
+    // event is judged by it.
+    const evidenceKeys = new Set<string>()
+    for (const edge of relationships) {
+      for (const evidence of edge.evidence) {
+        if (evidence.eventKey) evidenceKeys.add(evidence.eventKey)
+      }
+    }
+    await readEvents(evidenceKeys, MAX_EVIDENCE_EVENTS)
+
+    // The window's co-hosted events: the only ones the cohosting layer counts.
+    let cohostEventKeys = new Set<string>()
+    if (layers.has("cohosting")) {
+      const { firstYear, scanFrom } = cohostWindow(Date.now(), COHOST_YEARS)
+      const keys = new Set<string>()
+      for (const visibility of ["public", "cam_only"] as const) {
+        const limit = MAX_ORGANISER_ROWS[visibility]
+        const scan = capped(
+          await ctx.db
+            .query("eventOrganisers")
+            .withIndex("by_visibility_startsAt", (q) =>
+              q.eq("visibility", visibility).gte("startsAt", scanFrom),
+            )
+            .order("desc")
+            .take(limit + 1),
+          limit,
+        )
+        truncated ||= scan.over
+        for (const row of scan.rows) {
+          if (row.role === "organiser" || row.hosting === "takes_part") continue
+          if (row.cancelled || row.superseded) continue
+          if (Number(academicYearOf(row.startsAt).slice(0, 4)) < firstYear) continue
+          keys.add(row.eventKey)
+        }
+      }
+      cohostEventKeys = await readEvents(keys, MAX_COHOST_EVENTS)
+    }
+    const events = [...read.values()].filter((event) => event !== null)
+
+    const take = async <T>(rows: Promise<T[]>, limit: number) => {
+      const result = capped(await rows, limit)
+      truncated ||= result.over
+      return result.rows
+    }
     const profiles = layers.has("sponsors")
-      ? await ctx.db.query("orgBrokerProfiles").take(MAX_PROFILES)
+      ? await take(ctx.db.query("orgBrokerProfiles").take(MAX_PROFILES + 1), MAX_PROFILES)
       : []
     const interactions = layers.has("outreach")
-      ? await ctx.db.query("interactions").withIndex("by_date").order("desc").take(MAX_INTERACTIONS)
+      ? await take(
+          ctx.db
+            .query("interactions")
+            .withIndex("by_date")
+            .order("desc")
+            .take(MAX_INTERACTIONS + 1),
+          MAX_INTERACTIONS,
+        )
       : []
     const introductions = layers.has("outreach")
-      ? await ctx.db
-          .query("introductions")
-          .withIndex("by_date")
-          .order("desc")
-          .take(MAX_INTRODUCTIONS)
+      ? await take(
+          ctx.db
+            .query("introductions")
+            .withIndex("by_date")
+            .order("desc")
+            .take(MAX_INTRODUCTIONS + 1),
+          MAX_INTRODUCTIONS,
+        )
       : []
-    const people = await ctx.db.query("people").take(MAX_PEOPLE)
+    const people = await take(ctx.db.query("people").take(MAX_PEOPLE + 1), MAX_PEOPLE)
 
     const keys = new Set<string>()
     for (const edge of relationships) keys.add(edge.fromKey).add(edge.toKey)
@@ -378,6 +427,8 @@ export const ecosystem = query({
       suppressedOrgs: suppressions.organisations,
       relationships,
       events,
+      cohostEventKeys,
+      judgedEventKeys: new Set(read.keys()),
       profiles,
       interactions,
       introductions,

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { eventKey, personKey } from "../../lib/keys"
 import { api, internal } from "../_generated/api"
 import type { ClaimInput } from "../ingest/claims"
+import { academicYearOf } from "../lib/derived"
 import { newTest, signedInAs, type TestConvex, withEnv } from "../lib/harness.testing"
 import { suppressionKey } from "../lib/suppressions"
 
@@ -242,6 +243,66 @@ describe("broker.graph.ecosystem", () => {
       const years = map.edges.flatMap((e) => e.years.map((y) => y.academicYear))
       expect(years.every((year) => /^\d{4}-\d{2}$/.test(year))).toBe(true)
       expect(map.nodes.map((n) => n.key)).not.toContain("org-hidden")
+    })
+  })
+
+  test("co-hosting counts the 3-year window only, whatever other layers are on", async () => {
+    await asBroker(async (t, broker) => {
+      // Two co-hosted events outside the window, each named by the co_hosted
+      // relationship sighting setEventOrganisers records: one six years old,
+      // one on the 30 June that ends the academic year before the window.
+      const firstYear = Number(academicYearOf(NOW).slice(0, 4)) - 2
+      const old = eventKey("ics", "invented-old-joint")
+      const june = eventKey("ics", "invented-june-joint")
+      const fields = (key: string, startsAt: number) =>
+        Object.entries({
+          title: `Invented event ${key.slice(4, 10)}`,
+          startsAt,
+          visibility: "public",
+          source: "ics",
+          sourceUrl: `https://example.org/${key}`,
+          externalId: key,
+        }).map(([field, value]) => claim(key, field, value, "event"))
+      await t.mutation(internal.ingest.claims.ingest, {
+        claims: [
+          ...fields(old, NOW - 6 * 365 * DAY),
+          ...fields(june, Date.UTC(firstYear, 5, 30, 12)),
+        ],
+      })
+      await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+        events: [
+          {
+            eventKey: old,
+            organisers: [
+              { orgKey: "org-go", role: "organiser" },
+              { orgKey: "org-faith", role: "co_host" },
+            ],
+          },
+          {
+            eventKey: june,
+            organisers: [
+              { orgKey: "org-quiz", role: "organiser" },
+              { orgKey: "org-faith", role: "co_host" },
+            ],
+          },
+        ],
+      })
+      const cohosting = async (layers: (typeof ALL)[number][]) =>
+        (await broker.query(api.broker.graph.ecosystem, { layers })).edges
+          .filter((e) => e.layer === "cohosting")
+          .map((e) => [e.type, e.from, e.to, e.weight, e.years])
+      const alone = await cohosting(["cohosting"])
+      expect(alone.map(([type, from, to]) => [type, from, to])).toEqual([
+        ["co_host", "cam:org-chess", "cam:org-faith"],
+        ["co_host", "cam:org-chess", "cam:org-go"],
+        ["sponsor", "cam:org-bank", "cam:org-quiz"],
+      ])
+      expect(await cohosting(["cohosting", "relationships"])).toEqual(alone)
+      expect(await cohosting(["cohosting", "sponsors"])).toEqual(alone)
+      expect(await cohosting([...ALL])).toEqual(alone)
+      // The sightings themselves still count in the relationship layer.
+      const map = await broker.query(api.broker.graph.ecosystem, { layers: ["relationships"] })
+      expect(map.edges.some((e) => e.from === "cam:org-go" && e.to === "cam:org-faith")).toBe(true)
     })
   })
 
