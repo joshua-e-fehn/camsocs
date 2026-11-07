@@ -39,6 +39,7 @@ const appModules = {
   "./broker/orgs.ts": () => import("../broker/orgs"),
   "./broker/overview.ts": () => import("../broker/overview"),
   "./broker/people.ts": () => import("../broker/people"),
+  "./broker/pipeline.ts": () => import("../broker/pipeline"),
   "./broker/session.ts": () => import("../broker/session"),
   "./broker/suppressions.ts": () => import("../broker/suppressions"),
   "./ingest/broker.ts": () => import("../ingest/broker"),
