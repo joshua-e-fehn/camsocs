@@ -38,3 +38,24 @@ export async function loadCategoryEvents(
     return null
   }
 }
+
+/** Every public, non-talks event from today for `days` days (the events
+ * finder's "this week's picks"), cached the same way; null when Convex
+ * cannot be read. */
+export async function loadUpcomingEvents(
+  now: number,
+  days: number,
+): Promise<EventListItem[] | null> {
+  const today = londonIsoDate(now)
+  try {
+    return await publicQuery(api.events.list, {
+      from: londonMidnight(today),
+      to: londonMidnight(addDays(today, days)),
+      university: "hide",
+    })
+  } catch (error) {
+    unstable_rethrow(error)
+    console.error("events.list failed; the events finder without its picks", error)
+    return null
+  }
+}
