@@ -10,79 +10,38 @@ Background and the rules each source follows: `docs/source-research.md` §16 (in
 
 **Secrets:** never paste a value into a chat, a commit or a log. Each one goes in exactly one place: Convex env or `pipeline/.env`.
 
-## J3: Resend (sending domain and an inbound subdomain)
+## J3: Resend sends, Gmail receives (D12)
 
-Resend sends the `@cam.ac.uk` sign-in links (T10) and receives the redirected list mail (T7).
+**Done 2026-11-08** (D12). Resend's free plan counts received mail against the same 100-a-day quota as sent mail, so the list mail arrives on CAMsocs' own Google Workspace (D11) and Resend only sends the `@cam.ac.uk` sign-in links (T10). The Resend receiving code (Svix webhook, Receiving API) stays in place, unused.
 
-**1. Pick two subdomains** of your domain at IONOS (shown below as `<domain>`).
-- One for sending, e.g. `mail.<domain>`.
-- One for receiving, e.g. `inbound.<domain>`.
+**Sending (Resend).**
+- Domain `mail.camsocs.uk`, region Ireland (`eu-west-1`). DNS at IONOS: DKIM TXT `resend._domainkey.mail`, SPF MX and TXT on `send.mail`, CNAME `rsend.mail`. The root domain's Google MX is untouched; DMARC comes from `_dmarc.camsocs.uk` (relaxed alignment covers the subdomain).
+- Convex production: `RESEND_API_KEY` is a **sending-only key limited to `mail.camsocs.uk`** (Resend key "camsocs-convex-prod"), `RESEND_FROM` is `CAMsocs <sign-in@mail.camsocs.uk>`. The full-access account key stays in 1Password (Mya vault, "Resend API").
+- Free plan: 100 mails a day, 3,000 a month; the sign-in throttle (`convex/authEmail.ts`, 60 an hour overall) keeps a flood well inside it.
 
-Use subdomains, not the root domain. A receiving domain sends *all* its mail to Resend, and Resend recommends subdomains for sending reputation too. If you already have MX records on `<domain>`, a subdomain is the only safe choice.
+**Receiving (Gmail, the camsocs.uk Workspace).**
+- An unguessable alias of joshua@camsocs.uk, `lists-<random>@camsocs.uk` (the value is in 1Password, Mya vault, "CAMsocs list-mail relay", and in `INBOUND_EMAIL_RECIPIENTS`; keep it out of the repository).
+- A Gmail filter, `deliveredto:<alias>`: label **Lists**, skip the inbox. The agents' mail tool hides that label (mya-workstation `camsocs_mail`): list mail is never shown to an agent.
+- The relay, `camsocs-lists-relay.timer` on the VPS (every 5 minutes, mya-workstation `camsocs_mail/lists.py`), posts each new Lists message to `POST <prod>.convex.site/api/inbound/email` in the provider-agnostic shape with `Authorization: Bearer $INBOUND_EMAIL_SECRET`, then labels it **Lists/relayed** (4xx: **Lists/rejected**; 5xx or no network: tried again next run; the route dedupes on `Message-ID`). Settings: `/docker/hermes-agent-vspa/data/secrets/mya-camsocs-mail/lists-relay.env` (0600 root).
+- Convex production: `INBOUND_EMAIL_SECRET`, `INBOUND_EMAIL_RECIPIENTS` (the alias), `INBOUND_TRUSTED_AUTHSERV_IDS=mx.microsoft.com,mx.google.com` (Gmail seals the last ARC set on a redirected mail; see J4 step 1).
 
-**2. Add the domains in Resend.** In the Resend dashboard, go to Domains → Add Domain, then:
-- enter `mail.<domain>` and choose region Ireland (`eu-west-1`), closest to Cambridge;
-- add `inbound.<domain>` the same way, then switch **Receiving** on in its domain page.
-
-**3. Add the DNS records at IONOS.** Go to my.ionos.com → Domains → `<domain>` → DNS → Add record. Copy every *value* from Resend's Records tab, and type only the part before `<domain>` as the name.
-
-| For | Type | Name (IONOS) | Value | Priority |
-|---|---|---|---|---|
-| sending (SPF) | MX | `send.mail` | the MX value Resend shows (`feedback-smtp.<region>.amazonses.com`) | 10 |
-| sending (SPF) | TXT | `send.mail` | the TXT value Resend shows (`"v=spf1 include:amazonses.com ~all"`) | — |
-| sending (DKIM) | TXT | `resend._domainkey.mail` | the DKIM value Resend shows | — |
-| receiving | MX | `inbound` | the receiving MX value Resend shows (`inbound-smtp.<region>.amazonaws.com`) | 10 |
-| (recommended) DMARC | TXT | `_dmarc.mail` | e.g. `v=DMARC1; p=none;` | — |
-
-Then press **Verify DNS Records** in Resend. Verification usually completes within minutes and can take up to 72 hours. Resend receives mail only if its MX record has the lowest priority value on `inbound.<domain>`. Do not reuse a priority that another record already has.
-
-**4. Create the webhook.** In Resend, go to Webhooks → Add Webhook.
-- URL: `https://hushed-rhinoceros-215.convex.site/api/inbound/email` for dev. For production, use the production deployment's `.convex.site` host.
-- Event type: `email.received` only.
-
-Open the webhook's page and copy its **signing secret** (`whsec_…`).
-
-**5. Create an API key** with **Full access**. The Receiving API refuses a sending-only key.
-- If you want least privilege, keep a separate sending-only key for T10 as `RESEND_API_KEY`.
-- Put the full-access key in `RESEND_INBOUND_API_KEY`. The webhook prefers it and falls back to `RESEND_API_KEY`.
-
-**6. Choose the inbound address.** Any address at `inbound.<domain>` reaches the webhook, and the domain is public in its MX record. Pick an unguessable local part, e.g. `lists-<random>@inbound.<domain>`, and allow only that one (step 7). The route accepts nothing until `INBOUND_EMAIL_RECIPIENTS` is set.
-
-**7. Set the Convex env** (dev shown; add `--prod` for production):
-
-```bash
-cd webapp && unset CONVEX_DEPLOY_KEY
-bunx convex env set RESEND_WEBHOOK_SECRET 'whsec_…'          # step 4
-bunx convex env set RESEND_INBOUND_API_KEY 're_…'            # step 5 (full access)
-bunx convex env set INBOUND_EMAIL_RECIPIENTS 'lists-<random>@inbound.<domain>'   # required: unset accepts no mail
-# Optional: receivers whose DKIM / DMARC verdict is trusted (default mx.microsoft.com, see J4 step 1)
-# bunx convex env set INBOUND_TRUSTED_AUTHSERV_IDS 'mx.microsoft.com'
-# Only if you also post mail from another provider (generic JSON, Bearer auth):
-# bunx convex env set INBOUND_EMAIL_SECRET "$(openssl rand -hex 32)"
-```
-
-The route is deployed with the T7 code. `bunx convex dev --once` pushes it to dev; the integrator runs it.
-
-**8. Test.** Send a mail with a subject from any mailbox to the inbound address.
-- Resend → Emails → Receiving shows it.
-- The webhook log shows a `200 {"stored":true}`. `{"ignored":"recipient"}` means step 6 and step 7 disagree.
-- `pixi run pipeline -- sync --stages inbox` then marks it `skipped` ("not list mail"), which is correct for a test mail.
+**By hand on the VPS:** `/var/lib/mya/camsocs-mail/run relay-lists --dry-run` (counts only), `journalctl -u camsocs-lists-relay --since -1h`. **Off:** `systemctl disable --now camsocs-lists-relay.timer`.
 
 ## J4: the Outlook rule on your @cam.ac.uk mailbox, then the worklist
 
 **1. Create the rule** in Outlook on the web (outlook.office.com). Go to Settings → Mail → Rules → **Add new rule**.
 - Name: `camsocs list mail`.
 - Condition: **Message header includes** → `List-Id`. Sympa, Mailchimp and Google Groups all set this header.
-- Action: **Redirect to** → the inbound address from J3 step 6. Use *Redirect*, not *Forward*: a redirected message keeps its original sender and headers, `List-Id` included, which is how the pipeline knows which society sent it. A forwarded message arrives from you with the list's headers lost. The pipeline can read an inline-forwarded header block as a fallback, but it is weaker.
+- Action: **Redirect to** → the list alias from J3 (`lists-<random>@camsocs.uk`). Use *Redirect*, not *Forward*: a redirected message keeps its original sender and headers, `List-Id` included, which is how the pipeline knows which society sent it. A forwarded message arrives from you with the list's headers lost. The pipeline can read an inline-forwarded header block as a fallback, but it is weaker.
 - Keep "Stop processing more rules" off, so the mail still lands in your inbox.
 
 If you ever forward by hand, forward *as attachment* or redirect, for the same reason.
 
-**Check the first redirected list mail** in Resend's webhook log. It should answer `{"stored":true}`. If it answers `{"ignored":"recipient"}`, compare the address in `INBOUND_EMAIL_RECIPIENTS` with the one the redirect used: the check reads `To`, `Cc`, the webhook's `received_for` (the envelope recipient Resend reports) and the delivery headers. Fix the value or add the address the mail shows (comma-separated). Never unset it: unset, the route accepts no mail at all, because the receiving domain takes mail for any address and is public in its MX record.
+**Check the first redirected list mail.** In Gmail (joshua@camsocs.uk) it should carry **Lists** and, within five minutes, **Lists/relayed**. **Lists/rejected** means the route refused it: `journalctl -u camsocs-lists-relay` on the VPS has the status; `{"ignored":"recipient"}` from the route means `INBOUND_EMAIL_RECIPIENTS` and the alias disagree (the relay always names the alias in `to`). Never unset `INBOUND_EMAIL_RECIPIENTS`: unset, the route accepts no mail at all.
 
-**Check that the sender was verified.** The route records, per mail, whether a trusted receiver verified the sender (`senderVerified` on the `inboundEmails` row in the Convex dashboard). On the Outlook redirect that is Exchange's ARC verdict: the `ARC-Authentication-Results` header with the highest `i=` should start `i=N; mx.microsoft.com` and show `dmarc=pass` or a `dkim=pass` for the list's domain. Only verified mail is attributed to a society (and counts as its activity); unverified mail still yields unattributed Cambridge-only events. If the highest ARC set names another receiver, or Resend adds its own `Authentication-Results` that you want to trust, set `INBOUND_TRUSTED_AUTHSERV_IDS` to those ids (comma-separated; it replaces the default).
+**Check that the sender was verified.** The route records, per mail, whether a trusted receiver verified the sender (`senderVerified` on the `inboundEmails` row in the Convex dashboard). On the Outlook redirect to Gmail the highest ARC set is Gmail's own (`mx.google.com`), sealed over Exchange's (`mx.microsoft.com`): it should show `dmarc=pass` or a `dkim=pass` for the list's domain. Both ids are trusted on production. Only verified mail is attributed to a society (and counts as its activity); unverified mail still yields unattributed Cambridge-only events. If the highest ARC set names another receiver, set `INBOUND_TRUSTED_AUTHSERV_IDS` to those ids (comma-separated; it replaces the default).
 
-**2. External forwarding.** Cambridge Exchange Online allows external forwarding (Engineering IT help: https://help.eng.cam.ac.uk/email/forwarding-your-email/). If redirected mail never reaches Resend, check whether Microsoft has blocked automatic forwarding for the tenant. In that case, ask UIS (or Engineering IT) about the outbound spam policy for your mailbox.
+**2. External forwarding.** Cambridge Exchange Online allows external forwarding (Engineering IT help: https://help.eng.cam.ac.uk/email/forwarding-your-email/). If redirected mail never reaches Gmail, check whether Microsoft has blocked automatic forwarding for the tenant. In that case, ask UIS (or Engineering IT) about the outbound spam policy for your mailbox.
 
 **3. Work through the sign-up list.** Run:
 

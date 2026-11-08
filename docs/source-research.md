@@ -477,7 +477,8 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 ## §16 Mailing-list inbox
 
 **Flow**
-- Joshua's @cam.ac.uk Outlook rule **redirects** mail that carries a `List-Id` header to an address on a Resend receiving subdomain (setup: `docs/setup/inbox-instagram.md`, J3/J4).
+- **Since D12 (2026-11-08):** Joshua's @cam.ac.uk Outlook rule **redirects** mail that carries a `List-Id` header to an unguessable alias on the camsocs.uk Google Workspace; a Gmail filter labels it Lists, and a VPS relay posts it to `POST /api/inbound/email` as provider-agnostic JSON (setup: `docs/setup/inbox-instagram.md`, J3/J4). The Resend route below stays in the code, unused: Resend's free plan counts received mail against the sending quota.
+- Originally (2026-10-07): the redirect went to an address on a Resend receiving subdomain.
 - Resend posts an `email.received` webhook to the Convex HTTP route `POST /api/inbound/email` (`webapp/convex/http.ts`). The webhook carries metadata only; the route verifies its Svix signature, then fetches the body, headers and attachments from Resend's Receiving API and stores the mail in the internal `inboundEmails` table as `pending`.
 - The pipeline stage `inbox` extracts events and marks each mail `done` / `skipped` / `failed`.
 

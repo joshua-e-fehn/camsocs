@@ -14,7 +14,7 @@ import { deploymentProfile } from "../../lib/campus/deployment"
  * Off until both env vars are set on the deployment; nothing else is needed:
  *
  *   bunx convex env set RESEND_API_KEY re_…
- *   bunx convex env set RESEND_FROM "CAMsocs <sign-in@<your verified domain>>"
+ *   bunx convex env set RESEND_FROM "CAMsocs <sign-in@mail.camsocs.uk>"   # production (D12)
  *
  * Unset, the plugin is not registered at all (the endpoint answers 404) and
  * `auth.getSignInOptions` tells the sign-in page to show the option as off.

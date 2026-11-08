@@ -157,7 +157,8 @@ export function recipientAllowed(allowedRaw: string | undefined, recipients: str
  * (RFC 8601, 8617). Exchange Online seals a redirected message with an ARC set
  * from `mx.microsoft.com` that records its own DKIM / DMARC check of the
  * original sender. `INBOUND_TRUSTED_AUTHSERV_IDS` (comma-separated) replaces
- * the default — add Resend's receiver once a real mail shows its id.
+ * the default. Production (D12, list mail redirected to Gmail and relayed
+ * from there) sets `mx.microsoft.com,mx.google.com`: Gmail seals the last ARC set.
  */
 export const DEFAULT_TRUSTED_AUTHSERV_IDS = ["mx.microsoft.com"] as const
 
