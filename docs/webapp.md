@@ -462,15 +462,17 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
 - **Google, for the admin**, registered only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
   are both set on the Convex deployment (otherwise sign-in answers PROVIDER_NOT_FOUND; nothing
   crashes). Broker access is `BROKER_EMAILS` (below).
-- **`@cam.ac.uk` sign-in link** (Better Auth's magic-link plugin, supported by
-  @convex-dev/better-auth 0.12.5), registered only when `RESEND_API_KEY` and `RESEND_FROM` are
-  both set (otherwise the endpoint is a 404 and the form shows the option as off). The link is
+- **`@cam.ac.uk` sign-in code** (Better Auth's email-OTP plugin; the Convex plugin sets the JWT
+  cookie after `/sign-in/*`), registered only when `RESEND_API_KEY` and `RESEND_FROM` are both
+  set (otherwise its endpoints are a 404 and the form shows the option as off). A 6-digit code is
   sent from the `/api/auth/*` HTTP action through Resend's HTTP API (`convex/lib/signInEmail.ts`),
-  works once and expires in 10 minutes. The email links to `/sign-in/confirm#<verify query>`,
-  not to the verify endpoint: Exchange Safe Links (every `@cam.ac.uk` mailbox) opens links in
-  incoming mail and spent the token on the first production link (2026-11-08). The fragment never
-  reaches a server, and the page opens `/api/auth/magic-link/verify` only when the person presses
-  Sign in (`lib/sign-in-link.ts`, `components/organisms/confirm-sign-in.tsx`). The server refuses any address that is not exactly
+  stored hashed, works once, allows 5 wrong guesses and expires in 10 minutes. **Not a link**:
+  on 2026-11-08 Exchange's pre-delivery scanning (every `@cam.ac.uk` mailbox) opened each
+  emailed link, and even pressed the button of a confirm page, so every link was spent and a
+  session created in the scanner before the member saw the mail. Only the `sign-in` type is
+  served; password-reset, email-change and verify-email OTP routes answer 404 (`guardMemberCode`
+  in `convex/betterAuth/auth.ts`, where every refusal happens, since the plugin only logs what
+  its send callback throws). The server refuses any address that is not exactly
   `@cam.ac.uk` (`lib/cam-email.ts`, the same rule `getViewer` uses) before storing anything, and
   throttles to 3 links per address per 15 minutes, 10 per client (a sha256 of the
   `x-forwarded-for` IP) per hour and 60 per hour overall — a cap an address that has signed in

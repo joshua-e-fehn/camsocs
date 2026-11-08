@@ -89,7 +89,7 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | admin sign-in (J2) | the OAuth client whose callbacks include `https://camsocs.uk/api/auth/callback/google` |
 | `BROKER_EMAILS` | the private `/dashboard` | your Google address; unset = nobody |
 | `PIPELINE_API_KEY` | `/api/pipeline/*` | `openssl rand -hex 32` — a new one; the same value goes into `pipeline/.env.prod` |
-| `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in link (J3, D12) | **set on production since 2026-11-08**: a sending-only key limited to `mail.camsocs.uk`, from `CAMsocs <sign-in@mail.camsocs.uk>`; both unset = the option shows as off |
+| `RESEND_API_KEY`, `RESEND_FROM` | the `@cam.ac.uk` sign-in code (J3, D12) | **set on production since 2026-11-08**: a sending-only key limited to `mail.camsocs.uk`, from `CAMsocs <sign-in@mail.camsocs.uk>`; both unset = the option shows as off |
 | `INBOUND_EMAIL_SECRET`, `INBOUND_EMAIL_RECIPIENTS`, `INBOUND_TRUSTED_AUTHSERV_IDS` | forwarded list mail (J3, J4, D12) | **set on production since 2026-11-08**: the VPS relay posts list mail from the camsocs.uk Workspace with the Bearer secret; the recipient is the list alias; trusted `mx.microsoft.com,mx.google.com`. `RESEND_WEBHOOK_SECRET` and `RESEND_INBOUND_API_KEY` (Resend receiving) stay unset: D12 receives on Gmail. See `docs/setup/inbox-instagram.md` |
 | `REQUEST_FORM_SECRET` | the request form's route as the only way in (ENG-37) | the **same** value as Vercel's `REQUEST_FORM_SECRET`; set it **last**, after a production deploy that sends it ("Request form bot check" below). Unset = the mutation accepts any caller, as before. Never on dev |
 | `REQUEST_NOTIFY_EMAIL` | new-request emails to the broker (ENG-104) | **leave unset** (D12: Slack and WhatsApp through the VPS relay cover it). Would send through Resend with `RESEND_API_KEY` + `RESEND_FROM`; the production key may send only from `mail.camsocs.uk`. Never on dev |
@@ -182,7 +182,7 @@ Convex keeps the queue (convex/notifications.ts): open requests of the last 14 d
 
 What each channel carries (the request's text is the public's and unverified): Slack and WhatsApp get facts from Convex — kind, listing name, role, the submitter's *domain*, proposed field names and a one-line preview of at most 280 characters — which the relay shape-checks and formats itself; in Slack no mention, link or `<!channel>` can form. The relay builds the link from the request key, never from the answer. Mya does not read these messages as input: the bridge records what it sent, and Slack ignores the bot's own posts. Email carries everything the inbox shows, escaped and marked unverified.
 
-**Email** (off, D12). Resend is set up for the sign-in link (`mail.camsocs.uk`, J3), so switching it on needs only the recipient; the mail comes from `RESEND_FROM`:
+**Email** (off, D12). Resend is set up for the sign-in code (`mail.camsocs.uk`, J3), so switching it on needs only the recipient; the mail comes from `RESEND_FROM`:
 
 ```bash
 bunx convex env set --prod REQUEST_NOTIFY_EMAIL requests@camsocs.uk   # comma-separated for several

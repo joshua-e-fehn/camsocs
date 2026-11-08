@@ -53,7 +53,7 @@ export function signInMethods(options: SignInOptions | undefined): SignInMethod[
 
 /** Messages for the `?error=` Better Auth appends to the error callback. */
 const LINK_ERRORS: Record<string, string> = {
-  INVALID_TOKEN: "That sign-in link has expired or was already used. Request a new one.",
+  INVALID_TOKEN: "Sign-in links are no longer used. Ask for a sign-in code instead.",
   new_user_signup_disabled: "Sign-up is closed for this address.",
 }
 
@@ -187,6 +187,18 @@ function NotOpen({ next }: { next?: string }) {
   )
 }
 
+/** Messages for the email-OTP error codes Better Auth answers with. */
+const CODE_ERRORS: Record<string, string> = {
+  INVALID_OTP: "That code is not right. Check the email and try again.",
+  OTP_EXPIRED: "That code has expired. Send a new one.",
+  TOO_MANY_ATTEMPTS: "Too many wrong codes. Send a new one.",
+}
+
+/**
+ * Two steps: the address, then the 6-digit code we email to it. A code, not a
+ * link, because Exchange's scanning spent every emailed link before the member
+ * saw it (convex/lib/signInEmail.ts).
+ */
 function CamEmailForm({ initialError, next }: { initialError: string; next?: string }) {
   const [email, setEmail] = useState("")
   const [touched, setTouched] = useState(false)
@@ -207,13 +219,11 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
     setError("")
     setSending(true)
     try {
-      const result = await authClient.signIn.magicLink({
+      const result = await authClient.emailOtp.sendVerificationOtp({
         email: address,
-        // The marker lets the landing page count the sign-in (method only).
-        callbackURL: withSignInMarker(next ?? "/", "cam"),
-        errorCallbackURL: tier.signInHref,
+        type: "sign-in",
       })
-      if (result.error) setError(result.error.message ?? "The link could not be sent")
+      if (result.error) setError(result.error.message ?? "The code could not be sent")
       else setSentTo(address)
     } catch {
       setError("Something went wrong. Try again.")
@@ -224,23 +234,14 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
 
   if (sentTo) {
     return (
-      // Takes focus: the button that was pressed is gone (lib/focus.ts, ENG-37).
-      <div
-        className="flex flex-col items-center gap-3 rounded-lg text-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        role="status"
-        ref={focusOnMount}
-        tabIndex={-1}
-      >
-        <MailCheckIcon className="size-10 text-primary" aria-hidden="true" />
-        <p className="font-medium">Check your inbox</p>
-        <p className="text-sm text-muted-foreground">
-          We sent a sign-in link to <span className="font-mono text-foreground">{sentTo}</span>. It
-          works once and expires in 10 minutes.
-        </p>
-        <Button variant="ghost" size="sm" onClick={() => setSentTo(null)}>
-          Use a different address
-        </Button>
-      </div>
+      <CodeForm
+        email={sentTo}
+        next={next}
+        onChangeAddress={() => {
+          setSentTo(null)
+          setError("")
+        }}
+      />
     )
   }
 
@@ -266,18 +267,123 @@ function CamEmailForm({ initialError, next }: { initialError: string; next?: str
         {invalid ? (
           <FieldError>{`Only @${memberDomain} addresses can sign in here`}</FieldError>
         ) : (
-          <FieldDescription>We email you a one-time link. No password.</FieldDescription>
+          <FieldDescription>We email you a 6-digit code. No password.</FieldDescription>
         )}
       </Field>
       <Button type="submit" disabled={sending}>
         {sending ? <Spinner /> : <MailIcon />}
-        {sending ? "Sending…" : "Email me a sign-in link"}
+        {sending ? "Sending…" : "Email me a sign-in code"}
       </Button>
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
+    </form>
+  )
+}
+
+/** The code step: six digits, then a full page load so every part of the site
+ * reads the new session (the JWT cookie the sign-in response set). */
+function CodeForm({
+  email,
+  next,
+  onChangeAddress,
+}: {
+  email: string
+  next?: string
+  onChangeAddress: () => void
+}) {
+  const [code, setCode] = useState("")
+  const [error, setError] = useState("")
+  const [checking, setChecking] = useState(false)
+  const [resent, setResent] = useState(false)
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const otp = code.replace(/\D/g, "")
+    if (otp.length !== 6) {
+      setError("Enter the 6 digits from the email.")
+      return
+    }
+    setError("")
+    setChecking(true)
+    try {
+      const result = await authClient.signIn.emailOtp({ email, otp })
+      if (result.error) {
+        setError(CODE_ERRORS[result.error.code ?? ""] ?? result.error.message ?? "Sign-in failed.")
+        setChecking(false)
+        return
+      }
+      // The marker lets the landing page count the sign-in (method only).
+      window.location.assign(withSignInMarker(next ?? "/", "cam"))
+    } catch {
+      setError("Something went wrong. Try again.")
+      setChecking(false)
+    }
+  }
+
+  const resend = async () => {
+    setError("")
+    const result = await authClient.emailOtp
+      .sendVerificationOtp({ email, type: "sign-in" })
+      .catch(() => null)
+    if (!result || result.error) setError(result?.error?.message ?? "The code could not be sent")
+    else setResent(true)
+  }
+
+  return (
+    <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      {/* Takes focus: the form that was submitted is gone (lib/focus.ts, ENG-37). */}
+      <div
+        className="flex flex-col items-center gap-2 rounded-lg text-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        role="status"
+        ref={focusOnMount}
+        tabIndex={-1}
+      >
+        <MailCheckIcon className="size-10 text-primary" aria-hidden="true" />
+        <p className="font-medium">Check your inbox</p>
+        <p className="text-sm text-muted-foreground">
+          We sent a 6-digit code to <span className="font-mono text-foreground">{email}</span>. It
+          works once and expires in 10 minutes. Mail to Cambridge can take a few minutes.
+        </p>
+      </div>
+      <Field data-invalid={Boolean(error) || undefined}>
+        <FieldLabel htmlFor="cam-code">Sign-in code</FieldLabel>
+        <Input
+          id="cam-code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]*"
+          maxLength={6}
+          placeholder="123456"
+          className="text-center font-mono text-lg tracking-[0.4em]"
+          value={code}
+          onChange={(event) => {
+            setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+            if (error) setError("")
+          }}
+          aria-invalid={Boolean(error) || undefined}
+          required
+        />
+      </Field>
+      <Button type="submit" disabled={checking}>
+        {checking ? <Spinner /> : <LockKeyholeIcon />}
+        {checking ? "Signing in…" : "Sign in"}
+      </Button>
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-center gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={resend} disabled={resent}>
+          {resent ? "New code sent" : "Send a new code"}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onChangeAddress}>
+          Use a different address
+        </Button>
+      </div>
     </form>
   )
 }

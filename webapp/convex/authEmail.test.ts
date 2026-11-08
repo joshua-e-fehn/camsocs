@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { isCamEmail } from "../lib/cam-email"
-import { CONFIRM_PATH, verifyPathFromFragment } from "../lib/sign-in-link"
 import { api, components, internal } from "./_generated/api"
 import { LINKS_PER_CLIENT, LINKS_PER_HOUR } from "./authEmail"
 import { NOT_CAM_EMAIL } from "./betterAuth/auth"
 import { newTest, type TestConvex, withEnv } from "./lib/harness.testing"
-import { buildSignInEmail, RESEND_ENDPOINT, resendConfig } from "./lib/signInEmail"
+import {
+  buildSignInEmail,
+  RESEND_ENDPOINT,
+  resendConfig,
+  SIGN_IN_CODE_ATTEMPTS,
+} from "./lib/signInEmail"
 
 /**
- * The `@cam.ac.uk` sign-in link end to end, through the real Better Auth
+ * The `@cam.ac.uk` sign-in code end to end, through the real Better Auth
  * routes (convex-test `t.fetch` → convex/http.ts → betterAuth/auth.ts):
  * the domain restriction is enforced on the server, the throttle holds, the
- * option is off without Resend, and a verified link yields a session that
+ * option is off without Resend, and a verified code yields a session that
  * `getViewer` reports as `isCamVerified`. Resend itself is a stub: the test
  * captures what would have been sent.
  */
@@ -46,31 +50,31 @@ afterEach(() => {
   globalThis.fetch = realFetch
 })
 
-function requestLink(t: TestConvex, email: string, forwardedFor?: string) {
-  return t.fetch("/api/auth/sign-in/magic-link", {
+function requestLink(t: TestConvex, email: string, forwardedFor?: string, type = "sign-in") {
+  return t.fetch("/api/auth/email-otp/send-verification-otp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Origin: SITE,
       ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}),
     },
-    body: JSON.stringify({ email, callbackURL: "/" }),
+    body: JSON.stringify({ email, type }),
   })
 }
 
-/** The link in the last email, as the path + query `t.fetch` takes. */
-function lastLinkPath(): string {
-  const match = sent[sent.length - 1]?.body.text.match(/https?:\/\/\S+/)
-  if (!match) throw new Error("no link in the email")
-  const url = new URL(match[0])
-  expect(url.origin).toBe(SITE)
-  // The email opens the confirm page; nothing a scanner fetches carries the
-  // token. Pressing Sign in there opens the verify path from the fragment.
-  expect(url.pathname).toBe(CONFIRM_PATH)
-  expect(url.search).toBe("")
-  const path = verifyPathFromFragment(url.hash)
-  if (!path) throw new Error("no sign-in token in the link")
-  return path
+function signIn(t: TestConvex, email: string, otp: string) {
+  return t.fetch("/api/auth/sign-in/email-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: SITE },
+    body: JSON.stringify({ email, otp }),
+  })
+}
+
+/** The code in the last email. */
+function lastCode(): string {
+  const match = sent[sent.length - 1]?.body.text.match(/^\d{6}$/m)
+  if (!match) throw new Error("no code in the email")
+  return match[0]
 }
 
 describe("isCamEmail", () => {
@@ -88,7 +92,7 @@ describe("isCamEmail", () => {
   })
 })
 
-describe("POST /api/auth/sign-in/magic-link", () => {
+describe("the @cam.ac.uk sign-in code", () => {
   test("refuses every address that is not @cam.ac.uk, and sends nothing", async () => {
     await withEnv(ENV, async () => {
       const t = newTest()
@@ -113,7 +117,7 @@ describe("POST /api/auth/sign-in/magic-link", () => {
     })
   })
 
-  test("sends a link to a @cam.ac.uk address; the link signs in as cam-verified", async () => {
+  test("sends a code to a @cam.ac.uk address; the code signs in as cam-verified", async () => {
     await withEnv(ENV, async () => {
       const t = newTest()
       expect((await t.query(api.auth.getSignInOptions, {})).camEmail).toBe(true)
@@ -124,10 +128,17 @@ describe("POST /api/auth/sign-in/magic-link", () => {
       expect(sent[0].body.to).toEqual(["ab123@cam.ac.uk"])
       expect(sent[0].body.from).toBe(ENV.RESEND_FROM)
       expect(sent[0].headers.get("Authorization")).toBe(`Bearer ${ENV.RESEND_API_KEY}`)
+      // No link a mail scanner could open.
+      expect(sent[0].body.text).not.toMatch(/https?:\/\//)
+      const code = lastCode()
 
-      const verify = await t.fetch(lastLinkPath(), { headers: { Origin: SITE } })
-      expect(verify.status).toBe(302)
-      expect(verify.headers.get("location")).toBe(`${SITE}/`)
+      // A wrong code does not sign in and does not spend the right one.
+      expect(
+        (await signIn(t, "ab123@cam.ac.uk", code === "000000" ? "111111" : "000000")).status,
+      ).toBe(400)
+
+      const verify = await signIn(t, "ab123@cam.ac.uk", code)
+      expect(verify.status).toBe(200)
       expect(verify.headers.get("set-cookie")).toContain("better-auth.session_token")
 
       const user = await t.query(components.betterAuth.adapter.findOne, {
@@ -146,9 +157,37 @@ describe("POST /api/auth/sign-in/magic-link", () => {
         isCamVerified: true,
       })
 
-      // A link works once.
-      const again = await t.fetch(lastLinkPath(), { headers: { Origin: SITE } })
-      expect(again.headers.get("location")).toContain("error=INVALID_TOKEN")
+      // A code works once.
+      expect((await signIn(t, "ab123@cam.ac.uk", code)).status).toBeGreaterThanOrEqual(400)
+    })
+  })
+
+  test("a code stops working after too many wrong guesses", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      await requestLink(t, "ab123@cam.ac.uk")
+      const code = lastCode()
+      const wrong = code === "000000" ? "111111" : "000000"
+      for (let i = 0; i < SIGN_IN_CODE_ATTEMPTS; i++) await signIn(t, "ab123@cam.ac.uk", wrong)
+      const late = await signIn(t, "ab123@cam.ac.uk", code)
+      expect(late.status).toBe(403)
+      expect(((await late.json()) as { code: string }).code).toBe("TOO_MANY_ATTEMPTS")
+    })
+  })
+
+  test("refuses every other email-OTP use (password reset, email change, verify-email)", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      for (const type of ["forget-password", "email-verification"]) {
+        expect((await requestLink(t, "ab123@cam.ac.uk", undefined, type)).status).toBe(404)
+      }
+      const reset = await t.fetch("/api/auth/forget-password/email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: SITE },
+        body: JSON.stringify({ email: "ab123@cam.ac.uk" }),
+      })
+      expect(reset.status).toBe(404)
+      expect(sent).toEqual([])
     })
   })
 
@@ -176,22 +215,20 @@ describe("POST /api/auth/sign-in/magic-link", () => {
     })
   })
 
-  test("reports a Resend failure as 502 without leaking the key or the link", async () => {
+  test("logs a Resend failure without the key or the code", async () => {
     await withEnv(ENV, async () => {
       globalThis.fetch = (async () =>
         Response.json({ name: "validation_error" }, { status: 422 })) as unknown as typeof fetch
       const logged = spyOn(console, "error").mockImplementation(() => {})
       try {
+        // Better Auth runs the send through runInBackgroundOrAwait, which logs
+        // what it throws; the caller sees success and can ask for a new code.
         const response = await requestLink(newTest(), "ab123@cam.ac.uk")
-        expect(response.status).toBe(502)
-        const text = await response.text()
-        expect(text).not.toContain(ENV.RESEND_API_KEY)
-        expect(text).not.toContain("token=")
-        // The deployment log names the failure, never the key or the link.
+        expect(response.status).toBe(200)
         const log = JSON.stringify(logged.mock.calls)
         expect(log).toContain("HTTP 422: validation_error")
         expect(log).not.toContain(ENV.RESEND_API_KEY)
-        expect(log).not.toContain("token=")
+        expect(log).not.toMatch(/\b\d{6}\b/)
       } finally {
         logged.mockRestore()
       }
@@ -256,9 +293,11 @@ describe("signInEmail", () => {
     })
   })
 
-  test("escapes the link in the HTML part", () => {
-    const email = buildSignInEmail("a@b.c", "ab123@cam.ac.uk", 'https://x.test/?a=1&b="2"')
-    expect(email.html).toContain("https://x.test/?a=1&amp;b=&quot;2&quot;")
-    expect(email.text).toContain('https://x.test/?a=1&b="2"')
+  test("carries the code, and no link", () => {
+    const email = buildSignInEmail("a@b.c", "ab123@cam.ac.uk", "042917")
+    expect(email.subject).toBe("042917 is your CAMsocs sign-in code")
+    expect(email.text.split("\n")).toContain("042917")
+    expect(email.html).toContain("042917")
+    expect(email.html).not.toContain("<a ")
   })
 })
