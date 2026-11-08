@@ -12,7 +12,7 @@ Background and the rules each source follows: `docs/source-research.md` §16 (in
 
 ## J3: Resend sends, Gmail receives (D12)
 
-**Done 2026-11-08** (D12). Resend's free plan counts received mail against the same 100-a-day quota as sent mail, so the list mail arrives on CAMsocs' own Google Workspace (D11) and Resend only sends the `@cam.ac.uk` sign-in links (T10). The Resend receiving code (Svix webhook, Receiving API) stays in place, unused.
+**Done 2026-11-08** (D12). Resend's free plan counts received mail against the same 100-a-day quota as sent mail, so the list mail arrives on CAMsocs' own Google Workspace (D11) and Resend only sends the `@cam.ac.uk` sign-in codes (T10). The Resend receiving code (Svix webhook, Receiving API) stays in place, unused.
 
 **Sending (Resend).**
 - Domain `mail.camsocs.uk`, region Ireland (`eu-west-1`). DNS at IONOS: DKIM TXT `resend._domainkey.mail`, SPF MX and TXT on `send.mail`, CNAME `rsend.mail`. The root domain's Google MX is untouched; DMARC comes from `_dmarc.camsocs.uk` (relaxed alignment covers the subdomain).

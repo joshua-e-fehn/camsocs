@@ -2,31 +2,37 @@ import type { CampusProfile } from "../../lib/campus"
 import { deploymentProfile } from "../../lib/campus/deployment"
 
 /**
- * The member sign-in link email (Cambridge: `@cam.ac.uk`), sent through
+ * The member sign-in code email (Cambridge: `@cam.ac.uk`), sent through
  * Resend's HTTP API. Its product name and closing disclaimer are the
  * deployment's campus's (lib/campus, decision D8).
  *
- * Called from Better Auth's magic-link plugin (convex/betterAuth/auth.ts),
- * which runs inside the `/api/auth/*` HTTP action — a Convex action, so
- * `fetch` is available and the link (which carries a one-time token) never
- * passes through a scheduled function's stored arguments.
+ * A code, not a link (2026-11-08): Exchange Online's pre-delivery scanning,
+ * which every @cam.ac.uk mailbox has, opened each emailed sign-in link and even
+ * pressed the button of a confirm page, so every link was spent (and a session
+ * created in the scanner) before the member saw it. A code typed on the page
+ * that asked for it cannot be used by a scanner.
+ *
+ * Called from Better Auth's email-OTP plugin (convex/betterAuth/auth.ts),
+ * inside the `/api/auth/*` HTTP action, so `fetch` is available.
  *
  * Off until both env vars are set on the deployment; nothing else is needed:
  *
  *   bunx convex env set RESEND_API_KEY re_…
  *   bunx convex env set RESEND_FROM "CAMsocs <sign-in@mail.camsocs.uk>"   # production (D12)
  *
- * Unset, the plugin is not registered at all (the endpoint answers 404) and
+ * Unset, the plugin is not registered at all (its endpoints answer 404) and
  * `auth.getSignInOptions` tells the sign-in page to show the option as off.
  *
- * ⚠ Never log the link or the token: either is a session for its address.
+ * ⚠ Never log the code: it is a session for its address.
  */
 
 export const RESEND_ENDPOINT = "https://api.resend.com/emails"
 
-/** How long a link works. Better Auth's default is 5 minutes; mail to
- * @cam.ac.uk (Exchange Online, with its scanning) can take a few. */
-export const SIGN_IN_LINK_TTL_SECONDS = 10 * 60
+/** How long a code works. Better Auth's default is 5 minutes; mail to
+ * @cam.ac.uk (Exchange Online, with its scanning) took 4 on 2026-11-08. */
+export const SIGN_IN_CODE_TTL_SECONDS = 10 * 60
+/** Wrong guesses allowed per code; a new code needs a new request (throttled). */
+export const SIGN_IN_CODE_ATTEMPTS = 5
 
 export type ResendConfig = { apiKey: string; from: string }
 
@@ -58,37 +64,34 @@ function escapeHtml(text: string): string {
 export function buildSignInEmail(
   from: string,
   to: string,
-  url: string,
+  code: string,
   profile: CampusProfile = deploymentProfile(),
 ): SignInEmail {
-  const minutes = SIGN_IN_LINK_TTL_SECONDS / 60
+  const minutes = SIGN_IN_CODE_TTL_SECONDS / 60
   const product = profile.brand.name
   const disclaimer = profile.brand.emailDisclaimer
-  const lines = [
-    `Sign in to ${product} with this link:`,
-    "",
-    url,
-    "",
-    `It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.`,
-    "",
-    disclaimer,
-  ]
-  const href = escapeHtml(url)
+  const note = `Type it on the ${product} sign-in page where you asked for it. It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the code.`
+  const lines = [`Your ${product} sign-in code:`, "", code, "", note, "", disclaimer]
   const html = [
     '<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1f1d24">',
-    `<p>Sign in to ${escapeHtml(product)} with this link:</p>`,
-    `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to ${escapeHtml(product)}</a></p>`,
-    `<p style="font-size:13px;color:#5f5a66">Or paste this address into your browser:<br><span style="word-break:break-all">${href}</span></p>`,
-    `<p style="font-size:13px;color:#5f5a66">It works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the link.</p>`,
+    `<p>Your ${escapeHtml(product)} sign-in code:</p>`,
+    `<p style="font-family:ui-monospace,Menlo,monospace;font-size:28px;font-weight:600;letter-spacing:6px;margin:12px 0">${escapeHtml(code)}</p>`,
+    `<p style="font-size:13px;color:#5f5a66">${escapeHtml(note)}</p>`,
     `<p style="font-size:12px;color:#8a8590">${escapeHtml(disclaimer)}</p>`,
     "</div>",
   ].join("")
-  return { from, to: [to], subject: `Your ${product} sign-in link`, text: lines.join("\n"), html }
+  return {
+    from,
+    to: [to],
+    subject: `${code} is your ${product} sign-in code`,
+    text: lines.join("\n"),
+    html,
+  }
 }
 
 /**
  * Sends the email. Throws a message safe to log (HTTP status and Resend's error
- * name, never the key or the link) when Resend refuses it.
+ * name, never the key or the code) when Resend refuses it.
  */
 export async function sendSignInEmail(
   config: ResendConfig,

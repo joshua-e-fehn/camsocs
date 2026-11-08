@@ -367,32 +367,18 @@ describe("other campus rules", () => {
   })
 
   test("the sign-in email names the campus's product and disclaimer", () => {
-    const url = "https://x.test/?a=1&b=2"
-    const cam = buildSignInEmail("a@example.org", "ab123@cam.ac.uk", url)
-    expect(cam).toEqual(buildSignInEmail("a@example.org", "ab123@cam.ac.uk", url, CAMBRIDGE))
-    // Today's message, byte for byte.
-    const href = "https://x.test/?a=1&amp;b=2"
+    const cam = buildSignInEmail("a@example.org", "ab123@cam.ac.uk", "042917")
+    expect(cam).toEqual(buildSignInEmail("a@example.org", "ab123@cam.ac.uk", "042917", CAMBRIDGE))
     const note =
-      "It works once and expires in 10 minutes. If you did not ask for it, ignore this email: nobody can sign in without the link."
+      "Type it on the CAMsocs sign-in page where you asked for it. It works once and expires in 10 minutes. If you did not ask for it, ignore this email: nobody can sign in without the code."
     const disclaimer =
       "CAMsocs is an unofficial directory of Cambridge student societies. It is not affiliated with the University of Cambridge or Cambridge SU."
-    expect(cam).toEqual({
-      from: "a@example.org",
-      to: ["ab123@cam.ac.uk"],
-      subject: "Your CAMsocs sign-in link",
-      text: ["Sign in to CAMsocs with this link:", "", url, "", note, "", disclaimer].join("\n"),
-      html: [
-        '<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1f1d24">',
-        "<p>Sign in to CAMsocs with this link:</p>",
-        `<p><a href="${href}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#1f1d24;color:#ffffff;text-decoration:none">Sign in to CAMsocs</a></p>`,
-        `<p style="font-size:13px;color:#5f5a66">Or paste this address into your browser:<br><span style="word-break:break-all">${href}</span></p>`,
-        `<p style="font-size:13px;color:#5f5a66">${note}</p>`,
-        `<p style="font-size:12px;color:#8a8590">${disclaimer}</p>`,
-        "</div>",
-      ].join(""),
-    })
-    const zz = buildSignInEmail("a@example.org", "jane@testford.ac.uk", "https://x.test/", TESTFORD)
-    expect(zz.subject).toBe("Your ZZsocs sign-in link")
+    expect(cam.subject).toBe("042917 is your CAMsocs sign-in code")
+    expect(cam.text).toBe(
+      ["Your CAMsocs sign-in code:", "", "042917", "", note, "", disclaimer].join("\n"),
+    )
+    const zz = buildSignInEmail("a@example.org", "jane@testford.ac.uk", "042917", TESTFORD)
+    expect(zz.subject).toBe("042917 is your ZZsocs sign-in code")
     expect(zz.text).not.toContain("Cambridge")
     expect(zz.html).not.toContain("Cambridge")
   })

@@ -5,18 +5,18 @@ import type { GenericCtx } from "@convex-dev/better-auth/utils"
 import type { BetterAuthOptions } from "better-auth"
 import { betterAuth } from "better-auth"
 import { APIError, createAuthMiddleware } from "better-auth/api"
-import { magicLink } from "better-auth/plugins/magic-link"
+import { emailOTP } from "better-auth/plugins/email-otp"
 import { CAMBRIDGE } from "../../lib/campus"
 import { deploymentProfile } from "../../lib/campus/deployment"
 import { isMemberEmail, normaliseEmail } from "../../lib/campus/member-email"
-import { confirmLinkFor } from "../../lib/sign-in-link"
 import { components, internal } from "../_generated/api"
 import type { DataModel } from "../_generated/dataModel"
 import authConfig from "../auth.config"
 import {
   buildSignInEmail,
   resendConfig,
-  SIGN_IN_LINK_TTL_SECONDS,
+  SIGN_IN_CODE_ATTEMPTS,
+  SIGN_IN_CODE_TTL_SECONDS,
   sendSignInEmail,
 } from "../lib/signInEmail"
 import schema from "./schema"
@@ -58,7 +58,13 @@ function googleProvider() {
   return clientId && clientSecret ? { google: { clientId, clientSecret } } : {}
 }
 
-export const MAGIC_LINK_PATH = "/sign-in/magic-link"
+/** The two email-OTP endpoints the member tier uses; every other email-OTP
+ * endpoint (password reset, email change, verify-email) is refused. */
+export const SEND_CODE_PATH = "/email-otp/send-verification-otp"
+export const CODE_SIGN_IN_PATH = "/sign-in/email-otp"
+const OTHER_EMAIL_OTP = (path: string) =>
+  (path.startsWith("/email-otp/") && path !== SEND_CODE_PATH) ||
+  path === "/forget-password/email-otp"
 /** Cambridge's refusal text. A deployment refuses with its own campus's
  * (`memberTier.rejectMessage`, decision D8); for `cam` it is this. */
 export const NOT_CAM_EMAIL = CAMBRIDGE.memberTier.rejectMessage
@@ -82,61 +88,80 @@ export function clientAddress(headers: Headers | undefined): string | undefined 
 }
 
 /**
- * The `@cam.ac.uk` sign-in link (Better Auth's magic-link plugin, which
- * @convex-dev/better-auth 0.12.5 supports: its convex plugin sets the JWT
- * cookie after `/magic-link/verify`). Registered only when Resend is
- * configured (convex/lib/signInEmail.ts), like Google above: unset, the
- * endpoint answers 404 and the sign-in page shows the option as off.
+ * The `@cam.ac.uk` sign-in code (Better Auth's email-OTP plugin; the Convex
+ * plugin sets the JWT cookie after `/sign-in/*`). Registered only when Resend
+ * is configured (convex/lib/signInEmail.ts), like Google above: unset, the
+ * endpoints answer 404 and the sign-in page shows the option as off.
  *
- * A verified link creates (or signs in) a user with `emailVerified: true`, so
- * `getViewer` (convex/lib/viewer.ts) reports `isCamVerified` for that session.
+ * A code, not a link: Exchange's scanning spent every emailed link before the
+ * member saw it (2026-11-08; signInEmail.ts). A verified code creates (or signs
+ * in) a user with `emailVerified: true`, so `getViewer` (convex/lib/viewer.ts)
+ * reports `isCamVerified` for that session.
  *
- * Every refusal happens on the server: `refuseNonCamEmail` in the `before`
- * hook (nothing is stored) and again before sending, and a throttle per
- * address, per client and per deployment (convex/authEmail.ts).
+ * Every refusal happens in the `before` hook (`guardMemberCode`), where an
+ * error reaches the caller: the plugin runs `sendVerificationOTP` through
+ * `runInBackgroundOrAwait`, which only logs what it throws. So a failed send is
+ * logged (status only, never the code) and the caller still sees success.
  */
-function camEmailLink(ctx: GenericCtx<DataModel>) {
+function camEmailCode() {
   const config = resendConfig()
   if (!config) return []
   return [
-    magicLink({
-      expiresIn: SIGN_IN_LINK_TTL_SECONDS,
-      sendMagicLink: async ({ email, url }, endpoint) => {
-        refuseNonCamEmail(email)
-        if (!("runMutation" in ctx)) {
-          throw new APIError("INTERNAL_SERVER_ERROR", { message: "Cannot send email here" })
-        }
-        const known = await endpoint?.context.internalAdapter
-          .findUserByEmail(normaliseEmail(email))
-          .catch(() => null)
-        const verdict = await ctx.runMutation(internal.authEmail.reserveSignInLink, {
-          email,
-          client: clientAddress(endpoint?.request?.headers),
-          knownUser: known?.user.emailVerified === true,
-        })
-        if (verdict !== "ok") {
-          throw new APIError("TOO_MANY_REQUESTS", {
-            message:
-              verdict === "address_limit"
-                ? "A link was sent to this address a moment ago. Check your inbox, or try again in 15 minutes."
-                : "Too many sign-in requests right now. Please try again later.",
-          })
-        }
+    emailOTP({
+      otpLength: 6,
+      expiresIn: SIGN_IN_CODE_TTL_SECONDS,
+      allowedAttempts: SIGN_IN_CODE_ATTEMPTS,
+      storeOTP: "hashed",
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        if (type !== "sign-in") return
         try {
-          // The link opens /sign-in/confirm, which spends the token only on a
-          // click: a mail scanner opening the link cannot use it up.
-          await sendSignInEmail(
-            config,
-            buildSignInEmail(config.from, normaliseEmail(email), confirmLinkFor(url)),
-          )
+          await sendSignInEmail(config, buildSignInEmail(config.from, normaliseEmail(email), otp))
         } catch (error) {
-          // The message names the HTTP status only — never the link or key.
+          // The message names the HTTP status only — never the code or key.
           console.error(error instanceof Error ? error.message : "Sign-in email failed")
-          throw new APIError("BAD_GATEWAY", { message: "The email could not be sent. Try again." })
         }
       },
     }),
   ]
+}
+
+/**
+ * The member tier's guard, before any email-OTP endpoint runs: only sign-in
+ * codes, only member addresses, and the throttle per address, per client and
+ * per deployment (convex/authEmail.ts) before a code is made and sent.
+ */
+async function guardMemberCode(
+  ctx: GenericCtx<DataModel>,
+  hookCtx: Parameters<Parameters<typeof createAuthMiddleware>[0]>[0],
+): Promise<void> {
+  const path = hookCtx.path ?? ""
+  if (OTHER_EMAIL_OTP(path)) throw new APIError("NOT_FOUND")
+  // Without Resend the plugin is not registered: its routes answer 404 themselves.
+  if (!resendConfig()) return
+  if (path === CODE_SIGN_IN_PATH) refuseNonCamEmail(hookCtx.body?.email)
+  if (path !== SEND_CODE_PATH) return
+  if (hookCtx.body?.type !== "sign-in") throw new APIError("NOT_FOUND")
+  const email: unknown = hookCtx.body?.email
+  refuseNonCamEmail(email)
+  if (!("runMutation" in ctx)) {
+    throw new APIError("INTERNAL_SERVER_ERROR", { message: "Cannot send email here" })
+  }
+  const known = await hookCtx.context.internalAdapter
+    .findUserByEmail(normaliseEmail(email as string))
+    .catch(() => null)
+  const verdict = await ctx.runMutation(internal.authEmail.reserveSignInLink, {
+    email: email as string,
+    client: clientAddress(hookCtx.request?.headers ?? hookCtx.headers),
+    knownUser: known?.user.emailVerified === true,
+  })
+  if (verdict !== "ok") {
+    throw new APIError("TOO_MANY_REQUESTS", {
+      message:
+        verdict === "address_limit"
+          ? "A code was sent to this address a moment ago. Check your inbox, or try again in 15 minutes."
+          : "Too many sign-in requests right now. Please try again later.",
+    })
+  }
 }
 
 // Better Auth Options
@@ -174,10 +199,10 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     // Cambridge tier by `getViewer` (a verified @cam.ac.uk address).
     hooks: {
       before: createAuthMiddleware(async (hookCtx) => {
-        if (hookCtx.path === MAGIC_LINK_PATH) refuseNonCamEmail(hookCtx.body?.email)
+        await guardMemberCode(ctx, hookCtx)
       }),
     },
-    plugins: [convex({ authConfig }), ...camEmailLink(ctx)],
+    plugins: [convex({ authConfig }), ...camEmailCode()],
   } satisfies BetterAuthOptions
 }
 
