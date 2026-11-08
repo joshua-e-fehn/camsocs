@@ -466,7 +466,11 @@ Two tiers, both Better Auth inside Convex (`convex/betterAuth/auth.ts`); `/sign-
   @convex-dev/better-auth 0.12.5), registered only when `RESEND_API_KEY` and `RESEND_FROM` are
   both set (otherwise the endpoint is a 404 and the form shows the option as off). The link is
   sent from the `/api/auth/*` HTTP action through Resend's HTTP API (`convex/lib/signInEmail.ts`),
-  works once and expires in 10 minutes. The server refuses any address that is not exactly
+  works once and expires in 10 minutes. The email links to `/sign-in/confirm#<verify query>`,
+  not to the verify endpoint: Exchange Safe Links (every `@cam.ac.uk` mailbox) opens links in
+  incoming mail and spent the token on the first production link (2026-11-08). The fragment never
+  reaches a server, and the page opens `/api/auth/magic-link/verify` only when the person presses
+  Sign in (`lib/sign-in-link.ts`, `components/organisms/confirm-sign-in.tsx`). The server refuses any address that is not exactly
   `@cam.ac.uk` (`lib/cam-email.ts`, the same rule `getViewer` uses) before storing anything, and
   throttles to 3 links per address per 15 minutes, 10 per client (a sha256 of the
   `x-forwarded-for` IP) per hour and 60 per hour overall — a cap an address that has signed in

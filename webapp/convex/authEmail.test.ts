@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { isCamEmail } from "../lib/cam-email"
+import { CONFIRM_PATH, verifyPathFromFragment } from "../lib/sign-in-link"
 import { api, components, internal } from "./_generated/api"
 import { LINKS_PER_CLIENT, LINKS_PER_HOUR } from "./authEmail"
 import { NOT_CAM_EMAIL } from "./betterAuth/auth"
@@ -63,7 +64,13 @@ function lastLinkPath(): string {
   if (!match) throw new Error("no link in the email")
   const url = new URL(match[0])
   expect(url.origin).toBe(SITE)
-  return `${url.pathname}${url.search}`
+  // The email opens the confirm page; nothing a scanner fetches carries the
+  // token. Pressing Sign in there opens the verify path from the fragment.
+  expect(url.pathname).toBe(CONFIRM_PATH)
+  expect(url.search).toBe("")
+  const path = verifyPathFromFragment(url.hash)
+  if (!path) throw new Error("no sign-in token in the link")
+  return path
 }
 
 describe("isCamEmail", () => {

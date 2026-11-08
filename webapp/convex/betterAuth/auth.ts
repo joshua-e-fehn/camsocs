@@ -9,6 +9,7 @@ import { magicLink } from "better-auth/plugins/magic-link"
 import { CAMBRIDGE } from "../../lib/campus"
 import { deploymentProfile } from "../../lib/campus/deployment"
 import { isMemberEmail, normaliseEmail } from "../../lib/campus/member-email"
+import { confirmLinkFor } from "../../lib/sign-in-link"
 import { components, internal } from "../_generated/api"
 import type { DataModel } from "../_generated/dataModel"
 import authConfig from "../auth.config"
@@ -122,7 +123,12 @@ function camEmailLink(ctx: GenericCtx<DataModel>) {
           })
         }
         try {
-          await sendSignInEmail(config, buildSignInEmail(config.from, normaliseEmail(email), url))
+          // The link opens /sign-in/confirm, which spends the token only on a
+          // click: a mail scanner opening the link cannot use it up.
+          await sendSignInEmail(
+            config,
+            buildSignInEmail(config.from, normaliseEmail(email), confirmLinkFor(url)),
+          )
         } catch (error) {
           // The message names the HTTP status only — never the link or key.
           console.error(error instanceof Error ? error.message : "Sign-in email failed")
