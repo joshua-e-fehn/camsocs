@@ -8,7 +8,9 @@ import {
   kindOf,
   ownProblem,
   RECHECK_INDEXED_MS,
+  RECHECK_KEY_MS,
   selectDue,
+  settle,
   sitemapIssue,
   sitemapUrls,
   summarize,
@@ -48,6 +50,24 @@ describe("classify", () => {
     )
     // The same URL with or without a trailing slash is the same page.
     expect(classify(`${SITE}/`, { verdict: "PASS", googleCanonical: SITE }).state).toBe("indexed")
+  })
+})
+
+describe("settle", () => {
+  const noindex = { state: "problem" as const, problem: "noindex (BLOCKED_BY_META_TAG)" }
+  const listed = NOW - DAY / 2
+  test("a problem from a crawl before the listing waits when our page is fine now", () => {
+    // Crawled while thin (noindex by design), listed once it had content.
+    expect(settle(noindex, NOW - DAY, listed, { problem: undefined })).toEqual({ state: "waiting" })
+  })
+  test("our read finding it, a crawl since the listing or no read keep the problem", () => {
+    expect(settle(noindex, NOW - DAY, listed, { problem: "carries noindex" })).toEqual(noindex)
+    expect(settle(noindex, NOW, listed, { problem: undefined })).toEqual(noindex)
+    expect(settle(noindex, undefined, listed, { problem: undefined })).toEqual(noindex)
+    expect(settle(noindex, NOW - DAY, listed, undefined)).toEqual(noindex)
+    expect(settle({ state: "indexed" }, NOW - DAY, listed, { problem: "x" })).toEqual({
+      state: "indexed",
+    })
   })
 })
 
@@ -128,6 +148,10 @@ describe("sitemaps and scheduling", () => {
     ])
     expect(selectDue(rows, NOW, 2)).toHaveLength(2)
     expect(dueAt(rows[0])).toBe(NOW - 2 * DAY + RECHECK_INDEXED_MS)
+    // A problem is looked at again daily, whatever its kind.
+    expect(
+      dueAt({ url: "x", kind: "society", listedSince: 0, checkedAt: NOW, state: "problem" }),
+    ).toBe(NOW + RECHECK_KEY_MS)
   })
 
   test("a sitemap with errors, never read or unread for days is an issue", () => {
@@ -286,5 +310,51 @@ describe("the check's storage", () => {
       // Not for anyone else.
       await expect(t.query(api.indexing.summary, {})).rejects.toThrow()
     })
+  })
+
+  test("a stale noindex on a page fine now waits; our read finding noindex pages", async () => {
+    const t = newTest()
+    const T0 = Date.now()
+    const crawled = new Date(T0 - DAY).toISOString()
+    await t.mutation(internal.indexing.sync, {
+      now: T0,
+      entries: [
+        { url: `${SITE}/societies/now-fine`, kind: "society" },
+        { url: `${SITE}/societies/still-noindex`, kind: "society" },
+      ],
+    })
+    const noindex = {
+      coverageState: "Excluded by ‘noindex’ tag",
+      indexingState: "BLOCKED_BY_META_TAG",
+      lastCrawlTime: crawled,
+    }
+    await t.mutation(internal.indexing.recordInspections, {
+      now: T0,
+      results: [
+        { url: `${SITE}/societies/now-fine`, ...noindex, own: {} },
+        { url: `${SITE}/societies/still-noindex`, ...noindex, own: { problem: "carries noindex" } },
+      ],
+    })
+    await t.mutation(internal.indexing.finish, { now: T0, inspected: 2, sitemaps: [] })
+    expect(await t.query(internal.indexing.monitorSummary, {})).toEqual({
+      runAt: T0,
+      problems: 1,
+      sitemapIssues: 0,
+    })
+    // Indexed later: our earlier read goes with Google's problem.
+    await t.mutation(internal.indexing.recordInspections, {
+      now: T0 + DAY,
+      results: [{ url: `${SITE}/societies/still-noindex`, verdict: "PASS" }],
+    })
+    // And `recheck` puts a URL first in line again.
+    expect(await t.mutation(internal.indexing.recheck, { url: `${SITE}/societies/now-fine` })).toBe(
+      true,
+    )
+    expect(await t.mutation(internal.indexing.recheck, { url: `${SITE}/nope` })).toBe(false)
+    expect((await t.query(internal.indexing.dueRows, { limit: 1 }))[0]).toBe(
+      `${SITE}/societies/now-fine`,
+    )
+    await t.mutation(internal.indexing.finish, { now: T0 + DAY, inspected: 1, sitemaps: [] })
+    expect((await t.query(internal.indexing.monitorSummary, {})).problems).toBe(0)
   })
 })

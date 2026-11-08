@@ -13,6 +13,7 @@ import {
   ownProblem,
   type SitemapStatus,
   selectDue,
+  settle,
   sitemapUrls,
   summarize,
 } from "./lib/indexing"
@@ -217,9 +218,27 @@ export const inspectBatch = internalAction({
         }
       })
       const inspected = results.flatMap((r) => ("result" in r && r.result ? [r] : []))
+      // Our own read of each page Google finds a problem with (`settle`); a
+      // read that fails leaves Google's verdict as it is.
+      const flagged = inspected.filter(
+        ({ url, result }) => classify(url, result).state === "problem",
+      )
+      const reads = new Map(
+        (
+          await pool(flagged, CONCURRENCY, async ({ url }) => {
+            try {
+              const { status, text } = await fetchText(url)
+              return [[url, { problem: ownProblem(url, status, text) }] as const]
+            } catch {
+              return []
+            }
+          })
+        ).flat(),
+      )
       await ctx.runMutation(internal.indexing.recordInspections, {
         now: Date.now(),
         results: inspected.map(({ url, result }) => ({
+          own: reads.get(url),
           url,
           verdict: result.verdict,
           coverageState: result.coverageState,
@@ -293,6 +312,22 @@ export const recordOwn = internalMutation({
   },
 })
 
+/** Inspects one URL again on the next run (ops: after a fix, with
+ * `indexing:run`; docs/webapp.md). */
+export const recheck = internalMutation({
+  args: { url: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("indexChecks")
+      .withIndex("by_url", (q) => q.eq("url", args.url))
+      .unique()
+    if (!row) return false
+    await ctx.db.patch(row._id, { checkedAt: undefined })
+    return true
+  },
+})
+
 /** The URLs to inspect next (`selectDue`). */
 export const dueRows = internalQuery({
   args: { limit: v.number() },
@@ -316,6 +351,8 @@ export const recordInspections = internalMutation({
         pageFetchState: v.optional(v.string()),
         googleCanonical: v.optional(v.string()),
         lastCrawlTime: v.optional(v.string()),
+        /** Our own read of the page, made when Google finds a problem. */
+        own: v.optional(v.object({ problem: v.optional(v.string()) })),
       }),
     ),
   },
@@ -327,14 +364,28 @@ export const recordInspections = internalMutation({
         .withIndex("by_url", (q) => q.eq("url", result.url))
         .unique()
       if (!row) continue
-      const { state, problem } = classify(result.url, result)
       const crawl = result.lastCrawlTime ? Date.parse(result.lastCrawlTime) : Number.NaN
+      const lastCrawlAt = Number.isFinite(crawl) ? crawl : undefined
+      const { state, problem } = settle(
+        classify(result.url, result),
+        lastCrawlAt,
+        row.listedSince,
+        result.own,
+      )
+      // A key page's own read is `recordOwn`'s, daily; another page's is
+      // this one, and goes when Google no longer finds a problem.
+      const own = result.own
+        ? { ownProblem: result.own.problem, ownCheckedAt: args.now }
+        : isKey(row.kind)
+          ? {}
+          : { ownProblem: undefined }
       await ctx.db.patch(row._id, {
         checkedAt: args.now,
         state,
         problem,
         coverage: result.coverageState,
-        lastCrawlAt: Number.isFinite(crawl) ? crawl : undefined,
+        lastCrawlAt,
+        ...own,
       })
     }
     return null
