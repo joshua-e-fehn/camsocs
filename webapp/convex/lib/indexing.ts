@@ -111,6 +111,25 @@ export function ownProblem(url: string, status: number, html: string): string | 
   return undefined
 }
 
+/** Google's verdict weighed against our own read of the page now. A
+ * problem Google found on a crawl from before the URL entered our sitemaps
+ * describes the page as it was then: a society page crawled while it was
+ * thin (noindex by design, owner decision G3) and listed once it had
+ * content paged as "cannot be indexed" (monitor alert 2026-11-08). When our
+ * own read finds the page fine, the URL is only waiting for a recrawl. Our
+ * read finding a problem, or a verdict from a crawl since the listing,
+ * stays a problem. `own` is undefined when the page was not read. */
+export function settle(
+  verdict: { state: IndexState; problem?: string },
+  lastCrawlAt: number | undefined,
+  listedSince: number,
+  own: { problem?: string } | undefined,
+): { state: IndexState; problem?: string } {
+  if (verdict.state !== "problem" || !own || own.problem) return verdict
+  if (lastCrawlAt === undefined || lastCrawlAt >= listedSince) return verdict
+  return { state: "waiting" }
+}
+
 /** The paths a sitemap's `<loc>` entries name (absolute URLs kept). */
 export function sitemapUrls(xml: string): string[] {
   return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, "&"))
@@ -128,7 +147,8 @@ export type CheckRow = {
  * by their state. */
 export function dueAt(row: CheckRow): number {
   if (row.checkedAt === undefined) return 0
-  if (isKey(row.kind)) return row.checkedAt + RECHECK_KEY_MS
+  // A problem is looked at again daily, so a fixed one stops paging soon.
+  if (isKey(row.kind) || row.state === "problem") return row.checkedAt + RECHECK_KEY_MS
   return row.checkedAt + (row.state === "indexed" ? RECHECK_INDEXED_MS : RECHECK_WAITING_MS)
 }
 
