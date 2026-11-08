@@ -66,7 +66,7 @@ export const CONTACT_EMAIL = "privacy@camsocs.uk"
 export const ICO_REGISTRATION_NUMBER = ""
 
 /** When the privacy notice last changed in substance, `YYYY-MM-DD`. */
-export const PRIVACY_NOTICE_UPDATED = "2026-11-07"
+export const PRIVACY_NOTICE_UPDATED = "2026-11-08"
 
 /** When the terms of use (`/terms`) last changed in substance, `YYYY-MM-DD`. */
 export const TERMS_UPDATED = "2026-11-03"

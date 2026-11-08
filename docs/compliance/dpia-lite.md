@@ -28,7 +28,7 @@ public pages / feeds ──(polite fetcher, robots.txt; D3 society override)─�
         ▼                                                                │
   parser claims ──(D1 redaction: names → roles, original → valueRaw)──▶ /api/pipeline/* ──▶ Convex ◀── quote-checked LLM claims
                                                     │
-Joshua's @cam.ac.uk list mail ──▶ Resend inbound ──▶│ inboundEmails (internal, 90 d) ──▶ LLM (events only)
+Joshua's @cam.ac.uk list mail ──▶ Gmail alias ──▶ VPS relay ──▶│ inboundEmails (internal, 90 d) ──▶ LLM (events only)
                                                     │
                        public projection only ──────┴──▶ Next.js on Vercel ──▶ visitors
                        broker tables (requireBrokerUser) ──▶ /dashboard (Joshua only)

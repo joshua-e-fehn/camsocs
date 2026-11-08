@@ -373,8 +373,11 @@ export default function PrivacyPage() {
             talks, and mailing-list messages being processed, for up to 90 days (list mail for 30
             days), and it runs the relay to the AI model described below;
           </li>
-          <li>Resend (sign-in emails and receiving forwarded mailing-list messages);</li>
-          <li>Google (sign-in for the operator only);</li>
+          <li>Resend (sending the Cambridge sign-in emails, from its region in Ireland);</li>
+          <li>
+            Google (sign-in for the operator, and Google Workspace, which holds CAMsocs’ email: the
+            messages you send to our addresses and the forwarded mailing-list messages);
+          </li>
           <li>
             PostHog (analytics and error reports), on its EU Cloud: the data is stored in the EU, in
             Frankfurt. PostHog, Inc. acts as our processor (see its{" "}
