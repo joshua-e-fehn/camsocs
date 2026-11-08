@@ -10,20 +10,33 @@ export const FINDER_COLLEGES = COLLEGE_INFO.map(({ key, shortName, crest }) => (
 export const FINDER_PAGES = {
   societies: {
     path: "/finder",
-    title: "Society Finder: your Cambridge societies in 60 seconds",
+    title: "Which Cambridge society should I join? Take the quiz",
     description:
-      "Answer five quick questions and get the 15 Cambridge societies and clubs that fit you best, then follow them all in one calendar. No account needed.",
+      "Not sure which Cambridge society to join? Five quick questions find the 15 societies and clubs that fit you, then follow them all in one calendar.",
   },
   events: {
     path: "/finder/events",
-    title: "Events Finder: what's on in Cambridge for you",
+    title: "What's on in Cambridge this week? Events picked for you",
     description:
-      "Five quick questions, then the 15 Cambridge student events of the next two weeks that suit you best, each one click from your calendar.",
+      "This week's best Cambridge student events, and a five-question quiz that picks the 15 that suit you, each one click from your calendar.",
   },
   talks: {
     path: "/talks/finder",
-    title: "Talk Finder: Cambridge talks for you",
+    title: "Interesting talks in Cambridge this week: Talk Finder",
     description:
-      "Pick your subjects and the times that suit you, and get the 15 best Cambridge talks of the next two weeks, with a feed for each area.",
+      "Interesting talks in Cambridge this week, and a quick quiz: pick your subjects and times, get the 15 best talks and a calendar feed for each area.",
   },
 } as const
+
+/** The interests /finder shows as "popular starting points" (ENG-134). */
+export const STARTING_POINTS = [
+  "music",
+  "sport",
+  "theatre_film_dance",
+  "politics_debate",
+  "careers_professional",
+  "science_tech",
+  "cultural_international",
+  "outdoors",
+  "hobbies_games",
+] as const
