@@ -153,8 +153,35 @@ function EventsPlan({ draft, open }: { draft: RequestDraft; open: boolean }) {
  * The work a confirmed plan started (ENG-158, `listingRequests.job`): queued,
  * running on the VPS, done with what was added, or failed with a way to run
  * it again. Done, the broker looks at the listing and closes the request,
- * which moves it from `in_progress` to `accepted`.
+ * which moves it from `in_progress` to `accepted`. It is the card's one
+ * summary of what was done: the plan and what the agent found on the site are
+ * behind "Details" (`RequestDetails`).
  */
+
+/** The draft reply as a mail to the sender. */
+export function replyMailto(request: BrokerListingRequest): string {
+  return `mailto:${encodeURIComponent(request.submitterEmail)}?subject=${encodeURIComponent(
+    "Your CAMsocs request",
+  )}&body=${encodeURIComponent(request.draft?.reply ?? "")}`
+}
+
+/**
+ * The agent's draft behind a collapsed "Details", once a request has a job:
+ * the summary above says what was done, so the plan, the site check and the
+ * sender's checks are shown only on demand.
+ */
+export function RequestDetails({ request }: { request: BrokerListingRequest }) {
+  return (
+    <details className="group">
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        Details: the plan, what the agent found on the site, and the draft reply
+      </summary>
+      <div className="mt-2">
+        <RequestDraftPanel request={request} />
+      </div>
+    </details>
+  )
+}
 
 /** Where an in-progress request stands, for the badge on its card. */
 export function progressLabel(request: BrokerListingRequest): string | null {
@@ -215,6 +242,7 @@ export function RequestJobPanel({ request }: { request: BrokerListingRequest }) 
   }
 
   const count = job.eventCount ?? 0
+  const reply = request.draft?.reply
   return (
     <section
       aria-label="Result"
@@ -228,13 +256,11 @@ export function RequestJobPanel({ request }: { request: BrokerListingRequest }) 
           : `${count} upcoming event${count === 1 ? "" : "s"} on the listing`}
         .
       </p>
-      {job.readCount !== undefined && (
+      {job.readCount !== undefined && job.readCount !== count && (
         <p className="text-xs text-muted-foreground">
-          This run read {job.readCount} upcoming event{job.readCount === 1 ? "" : "s"} from the
-          site; the listing shows every source&apos;s, without duplicates.
+          {`This run read ${job.readCount} from the site; the listing shows every source's events, without duplicates.`}
         </p>
       )}
-      <EventList events={job.events ?? []} total={count} />
       <div className="flex flex-wrap gap-2">
         {listing && (
           <Button size="sm" variant="outline" asChild>
@@ -243,6 +269,24 @@ export function RequestJobPanel({ request }: { request: BrokerListingRequest }) 
               Look at the listing
             </Link>
           </Button>
+        )}
+        {reply && (
+          <>
+            <Button size="sm" variant="outline" asChild>
+              <a href={replyMailto(request)}>
+                <MailIcon />
+                Reply in mail
+              </a>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => runWithToast(navigator.clipboard.writeText(reply), "Reply copied")}
+            >
+              <CopyIcon />
+              Copy reply
+            </Button>
+          </>
         )}
         {request.status === "in_progress" && (
           <Button
@@ -313,9 +357,7 @@ export function RequestDraftPanel({ request }: { request: BrokerListingRequest }
   }
 
   const checks = draft.checks
-  const mailto = `mailto:${encodeURIComponent(request.submitterEmail)}?subject=${encodeURIComponent(
-    "Your CAMsocs request",
-  )}&body=${encodeURIComponent(draft.reply ?? "")}`
+  const mailto = replyMailto(request)
 
   return (
     <section

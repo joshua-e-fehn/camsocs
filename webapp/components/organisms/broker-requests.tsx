@@ -24,6 +24,7 @@ import {
 import {
   isDrafted,
   progressLabel,
+  RequestDetails,
   RequestDraftPanel,
   RequestJobPanel,
   readyDraft,
@@ -39,13 +40,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -307,7 +301,6 @@ function RequestCard({
   useEffect(() => {
     if (highlighted) ref.current?.scrollIntoView({ block: "start" })
   }, [highlighted])
-  const setStatus = useSetListingRequestStatus()
   const { setHidden, updateProfile } = useBrokerOrgMutations()
   const [dialog, setDialog] = useState<"corrections" | "removal" | null>(null)
   const removal = request.kind === "remove" || request.kind === "object"
@@ -359,28 +352,12 @@ function RequestCard({
             address unverified
           </span>
         </CardDescription>
-        <CardAction>
-          <Select
-            value={request.status}
-            onValueChange={(status) =>
-              runWithToast(
-                setStatus({ key: request.key, status: status as BrokerListingRequest["status"] }),
-                `Marked ${status}`,
-              )
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Request status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LISTING_REQUEST_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {humanize(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardAction>
+        {/* An in-progress request says where it stands in its title's badge. */}
+        {!progress && (
+          <CardAction>
+            <Badge variant="outline">{humanize(request.status)}</Badge>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm whitespace-pre-wrap">{request.message}</p>
@@ -408,8 +385,16 @@ function RequestCard({
             ))}
           </dl>
         )}
-        {isDrafted(request) && <RequestDraftPanel request={request} />}
-        <RequestJobPanel request={request} />
+        {request.job ? (
+          // One summary of what was done; the plan and the agent's findings
+          // are behind "Details".
+          <>
+            <RequestJobPanel request={request} />
+            {isDrafted(request) && <RequestDetails request={request} />}
+          </>
+        ) : (
+          isDrafted(request) && <RequestDraftPanel request={request} />
+        )}
         {applied.length > 0 && (
           <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
             <CheckIcon className="size-4" />
@@ -468,6 +453,7 @@ function RequestCard({
             </Button>
           </div>
         )}
+        <StatusActions request={request} />
       </CardContent>
       {dialog === "corrections" && (
         <AcceptCorrectionsDialog request={request} open onClose={() => setDialog(null)} />
@@ -477,6 +463,40 @@ function RequestCard({
       )}
     </Card>
   )
+}
+
+/**
+ * Moving a request by hand, where no accept dialog does it: an open one is
+ * rejected or marked done (a question answered, a listing added by hand), a
+ * closed one reopened, and one whose job failed for good closed without its
+ * events. The filters above the list show each status.
+ */
+function StatusActions({ request }: { request: BrokerListingRequest }) {
+  const setStatus = useSetListingRequestStatus()
+  const move = (status: BrokerListingRequest["status"], label: string, said: string) => (
+    <Button
+      key={status}
+      size="sm"
+      variant="ghost"
+      className="text-muted-foreground"
+      onClick={() => runWithToast(setStatus({ key: request.key, status }), said)}
+    >
+      {label}
+    </Button>
+  )
+  const actions =
+    request.status === "open"
+      ? [
+          move("rejected", "Reject", "Request rejected"),
+          move("done", "Mark done", "Request marked done"),
+        ]
+      : request.status === "in_progress"
+        ? request.job?.state === "failed"
+          ? [move("accepted", "Close without its events", "Request closed: now under Accepted")]
+          : []
+        : [move("open", "Reopen", "Request reopened")]
+  if (actions.length === 0) return null
+  return <div className="flex flex-wrap justify-end gap-1 border-t pt-2">{actions}</div>
 }
 
 function describeSuppression(entry: BrokerSuppression): string {
