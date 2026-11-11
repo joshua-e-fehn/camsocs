@@ -517,6 +517,58 @@ def test_targets_skip_counterparts_social_only_and_shared_sites() -> None:
     assert any("shared.example" in note for note in notes)
 
 
+def test_a_seeded_website_is_read_after_any_a_register_states() -> None:
+    def site(url: str):
+        return [parser_field("website", url, extractor="test", evidence="secondary")]
+
+    seeds = {"org-a": "https://a-own.example/", "org-b": "https://b-own.example/"}
+    targets, _ = targets_from(
+        [
+            resolved_org("org-a", "A Society", fields=site("https://a.example/")),
+            # No register states a website for B: without the seed it is no target.
+            resolved_org("org-b", "B Society"),
+            resolved_org("org-c", "C Society"),
+        ],
+        seeds,
+    )
+    assert [(t.key, t.website, t.fallbacks) for t in targets] == [
+        ("org-a", "https://a.example/", ["https://a-own.example/"]),
+        ("org-b", "https://b-own.example/", []),
+    ]
+
+
+def test_website_seeds_name_known_organisations_of_cambridge_only() -> None:
+    from camsocs_pipeline.resolve.lookup import OrgLookup
+    from camsocs_pipeline.sources.websites.seeds import WEBSITE_SEEDS, WebsiteSeed, seeded_websites
+
+    index = OrgLookup.from_records(
+        [resolved_org("org-quokka", "Quokka Society", su_id="99001", instagram_handle="quokkas")]
+    )
+    seeds = (
+        WebsiteSeed(
+            url="https://quokkas.example/",
+            owner=IdentityHints(name="Quokkas of Cambridge", su_id="99001"),
+            found_on="https://quokkas.example/",
+            checked="2026-11-11",
+        ),
+        WebsiteSeed(
+            url="https://nobody.example/",
+            owner=IdentityHints(name="A society no register lists", su_id="99002"),
+            found_on="https://nobody.example/",
+            checked="2026-11-11",
+        ),
+    )
+    assert seeded_websites(index, campus="cam", seeds=seeds) == {
+        "org-quokka": "https://quokkas.example/"
+    }
+    assert seeded_websites(index, campus="zz", seeds=seeds) == {}
+    # Every real seed is a home page with its owner named by a register's identifier.
+    for seed in WEBSITE_SEEDS:
+        assert seed.url.startswith("https://") and seed.url.endswith("/")
+        assert seed.owner.su_id or seed.owner.instagram_handle
+        assert seed.found_on and len(seed.checked) == 10
+
+
 SPONSOR_PAGE = """<html><head><title>Example Robotics Society</title></head><body><main>
 <h1>Example Robotics Society</h1>
 <p>We build robots every Thursday evening. Our sponsors this year are Acme Robotics Ltd and

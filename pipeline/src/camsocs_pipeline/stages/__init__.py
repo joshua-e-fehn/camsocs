@@ -80,7 +80,8 @@ still holds):
   - su_whatson: the SU profiles' own event lists — su_directory
     (``su_profile`` and its cached pages);
   - website_events: the sites enrichment read (``society_website`` and its
-    cached pages);
+    cached pages), and the seeded websites (`sources/websites/seeds.py`) of
+    organisations resolve keyed (``_resolved`` and the crosswalk);
   - termcards, instagram, inbox: termcard URLs, Instagram handles, lists,
     addresses and domains — su_directory, resolve and enrich;
   - talks: nothing earlier runs left (the department registry is in the
@@ -374,8 +375,9 @@ STAGES: list[Stage] = [
         description="society websites' events pages → events (structured data, then LLM)",
         phase="events",
         pillar="events",
-        reads=("society_website",),
+        reads=("society_website", _ORGS),
         writes=("society_website.events",),
+        sinks=("crosswalk",),
         network=True,
         llm=True,
         docs=("source-research§14",),

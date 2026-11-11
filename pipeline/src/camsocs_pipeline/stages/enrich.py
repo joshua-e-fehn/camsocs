@@ -3,7 +3,9 @@ Linktree (source-research §13, §14; feeds §11, ticketing §15).
 
 Reads the resolve stage's latest output (``var/staging/_resolved``), picks
 every organisation with a website or Linktree a source states
-(`sources.websites.enrich.targets_from`; ``--limit N`` takes the first N),
+(`sources.websites.enrich.targets_from`; ``--limit N`` takes the first N)
+or a hand-verified website of its own no register states
+(`sources.websites.seeds`),
 and enriches it (`sources.websites.enrich.Enricher`: polite fetch of a few
 key pages, deterministic links / emails / feeds / JSON-LD, LLM extraction with
 verbatim-evidence checks). Named sponsors and partners are keyed against the
@@ -36,6 +38,7 @@ from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.models.observation import Observation
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.resolve.crosswalk import Crosswalk, crosswalk_path
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.resolve.resolver import Resolver
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.websites.enrich import (
@@ -47,6 +50,7 @@ from camsocs_pipeline.sources.websites.enrich import (
     restate_readings,
     targets_from,
 )
+from camsocs_pipeline.sources.websites.seeds import seeded_websites
 from camsocs_pipeline.staging.store import RESOLVED
 
 #: Per-organisation notes shown in the stage report; the rest are counted.
@@ -58,7 +62,8 @@ def run(ctx: StageContext) -> None:
     if not resolved:
         ctx.report.notes.append("nothing resolved yet — run resolve first")
         return
-    targets, notes = targets_from(resolved)
+    seeds = seeded_websites(OrgLookup.from_records(resolved), campus=ctx.profile.id)
+    targets, notes = targets_from(resolved, seeds)
     total = len(targets)
     if ctx.limit is not None:
         targets = targets[: ctx.limit]

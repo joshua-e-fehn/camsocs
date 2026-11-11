@@ -152,7 +152,9 @@ flowchart LR
   stage_su_whatson --> dir_su_whatson__events
   sink_crosswalk -.-> stage_su_whatson
   dir_society_website -.-> stage_website_events
+  sel_org_lookup -.-> stage_website_events
   stage_website_events --> dir_society_website__events
+  sink_crosswalk -.-> stage_website_events
   sel_org_lookup -.-> stage_inbox
   sel_event_index -.-> stage_inbox
   stage_inbox --> dir_mailing_list_email
