@@ -91,7 +91,7 @@ ANNOTATIONS: dict[str, tuple] = {
         ("§12",),
     ),
     "website_events": (
-        "events", "events", None, ("society_website.events",), ("society_website",), (), True,
+        "events", "events", None, ("society_website.events",), ("society_website", ORG), XW, True,
         True, ("§14",),
     ),
     "inbox": (

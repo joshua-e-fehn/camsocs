@@ -8,7 +8,10 @@ at most `MAX_EVENT_PAGES` pages inside the site whose link says events,
 calendar, what's on, term card, programme, fixtures or upcoming
 (`discover.choose_pages`' "events" page first), never an archive of past
 events, never a year-dated path older than this year; the home page itself
-counts when it lists upcoming events. Pages are read through the polite
+counts when it lists upcoming events. A society whose own website no
+register states, but a seed does (`websites.seeds`, verified by hand), is
+read too, from the first daily run: its home page is fetched here until the
+weekly enrichment has read it. Pages are read through the polite
 client with the society-website purpose (decision D3, 2026-10-08: society
 pages may be read where robots.txt disallows, and their AI opt-outs do not
 keep them from the model — never talks.cam or tbc.xyz), from the cache the
@@ -104,7 +107,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
@@ -163,6 +166,7 @@ from camsocs_pipeline.models.observation import (
     OrganiserObs,
 )
 from camsocs_pipeline.pipeline.context import StageContext
+from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE, SOCIETY_WEBSITE, FetchPurpose
 from camsocs_pipeline.sources.termcards import (
@@ -179,6 +183,7 @@ from camsocs_pipeline.sources.termcards import (
 )
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.page import Page, parse_page
+from camsocs_pipeline.sources.websites.seeds import seeded_websites
 from camsocs_pipeline.sources.websites.site import ai_reading, with_note
 from camsocs_pipeline.staging.store import events_directory
 
@@ -274,6 +279,26 @@ def sites_from(records: Iterable[object]) -> list[Site]:
         )
         for key in sorted(homes)
     ]
+
+
+def seeded_sites(sites: Sequence[Site], seeds: Mapping[str, str], index: OrgLookup) -> list[Site]:
+    """The seeded websites (`websites.seeds`, by organisation key) of
+    organisations enrichment has read no site for yet, as `Site`s."""
+    read = {site.org_key for site in sites}
+    return [
+        Site(key, index.name_of(key) or key, url)
+        for key, url in sorted(seeds.items())
+        if key not in read
+    ]
+
+
+def _sites(ctx: StageContext) -> tuple[list[Site], int]:
+    """Every site to read, by organisation key, and how many of them are
+    seeds enrichment has not read yet."""
+    sites = sites_from(ctx.staging.read_latest(SOURCE_TYPE))
+    index = OrgLookup.for_stage(ctx)
+    seeded = seeded_sites(sites, seeded_websites(index, campus=ctx.profile.id), index)
+    return sorted([*sites, *seeded], key=lambda site: site.org_key), len(seeded)
 
 
 def _norm(url: str) -> str:
@@ -910,11 +935,12 @@ def _organiser(record: EventObservation) -> str | None:
 
 def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     now = now or datetime.now(UTC)
-    sites = sites_from(ctx.staging.read_latest(SOURCE_TYPE))
+    sites, seeded = _sites(ctx)
     if not sites:
         ctx.report.notes.append("no society website read yet — run enrich first")
         return
     total = len(sites)
+    with_sites = {site.org_key for site in sites}
     if ctx.limit is not None:
         sites = sites[: ctx.limit]
     if ctx.dry_run:
@@ -945,7 +971,6 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             )
     events = [event for result in results for event in result.events]
     reached = {site.org_key for site in sites}
-    with_sites = {site.org_key for site in sites_from(ctx.staging.read_latest(SOURCE_TYPE))}
     carried = [
         record
         for record in ctx.staging.read_latest(events_directory(SOURCE_TYPE))
@@ -966,7 +991,9 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             tally.drop(reason, count)
     pages = sum(r.pages for r in results)
     ctx.report.notes.append(
-        f"{total} sites read by enrichment; {len(sites)} read for events, {pages} pages; "
+        f"{total} sites read by enrichment"
+        + (f" or seeded ({seeded} seeded, not enriched yet)" if seeded else "")
+        + f"; {len(sites)} read for events, {pages} pages; "
         f"{sum(r.structured for r in results)} structured events, "
         f"{sum(r.llm_calls for r in results)} model reads "
         f"({sum(r.llm_cached for r in results)} cached); "
@@ -1056,6 +1083,7 @@ __all__ = [
     "page_text",
     "read_site",
     "run",
+    "seeded_sites",
     "sites_from",
     "structured_draft",
     "structured_events",

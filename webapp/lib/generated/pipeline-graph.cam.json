@@ -1293,9 +1293,19 @@
       "kind": "reads"
     },
     {
+      "from": "sel:cam:org_lookup",
+      "to": "stage:cam:website_events",
+      "kind": "reads"
+    },
+    {
       "from": "stage:cam:website_events",
       "to": "dir:cam:society_website.events",
       "kind": "writes"
+    },
+    {
+      "from": "sink:cam:crosswalk",
+      "to": "stage:cam:website_events",
+      "kind": "reads"
     },
     {
       "from": "sel:cam:org_lookup",

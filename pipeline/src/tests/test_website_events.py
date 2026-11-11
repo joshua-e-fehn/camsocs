@@ -353,6 +353,77 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     assert (ctx.report.inserted, ctx.report.unchanged) == (0, 2)
 
 
+def test_a_seeded_website_is_read_before_enrichment_has_read_it(
+    tmp_path: Path, net: respx.MockRouter, make_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from camsocs_pipeline.claims import parser_field
+    from camsocs_pipeline.sources.websites import seeds
+    from camsocs_pipeline.staging.store import RESOLVED
+
+    serve(net)
+    settings = make_settings(min_host_interval=0.0)
+    run = RunReport(run_key="20261009T120000Z-abcdef", command="sync", dry_run=False)
+    staging = StagingStore(tmp_path / "staging")
+    # The register lists the society (its SU id), with no website.
+    staging.write(
+        RESOLVED,
+        "20261008T000000Z-aaaaaa",
+        [
+            Observation(
+                source_type="su_profile",
+                source_key="99001",
+                source_url="https://www.cambridgesu.co.uk/organisation/99001/",
+                retrieved_at=NOW,
+                entity_type="organisation",
+                identity=IdentityHints(name=QUOKKAS.org_name, known_key=KEY, su_id="99001"),
+                entity_key=KEY,
+                fields=[
+                    parser_field("name", QUOKKAS.org_name, extractor="t", evidence="secondary")
+                ],
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        seeds,
+        "WEBSITE_SEEDS",
+        (
+            seeds.WebsiteSeed(
+                url=f"{SITE}/",
+                owner=IdentityHints(name="Quokkas", su_id="99001"),
+                found_on=f"{SITE}/events",
+                checked="2026-10-09",
+            ),
+        ),
+    )
+    ctx = StageContext(
+        settings=settings,
+        report=run.stage("website_events"),
+        run=run,
+        loader=ConvexLoader("", "", dry_run=True),
+        state=SyncState(),
+        staging=staging,
+        dry_run=False,
+        limit=None,
+    )
+    fake = FakeLLM(lambda _text, _tier: REPLY)
+    monkeypatch.setattr(website, "LLMClient", lambda _settings: fake)
+    monkeypatch.setattr(type(settings), "require_llm", lambda _self: None)
+    real_client = website.PoliteClient
+    monkeypatch.setattr(website, "PoliteClient", lambda **kw: real_client(**kw, now=lambda: NOW))
+
+    website.run(ctx, now=NOW)
+
+    staged = staging.read_latest("society_website.events")
+    assert sorted(values(e)["title"] for e in staged) == ["Burrow building", "Quokka Quiz"]
+    assert {o.identity.known_key for e in staged for o in e.organisers} == {KEY}
+    assert any("1 seeded, not enriched yet" in n for n in ctx.report.notes)
+
+    # Once enrichment has read the site, it is one site, not two.
+    index = website.OrgLookup.from_records(staging.read_latest(RESOLVED))
+    assert website.seeded_sites([QUOKKAS], {KEY: f"{SITE}/"}, index) == []
+    assert website.seeded_sites([], {KEY: f"{SITE}/"}, index) == [QUOKKAS]
+
+
 @pytest.mark.parametrize(
     ("event", "problem"),
     [

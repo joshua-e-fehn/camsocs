@@ -65,7 +65,7 @@ import functools
 import logging
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
@@ -176,10 +176,14 @@ def _skipped_host(url: str) -> bool:
     return any(host == skip or host.endswith("." + skip) for skip in SKIP_HOSTS)
 
 
-def targets_from(records: Iterable[Any]) -> tuple[list[Target], list[str]]:
+def targets_from(
+    records: Iterable[Any], seeds: Mapping[str, str] | None = None
+) -> tuple[list[Target], list[str]]:
     """Organisations worth enriching from resolved observations: those with
     a website or Linktree a register states, skipping counterparts and sites
-    claimed by several organisations (whose site would it be?)."""
+    claimed by several organisations (whose site would it be?). `seeds`: a
+    hand-verified website by organisation key (`websites.seeds`), read after
+    any a register states."""
     by_key: dict[str, list[Observation]] = defaultdict(list)
     for record in records:
         if (
@@ -226,6 +230,8 @@ def targets_from(records: Iterable[Any]) -> tuple[list[Target], list[str]]:
             for o in observations
             if o.identity.website_domain and "." in o.identity.website_domain
         ]
+        if seeds and key in seeds:
+            sites.append(seeds[key])
         socials = [
             item.get("url")
             for v in values.get("socials", [])
