@@ -204,7 +204,10 @@ export const retryJob = mutation({
     if (!row.job || row.job.state !== "failed") {
       throw new ConvexError("Only a failed job is run again")
     }
+    // Back on the inbox, whatever it was marked meanwhile.
     await ctx.db.patch("listingRequests", row._id, {
+      status: "in_progress",
+      resolvedAt: undefined,
       job: { state: "queued", website: row.job.website, queuedAt: Date.now(), attempts: 0 },
     })
     return null
