@@ -753,8 +753,12 @@ export const requestJobValidator = v.object({
   attempts: v.number(),
   /** A failed run's reason: a stage name or an error class, never a log line. */
   error: v.optional(v.string()),
+  /** The listing's upcoming public events after the load (all its sources). */
   eventCount: v.optional(v.number()),
   events: v.optional(v.array(v.object({ title: v.string(), startsAt: v.number() }))),
+  /** Upcoming events the run staged from the site itself, before the load's
+   * filters (redaction, notices, events another source already has). */
+  readCount: v.optional(v.number()),
 })
 
 /**
@@ -767,6 +771,9 @@ export const requestJobValidator = v.object({
 export const websiteSourceFields = {
   orgKey: v.string(),
   url: v.string(),
+  /** The page on that site where the society lists its events, as the
+   * request gave it: read every day whether or not the home page links it. */
+  eventsUrl: v.optional(v.string()),
   /** The request that confirmed it. */
   requestKey: v.optional(v.string()),
   createdAt: v.number(),

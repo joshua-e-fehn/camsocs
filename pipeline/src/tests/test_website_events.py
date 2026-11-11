@@ -298,6 +298,30 @@ def test_a_site_yields_its_upcoming_dated_events(tmp_path: Path, net: respx.Mock
     assert llm.calls[0]["version"] == "website_events_v1" and llm.calls[0]["tier"] == "bulk"
 
 
+def test_a_page_a_confirmed_request_named_is_read_though_the_home_page_does_not_link_it(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    """ENG-158: the request said where the events are; the reader goes there."""
+    bare = HOME.replace('<a href="/events/">Events</a>', "")
+    net.get(f"{SITE}/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+    net.get(f"{SITE}/").respond(200, text=bare, headers={"content-type": "text/html"})
+    net.get(f"{SITE}/whats-on").respond(
+        200, text=EVENTS_PAGE, headers={"content-type": "text/html"}
+    )
+    llm = FakeLLM(lambda _text, _tier: REPLY)
+
+    def read(site: website.Site) -> list[str]:
+        with client(tmp_path) as polite:
+            result = website.read_site(
+                polite, site, llm=llm, memo=None, calendar=TermCalendar.default(), now=NOW
+            )
+        return sorted(values(e)["title"] for e in result.events)
+
+    assert read(QUOKKAS) == []
+    named = website.Site(KEY, QUOKKAS.org_name, f"{SITE}/", extra_pages=(f"{SITE}/whats-on",))
+    assert read(named) == ["Burrow building", "Quokka Quiz"]
+
+
 def test_the_stage_stages_events_and_carries_unreached_sites(
     tmp_path: Path, net: respx.MockRouter, make_settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -364,6 +388,13 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     website.run(ctx, now=NOW)
     assert any("1 read for events" in n for n in ctx.report.notes)
     assert len(staging.read_latest("society_website.events")) == 2
+    # A site that cannot be read fails the job's stage too: "done" means read.
+    net.get(f"{SITE}/").respond(404)
+    ctx.only_orgs = frozenset({KEY})
+    monkeypatch.setattr(website, "FRESH_FOR", website.FRESH_FOR * 0)  # no cached copy
+    with pytest.raises(RuntimeError, match="was not read"):
+        website.run(ctx, now=NOW)
+    assert len(staging.read_latest("society_website.events")) == 2
 
 
 def test_a_website_the_broker_confirmed_is_read_like_a_seed(
@@ -379,6 +410,7 @@ def test_a_website_the_broker_confirmed_is_read_like_a_seed(
 
     class Loader(ConvexLoader):
         fail = False
+        page: str | None = None
 
         def post(self, path: str, payload: dict) -> dict:
             if path != "requests/websites":
@@ -387,7 +419,7 @@ def test_a_website_the_broker_confirmed_is_read_like_a_seed(
                 raise ConvexError("404")
             return {
                 "websites": [
-                    {"orgKey": KEY, "url": f"{SITE}/"},
+                    {"orgKey": KEY, "url": f"{SITE}/", "eventsUrl": self.page},
                     {"orgKey": "org-x", "url": "ftp://nope.example.org/"},
                     {"orgKey": "org-y"},
                 ]
@@ -427,7 +459,7 @@ def test_a_website_the_broker_confirmed_is_read_like_a_seed(
         dry_run=False,
         limit=None,
     )
-    assert seeds.confirmed_websites(ctx) == {KEY: f"{SITE}/"}
+    assert seeds.confirmed_websites(ctx) == {KEY: seeds.ConfirmedSite(f"{SITE}/", None)}
     fake = FakeLLM(lambda _text, _tier: REPLY)
     monkeypatch.setattr(website, "LLMClient", lambda _settings: fake)
     monkeypatch.setattr(type(settings), "require_llm", lambda _self: None)
@@ -439,6 +471,38 @@ def test_a_website_the_broker_confirmed_is_read_like_a_seed(
     staged = staging.read_latest("society_website.events")
     assert sorted(values(e)["title"] for e in staged) == ["Burrow building", "Quokka Quiz"]
     assert any("1 seeded, not enriched yet" in n for n in ctx.report.notes)
+
+    # A skip host, a trailing dot or a port is never read.
+    assert seeds.confirmed_websites(ctx, skip=lambda url: "quokkas" in url) == {}
+
+    # The confirmed website replaces a site enrichment read on another host
+    # (the register's), and leaves the same site, with or without www, alone.
+    old = website.Site(KEY, QUOKKAS.org_name, "https://old.example.net/")
+    staging.write(
+        "society_website",
+        "20261008T000000Z-aaaaaa",
+        [
+            Observation(
+                source_type="society_website",
+                source_key=old.home_url,
+                source_url=old.home_url,
+                retrieved_at=NOW,
+                entity_type="organisation",
+                identity=IdentityHints(name=QUOKKAS.org_name, known_key=KEY),
+                entity_key=KEY,
+                internal={"website_domain": "old.example.net", "website_health": {"s": 200}},
+            )
+        ],
+    )
+    sites, seeded = website._sites(ctx)
+    assert [(site.home_url, seeded) for site in sites] == [(f"{SITE}/", 1)]
+    assert sites[0].extra_pages == ()
+    # The events page the request named goes with it, on that site only.
+    loader.page = f"{SITE}/whats-on"
+    assert website._sites(ctx)[0][0].extra_pages == (f"{SITE}/whats-on",)
+    loader.page = "https://elsewhere.example.com/events"
+    assert website._sites(ctx)[0][0].extra_pages == ()
+    loader.page = None
 
     loader.fail = True
     ctx.report.notes.clear()

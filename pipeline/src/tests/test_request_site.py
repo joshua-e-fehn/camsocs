@@ -79,10 +79,53 @@ def test_a_check_reports_the_tie_and_the_events_the_reader_finds(
 
 def test_a_host_never_read_as_a_societys_site_is_refused(tmp_path: Path) -> None:
     with client(tmp_path) as http:
+        for website in (
+            "https://www.instagram.com/",
+            "https://quokkas.example.org./",
+            "https://quokkas.example.org:8443/",
+        ):
+            found = check_site({**CHECK, "website": website}, http, llm=None, memo=None, now=NOW)
+            assert found["ok"] is False and "never read" in found["error"], website
+
+
+def test_a_site_nothing_ties_to_the_listing_never_reaches_the_model(
+    tmp_path: Path, net: respx.MockRouter
+) -> None:
+    """The request is a stranger's word: a site that neither links the
+    listing's accounts nor names the society is not read further."""
+    site = "https://widgets.example.com"
+    net.get(f"{site}/robots.txt").respond(200, text="User-agent: *\nAllow: /\n")
+    net.get(f"{site}/").respond(
+        200,
+        text="<html><head><title>Acme Widgets</title></head><body><main>"
+        '<a href="/events">Events</a><p>We sell widgets.</p></main></body></html>',
+        headers={"content-type": "text/html"},
+    )
+    fake = FakeLLM(lambda _text, _tier: REPLY)
+    with client(tmp_path) as http:
         found = check_site(
-            {**CHECK, "website": "https://www.instagram.com/"}, http, llm=None, memo=None, now=NOW
+            {**CHECK, "website": f"{site}/", "socials": []},
+            http,
+            llm=fake,  # type: ignore[arg-type]
+            memo=LLMMemo(tmp_path / "llm"),
+            now=NOW,
         )
-    assert found["ok"] is False and "never read" in found["error"]
+    assert (found["ok"], found["ownSite"], found["events"]) == (True, False, [])
+    assert "not shown to be the society's own site" in found["notes"][0]
+    assert fake.calls == []
+
+
+def test_robots_txt_holds_before_the_broker_confirms(tmp_path: Path, net: respx.MockRouter) -> None:
+    net.get(f"{SITE}/robots.txt").respond(200, text="User-agent: *\nDisallow: /\n")
+    net.get(f"{SITE}/").respond(200, text=LINKED, headers={"content-type": "text/html"})
+    with client(tmp_path) as http:
+        found = check_site(CHECK, http, llm=None, memo=None, now=NOW)
+    assert found == {
+        "key": CHECK["key"],
+        "website": f"{SITE}/",
+        "ok": False,
+        "error": "disallowed_by_robots",
+    }
 
 
 def test_a_check_that_raises_is_posted_as_failed_by_class(

@@ -402,7 +402,7 @@ function RequestCard({
               .join(", ")}
           </p>
         )}
-        {request.org && correction && !request.job && (
+        {request.org && correction && (!request.job || request.job.state === "failed") && (
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setDialog("corrections")}>
               <CheckIcon />

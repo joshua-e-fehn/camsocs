@@ -11,7 +11,7 @@ is one:
 1. takes the harvest lock without waiting (`$CAMSOCS_STATE_DIR/harvest.lock`,
    the lock of `ops/vps/camsocs-harvest.sh`): politeness holds only inside
    one run, and a job never runs next to a harvest. It does not start in the
-   half hour before a scheduled harvest either, because the daily run skips
+   50 minutes before a scheduled harvest either, because the daily run skips
    its tick when the lock is held;
 2. claims the job (which counts a try) and runs `website_events` for that one
    organisation, then `load`: every other site's staged events are carried
@@ -38,9 +38,8 @@ from pathlib import Path
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from camsocs_pipeline.config import ConfigError, Settings
+from camsocs_pipeline.config import Settings
 from camsocs_pipeline.models.observation import EventObservation
-from camsocs_pipeline.pipeline.load import ConvexError
 from camsocs_pipeline.pipeline.report import RunReport
 from camsocs_pipeline.pipeline.sync import run_sync
 from camsocs_pipeline.request_site import MAX_EVENTS, upcoming
@@ -55,8 +54,10 @@ JOB_STAGES = ("website_events", "load")
 LONDON = ZoneInfo("Europe/London")
 DAILY_HARVEST = (4, 30)
 WEEKLY_HARVEST = (6, 2, 0)
-#: A job does not start this long before one of them.
-QUIET_BEFORE = timedelta(minutes=30)
+#: A job does not start this long before one of them: longer than the unit
+#: lets a job run (`TimeoutStartSec=45min`), so a job never holds the lock
+#: when a harvest starts.
+QUIET_BEFORE = timedelta(minutes=50)
 
 
 class Poster(Protocol):
@@ -134,7 +135,7 @@ def run_job(
     if (loader.post("requests/jobs/next", {"claim": False}).get("job")) is None:
         return "no job"
     if harvest_soon(now):
-        return "a job waits: a scheduled harvest starts within half an hour"
+        return "a job waits: a scheduled harvest starts soon"
     with harvest_lock(lock_path or default_lock_path()) as held:
         if not held:
             return "a job waits: a harvest holds the lock"
@@ -146,8 +147,8 @@ def run_job(
             report = runner(
                 settings=settings, stages=list(JOB_STAGES), only_orgs=frozenset({org_key})
             )
-        except (ConfigError, ConvexError, ValueError) as error:
-            logger.warning("request job did not start (%s)", type(error).__name__)
+        except Exception as error:  # reported by class; Convex queues it again
+            logger.warning("request job did not finish (%s)", type(error).__name__)
             loader.post("requests/job", {"key": key, "ok": False, "error": type(error).__name__})
             return f"job for {org_key}: failed before any stage"
         if not report.ok:

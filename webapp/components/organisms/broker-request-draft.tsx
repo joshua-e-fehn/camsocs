@@ -79,7 +79,7 @@ function EventList({ events, total }: { events: SiteEvent[]; total: number }) {
  * what confirming will do, and what the agent found when it read the site by
  * the scraper's rules (convex/lib/requestDraft.ts, pipeline request_site.py).
  */
-function EventsPlan({ draft }: { draft: RequestDraft }) {
+function EventsPlan({ draft, open }: { draft: RequestDraft; open: boolean }) {
   const source = draft.eventsSource
   if (!source) return null
   const check = source.check
@@ -103,10 +103,13 @@ function EventsPlan({ draft }: { draft: RequestDraft }) {
         <li>Report here what was added, with a reply to send</li>
       </ol>
       {!check ? (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Spinner className="size-3.5" />
-          The agent is reading the site (about a minute)…
-        </p>
+        // The agent checks open requests only: none will follow a confirmation.
+        open && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner className="size-3.5" />
+            The agent is reading the site (about a minute)…
+          </p>
+        )
       ) : check.state === "failed" ? (
         <p className="text-xs text-destructive">
           The agent could not read the site ({check.error ?? "error"}, try {check.attempts} of 3).
@@ -120,16 +123,18 @@ function EventsPlan({ draft }: { draft: RequestDraft }) {
               label={
                 check.ownSite
                   ? `The society's own site: ${check.tiedBy ?? "shown"}`
-                  : "Not shown to be this society's site: check it"
+                  : "Not shown to be this society's site: open it and check"
               }
             />
-            <Check
-              ok={(check.eventCount ?? 0) > 0}
-              label={`${check.eventCount ?? 0} upcoming event${check.eventCount === 1 ? "" : "s"} found`}
-            />
+            {check.ownSite && (
+              <Check
+                ok={(check.eventCount ?? 0) > 0}
+                label={`${check.eventCount ?? 0} upcoming event${check.eventCount === 1 ? "" : "s"} found`}
+              />
+            )}
           </div>
           <EventList events={check.events ?? []} total={check.eventCount ?? 0} />
-          {(check.eventCount ?? 0) === 0 && (
+          {check.ownSite && (check.eventCount ?? 0) === 0 && (
             <p className="text-xs text-muted-foreground">
               The reader finds no upcoming event on this site today. Confirming still adds the
               website; if the page does list events, the reader needs work.
@@ -200,10 +205,16 @@ export function RequestJobPanel({ request }: { request: BrokerListingRequest }) 
         <CircleCheckIcon className="size-4" />
         Implemented {formatDateTime(job.finishedAt)}: {job.website} is read every day,{" "}
         {count === 0
-          ? "no upcoming event found yet"
+          ? "no upcoming event on the listing yet"
           : `${count} upcoming event${count === 1 ? "" : "s"} on the listing`}
         .
       </p>
+      {job.readCount !== undefined && (
+        <p className="text-xs text-muted-foreground">
+          This run read {job.readCount} upcoming event{job.readCount === 1 ? "" : "s"} from the
+          site; the listing shows every source&apos;s, without duplicates.
+        </p>
+      )}
       <EventList events={job.events ?? []} total={count} />
       <div className="flex flex-wrap gap-2">
         {listing && (
@@ -298,7 +309,7 @@ export function RequestDraftPanel({ request }: { request: BrokerListingRequest }
         {redo}
       </div>
       {draft.summary && <p>{draft.summary}</p>}
-      <EventsPlan draft={draft} />
+      <EventsPlan draft={draft} open={open} />
       {checks && (
         <div className="flex flex-wrap gap-1.5">
           <Check ok={checks.cam} label={checks.cam ? "cam.ac.uk address" : checks.domain} />

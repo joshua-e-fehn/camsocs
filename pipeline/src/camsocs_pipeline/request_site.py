@@ -6,9 +6,12 @@ A draft that names the society's events page (`request_agent.py`,
 that link (`POST /api/pipeline/requests/pending`, `checks`), and this module
 reads the site exactly as the scraper will once the plan is confirmed:
 
-1. the home page, with the society purpose (robots.txt, the never-fetch and
-   skip hosts of `sources/policy.py` and `websites/enrich.py` all hold);
-2. whether the site is shown to be this listing's own: it links one of the
+1. the home page, with the general purpose: robots.txt holds without the
+   society override, and so do the never-fetch and skip hosts of
+   `sources/policy.py` and `websites/enrich.py`;
+2. whether the site is shown to be this listing's own (only then is it read
+   further: a site nothing ties to the listing is a stranger's until the
+   broker confirms it, and its text never reaches the model): it links one of the
    listing's social accounts (the strongest tie: a register states those),
    or `enrich.own_site` says so (it names Cambridge or a college, or its host
    carries the society's name);
@@ -31,6 +34,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from camsocs_pipeline.config import Settings
 from camsocs_pipeline.extract.events import CallBudget
@@ -40,6 +44,7 @@ from camsocs_pipeline.extract.when import TermCalendar
 from camsocs_pipeline.models.observation import EventObservation
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.links import host_of
+from camsocs_pipeline.sources.policy import GENERAL
 from camsocs_pipeline.sources.websites import enrich
 from camsocs_pipeline.sources.websites import events as website_events
 from camsocs_pipeline.sources.websites.page import Page
@@ -105,9 +110,13 @@ def check_site(
     """One site check, as `requests/check` takes it."""
     key, website = check["key"], check["website"]
     base = {"key": key, "website": website}
-    if enrich._skipped_host(website):
+    host = urlsplit(website).hostname or ""
+    if enrich._skipped_host(website) or host.endswith(".") or urlsplit(website).port is not None:
         return {**base, "ok": False, "error": "a host that is never read as a society's site"}
-    home = enrich._fetch(client, "home", website)
+    # Before the broker has confirmed anything the site is a stranger's: the
+    # home page is fetched with the general purpose, so its robots.txt holds
+    # (the society override of decision D3 is for a society's own site).
+    home = enrich._fetch(client, "home", website, GENERAL)
     if home.page is None:
         return {**base, "ok": False, "error": home.result.outcome}
     if enrich._skipped_host(home.url):
@@ -120,9 +129,34 @@ def check_site(
     )
     tie = tied_by(home.page, list(check.get("socials") or []))
     own = tie is not None or enrich.own_site(target, home.page)
+    if not own:
+        # Nothing ties the site to the listing: it is not read further, and
+        # its text never reaches the model, until the broker confirms it.
+        return {
+            **base,
+            "ok": True,
+            "ownSite": False,
+            "pages": 0,
+            "eventCount": 0,
+            "events": [],
+            "notes": ["not shown to be the society's own site, so its events were not read"],
+        }
     read = website_events.read_site(
         client,
-        website_events.Site(target.key, target.name, home.url),
+        website_events.Site(
+            target.key,
+            target.name,
+            home.url,
+            # The page the request names is read even if the home page does
+            # not link it (on the site itself only).
+            extra_pages=tuple(
+                page
+                for page in [check.get("eventsUrl")]
+                if isinstance(page, str)
+                and (urlsplit(page).hostname or "").removeprefix("www.")
+                == (urlsplit(home.url).hostname or "").removeprefix("www.")
+            ),
+        ),
         llm=llm,
         memo=memo,
         calendar=TermCalendar.default(),
@@ -133,8 +167,8 @@ def check_site(
     return {
         **base,
         "ok": True,
-        "ownSite": own,
-        **({"tiedBy": tie or "names Cambridge, a college or the society"} if own else {}),
+        "ownSite": True,
+        "tiedBy": tie or "names Cambridge, a college or the society",
         "pages": read.pages,
         "eventCount": len(events),
         "events": events[:MAX_EVENTS],

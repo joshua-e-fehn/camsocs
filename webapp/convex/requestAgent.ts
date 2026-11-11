@@ -438,10 +438,31 @@ export const nextJob = internalMutation({
   },
 })
 
+/** The listing's upcoming public events, soonest first (at most 50). */
+async function upcomingEvents(ctx: { db: QueryCtx["db"] }, orgKey: string, now: number) {
+  const rows = await ctx.db
+    .query("eventOrganisers")
+    .withIndex("by_org_startsAt", (q) => q.eq("orgKey", orgKey).gte("startsAt", now))
+    .take(100)
+  const events = []
+  for (const organiser of rows) {
+    if (organiser.visibility !== "public" || organiser.cancelled || organiser.superseded) continue
+    const event = await ctx.db
+      .query("events")
+      .withIndex("by_key", (q) => q.eq("key", organiser.eventKey))
+      .unique()
+    if (!event || event.cancelled || event.supersededBy) continue
+    events.push({ title: clean(event.title, 200), startsAt: event.startsAt })
+    if (events.length >= 50) break
+  }
+  return events
+}
+
 /**
  * `POST /api/pipeline/requests/job` `{ key, ok, error?, eventCount?, events? }`
  * → `{ ok }`: how a job went. A failed one is queued again while it has tries
- * left.
+ * left. The counts the runner sends are what it staged from the site
+ * (`readCount`); the result shown is read here, from the listing itself.
  */
 export const saveJob = internalMutation({
   args: {
@@ -458,18 +479,19 @@ export const saveJob = internalMutation({
     if (!row || !job || job.state !== "running") return { ok: false }
     const now = Date.now()
     if (args.ok) {
-      const events = (args.events ?? []).slice(0, 12).map((event) => ({
-        title: clean(event.title, 200),
-        startsAt: event.startsAt,
-      }))
+      // What the broker is told is what the listing shows after the load:
+      // its upcoming public events, not what the run staged (the load leaves
+      // out notices, unsafe titles and events another source already has).
+      const listed = row.orgKey ? await upcomingEvents(ctx, row.orgKey, now) : []
       await ctx.db.patch("listingRequests", row._id, {
         job: {
           ...job,
           state: "done",
           finishedAt: now,
           error: undefined,
-          eventCount: args.eventCount ?? events.length,
-          events,
+          eventCount: listed.length,
+          events: listed.slice(0, 12),
+          readCount: args.eventCount ?? args.events?.length ?? 0,
         },
       })
       return { ok: true }
@@ -496,11 +518,19 @@ export const saveJob = internalMutation({
 export const websites = internalQuery({
   args: {},
   returns: v.object({
-    websites: v.array(v.object({ orgKey: v.string(), url: v.string() })),
+    websites: v.array(
+      v.object({ orgKey: v.string(), url: v.string(), eventsUrl: v.optional(v.string()) }),
+    ),
   }),
   handler: async (ctx) => {
     const rows = await ctx.db.query("websiteSources").take(2000)
-    return { websites: rows.map((row) => ({ orgKey: row.orgKey, url: row.url })) }
+    return {
+      websites: rows.map((row) => ({
+        orgKey: row.orgKey,
+        url: row.url,
+        ...(row.eventsUrl ? { eventsUrl: row.eventsUrl } : {}),
+      })),
+    }
   },
 })
 

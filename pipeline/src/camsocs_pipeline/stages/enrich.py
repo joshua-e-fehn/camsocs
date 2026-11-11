@@ -46,6 +46,7 @@ from camsocs_pipeline.sources.websites.enrich import (
     PartnerMention,
     Stats,
     TargetResult,
+    _skipped_host,
     enrich_all,
     restate_readings,
     targets_from,
@@ -62,13 +63,11 @@ def run(ctx: StageContext) -> None:
     if not resolved:
         ctx.report.notes.append("nothing resolved yet — run resolve first")
         return
-    # Hand-verified seeds, then the websites the broker confirmed on a listing
-    # request (ENG-158), which come first for their organisation.
-    seeds = {
-        **seeded_websites(OrgLookup.from_records(resolved), campus=ctx.profile.id),
-        **confirmed_websites(ctx),
-    }
-    targets, notes = targets_from(resolved, seeds)
+    seeds = seeded_websites(OrgLookup.from_records(resolved), campus=ctx.profile.id)
+    # The websites the broker confirmed on a listing request (ENG-158) are
+    # read before any a register states.
+    confirmed = {key: site.url for key, site in confirmed_websites(ctx, skip=_skipped_host).items()}
+    targets, notes = targets_from(resolved, seeds, confirmed)
     total = len(targets)
     if ctx.limit is not None:
         targets = targets[: ctx.limit]

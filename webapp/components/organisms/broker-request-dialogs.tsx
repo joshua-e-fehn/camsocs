@@ -214,8 +214,8 @@ export function AcceptCorrectionsDialog({
                     Read this site&apos;s events every day
                   </FieldLabel>
                   <FieldDescription className="break-words">
-                    The request gives {source.url}. The listing&apos;s website is kept for the
-                    scraper and read now; the request reports what was added, and you close it.
+                    The request gives {source.url}. The scraper keeps {source.website} for this
+                    listing and reads it now; the request reports what was added, and you close it.
                   </FieldDescription>
                 </div>
               </Field>

@@ -234,13 +234,25 @@ export const setStatus = mutation({
 })
 
 /** The listing's confirmed website, for the scraper: one row per listing. */
-async function confirmWebsite(ctx: MutationCtx, orgKey: string, url: string, requestKey: string) {
+async function confirmWebsite(
+  ctx: MutationCtx,
+  orgKey: string,
+  url: string,
+  requestKey: string,
+  eventsUrl?: string,
+) {
   const existing = await ctx.db
     .query("websiteSources")
     .withIndex("by_orgKey", (q) => q.eq("orgKey", orgKey))
     .take(10)
   for (const row of existing) await ctx.db.delete("websiteSources", row._id)
-  await ctx.db.insert("websiteSources", { orgKey, url, requestKey, createdAt: Date.now() })
+  await ctx.db.insert("websiteSources", {
+    orgKey,
+    url,
+    ...(eventsUrl ? { eventsUrl } : {}),
+    requestKey,
+    createdAt: Date.now(),
+  })
 }
 
 const isWebUrl = (value: unknown): value is string =>
@@ -254,8 +266,9 @@ const isWebUrl = (value: unknown): value is string =>
  * them all.
  *
  * A confirmed `website` is also kept for the scraper (`websiteSources`). With
- * `readEvents` the website (the one confirmed here, else the listing's own)
- * is read for events now: the request gets a queued job, which may also be
+ * `readEvents` the site the request's events page is on (the one the agent
+ * checked; without a draft, the website confirmed here, else the listing's
+ * own) is kept instead and read for events now: the request gets a queued job, which may also be
  * the whole acceptance (no field to change).
  */
 export const acceptCorrections = mutation({
@@ -275,6 +288,9 @@ export const acceptCorrections = mutation({
     const orgKey = request.orgKey
     if (args.corrections.length === 0 && !args.readEvents) {
       throw new ConvexError("Choose at least one field")
+    }
+    if (args.readEvents && (request.job?.state === "queued" || request.job?.state === "running")) {
+      throw new ConvexError("This request's site is being read already: wait for its report")
     }
     if (args.corrections.length > MAX_CORRECTIONS) {
       throw new ConvexError(`At most ${MAX_CORRECTIONS} fields at once`)
@@ -312,9 +328,13 @@ export const acceptCorrections = mutation({
       }
     }
     const now = Date.now()
+    // The site the scraper reads: with `readEvents`, the one the request's
+    // events page is on (the site the agent checked), whatever the listing's
+    // website is set to; else the website confirmed here; else the listing's.
     const confirmed = args.corrections.find((item) => item.field === "website")?.value
-    let website = isWebUrl(confirmed) ? confirmed : undefined
-    if (website) await confirmWebsite(ctx, orgKey, website, request.key)
+    const source = request.draft?.state === "ready" ? request.draft.eventsSource : undefined
+    const checked = source?.website
+    let website = args.readEvents && checked ? checked : isWebUrl(confirmed) ? confirmed : undefined
     if (args.readEvents && !website) {
       const org = await ctx.db
         .query("organisations")
@@ -324,7 +344,10 @@ export const acceptCorrections = mutation({
         throw new ConvexError("Give the listing a website first: its events are read from it")
       }
       website = org.website
-      await confirmWebsite(ctx, orgKey, website, request.key)
+    }
+    if (website) {
+      const page = args.readEvents && website === checked ? source?.url : undefined
+      await confirmWebsite(ctx, orgKey, website, request.key, page)
     }
     const applied = [...new Set([...(request.outcome?.appliedFields ?? []), ...fields])]
     await ctx.db.patch("listingRequests", request._id, {

@@ -374,7 +374,21 @@ describe("the events page of a request (ENG-158)", () => {
     expect(eventsSourceFrom(undefined, MESSAGE)).toBeNull()
     const invented = eventsSourceFrom("https://made-up.example.org/events", MESSAGE)
     expect(invented && "refused" in invented).toBe(true)
+    // The link is the request's own whole link, not a tail or head of another.
+    for (const [link, text] of [
+      ["https://evil.org/events", "see https://notevil.org/events"],
+      ["https://quokkas.example.org/events", "see https://quokkas.example.org/events-archive"],
+      ["https://quokkas.example.org/events", "write to me@quokkas.example.org/events"],
+    ]) {
+      const found = eventsSourceFrom(link, text)
+      expect(found && "refused" in found).toBe(true)
+    }
     for (const refused of [
+      "http:evil.org",
+      "http:\\\\evil.org/events",
+      "https://quokkas.example.org:8443/events",
+      "https://talks.cam.ac.uk./show/index/1",
+      "https://93.184.216.34/events",
       "javascript:alert(1)",
       "not a link",
       "https://www.instagram.com/quokkas",
@@ -478,7 +492,7 @@ describe("the events page of a request (ENG-158)", () => {
       expect(accepted?.outcome?.eventsWebsite).toBe("https://www.quokkas.example.org/")
       expect(accepted?.job).toMatchObject({ state: "queued", attempts: 0 })
       expect((await post(t, "requests/websites", {})).websites).toEqual([
-        { orgKey: "org-chess", url: "https://www.quokkas.example.org/" },
+        { orgKey: "org-chess", url: "https://www.quokkas.example.org/", eventsUrl: EVENTS },
       ])
 
       // Peeking counts no try; claiming does.
@@ -488,6 +502,14 @@ describe("the events page of a request (ENG-158)", () => {
       expect((await post(t, "requests/jobs/next", { claim: true })).job).toEqual(job)
       expect((await row(t, key))?.job).toMatchObject({ state: "running", attempts: 1 })
       expect((await post(t, "requests/jobs/next", { claim: true })).job).toBeNull()
+      // A second confirm cannot replace a job that is under way.
+      await expect(
+        broker.mutation(api.broker.listingRequests.acceptCorrections, {
+          key,
+          corrections: [],
+          readEvents: true,
+        }),
+      ).rejects.toThrow()
 
       // A failed run is queued again; the third failure is final.
       await post(t, "requests/job", { key, ok: false, error: "stage load failed <x>" })
@@ -503,8 +525,13 @@ describe("the events page of a request (ENG-158)", () => {
         events: [{ title: "Quokka Quiz", startsAt: START + 86_400_000 }],
       })
       const done = (await row(t, key))?.job
-      expect(done).toMatchObject({ state: "done", attempts: 2, eventCount: 1 })
+      // The run staged one event; the result is what the listing shows (the
+      // test loads none, so none).
+      expect(done).toMatchObject({ state: "done", attempts: 2, readCount: 1, eventCount: 0 })
       expect(done?.error).toBeUndefined()
+      // The site read is the one the agent checked, and a second confirm
+      // cannot replace a job that is under way.
+      expect(done?.website).toBe("https://www.quokkas.example.org/")
       // A late report changes nothing.
       expect((await post(t, "requests/job", { key, ok: false, error: "late" })).ok).toBe(false)
 

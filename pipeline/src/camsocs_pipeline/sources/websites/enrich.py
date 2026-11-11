@@ -177,7 +177,9 @@ def _skipped_host(url: str) -> bool:
 
 
 def targets_from(
-    records: Iterable[Any], seeds: Mapping[str, str] | None = None
+    records: Iterable[Any],
+    seeds: Mapping[str, str] | None = None,
+    confirmed: Mapping[str, str] | None = None,
 ) -> tuple[list[Target], list[str]]:
     """Organisations worth enriching from resolved observations: those with
     a website or Linktree a register states, skipping counterparts and sites
@@ -224,7 +226,10 @@ def targets_from(
                 None,
             ),
         )
-        sites = [v for v in values.get("website", []) if isinstance(v, str)]
+        # A website the broker confirmed on a listing request (ENG-158) is
+        # read first: it outranks what a register states, as its claim does.
+        sites = [confirmed[key]] if confirmed and key in confirmed else []
+        sites += [v for v in values.get("website", []) if isinstance(v, str)]
         sites += [
             o.identity.website_domain
             for o in observations

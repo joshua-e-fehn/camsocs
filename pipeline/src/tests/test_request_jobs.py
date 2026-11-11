@@ -134,6 +134,16 @@ def test_a_failed_stage_or_start_is_reported_by_name_or_class(
         runner=Runner(error=ConvexError("401 with a key in it")),
     )
     assert loader.posts[-1][1] == {"key": JOB["key"], "ok": False, "error": "ConvexError"}
+    # Whatever stops the run, the job is reported (and queued again), not left running.
+    loader = FakeLoader(JOB)
+    run_job(
+        loader,
+        make_settings(),
+        lock_path=tmp_path / "l",
+        now=NOON,
+        runner=Runner(error=OSError("disk full")),
+    )
+    assert loader.posts[-1][1] == {"key": JOB["key"], "ok": False, "error": "OSError"}
 
 
 def test_a_job_waits_for_a_running_or_imminent_harvest(tmp_path: Path, make_settings) -> None:
@@ -156,7 +166,8 @@ def test_a_job_waits_for_a_running_or_imminent_harvest(tmp_path: Path, make_sett
 def test_the_quiet_time_follows_the_timers_in_london_time() -> None:
     assert harvest_soon(datetime(2026, 11, 12, 4, 10, tzinfo=UTC))  # daily 04:30 GMT
     assert not harvest_soon(datetime(2026, 11, 12, 4, 31, tzinfo=UTC))
-    assert not harvest_soon(datetime(2026, 11, 12, 3, 59, tzinfo=UTC))
+    assert harvest_soon(datetime(2026, 11, 12, 3, 45, tzinfo=UTC))  # longer than a job may run
+    assert not harvest_soon(datetime(2026, 11, 12, 3, 30, tzinfo=UTC))
     assert harvest_soon(datetime(2026, 7, 13, 3, 10, tzinfo=UTC))  # 04:30 BST is 03:30 UTC
     assert harvest_soon(datetime(2026, 11, 15, 1, 45, tzinfo=UTC))  # Sunday 02:00
     assert not harvest_soon(datetime(2026, 11, 14, 1, 45, tzinfo=UTC))  # a Saturday

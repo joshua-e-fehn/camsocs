@@ -202,6 +202,25 @@ const hostOf = (url: string): string => {
 export type EventsSource = { url: string; website: string }
 
 /**
+ * Whether the request itself writes `link`: the whole link (without scheme,
+ * `www.` or a trailing slash), not as the tail of a longer host or the head
+ * of a longer path (`evil.org/events` is not given by `notevil.org/events`).
+ */
+function givenInRequest(link: string, requestText: string): boolean {
+  const haystack = requestText.toLowerCase().replace(/https?:\/\/(www\.)?/g, " ")
+  const needle = bareUrl(link)
+  let from = 0
+  for (;;) {
+    const at = haystack.indexOf(needle, from)
+    if (at < 0) return false
+    const before = at === 0 ? " " : haystack[at - 1]
+    const after = haystack[at + needle.length] ?? " "
+    if (!/[a-z0-9.@_-]/.test(before) && !/[a-z0-9_%-]/.test(after)) return true
+    from = at + 1
+  }
+}
+
+/**
  * The events page a request points to, from the link the model returned, or
  * why it is refused. The link must be one the request gives (`requestText`);
  * the home page is its scheme and host, derived here and never by the model.
@@ -212,19 +231,24 @@ export function eventsSourceFrom(
 ): { source: EventsSource } | { refused: string } | null {
   const text = (raw ?? "").trim()
   if (!text) return null
+  // A plain `http(s)://host/path` link and nothing else: `new URL` alone
+  // would also take `http:evil.org`, a backslash or an embedded tab.
+  if (!/^https?:\/\/[a-z0-9.-]+(\/[^\s\\]*)?$/i.test(text))
+    return { refused: "not a plain web link" }
   let url: URL
   try {
     url = new URL(text)
   } catch {
     return { refused: "not a link" }
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return { refused: "not a web link" }
-  if (url.username || url.password) return { refused: "not a plain web link" }
-  if (unsupportedContacts(text, requestText).length > 0) {
+  if (url.username || url.password || url.port) return { refused: "not a plain web link" }
+  if (!givenInRequest(text, requestText)) {
     return { refused: `not in the request: ${text.slice(0, 200)}` }
   }
   const host = url.hostname.toLowerCase().replace(/^www\./, "")
-  if (!host.includes(".")) return { refused: "not a public site" }
+  if (!host.includes(".") || host.endsWith(".") || /^[\d.]+$/.test(host)) {
+    return { refused: "not a public site by name" }
+  }
   if (SHARED_HOSTS.some((shared) => host === shared || host.endsWith(`.${shared}`))) {
     return { refused: `${host} hosts many organisers: not read as the society's own site` }
   }
