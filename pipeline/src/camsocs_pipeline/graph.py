@@ -85,6 +85,9 @@ READ_ROUTES: frozenset[str] = frozenset(
         "events/scan",
         # The monitor's indexing check (monitor.py `check_indexing`).
         "indexing/summary",
+        # The websites the broker confirmed on listing requests (ENG-158,
+        # `websites.seeds.confirmed_websites`).
+        "requests/websites",
     }
 )
 

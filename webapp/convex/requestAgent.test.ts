@@ -5,6 +5,8 @@ import {
   type AgentReply,
   buildDraft,
   DRAFT_RETRY_AFTER_MS,
+  eventsSourceFrom,
+  JOB_STALE_MS,
   maskContacts,
   SENDER_TOKEN,
   senderChecks,
@@ -270,7 +272,7 @@ describe("the agent's routes", () => {
         key,
         ok: true,
         model: "gpt-6.1-sol",
-        promptVersion: "request_draft_v1",
+        promptVersion: "request_draft_v2",
         reply: REPLY,
       })
       const draft = (await row(t, key))?.draft
@@ -334,6 +336,263 @@ describe("the agent's routes", () => {
       await expect(
         t.mutation(api.broker.listingRequests.redraft, { key: "lr-x" }),
       ).rejects.toThrow()
+    })
+  })
+})
+
+/**
+ * ENG-158: a request that says where the society lists its events becomes a
+ * plan. The draft names the events page, the agent's site check shows what
+ * the scraper would find, the confirm keeps the website for the scraper and
+ * queues a job, and the job's outcome is on the request.
+ */
+describe("the events page of a request (ENG-158)", () => {
+  const EVENTS = "https://www.quokkas.example.org/events"
+  const MESSAGE = `Can we publicise our events on your page? They are on ${EVENTS}`
+  const PLAN: AgentReply = {
+    summary: "The president asks for the society's events to be listed.",
+    action: "corrections",
+    corrections: [],
+    removal: null,
+    concerns: [],
+    reply: "Thank you. Your events now appear on CAMsocs.",
+    eventsUrl: EVENTS,
+  }
+  const context = {
+    kind: "claim",
+    addresses: {},
+    requestText: MESSAGE,
+    message: MESSAGE,
+    current: () => undefined,
+  }
+
+  test("the link must be the request's; the home page is derived by code", () => {
+    expect(eventsSourceFrom(EVENTS, MESSAGE)).toEqual({
+      source: { url: EVENTS, website: "https://www.quokkas.example.org/" },
+    })
+    expect(eventsSourceFrom("", MESSAGE)).toBeNull()
+    expect(eventsSourceFrom(undefined, MESSAGE)).toBeNull()
+    const invented = eventsSourceFrom("https://made-up.example.org/events", MESSAGE)
+    expect(invented && "refused" in invented).toBe(true)
+    // The link is the request's own whole link, not a tail or head of another.
+    for (const [link, text] of [
+      ["https://evil.org/events", "see https://notevil.org/events"],
+      ["https://quokkas.example.org/events", "see https://quokkas.example.org/events-archive"],
+      ["https://quokkas.example.org/events", "write to me@quokkas.example.org/events"],
+    ]) {
+      const found = eventsSourceFrom(link, text)
+      expect(found && "refused" in found).toBe(true)
+    }
+    for (const refused of [
+      "http:evil.org",
+      "http:\\\\evil.org/events",
+      "https://quokkas.example.org:8443/events",
+      "https://talks.cam.ac.uk./show/index/1",
+      "https://93.184.216.34/events",
+      "javascript:alert(1)",
+      "not a link",
+      "https://www.instagram.com/quokkas",
+      "https://talks.cam.ac.uk/show/index/1",
+      "https://user:pw@quokkas.example.org/events",
+    ]) {
+      const found = eventsSourceFrom(refused, `${MESSAGE} ${refused}`)
+      expect(found && "refused" in found).toBe(true)
+    }
+
+    const draft = buildDraft(PLAN, context)
+    expect(draft.eventsSource).toEqual({
+      url: EVENTS,
+      website: "https://www.quokkas.example.org/",
+    })
+    // The listing shows no website on that host: the home page is proposed.
+    expect(draft.corrections).toEqual([
+      {
+        field: "website",
+        text: "https://www.quokkas.example.org/",
+        reason: "the home page of the events link in the request",
+      },
+    ])
+    // It already shows that site: nothing to correct, the plan stays.
+    const same = buildDraft(PLAN, { ...context, current: () => "https://quokkas.example.org" })
+    expect(same.corrections).toEqual([])
+    expect(same.eventsSource?.url).toBe(EVENTS)
+    // A removal has no events page; a platform is refused with the reason.
+    expect(buildDraft(PLAN, { ...context, kind: "remove" }).eventsSource).toBeUndefined()
+    const platform = "https://www.eventbrite.co.uk/o/quokkas-123"
+    const refused = buildDraft(
+      { ...PLAN, eventsUrl: platform },
+      { ...context, requestText: platform },
+    )
+    expect(refused.eventsSource).toBeUndefined()
+    expect(refused.dropped[0].field).toBe("events page")
+  })
+
+  test("check, confirm, job and result, end to end", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      await seedOrg(t)
+      const key = await insertRequest(t, { kind: "claim", message: MESSAGE, fields: {} })
+      await post(t, "requests/draft", { key, ok: true, reply: PLAN })
+      const draft = (await row(t, key))?.draft
+      expect(draft?.eventsSource).toEqual({
+        url: EVENTS,
+        website: "https://www.quokkas.example.org/",
+      })
+      expect(draft?.corrections?.map((c) => [c.field, c.text])).toEqual([
+        ["website", "https://www.quokkas.example.org/"],
+      ])
+
+      // The agent is offered the site to read, once.
+      const work = await post(t, "requests/pending", {})
+      expect(work.items).toEqual([])
+      expect(work.checks).toEqual([
+        {
+          key,
+          orgKey: "org-chess",
+          name: "Cambridge University Chess Club",
+          aliases: [],
+          website: "https://www.quokkas.example.org/",
+          eventsUrl: EVENTS,
+          socials: [],
+        },
+      ])
+      // A check of another site (the draft changed meanwhile) is not kept.
+      expect(
+        (await post(t, "requests/check", { key, website: "https://other.example.org/", ok: true }))
+          .ok,
+      ).toBe(false)
+      await post(t, "requests/check", {
+        key,
+        website: "https://www.quokkas.example.org/",
+        ok: true,
+        ownSite: true,
+        tiedBy: "links the listing's instagram.com account",
+        pages: 1,
+        eventCount: 1,
+        events: [{ title: "  Quokka   Quiz ", startsAt: START + 86_400_000, venue: "Old Library" }],
+        notes: [],
+      })
+      const check = (await row(t, key))?.draft?.eventsSource?.check
+      expect(check).toMatchObject({ state: "ok", attempts: 1, ownSite: true, eventCount: 1 })
+      expect(check?.events?.[0].title).toBe("Quokka Quiz")
+      expect((await post(t, "requests/pending", {})).checks).toEqual([])
+
+      // Nothing is queued or kept before the broker confirms.
+      expect((await post(t, "requests/jobs/next", { claim: false })).job).toBeNull()
+      expect((await post(t, "requests/websites", {})).websites).toEqual([])
+
+      const broker = await signedInAs(t, BROKER)
+      await broker.mutation(api.broker.listingRequests.acceptCorrections, {
+        key,
+        corrections: [{ field: "website", value: "https://www.quokkas.example.org/" }],
+        readEvents: true,
+      })
+      const accepted = await row(t, key)
+      expect(accepted?.status).toBe("accepted")
+      expect(accepted?.outcome?.eventsWebsite).toBe("https://www.quokkas.example.org/")
+      expect(accepted?.job).toMatchObject({ state: "queued", attempts: 0 })
+      expect((await post(t, "requests/websites", {})).websites).toEqual([
+        { orgKey: "org-chess", url: "https://www.quokkas.example.org/", eventsUrl: EVENTS },
+      ])
+
+      // Peeking counts no try; claiming does.
+      const job = { key, orgKey: "org-chess", website: "https://www.quokkas.example.org/" }
+      expect((await post(t, "requests/jobs/next", { claim: false })).job).toEqual(job)
+      expect((await row(t, key))?.job?.state).toBe("queued")
+      expect((await post(t, "requests/jobs/next", { claim: true })).job).toEqual(job)
+      expect((await row(t, key))?.job).toMatchObject({ state: "running", attempts: 1 })
+      expect((await post(t, "requests/jobs/next", { claim: true })).job).toBeNull()
+      // A second confirm, of this or another request for the listing, cannot
+      // replace a job that is under way.
+      const second = await insertRequest(t, {
+        key: "lr-eeeeeeeeeeeeeeeeeeee",
+        kind: "claim",
+        message: MESSAGE,
+        fields: {},
+      })
+      await expect(
+        broker.mutation(api.broker.listingRequests.acceptCorrections, {
+          key: second,
+          corrections: [],
+          readEvents: true,
+        }),
+      ).rejects.toThrow()
+      await expect(
+        broker.mutation(api.broker.listingRequests.acceptCorrections, {
+          key,
+          corrections: [],
+          readEvents: true,
+        }),
+      ).rejects.toThrow()
+
+      // A failed run is queued again; the third failure is final.
+      await post(t, "requests/job", { key, ok: false, error: "stage load failed <x>" })
+      expect((await row(t, key))?.job).toMatchObject({
+        state: "queued",
+        error: "stage load failed x",
+      })
+      await post(t, "requests/jobs/next", { claim: true })
+      await post(t, "requests/job", {
+        key,
+        ok: true,
+        eventCount: 1,
+        events: [{ title: "Quokka Quiz", startsAt: START + 86_400_000 }],
+      })
+      const done = (await row(t, key))?.job
+      // The run staged one event; the result is what the listing shows (the
+      // test loads none, so none).
+      expect(done).toMatchObject({ state: "done", attempts: 2, readCount: 1, eventCount: 0 })
+      expect(done?.error).toBeUndefined()
+      // The site read is the one the agent checked, and a second confirm
+      // cannot replace a job that is under way.
+      expect(done?.website).toBe("https://www.quokkas.example.org/")
+      // A late report changes nothing.
+      expect((await post(t, "requests/job", { key, ok: false, error: "late" })).ok).toBe(false)
+
+      await broker.mutation(api.broker.listingRequests.setStatus, { key, status: "done" })
+      expect((await row(t, key))?.status).toBe("done")
+    })
+  })
+
+  test("a job that died is offered again, then given up; the broker can retry", async () => {
+    await withEnv(ENV, async () => {
+      const t = newTest()
+      await seedOrg(t)
+      const key = await insertRequest(t, { kind: "claim", message: MESSAGE, fields: {} })
+      const broker = await signedInAs(t, BROKER)
+      // The listing has a website already: reading its events is the whole plan.
+      await broker.mutation(api.broker.listingRequests.acceptCorrections, {
+        key,
+        corrections: [],
+        readEvents: true,
+      })
+      expect((await row(t, key))?.job?.website).toBe("https://chess.example.org/")
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        expect((await post(t, "requests/jobs/next", { claim: true })).job).not.toBeNull()
+        expect((await post(t, "requests/jobs/next", { claim: true })).job).toBeNull()
+        setSystemTime(new Date(START + attempt * (JOB_STALE_MS + 1)))
+      }
+      expect((await post(t, "requests/jobs/next", { claim: true })).job).toBeNull()
+      expect((await row(t, key))?.job).toMatchObject({ state: "failed", attempts: 3 })
+      setSystemTime(new Date(START))
+      await broker.mutation(api.broker.listingRequests.retryJob, { key })
+      expect((await row(t, key))?.job).toMatchObject({ state: "queued", attempts: 0 })
+
+      // Without a website there is nothing to read; nothing is half applied.
+      const other = await insertRequest(t, {
+        key: "lr-ffffffffffffffffffff",
+        kind: "claim",
+        orgKey: "org-none",
+        fields: {},
+      })
+      await expect(
+        broker.mutation(api.broker.listingRequests.acceptCorrections, {
+          key: other,
+          corrections: [],
+          readEvents: true,
+        }),
+      ).rejects.toThrow()
+      expect((await row(t, other))?.status).toBe("open")
     })
   })
 })

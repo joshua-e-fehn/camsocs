@@ -13,6 +13,14 @@ gives such an organisation its website:
 - `website_events` reads its events pages from the first daily run, without
   waiting for the weekly enrichment.
 
+**Confirmed websites (ENG-158).** The same holds, without a code change, for
+a website the broker confirmed on a listing request: Convex keeps it
+(`websiteSources`) and `confirmed_websites` reads the list at the start of
+`enrich` and `website_events` (`POST /api/pipeline/requests/websites`). The
+request agent read the site and showed the broker what ties it to the listing
+before they confirmed (`request_site.py`). A confirmed website comes before a
+seed of the same organisation.
+
 Add one only after reading the site and tying it to the organisation by
 something a register states (`found_on` says what), and name the owner by
 identifiers a register carries (SU id, Instagram handle), never by name
@@ -21,10 +29,19 @@ alone. The seeds are Cambridge's: another campus reads none of them.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
+
+import httpx
 
 from camsocs_pipeline.models.observation import IdentityHints
+from camsocs_pipeline.pipeline.load import ConvexError
 from camsocs_pipeline.resolve.lookup import OrgLookup
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.pipeline.context import StageContext
 
 
 @dataclass(frozen=True)
@@ -73,4 +90,61 @@ def seeded_websites(
     return found
 
 
-__all__ = ["WEBSITE_SEEDS", "WebsiteSeed", "seeded_websites"]
+@dataclass(frozen=True)
+class ConfirmedSite:
+    """A website the broker confirmed for a listing, and the page on it where
+    the society lists its events, when the request named one."""
+
+    url: str
+    events_url: str | None = None
+
+
+def _plain(url: object, skip: Callable[[str], bool] | None) -> bool:
+    """A public http(s) URL by name, without a port or a trailing dot, that
+    `skip` does not refuse."""
+    if not isinstance(url, str):
+        return False
+    try:
+        parts = urlsplit(url)
+        host, port = parts.hostname or "", parts.port
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https") or "." not in host or host.endswith("."):
+        return False
+    return port is None and not (skip is not None and skip(url))
+
+
+def confirmed_websites(
+    ctx: StageContext, *, skip: Callable[[str], bool] | None = None
+) -> dict[str, ConfirmedSite]:
+    """Organisation key → the website the broker confirmed for it on a
+    listing request (module docstring). Nothing in a dry run, which touches
+    no network; a route that is not deployed or does not answer leaves the
+    run with the register-stated and seeded websites, and says so. `skip`
+    says which URLs are never read as a society's site (the caller's skip
+    hosts); a host written with a trailing dot or a port is left out too."""
+    if ctx.dry_run:
+        return {}
+    try:
+        rows = ctx.loader.post("requests/websites", {}).get("websites") or []
+    except (ConvexError, httpx.HTTPError) as error:
+        ctx.report.notes.append(f"confirmed websites from Convex unavailable ({error})")
+        return {}
+    found: dict[str, ConfirmedSite] = {}
+    for row in rows:
+        key, url, page = row.get("orgKey"), row.get("url"), row.get("eventsUrl")
+        if not isinstance(key, str) or not _plain(url, skip):
+            continue
+        # The events page counts only on the confirmed site itself.
+        same = _plain(page, skip) and urlsplit(page).hostname == urlsplit(url).hostname
+        found.setdefault(key, ConfirmedSite(url, page if same else None))
+    return found
+
+
+__all__ = [
+    "WEBSITE_SEEDS",
+    "ConfirmedSite",
+    "WebsiteSeed",
+    "confirmed_websites",
+    "seeded_websites",
+]

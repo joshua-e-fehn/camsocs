@@ -62,7 +62,8 @@ ANNOTATIONS: dict[str, tuple] = {
         "resolve", "societies", None, (RESOLVED,), (ALL,), XW, False, False, ()
     ),
     "enrich": (
-        "enrich", "societies", None, ("society_website", "linktree"), (RESOLVED,), (), True, True,
+        "enrich", "societies", None, ("society_website", "linktree"), (RESOLVED,),
+        ("requests/websites",), True, True,
         ("§13", "§14"),
     ),
     "classify": ("classify", "societies", None, (ALL,), (ALL,), (), True, True, ()),
@@ -91,8 +92,8 @@ ANNOTATIONS: dict[str, tuple] = {
         ("§12",),
     ),
     "website_events": (
-        "events", "events", None, ("society_website.events",), ("society_website", ORG), XW, True,
-        True, ("§14",),
+        "events", "events", None, ("society_website.events",), ("society_website", ORG),
+        (*XW, "requests/websites"), True, True, ("§14",),
     ),
     "inbox": (
         "inbox", "events", None, ("mailing_list_email",), (ORG, EVENTS),

@@ -16,12 +16,18 @@ masked (`[sender]`, `[email 1]`, `[phone]`), the reply's values are typed
 and checked there, and a link or address the request does not give is
 dropped. This module only renders the prompt, validates the reply's shape
 and reports counts: it never logs a request's text, a reply or a key.
+
+ENG-158 made the draft a plan. A request that says where the society lists
+its events gets `events_url` (prompt `request_draft_v2`); Convex checks the
+link and derives the home page, and in the next round offers that site to be
+read (`checks` in the same `requests/pending` answer, `request_site.py`).
+Confirmed, the plan is carried out by the job runner (`request_jobs.py`).
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from string import Template
 from typing import Any, Literal, Protocol
@@ -32,7 +38,7 @@ from camsocs_pipeline.extract.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
-PROMPT_NAME = "request_draft_v1"
+PROMPT_NAME = "request_draft_v2"
 PROMPT_PATH = Path(__file__).parent / "extract" / "prompts" / f"{PROMPT_NAME}.md"
 
 #: What a request is, in the prompt's words.
@@ -74,6 +80,9 @@ class DraftReply(BaseModel):
     removal: Removal | None = None
     concerns: list[str] = Field(default_factory=list, max_length=10)
     reply: str = Field(default="", max_length=MAX_TEXT)
+    #: The page where the society lists its events, as the request gives it
+    #: (ENG-158); Convex checks it and derives the home page.
+    events_url: str | None = Field(default=None, max_length=500)
 
     def payload(self) -> dict[str, Any]:
         """The reply as `requests/draft` takes it (camelCase, no nulls)."""
@@ -98,6 +107,7 @@ class DraftReply(BaseModel):
             "removal": removal,
             "concerns": [concern[:400] for concern in self.concerns],
             "reply": self.reply,
+            **({"eventsUrl": self.events_url.strip()} if (self.events_url or "").strip() else {}),
         }
 
 
@@ -161,6 +171,9 @@ class DraftCounts:
     offered: int = 0
     drafted: int = 0
     failed: int = 0
+    #: The sites Convex asked to have read in the same call (ENG-158,
+    #: `request_site.run_site_checks`).
+    checks: list[dict[str, Any]] = field(default_factory=list)
 
     def line(self) -> str:
         return f"{self.offered} offered, {self.drafted} drafted, {self.failed} failed"
@@ -175,7 +188,7 @@ def run_drafts(loader: Poster, llm: LLMClient) -> DraftCounts:
     items = work.get("items") or []
     guide = render_guide(work.get("fieldGuide") or [])
     scopes = list(work.get("removalScopes") or [])
-    counts = DraftCounts(offered=len(items))
+    counts = DraftCounts(offered=len(items), checks=list(work.get("checks") or []))
     for item in items:
         prompt = template.safe_substitute(guide=guide, request=render_request(item, scopes))
         try:

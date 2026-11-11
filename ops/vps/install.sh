@@ -90,7 +90,7 @@ LOG_DIR="/var/log/camsocs"
 KEY_PATH="$HOME_DIR/.ssh/camsocs_deploy"
 KNOWN_HOSTS="$HOME_DIR/.ssh/known_hosts"
 UNIT_DIR="/etc/systemd/system"
-TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer camsocs-notify.timer camsocs-request-agent.timer)
+TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer camsocs-notify.timer camsocs-request-agent.timer camsocs-request-jobs.timer)
 MYA_ENV="/docker/hermes-agent-vspa/data/.env"
 # Root's own: the installed runner, its keys and its mirror of the repository.
 OPS_DIR="/usr/local/lib/camsocs-ops"

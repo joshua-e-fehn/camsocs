@@ -59,6 +59,9 @@ class StageContext:
     - post through `loader`, which is a no-op in a dry run;
     - fetch through `crawler()` (robots.txt, per-host pacing, cache);
     - honour `limit` (process at most this many items) for trial runs;
+    - honour `only_orgs` where it is meaningful: a run for these
+      organisations only (a confirmed listing request's job, ENG-158), which
+      must leave every other organisation's staged work as it is;
     - read campus facts (term dates, decisions file…) from `profile`, the
       campus this run belongs to (`campuses.active()`, decision D8).
     """
@@ -72,6 +75,7 @@ class StageContext:
     dry_run: bool
     limit: int | None
     profile: CampusProfile = field(default_factory=_active_profile)
+    only_orgs: frozenset[str] | None = None
 
     def crawler(self) -> PoliteClient:
         """The polite HTTP client (sources/base.py) configured from settings;

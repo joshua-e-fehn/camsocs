@@ -180,6 +180,7 @@ def run_sync(
     group: StageGroup | None = None,
     dry_run: bool = False,
     limit: int | None = None,
+    only_orgs: frozenset[str] | None = None,
     loader: ConvexLoader | None = None,
     registry: Sequence[Stage] | None = None,
     now: datetime | None = None,
@@ -192,6 +193,9 @@ def run_sync(
 
     `telemetry` receives the run's start, stage and finish events; default
     none. The caller closes it.
+
+    `only_orgs` narrows the stages that honour it (`website_events`) to those
+    organisations, for a confirmed listing request's job (`request_jobs.py`).
 
     The run belongs to the process's campus (`campuses.active()`, which the
     CLI configures from `settings.campus`): its registry is the default, and
@@ -253,7 +257,7 @@ def run_sync(
                 revision=run_revision(),
             )
 
-        _run_stages(selected, report, settings, loader, state, limit, telemetry, profile)
+        _run_stages(selected, report, settings, loader, state, limit, telemetry, profile, only_orgs)
 
         if not loader.dry_run:
             try:
@@ -286,6 +290,7 @@ def _run_stages(
     limit: int | None,
     telemetry: HarvestTelemetry,
     profile: CampusProfile,
+    only_orgs: frozenset[str] | None = None,
 ) -> None:
     staging = StagingStore(settings.staging_dir)
     declared = {entry.name: entry for entry in campus_registry(profile)}
@@ -310,6 +315,7 @@ def _run_stages(
             dry_run=loader.dry_run,
             limit=limit,
             profile=profile,
+            only_orgs=only_orgs,
         )
         telemetry.stage_started(stage.name)  # the stage its LLM generations carry
         # The advisory write guard checks the stage's declared writes; an

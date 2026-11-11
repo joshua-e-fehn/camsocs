@@ -175,6 +175,7 @@ export function useListingRequestMutations() {
     acceptRemoval: useMutation(api.broker.listingRequests.acceptRemoval),
     liftSuppression: useMutation(api.broker.suppressions.lift),
     redraft: useMutation(api.broker.listingRequests.redraft),
+    retryJob: useMutation(api.broker.listingRequests.retryJob),
   }
 }
 

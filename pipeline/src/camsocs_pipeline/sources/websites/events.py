@@ -169,6 +169,7 @@ from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.resolve.lookup import OrgLookup
 from camsocs_pipeline.sources.base import FetchResult, PoliteClient
 from camsocs_pipeline.sources.policy import AI_OVERRIDE_NOTE, SOCIETY_WEBSITE, FetchPurpose
+from camsocs_pipeline.sources.policy import host_of as policy_host
 from camsocs_pipeline.sources.termcards import (
     PageFile,
     Skipped,
@@ -182,8 +183,9 @@ from camsocs_pipeline.sources.termcards import (
     term_hint,
 )
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
+from camsocs_pipeline.sources.websites.enrich import _skipped_host
 from camsocs_pipeline.sources.websites.page import Page, parse_page
-from camsocs_pipeline.sources.websites.seeds import seeded_websites
+from camsocs_pipeline.sources.websites.seeds import confirmed_websites, seeded_websites
 from camsocs_pipeline.sources.websites.site import ai_reading, with_note
 from camsocs_pipeline.staging.store import events_directory
 
@@ -234,6 +236,9 @@ class Site:
     #: The website as a register states it, when it redirected to `home_url`:
     #: the fetch cache holds the home page under this URL.
     stated_urls: tuple[str, ...] = ()
+    #: Pages of the site to read whether or not the home page links them: the
+    #: events page a confirmed listing request named (ENG-158).
+    extra_pages: tuple[str, ...] = ()
 
 
 @dataclass
@@ -294,11 +299,38 @@ def seeded_sites(sites: Sequence[Site], seeds: Mapping[str, str], index: OrgLook
 
 def _sites(ctx: StageContext) -> tuple[list[Site], int]:
     """Every site to read, by organisation key, and how many of them are
-    seeds enrichment has not read yet."""
+    seeds or broker-confirmed websites (`websites.seeds`) enrichment has not
+    read yet."""
     sites = sites_from(ctx.staging.read_latest(SOURCE_TYPE))
     index = OrgLookup.for_stage(ctx)
-    seeded = seeded_sites(sites, seeded_websites(index, campus=ctx.profile.id), index)
-    return sorted([*sites, *seeded], key=lambda site: site.org_key), len(seeded)
+    # A website the broker confirmed on a listing request (ENG-158) is the
+    # one read for its organisation: the site enrichment read is left out
+    # when it is on another host (the register's, which the request corrects).
+    confirmed = confirmed_websites(ctx, skip=_skipped_host)
+    sites = [
+        site
+        for site in sites
+        if site.org_key not in confirmed or _same_host(confirmed[site.org_key].url, site.home_url)
+    ]
+    seeds = {
+        **seeded_websites(index, campus=ctx.profile.id),
+        **{key: site.url for key, site in confirmed.items()},
+    }
+    seeded = seeded_sites(sites, seeds, index)
+    every = [
+        # The events page the request named is read on its own site.
+        replace(site, extra_pages=(page,))
+        if (found := confirmed.get(site.org_key))
+        and (page := found.events_url)
+        and _same_host(page, site.home_url)
+        else site
+        for site in [*sites, *seeded]
+    ]
+    return sorted(every, key=lambda site: site.org_key), len(seeded)
+
+
+def _same_host(a: str, b: str) -> bool:
+    return policy_host(a).removeprefix("www.") == policy_host(b).removeprefix("www.")
 
 
 def _norm(url: str) -> str:
@@ -674,7 +706,9 @@ def read_site(
     pages: list[tuple[Page, FetchResult]] = []
     if home_lists_events(home):
         pages.append((home, home_result))
-    for url in event_pages(home, today=london_date(now)):
+    found = event_pages(home, today=london_date(now))
+    known = {_norm(url) for url in [home.url, *found]}
+    for url in [*found, *(page for page in site.extra_pages if _norm(page) not in known)]:
         result = _fetch(client, url)
         if not result.ok or "html" not in (result.content_type or "html").lower():
             continue
@@ -936,11 +970,19 @@ def _organiser(record: EventObservation) -> str | None:
 def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     now = now or datetime.now(UTC)
     sites, seeded = _sites(ctx)
+    total = len(sites)
+    with_sites = {site.org_key for site in sites}
+    if ctx.only_orgs is not None:
+        # A confirmed request's job (ENG-158): these organisations' sites
+        # only; every other site's staged events are carried forward below.
+        sites = [site for site in sites if site.org_key in ctx.only_orgs]
+        if not sites:
+            # Failing the stage fails the job, which is tried again: a job
+            # reported as done must have read the site.
+            raise RuntimeError("none of the organisations asked for has a site to read")
     if not sites:
         ctx.report.notes.append("no society website read yet — run enrich first")
         return
-    total = len(sites)
-    with_sites = {site.org_key for site in sites}
     if ctx.limit is not None:
         sites = sites[: ctx.limit]
     if ctx.dry_run:
@@ -969,6 +1011,11 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
                     sites,
                 )
             )
+    if ctx.only_orgs is not None and not ctx.dry_run:
+        unread = [note for result in results for note in result.notes if "not read" in note]
+        if unread:
+            # As above: the job is done only when its site was read.
+            raise RuntimeError("a site asked for was not read")
     events = [event for result in results for event in result.events]
     reached = {site.org_key for site in sites}
     carried = [

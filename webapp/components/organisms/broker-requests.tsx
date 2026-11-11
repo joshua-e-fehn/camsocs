@@ -23,6 +23,7 @@ import {
 import {
   isDrafted,
   RequestDraftPanel,
+  RequestJobPanel,
   readyDraft,
 } from "@/components/organisms/broker-request-draft"
 import { Badge } from "@/components/ui/badge"
@@ -81,7 +82,10 @@ const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
  * add form, and where they are accepted. The request agent (ENG-126) drafts
  * each open claim, correction, removal and objection (`RequestDraftPanel`)
  * and its draft pre-fills the dialogs, so accepting is a review and a
- * confirm: a claim or correction's values
+ * confirm. A request that points to the society's events page gets a plan
+ * with what the agent found on the site; confirmed, the VPS reads the site
+ * and the card reports what was added, to be closed (`RequestJobPanel`,
+ * ENG-158). A claim or correction's values
  * become owner-confirmed claims (`AcceptCorrectionsDialog`); a removal or
  * objection becomes a suppression of the listing, some fields, an address or
  * named people (`AcceptRemovalDialog`), listed on the card with a way to lift
@@ -388,6 +392,7 @@ function RequestCard({
           </dl>
         )}
         {isDrafted(request) && <RequestDraftPanel request={request} />}
+        <RequestJobPanel request={request} />
         {applied.length > 0 && (
           <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
             <CheckIcon className="size-4" />
@@ -397,7 +402,7 @@ function RequestCard({
               .join(", ")}
           </p>
         )}
-        {request.org && correction && (
+        {request.org && correction && (!request.job || request.job.state === "failed") && (
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setDialog("corrections")}>
               <CheckIcon />

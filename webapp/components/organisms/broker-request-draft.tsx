@@ -2,13 +2,17 @@
 
 import {
   BotIcon,
+  CalendarDaysIcon,
   CheckIcon,
+  CircleCheckIcon,
   CopyIcon,
+  ExternalLinkIcon,
   MailIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
+import Link from "next/link"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +22,7 @@ import {
   runWithToast,
   useListingRequestMutations,
   useRequestAgent,
+  useSetListingRequestStatus,
 } from "@/hooks/convex/broker"
 import { formatDateTime } from "@/lib/broker/format"
 
@@ -44,6 +49,195 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
       {ok ? <CheckIcon /> : <XIcon />}
       {label}
     </Badge>
+  )
+}
+
+type SiteEvent = { title: string; startsAt: number; venue?: string }
+
+function EventList({ events, total }: { events: SiteEvent[]; total: number }) {
+  if (events.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-1">
+      {events.map((event) => (
+        <li key={`${event.title}-${event.startsAt}`} className="flex flex-wrap gap-x-2">
+          <span className="font-mono text-xs text-muted-foreground">
+            {formatDateTime(event.startsAt)}
+          </span>
+          <span>{event.title}</span>
+          {event.venue && <span className="text-muted-foreground">· {event.venue}</span>}
+        </li>
+      ))}
+      {total > events.length && (
+        <li className="text-xs text-muted-foreground">and {total - events.length} more</li>
+      )}
+    </ul>
+  )
+}
+
+/**
+ * The plan behind a draft that names the society's events page (ENG-158):
+ * what confirming will do, and what the agent found when it read the site by
+ * the scraper's rules (convex/lib/requestDraft.ts, pipeline request_site.py).
+ */
+function EventsPlan({ draft, open }: { draft: RequestDraft; open: boolean }) {
+  const source = draft.eventsSource
+  if (!source) return null
+  const check = source.check
+  const website = draft.corrections?.find((item) => item.field === "website")
+  return (
+    <div className="flex flex-col gap-2 rounded-md border bg-background p-3">
+      <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <CalendarDaysIcon className="size-3.5" />
+        Plan
+      </p>
+      <ol className="list-decimal pl-5">
+        {website && (
+          <li className="break-words">
+            Set the listing&apos;s website to <span className="font-mono">{website.text}</span>
+          </li>
+        )}
+        <li className="break-words">
+          Read the society&apos;s events from <span className="font-mono">{source.url}</span> every
+          day, starting now
+        </li>
+        <li>Report here what was added, with a reply to send</li>
+      </ol>
+      {!check ? (
+        // The agent checks open requests only: none will follow a confirmation.
+        open && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner className="size-3.5" />
+            The agent is reading the site (about a minute)…
+          </p>
+        )
+      ) : check.state === "failed" ? (
+        <p className="text-xs text-destructive">
+          The agent could not read the site ({check.error ?? "error"}, try {check.attempts} of 3).
+          Confirming would still add the website; its events may not be readable.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <Check
+              ok={check.ownSite === true}
+              label={
+                check.ownSite
+                  ? `The society's own site: ${check.tiedBy ?? "shown"}`
+                  : "Not shown to be this society's site: open it and check"
+              }
+            />
+            {check.ownSite && (
+              <Check
+                ok={(check.eventCount ?? 0) > 0}
+                label={`${check.eventCount ?? 0} upcoming event${check.eventCount === 1 ? "" : "s"} found`}
+              />
+            )}
+          </div>
+          <EventList events={check.events ?? []} total={check.eventCount ?? 0} />
+          {check.ownSite && (check.eventCount ?? 0) === 0 && (
+            <p className="text-xs text-muted-foreground">
+              The reader finds no upcoming event on this site today. Confirming still adds the
+              website; if the page does list events, the reader needs work.
+            </p>
+          )}
+          {(check.notes?.length ?? 0) > 0 && (
+            <p className="text-xs text-muted-foreground">{check.notes?.join("; ")}</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The work a confirmed plan started (ENG-158, `listingRequests.job`): queued,
+ * running on the VPS, done with what was added, or failed with a way to run
+ * it again. Done, the broker looks at the listing and closes the request.
+ */
+export function RequestJobPanel({ request }: { request: BrokerListingRequest }) {
+  const { retryJob } = useListingRequestMutations()
+  const setStatus = useSetListingRequestStatus()
+  const job = request.job
+  if (!job) return null
+  const listing = request.org ? `/societies/${request.org.slug}` : null
+
+  if (job.state === "queued" || job.state === "running") {
+    return (
+      <p className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+        <Spinner className="size-4" />
+        {job.state === "queued"
+          ? "In progress: waiting for the scraper to pick this up (within a minute, or after a running harvest)."
+          : `In progress: reading ${job.website} and loading its events (about 15 minutes).`}
+        {job.error && (
+          <span className="text-xs text-muted-foreground">
+            Last try: {job.error} (try {job.attempts} of 3)
+          </span>
+        )}
+      </p>
+    )
+  }
+
+  if (job.state === "failed") {
+    return (
+      <p className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 p-3 text-sm text-destructive">
+        <TriangleAlertIcon className="size-4" />
+        Not implemented: the scraper run failed ({job.error ?? "error"}) after {job.attempts} tries.
+        The website is on the listing; its events are not.
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => runWithToast(retryJob({ key: request.key }), "Queued again")}
+        >
+          <RefreshCwIcon />
+          Run again
+        </Button>
+      </p>
+    )
+  }
+
+  const count = job.eventCount ?? 0
+  return (
+    <section
+      aria-label="Result"
+      className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-sm"
+    >
+      <p className="flex flex-wrap items-center gap-2 font-medium">
+        <CircleCheckIcon className="size-4" />
+        Implemented {formatDateTime(job.finishedAt)}: {job.website} is read every day,{" "}
+        {count === 0
+          ? "no upcoming event on the listing yet"
+          : `${count} upcoming event${count === 1 ? "" : "s"} on the listing`}
+        .
+      </p>
+      {job.readCount !== undefined && (
+        <p className="text-xs text-muted-foreground">
+          This run read {job.readCount} upcoming event{job.readCount === 1 ? "" : "s"} from the
+          site; the listing shows every source&apos;s, without duplicates.
+        </p>
+      )}
+      <EventList events={job.events ?? []} total={count} />
+      <div className="flex flex-wrap gap-2">
+        {listing && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href={listing} target="_blank" prefetch={false}>
+              <ExternalLinkIcon />
+              Look at the listing
+            </Link>
+          </Button>
+        )}
+        {request.status === "accepted" && (
+          <Button
+            size="sm"
+            onClick={() =>
+              runWithToast(setStatus({ key: request.key, status: "done" }), "Request closed")
+            }
+          >
+            <CheckIcon />
+            Confirm and close
+          </Button>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -115,6 +309,7 @@ export function RequestDraftPanel({ request }: { request: BrokerListingRequest }
         {redo}
       </div>
       {draft.summary && <p>{draft.summary}</p>}
+      <EventsPlan draft={draft} open={open} />
       {checks && (
         <div className="flex flex-wrap gap-1.5">
           <Check ok={checks.cam} label={checks.cam ? "cam.ac.uk address" : checks.domain} />

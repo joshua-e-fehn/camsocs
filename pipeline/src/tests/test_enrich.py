@@ -535,6 +535,15 @@ def test_a_seeded_website_is_read_after_any_a_register_states() -> None:
         ("org-a", "https://a.example/", ["https://a-own.example/"]),
         ("org-b", "https://b-own.example/", []),
     ]
+    # A website the broker confirmed on a request (ENG-158) is read first.
+    targets, _ = targets_from(
+        [resolved_org("org-a", "A Society", fields=site("https://a.example/"))],
+        seeds,
+        {"org-a": "https://a-new.example/"},
+    )
+    assert [(t.website, t.fallbacks) for t in targets] == [
+        ("https://a-new.example/", ["https://a.example/", "https://a-own.example/"])
+    ]
 
 
 def test_website_seeds_name_known_organisations_of_cambridge_only() -> None:

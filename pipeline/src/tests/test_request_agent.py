@@ -133,3 +133,21 @@ def test_the_unit_runs_the_command_as_camsocs_with_loopback_for_cliproxy_only():
         assert path in hidden
     timer = _unit("camsocs-request-agent.timer")
     assert timer["Timer.OnUnitActiveSec"] == ["1min"]
+
+
+def test_an_events_page_is_posted_as_the_request_gives_it():
+    """ENG-158: the link the request gives; Convex checks it and derives the
+    home page. No link, no key."""
+    reply = DraftReply.model_validate({**REPLY, "events_url": " https://chess.example.org/events "})
+    assert reply.payload()["eventsUrl"] == "https://chess.example.org/events"
+    assert "eventsUrl" not in DraftReply.model_validate(REPLY).payload()
+    assert "eventsUrl" not in DraftReply.model_validate({**REPLY, "events_url": None}).payload()
+
+
+def test_a_round_carries_the_sites_convex_asks_to_have_read():
+    check = {"key": ITEM["key"], "orgKey": "org-chess", "website": "https://chess.example.org/"}
+    loader = FakeLoader({**WORK, "items": [], "checks": [check]})
+    counts = run_drafts(loader, FakeLLM(lambda _text, _tier: REPLY))  # type: ignore[arg-type]
+    assert counts.checks == [check]
+    # An older deployment answers without `checks`.
+    assert run_drafts(FakeLoader({**WORK, "items": []}), FakeLLM(lambda _t, _r: REPLY)).checks == []  # type: ignore[arg-type]
