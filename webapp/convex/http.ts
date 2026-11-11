@@ -209,6 +209,13 @@ ingestionRoute("notify/ack", internal.notifications.relayAck)
 // apply, which the broker confirms.
 ingestionRoute("requests/pending", internal.requestAgent.pending)
 ingestionRoute("requests/draft", internal.requestAgent.saveDraft)
+// ENG-158: the site check behind a draft's events page, the jobs a confirmed
+// plan queued (pipeline request_jobs.py), and the confirmed websites the
+// scraper reads next to the register-stated ones.
+ingestionRoute("requests/check", internal.requestAgent.saveCheck)
+ingestionRoute("requests/jobs/next", internal.requestAgent.nextJob)
+ingestionRoute("requests/job", internal.requestAgent.saveJob)
+readRoute("requests/websites", internal.requestAgent.websites)
 // The daily indexing check's alerts, for the VPS monitor (convex/indexing.ts).
 readRoute("indexing/summary", internal.indexing.monitorSummary)
 // Events a corrected reader will never restate (`camsocs clean-events`,

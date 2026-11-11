@@ -50,7 +50,7 @@ from camsocs_pipeline.sources.websites.enrich import (
     restate_readings,
     targets_from,
 )
-from camsocs_pipeline.sources.websites.seeds import seeded_websites
+from camsocs_pipeline.sources.websites.seeds import confirmed_websites, seeded_websites
 from camsocs_pipeline.staging.store import RESOLVED
 
 #: Per-organisation notes shown in the stage report; the rest are counted.
@@ -62,7 +62,12 @@ def run(ctx: StageContext) -> None:
     if not resolved:
         ctx.report.notes.append("nothing resolved yet — run resolve first")
         return
-    seeds = seeded_websites(OrgLookup.from_records(resolved), campus=ctx.profile.id)
+    # Hand-verified seeds, then the websites the broker confirmed on a listing
+    # request (ENG-158), which come first for their organisation.
+    seeds = {
+        **seeded_websites(OrgLookup.from_records(resolved), campus=ctx.profile.id),
+        **confirmed_websites(ctx),
+    }
     targets, notes = targets_from(resolved, seeds)
     total = len(targets)
     if ctx.limit is not None:

@@ -20,7 +20,11 @@
                                          exits 1 when it pages; shadow checks never page
                                          (D9, docs/ops-vps.md)
     camsocs request-drafts               the request agent, one round: drafts for open listing
-                                         requests, posted for the broker to confirm (ENG-126)
+                                         requests, posted for the broker to confirm (ENG-126),
+                                         and the site checks behind them (ENG-158)
+    camsocs request-jobs                 the request job runner, one round: carries out one
+                                         confirmed plan (one society's website events, then
+                                         load) and reports on the request (ENG-158)
     camsocs graph [--json PATH] [--mermaid PATH]   the stage registry as a graph (JSON,
                                          Mermaid); offline (`pixi run pipeline-graph`)
 
@@ -93,6 +97,8 @@ from camsocs_pipeline.pipeline.state import load_state
 from camsocs_pipeline.pipeline.sync import STAGE_ORDER, resolve_group, run_sync
 from camsocs_pipeline.prune import parse_age, prune_cache, prune_staging
 from camsocs_pipeline.request_agent import run_drafts
+from camsocs_pipeline.request_jobs import run_job
+from camsocs_pipeline.request_site import run_site_checks
 from camsocs_pipeline.resolve.crosswalk import quarantine_path
 from camsocs_pipeline.sources.base import PoliteClient
 from camsocs_pipeline.sources.sympa import SympaUnavailable, fetch_soc_lists
@@ -668,8 +674,9 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
 def request_drafts(ctx: click.Context) -> None:
     """The request agent (request_agent.py, ENG-126), one round: drafts what
     to apply for the open listing requests that need it, with the strong
-    model, and posts each draft to Convex for the broker to confirm. Applies
-    nothing. Prints counts only. Run every minute by
+    model, and posts each draft to Convex for the broker to confirm; then
+    reads the sites of drafts that name an events page (request_site.py,
+    ENG-158) and posts what it found. Applies nothing. Prints counts only. Run every minute by
     camsocs-request-agent.timer on the VPS."""
     settings = _settings(ctx)
     try:
@@ -679,9 +686,29 @@ def request_drafts(ctx: click.Context) -> None:
     try:
         with _loader(settings) as loader:
             counts = run_drafts(loader, llm)
+            # ENG-158: the sites behind drafts that name an events page.
+            sites = run_site_checks(loader, counts.checks, settings, llm)
+    except (ConfigError, ConvexError) as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"request-drafts: {counts.line()}; {sites.line()}")
+
+
+@cli.command("request-jobs")
+@_env_option
+@click.pass_context
+def request_jobs(ctx: click.Context) -> None:
+    """The request job runner (request_jobs.py, ENG-158), one round: when a
+    confirmed listing request queued a job, reads that one society's website
+    for events, loads, and reports on the request. Never next to a harvest
+    (it takes the harvest's lock without waiting). Prints one line. Run every
+    minute by camsocs-request-jobs.timer on the VPS."""
+    settings = _settings(ctx)
+    try:
+        with _loader(settings) as loader:
+            line = run_job(loader, settings)
     except ConvexError as error:
         raise click.ClickException(str(error)) from error
-    click.echo(f"request-drafts: {counts.line()}")
+    click.echo(f"request-jobs: {line}")
 
 
 @cli.command()

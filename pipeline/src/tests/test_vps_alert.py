@@ -821,7 +821,7 @@ def test_the_installer_pins_pixi_and_installs_only_from_a_verified_revision() ->
     # … but turns on one it installs for the first time (the monitor's).
     assert (
         "TIMERS=(camsocs-harvest-events.timer camsocs-harvest-full.timer camsocs-monitor.timer"
-        " camsocs-notify.timer camsocs-request-agent.timer)" in text
+        " camsocs-notify.timer camsocs-request-agent.timer camsocs-request-jobs.timer)" in text
     )
     assert '"$enable" == "auto" && ${#new_timers[@]} -gt 0' in text
     assert 'systemctl enable --now "${new_timers[@]}"' in text

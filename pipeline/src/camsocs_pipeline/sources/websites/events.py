@@ -183,7 +183,7 @@ from camsocs_pipeline.sources.termcards import (
 )
 from camsocs_pipeline.sources.websites.discover import choose_pages, in_scope
 from camsocs_pipeline.sources.websites.page import Page, parse_page
-from camsocs_pipeline.sources.websites.seeds import seeded_websites
+from camsocs_pipeline.sources.websites.seeds import confirmed_websites, seeded_websites
 from camsocs_pipeline.sources.websites.site import ai_reading, with_note
 from camsocs_pipeline.staging.store import events_directory
 
@@ -294,10 +294,12 @@ def seeded_sites(sites: Sequence[Site], seeds: Mapping[str, str], index: OrgLook
 
 def _sites(ctx: StageContext) -> tuple[list[Site], int]:
     """Every site to read, by organisation key, and how many of them are
-    seeds enrichment has not read yet."""
+    seeds or broker-confirmed websites (`websites.seeds`) enrichment has not
+    read yet."""
     sites = sites_from(ctx.staging.read_latest(SOURCE_TYPE))
     index = OrgLookup.for_stage(ctx)
-    seeded = seeded_sites(sites, seeded_websites(index, campus=ctx.profile.id), index)
+    seeds = {**seeded_websites(index, campus=ctx.profile.id), **confirmed_websites(ctx)}
+    seeded = seeded_sites(sites, seeds, index)
     return sorted([*sites, *seeded], key=lambda site: site.org_key), len(seeded)
 
 
@@ -941,6 +943,14 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         return
     total = len(sites)
     with_sites = {site.org_key for site in sites}
+    if ctx.only_orgs is not None:
+        # A confirmed request's job (ENG-158): these organisations' sites
+        # only; every other site's staged events are carried forward below.
+        sites = [site for site in sites if site.org_key in ctx.only_orgs]
+        if not sites:
+            # Failing the stage fails the job, which is tried again: a job
+            # reported as done must have read the site.
+            raise RuntimeError("none of the organisations asked for has a site to read")
     if ctx.limit is not None:
         sites = sites[: ctx.limit]
     if ctx.dry_run:

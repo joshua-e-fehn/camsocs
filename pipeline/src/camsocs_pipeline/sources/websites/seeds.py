@@ -13,6 +13,14 @@ gives such an organisation its website:
 - `website_events` reads its events pages from the first daily run, without
   waiting for the weekly enrichment.
 
+**Confirmed websites (ENG-158).** The same holds, without a code change, for
+a website the broker confirmed on a listing request: Convex keeps it
+(`websiteSources`) and `confirmed_websites` reads the list at the start of
+`enrich` and `website_events` (`POST /api/pipeline/requests/websites`). The
+request agent read the site and showed the broker what ties it to the listing
+before they confirmed (`request_site.py`). A confirmed website comes before a
+seed of the same organisation.
+
 Add one only after reading the site and tying it to the organisation by
 something a register states (`found_on` says what), and name the owner by
 identifiers a register carries (SU id, Instagram handle), never by name
@@ -22,9 +30,17 @@ alone. The seeds are Cambridge's: another campus reads none of them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
+
+import httpx
 
 from camsocs_pipeline.models.observation import IdentityHints
+from camsocs_pipeline.pipeline.load import ConvexError
 from camsocs_pipeline.resolve.lookup import OrgLookup
+
+if TYPE_CHECKING:
+    from camsocs_pipeline.pipeline.context import StageContext
 
 
 @dataclass(frozen=True)
@@ -73,4 +89,27 @@ def seeded_websites(
     return found
 
 
-__all__ = ["WEBSITE_SEEDS", "WebsiteSeed", "seeded_websites"]
+def confirmed_websites(ctx: StageContext) -> dict[str, str]:
+    """Organisation key → the website the broker confirmed for it on a
+    listing request (module docstring). Nothing in a dry run, which touches
+    no network; a route that is not deployed or does not answer leaves the
+    run with the register-stated and seeded websites, and says so."""
+    if ctx.dry_run:
+        return {}
+    try:
+        rows = ctx.loader.post("requests/websites", {}).get("websites") or []
+    except (ConvexError, httpx.HTTPError) as error:
+        ctx.report.notes.append(f"confirmed websites from Convex unavailable ({error})")
+        return {}
+    found: dict[str, str] = {}
+    for row in rows:
+        key, url = row.get("orgKey"), row.get("url")
+        if not isinstance(key, str) or not isinstance(url, str):
+            continue
+        parts = urlsplit(url)
+        if parts.scheme in ("http", "https") and "." in (parts.hostname or ""):
+            found.setdefault(key, url)
+    return found
+
+
+__all__ = ["WEBSITE_SEEDS", "WebsiteSeed", "confirmed_websites", "seeded_websites"]

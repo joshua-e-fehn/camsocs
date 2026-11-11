@@ -38,6 +38,14 @@ import { MAX_NAME_WORDS, nameWords } from "./suppressions"
  *  - **Every value is typed and checked** by `parseCorrection`, the same parser
  *    as the dialog, and again by the claims ingestion on confirm. A value the
  *    listing already shows is dropped as no change.
+ *  - **An events page is a link the request gives** (ENG-158): when the
+ *    request says where the society lists its events, the model returns that
+ *    link (`eventsUrl`) and nothing else about it. The code checks it is in
+ *    the request, refuses a platform that hosts many organisers, and derives
+ *    the site's home page from it (`eventsSourceFrom`); when the listing shows
+ *    no website on that host, the home page is proposed as its `website`.
+ *    The agent then reads the site (the scraper's own rules) and the draft
+ *    shows what it found; confirmed, the scraper reads it daily.
  *  - **A removal names only what the request names**: an address by its token,
  *    a person's name as the message spells it, an event key the request
  *    carries. Named people in the broker tables (scope `person`) are left to
@@ -54,6 +62,12 @@ export const DRAFT_RETRY_AFTER_MS = 5 * 60 * 1000
 /** Requests older than this get no draft (the agent's first run drafts the
  * open requests of the last two weeks, then only new ones). */
 export const DRAFT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+/** Tries per site check and per job before the agent gives up. */
+export const CHECK_MAX_ATTEMPTS = 3
+export const JOB_MAX_ATTEMPTS = 3
+/** A job still `running` after this long is taken to have died, and is run
+ * again (the unit's own time limit is 45 minutes). */
+export const JOB_STALE_MS = 60 * 60 * 1000
 /** The agent is shown as offline when it has not called for this long. */
 export const AGENT_STALE_MS = 5 * 60 * 1000
 /** Characters of message the agent reads at most. */
@@ -144,6 +158,79 @@ export function unsupportedContacts(value: string, requestText: string): string[
   return missing
 }
 
+/**
+ * Hosts that carry many organisers' pages, or that the scraper never reads as
+ * a society's own site: an events link there gives no home page to derive,
+ * so it is left to the broker (the pipeline's `SKIP_HOSTS` and
+ * `NEVER_FETCH_HOSTS` hold on the VPS whatever this list says).
+ */
+const SHARED_HOSTS = [
+  "talks.cam.ac.uk",
+  "cambridgesu.co.uk",
+  "facebook.com",
+  "fb.me",
+  "instagram.com",
+  "linkedin.com",
+  "x.com",
+  "twitter.com",
+  "tiktok.com",
+  "youtube.com",
+  "linktr.ee",
+  "eventbrite.com",
+  "eventbrite.co.uk",
+  "fixr.co",
+  "lu.ma",
+  "luma.com",
+  "ticketsource.co.uk",
+  "meetup.com",
+  "google.com",
+  "notion.site",
+  "notion.so",
+  "whatsapp.com",
+  "discord.gg",
+  "discord.com",
+] as const
+
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "")
+  } catch {
+    return ""
+  }
+}
+
+export type EventsSource = { url: string; website: string }
+
+/**
+ * The events page a request points to, from the link the model returned, or
+ * why it is refused. The link must be one the request gives (`requestText`);
+ * the home page is its scheme and host, derived here and never by the model.
+ */
+export function eventsSourceFrom(
+  raw: string | undefined,
+  requestText: string,
+): { source: EventsSource } | { refused: string } | null {
+  const text = (raw ?? "").trim()
+  if (!text) return null
+  let url: URL
+  try {
+    url = new URL(text)
+  } catch {
+    return { refused: "not a link" }
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { refused: "not a web link" }
+  if (url.username || url.password) return { refused: "not a plain web link" }
+  if (unsupportedContacts(text, requestText).length > 0) {
+    return { refused: `not in the request: ${text.slice(0, 200)}` }
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "")
+  if (!host.includes(".")) return { refused: "not a public site" }
+  if (SHARED_HOSTS.some((shared) => host === shared || host.endsWith(`.${shared}`))) {
+    return { refused: `${host} hosts many organisers: not read as the society's own site` }
+  }
+  return { source: { url: text.slice(0, 500), website: `${url.protocol}//${url.host}/` } }
+}
+
 /** How a field's value is written, for the agent (the dialog's editor format). */
 export function fieldFormat(field: OwnerField): string {
   const input = fieldInput(field)
@@ -209,6 +296,8 @@ export type AgentReply = {
   } | null
   concerns: string[]
   reply: string
+  /** The page where the society lists its events, when the request gives it. */
+  eventsUrl?: string
 }
 
 export type DraftRemoval = {
@@ -226,6 +315,7 @@ export type DraftBody = {
   removal?: DraftRemoval
   dropped: { field: string; reason: string }[]
   reply: string
+  eventsSource?: EventsSource
 }
 
 /** What `buildDraft` needs to know about the request and its listing. */
@@ -299,6 +389,30 @@ export function buildDraft(reply: AgentReply, context: DraftContext): DraftBody 
     }
   }
 
+  // The events page (ENG-158): the link the request gives, and its site's home
+  // page as the listing's website when the listing shows none on that host.
+  let eventsSource: EventsSource | undefined
+  if (correcting) {
+    const found = eventsSourceFrom(reply.eventsUrl, context.requestText)
+    if (found && "refused" in found) dropped.push({ field: "events page", reason: found.refused })
+    if (found && "source" in found) {
+      eventsSource = found.source
+      const now = context.current("website")
+      const listed = typeof now === "string" ? hostOf(now) : ""
+      const proposed = corrections.some((item) => item.field === "website")
+      const parsed = parseCorrection("website", eventsSource.website)
+      if (!proposed && parsed.ok && listed !== hostOf(eventsSource.website)) {
+        const current = displayValue("website", now)
+        corrections.push({
+          field: "website",
+          text: eventsSource.website,
+          ...(current !== undefined ? { current: cut(current, 2_000) } : {}),
+          reason: "the home page of the events link in the request",
+        })
+      }
+    }
+  }
+
   let removal: DraftRemoval | undefined
   if (removing && reply.removal) {
     const checked = checkRemoval(reply.removal, context)
@@ -316,6 +430,7 @@ export function buildDraft(reply: AgentReply, context: DraftContext): DraftBody 
     ...(removal ? { removal } : {}),
     dropped: dropped.slice(0, 30),
     reply: cut(unmask(reply.reply, context.addresses).trim(), 3_000),
+    ...(eventsSource ? { eventsSource } : {}),
   }
 }
 

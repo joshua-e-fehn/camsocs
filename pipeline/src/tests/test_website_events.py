@@ -352,6 +352,102 @@ def test_the_stage_stages_events_and_carries_unreached_sites(
     assert any("2 carried forward" in n for n in ctx.report.notes)
     assert (ctx.report.inserted, ctx.report.unchanged) == (0, 2)
 
+    # A confirmed request's job (ENG-158) reads its organisation's site only;
+    # with no site for it the stage fails (so the job does), staging untouched.
+    ctx.limit = None
+    ctx.only_orgs = frozenset({"org-someone-else"})
+    with pytest.raises(RuntimeError, match="none of the organisations asked for"):
+        website.run(ctx, now=NOW)
+    assert len(staging.read_latest("society_website.events")) == 2
+    ctx.only_orgs = frozenset({KEY})
+    ctx.report.notes.clear()
+    website.run(ctx, now=NOW)
+    assert any("1 read for events" in n for n in ctx.report.notes)
+    assert len(staging.read_latest("society_website.events")) == 2
+
+
+def test_a_website_the_broker_confirmed_is_read_like_a_seed(
+    tmp_path: Path, net: respx.MockRouter, make_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ENG-158: Convex lists the websites confirmed on listing requests; the
+    stage reads them without a code change. A route that fails leaves the
+    run with what it has."""
+    from camsocs_pipeline.claims import parser_field
+    from camsocs_pipeline.pipeline.load import ConvexError
+    from camsocs_pipeline.sources.websites import seeds
+    from camsocs_pipeline.staging.store import RESOLVED
+
+    class Loader(ConvexLoader):
+        fail = False
+
+        def post(self, path: str, payload: dict) -> dict:
+            if path != "requests/websites":
+                return super().post(path, payload)
+            if self.fail:
+                raise ConvexError("404")
+            return {
+                "websites": [
+                    {"orgKey": KEY, "url": f"{SITE}/"},
+                    {"orgKey": "org-x", "url": "ftp://nope.example.org/"},
+                    {"orgKey": "org-y"},
+                ]
+            }
+
+    serve(net)
+    settings = make_settings(min_host_interval=0.0)
+    run = RunReport(run_key="20261009T120000Z-abcdef", command="sync", dry_run=False)
+    staging = StagingStore(tmp_path / "staging")
+    staging.write(
+        RESOLVED,
+        "20261008T000000Z-aaaaaa",
+        [
+            Observation(
+                source_type="su_profile",
+                source_key="99001",
+                source_url="https://www.cambridgesu.co.uk/organisation/99001/",
+                retrieved_at=NOW,
+                entity_type="organisation",
+                identity=IdentityHints(name=QUOKKAS.org_name, known_key=KEY, su_id="99001"),
+                entity_key=KEY,
+                fields=[
+                    parser_field("name", QUOKKAS.org_name, extractor="t", evidence="secondary")
+                ],
+            )
+        ],
+    )
+    monkeypatch.setattr(seeds, "WEBSITE_SEEDS", ())
+    loader = Loader("", "", dry_run=True)
+    ctx = StageContext(
+        settings=settings,
+        report=run.stage("website_events"),
+        run=run,
+        loader=loader,
+        state=SyncState(),
+        staging=staging,
+        dry_run=False,
+        limit=None,
+    )
+    assert seeds.confirmed_websites(ctx) == {KEY: f"{SITE}/"}
+    fake = FakeLLM(lambda _text, _tier: REPLY)
+    monkeypatch.setattr(website, "LLMClient", lambda _settings: fake)
+    monkeypatch.setattr(type(settings), "require_llm", lambda _self: None)
+    real_client = website.PoliteClient
+    monkeypatch.setattr(website, "PoliteClient", lambda **kw: real_client(**kw, now=lambda: NOW))
+
+    website.run(ctx, now=NOW)
+
+    staged = staging.read_latest("society_website.events")
+    assert sorted(values(e)["title"] for e in staged) == ["Burrow building", "Quokka Quiz"]
+    assert any("1 seeded, not enriched yet" in n for n in ctx.report.notes)
+
+    loader.fail = True
+    ctx.report.notes.clear()
+    assert seeds.confirmed_websites(ctx) == {}
+    assert any("confirmed websites from Convex unavailable" in n for n in ctx.report.notes)
+    ctx.dry_run = True
+    ctx.report.notes.clear()
+    assert seeds.confirmed_websites(ctx) == {} and ctx.report.notes == []
+
 
 def test_a_seeded_website_is_read_before_enrichment_has_read_it(
     tmp_path: Path, net: respx.MockRouter, make_settings, monkeypatch: pytest.MonkeyPatch

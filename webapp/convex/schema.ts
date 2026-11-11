@@ -687,6 +687,8 @@ export const listingRequestOutcomeValidator = v.object({
   appliedFields: v.optional(v.array(v.string())),
   /** Suppressions created (an accepted removal or objection). */
   suppressionKeys: v.optional(v.array(v.string())),
+  /** The website the scraper now reads for this listing (ENG-158). */
+  eventsWebsite: v.optional(v.string()),
   acceptedAt: v.number(),
 })
 
@@ -700,6 +702,75 @@ export const requestNotificationValidator = v.object({
   /** Tries so far (a failed channel is retried up to three times). */
   attempts: v.optional(v.number()),
 })
+
+/**
+ * What the request agent found when it read the site a request points to
+ * (ENG-158): by code and the website reader, on the VPS. Public facts of a
+ * public page only (titles, dates, venues).
+ */
+export const requestSiteCheckValidator = v.object({
+  state: v.union(v.literal("ok"), v.literal("failed")),
+  at: v.number(),
+  /** Tries so far (a failed check is tried again, three times at most). */
+  attempts: v.number(),
+  /** A failed check's reason (`robots`, `unreachable`, an error class). */
+  error: v.optional(v.string()),
+  /** The site is shown to be this listing's own, and by what. */
+  ownSite: v.optional(v.boolean()),
+  tiedBy: v.optional(v.string()),
+  /** Pages the events reader read, and the upcoming events it found. */
+  pages: v.optional(v.number()),
+  eventCount: v.optional(v.number()),
+  events: v.optional(
+    v.array(v.object({ title: v.string(), startsAt: v.number(), venue: v.optional(v.string()) })),
+  ),
+  notes: v.optional(v.array(v.string())),
+})
+
+/**
+ * The events page a request points to (ENG-158): the link as the request
+ * gives it, and the site's home page, which the code derives from it (never
+ * the model). Confirmed, the home page becomes a `websiteSources` row, which
+ * the scraper reads daily.
+ */
+export const requestEventsSourceValidator = v.object({
+  url: v.string(),
+  website: v.string(),
+  check: v.optional(requestSiteCheckValidator),
+})
+
+/**
+ * The work a confirmed plan started on the VPS (ENG-158, pipeline
+ * `request_jobs.py`): read the listing's site for events and load them.
+ * `queued` until the job runner takes it, `done` with what the read found.
+ */
+export const requestJobValidator = v.object({
+  state: v.union(v.literal("queued"), v.literal("running"), v.literal("done"), v.literal("failed")),
+  website: v.string(),
+  queuedAt: v.number(),
+  startedAt: v.optional(v.number()),
+  finishedAt: v.optional(v.number()),
+  attempts: v.number(),
+  /** A failed run's reason: a stage name or an error class, never a log line. */
+  error: v.optional(v.string()),
+  eventCount: v.optional(v.number()),
+  events: v.optional(v.array(v.object({ title: v.string(), startsAt: v.number() }))),
+})
+
+/**
+ * A society website the broker confirmed (ENG-158): an accepted request's
+ * website, which no register may state. The scraper reads these next to the
+ * register-stated ones (`POST /api/pipeline/requests/websites`): enrichment
+ * weekly, the events pages daily. One row per listing; a later confirmation
+ * replaces it.
+ */
+export const websiteSourceFields = {
+  orgKey: v.string(),
+  url: v.string(),
+  /** The request that confirmed it. */
+  requestKey: v.optional(v.string()),
+  createdAt: v.number(),
+}
 
 /**
  * The request agent's draft of what to apply (ENG-126, convex/lib/requestDraft.ts):
@@ -748,6 +819,8 @@ export const requestDraftValidator = v.object({
   ),
   dropped: v.optional(v.array(v.object({ field: v.string(), reason: v.string() }))),
   reply: v.optional(v.string()),
+  /** The society's own events page, when the request points to one (ENG-158). */
+  eventsSource: v.optional(requestEventsSourceValidator),
 })
 
 /** A broker's "Send test notification" (convex/notifications.ts): a synthetic
@@ -789,6 +862,8 @@ export const listingRequestFields = {
   notifications: v.optional(v.array(requestNotificationValidator)),
   /** The request agent's draft (ENG-126). */
   draft: v.optional(requestDraftValidator),
+  /** The work a confirmed plan started on the VPS (ENG-158). */
+  job: v.optional(requestJobValidator),
   /** When the retention job reduced an accepted correction its owner claims
    * cite (`request:<key>`) to a stub: key, kind, listing, role, outcome and
    * dates stay; the submitter's address, message and fields are gone (R8). */
@@ -1287,7 +1362,9 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_status_createdAt", ["status", "createdAt"])
     .index("by_submitter_createdAt", ["submitterEmail", "createdAt"])
-    .index("by_kind_createdAt", ["kind", "createdAt"]),
+    .index("by_kind_createdAt", ["kind", "createdAt"])
+    .index("by_job_state", ["job.state"]),
+  websiteSources: defineTable(websiteSourceFields).index("by_orgKey", ["orgKey"]),
   listingRequestSubmits: defineTable(listingRequestSubmitFields)
     .index("by_budget_submittedAt", ["budget", "submittedAt"])
     .index("by_orgKey_budget_submittedAt", ["orgKey", "budget", "submittedAt"])

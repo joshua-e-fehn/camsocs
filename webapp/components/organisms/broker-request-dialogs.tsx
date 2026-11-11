@@ -91,9 +91,13 @@ export function AcceptCorrectionsDialog({
   const ignored = proposed.filter(([field]) => !isOwnerField(field)).map(([field]) => field)
   const [adding, setAdding] = useState<string>("")
   const [saving, setSaving] = useState(false)
+  // The plan's other half (ENG-158): the request points to the society's
+  // events page, so the site is kept for the scraper and read now.
+  const source = draft?.eventsSource
+  const [readEvents, setReadEvents] = useState(source !== undefined)
 
   const parsed = useMemo(() => rows.map((row) => parseCorrection(row.field, row.text)), [rows])
-  const ready = rows.length > 0 && parsed.every((result) => result.ok)
+  const ready = (rows.length > 0 || readEvents) && parsed.every((result) => result.ok)
   const remaining = OWNER_FIELDS.filter((field) => !rows.some((row) => row.field === field))
 
   const setText = (index: number, text: string) =>
@@ -107,9 +111,16 @@ export function AcceptCorrectionsDialog({
       const result = parsed[index]
       return { field: row.field, value: result.ok ? result.value : null }
     })
+    const applied = `${rows.length} field${rows.length === 1 ? "" : "s"} applied`
     const done = await runWithToast(
-      acceptCorrections({ key: request.key, corrections }),
-      `${rows.length} field${rows.length === 1 ? "" : "s"} applied: live on the site within 5 minutes`,
+      acceptCorrections({
+        key: request.key,
+        corrections,
+        ...(readEvents ? { readEvents: true } : {}),
+      }),
+      readEvents
+        ? `${applied}. The site's events are being read: this request reports back in about 15 minutes`
+        : `${applied}: live on the site within 5 minutes`,
     )
     setSaving(false)
     if (done) onClose()
@@ -134,7 +145,7 @@ export function AcceptCorrectionsDialog({
             <p className="rounded-lg border bg-muted/30 p-3 text-sm">{draft.summary}</p>
           )}
           <FieldGroup>
-            {rows.length === 0 && (
+            {rows.length === 0 && !source && (
               <p className="text-sm text-muted-foreground">
                 The request proposes no value that can be applied. Add the fields it asks to change.
               </p>
@@ -191,6 +202,24 @@ export function AcceptCorrectionsDialog({
                 {draft?.dropped?.map((item) => `${label(item.field)} (${item.reason})`).join("; ")}
               </FieldDescription>
             )}
+            {source && (
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="read-events"
+                  checked={readEvents}
+                  onCheckedChange={(checked) => setReadEvents(checked === true)}
+                />
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="read-events">
+                    Read this site&apos;s events every day
+                  </FieldLabel>
+                  <FieldDescription className="break-words">
+                    The request gives {source.url}. The listing&apos;s website is kept for the
+                    scraper and read now; the request reports what was added, and you close it.
+                  </FieldDescription>
+                </div>
+              </Field>
+            )}
             <Field orientation="horizontal">
               <Select value={adding} onValueChange={setAdding}>
                 <SelectTrigger className="w-full sm:w-72" aria-label="Field to add">
@@ -225,8 +254,9 @@ export function AcceptCorrectionsDialog({
             </Button>
             <Button type="submit" disabled={saving || !ready}>
               {saving && <Spinner />}
-              {draft ? "Confirm and apply" : "Apply"} {rows.length} field
-              {rows.length === 1 ? "" : "s"}
+              {draft ? "Confirm and apply" : "Apply"}
+              {rows.length > 0 ? ` ${rows.length} field${rows.length === 1 ? "" : "s"}` : ""}
+              {readEvents ? (rows.length > 0 ? " and read events" : " and read the events") : ""}
             </Button>
           </DialogFooter>
         </form>

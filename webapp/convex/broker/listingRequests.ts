@@ -36,7 +36,11 @@ import { listingRequestFields, requestNotificationValidator } from "../schema"
  *    sub-transaction) — never a direct edit (data-model §0 rule 2). The
  *    claim's source is the request itself (`request:<key>`, internal, never
  *    shown). Any refused value fails the whole acceptance, so nothing is half
- *    applied.
+ *    applied. With `readEvents` (ENG-158) the listing's website also
+ *    becomes a `websiteSources` row, which the scraper reads from then on,
+ *    and the request gets a job: the VPS reads that site's events and loads
+ *    them now, and reports on the request (`job`). The broker then closes
+ *    the request (`done`).
  *  - **a removal or objection** (`acceptRemoval`): a suppression of the whole
  *    listing, some of its fields, one contact address or named people
  *    (convex/lib/suppressions.ts). It is enforced at once and kept so no later
@@ -163,6 +167,23 @@ export const redraft = mutation({
   },
 })
 
+/** Queues a request's failed job again (ENG-158): three more tries. */
+export const retryJob = mutation({
+  args: { key: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireBrokerUser(ctx)
+    const row = await findRequest(ctx, args.key)
+    if (!row.job || row.job.state !== "failed") {
+      throw new ConvexError("Only a failed job is run again")
+    }
+    await ctx.db.patch("listingRequests", row._id, {
+      job: { state: "queued", website: row.job.website, queuedAt: Date.now(), attempts: 0 },
+    })
+    return null
+  },
+})
+
 /** Queues a synthetic request for every channel; returns its key, whose
  * outcomes `notificationTest` reads as they arrive (the relay sends within
  * about a minute). Nothing is stored as a request. */
@@ -212,17 +233,36 @@ export const setStatus = mutation({
   },
 })
 
+/** The listing's confirmed website, for the scraper: one row per listing. */
+async function confirmWebsite(ctx: MutationCtx, orgKey: string, url: string, requestKey: string) {
+  const existing = await ctx.db
+    .query("websiteSources")
+    .withIndex("by_orgKey", (q) => q.eq("orgKey", orgKey))
+    .take(10)
+  for (const row of existing) await ctx.db.delete("websiteSources", row._id)
+  await ctx.db.insert("websiteSources", { orgKey, url, requestKey, createdAt: Date.now() })
+}
+
+const isWebUrl = (value: unknown): value is string =>
+  typeof value === "string" && /^https?:\/\/[^\s]+$/i.test(value)
+
 /**
  * Accepts a claim or correction: each `{field, value}` becomes an
  * `owner_submitted` claim on the request's listing, and the request is marked
  * `accepted` with the fields applied. Values are checked by the claims
  * ingestion like any claim (validator, URL, length …); one refusal refuses
  * them all.
+ *
+ * A confirmed `website` is also kept for the scraper (`websiteSources`). With
+ * `readEvents` the website (the one confirmed here, else the listing's own)
+ * is read for events now: the request gets a queued job, which may also be
+ * the whole acceptance (no field to change).
  */
 export const acceptCorrections = mutation({
   args: {
     key: v.string(),
     corrections: v.array(v.object({ field: v.string(), value: v.any() })),
+    readEvents: v.optional(v.boolean()),
   },
   returns: v.object({ appliedFields: v.array(v.string()) }),
   handler: async (ctx, args) => {
@@ -232,7 +272,10 @@ export const acceptCorrections = mutation({
       throw new ConvexError("Only a claim or a correction carries values to accept")
     }
     if (!request.orgKey) throw new ConvexError("The request names no listing")
-    if (args.corrections.length === 0) throw new ConvexError("Choose at least one field")
+    const orgKey = request.orgKey
+    if (args.corrections.length === 0 && !args.readEvents) {
+      throw new ConvexError("Choose at least one field")
+    }
     if (args.corrections.length > MAX_CORRECTIONS) {
       throw new ConvexError(`At most ${MAX_CORRECTIONS} fields at once`)
     }
@@ -260,18 +303,42 @@ export const acceptCorrections = mutation({
         retrievedAt: request.createdAt,
       }
     })
-    const result = await ctx.runMutation(internal.ingest.claims.ingest, { claims })
-    if (result.rejected.length > 0) {
-      throw new ConvexError(
-        result.rejected.map((item) => `${item.field}: ${item.reason}`).join("; "),
-      )
+    if (claims.length > 0) {
+      const result = await ctx.runMutation(internal.ingest.claims.ingest, { claims })
+      if (result.rejected.length > 0) {
+        throw new ConvexError(
+          result.rejected.map((item) => `${item.field}: ${item.reason}`).join("; "),
+        )
+      }
     }
     const now = Date.now()
+    const confirmed = args.corrections.find((item) => item.field === "website")?.value
+    let website = isWebUrl(confirmed) ? confirmed : undefined
+    if (website) await confirmWebsite(ctx, orgKey, website, request.key)
+    if (args.readEvents && !website) {
+      const org = await ctx.db
+        .query("organisations")
+        .withIndex("by_key", (q) => q.eq("key", orgKey))
+        .unique()
+      if (!isWebUrl(org?.website)) {
+        throw new ConvexError("Give the listing a website first: its events are read from it")
+      }
+      website = org.website
+      await confirmWebsite(ctx, orgKey, website, request.key)
+    }
     const applied = [...new Set([...(request.outcome?.appliedFields ?? []), ...fields])]
     await ctx.db.patch("listingRequests", request._id, {
       status: "accepted",
       resolvedAt: now,
-      outcome: { ...request.outcome, appliedFields: applied, acceptedAt: now },
+      outcome: {
+        ...request.outcome,
+        appliedFields: applied,
+        ...(args.readEvents && website ? { eventsWebsite: website } : {}),
+        acceptedAt: now,
+      },
+      ...(args.readEvents && website
+        ? { job: { state: "queued" as const, website, queuedAt: now, attempts: 0 } }
+        : {}),
     })
     return { appliedFields: fields }
   },

@@ -1,0 +1,69 @@
+# The request job runner (`camsocs request-jobs`, ENG-158): carries out a plan
+# the broker confirmed on a listing request. It asks Convex for the oldest
+# queued job; with none it ends at once. With one it takes the harvest lock
+# without waiting, reads that one society's website for events
+# (`website_events`), runs `load`, and reports on the request. Started by
+# camsocs-request-jobs.timer every minute, or by hand:
+# `systemctl start camsocs-request-jobs.service`. Runbook:
+# /opt/camsocs/docs/ops-vps.md §13. Installed by install.sh from a reviewed
+# commit; it runs the checkout's pipeline as camsocs, like the harvest.
+[Unit]
+Description=camsocs request jobs (confirmed listing requests)
+Documentation=file:/opt/camsocs/docs/ops-vps.md
+Wants=network-online.target
+After=network-online.target
+# No OnFailure=: a failed job is reported on the request itself, where the
+# broker sees it and can run it again; a run every minute would page on every
+# Convex blip.
+# The checkout's code arrives with the harvest's pull: until then there is no
+# command to run, and a failed condition skips the run quietly.
+ConditionPathExists=/opt/camsocs/pipeline/src/camsocs_pipeline/request_jobs.py
+
+[Service]
+Type=oneshot
+User=camsocs
+Group=camsocs
+WorkingDirectory=/opt/camsocs
+# --as-is: never install or update the environment (the harvest does, under
+# its lock).
+ExecStart=/usr/local/bin/pixi run --as-is --manifest-path /opt/camsocs/pixi.toml pipeline -- --env prod request-jobs
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=CAMSOCS_STATE_DIR=/var/lib/camsocs
+# One site and a load: about a quarter of an hour. Convex takes a job that is
+# still running after an hour to have died.
+TimeoutStartSec=45min
+StateDirectory=camsocs
+StateDirectoryMode=0750
+UMask=0027
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# --- hardening: as the harvest (it stages and loads), without the logs
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# As the harvest: the checkout (var/ with cache and staging, the sync state
+# files at its root, .pixi) and the camsocs home (pixi's cache, the lock).
+ReadWritePaths=/opt/camsocs /var/lib/camsocs
+ProtectHome=yes
+InaccessiblePaths=-/docker -/var/lib/docker -/run/docker.sock -/root -/etc/camsocs -/var/lib/camsocs/.ssh -/var/log/camsocs
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ProtectProc=invisible
+# As the harvest: no private, CGNAT, link-local or multicast range.
+IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

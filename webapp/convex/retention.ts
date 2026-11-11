@@ -551,6 +551,7 @@ export const purgeRequests = internalMutation({
           message: "",
           fields: undefined,
           draft: undefined,
+          job: undefined,
           purgedAt: now,
         })
       } else {

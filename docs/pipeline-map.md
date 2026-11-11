@@ -89,6 +89,7 @@ flowchart LR
   subgraph convex["Convex /api/pipeline"]
     sink_termDates[/"termDates"/]
     sink_crosswalk[/"crosswalk"/]
+    sink_requests_websites[/"requests/websites"/]
     sink_inbound_pending[/"inbound/pending"/]
     sink_inbound_file[/"inbound/file"/]
     sink_suppressions[/"suppressions"/]
@@ -126,6 +127,7 @@ flowchart LR
   dir__resolved -.-> stage_enrich
   stage_enrich --> dir_society_website
   stage_enrich --> dir_linktree
+  sink_requests_websites -.-> stage_enrich
   sel_all_observations -.-> stage_classify
   stage_classify --> sel_all_observations
   sel_org_lookup -.-> stage_camdram_events
@@ -155,6 +157,7 @@ flowchart LR
   sel_org_lookup -.-> stage_website_events
   stage_website_events --> dir_society_website__events
   sink_crosswalk -.-> stage_website_events
+  sink_requests_websites -.-> stage_website_events
   sel_org_lookup -.-> stage_inbox
   sel_event_index -.-> stage_inbox
   stage_inbox --> dir_mailing_list_email

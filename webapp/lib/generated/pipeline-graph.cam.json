@@ -963,6 +963,12 @@
       "route": "/api/pipeline/crosswalk"
     },
     {
+      "id": "sink:cam:requests/websites",
+      "kind": "sink",
+      "name": "requests/websites",
+      "route": "/api/pipeline/requests/websites"
+    },
+    {
       "id": "sink:cam:inbound/pending",
       "kind": "sink",
       "name": "inbound/pending",
@@ -1163,6 +1169,11 @@
       "kind": "writes"
     },
     {
+      "from": "sink:cam:requests/websites",
+      "to": "stage:cam:enrich",
+      "kind": "reads"
+    },
+    {
       "from": "sel:cam:all_observations",
       "to": "stage:cam:classify",
       "kind": "reads"
@@ -1304,6 +1315,11 @@
     },
     {
       "from": "sink:cam:crosswalk",
+      "to": "stage:cam:website_events",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:requests/websites",
       "to": "stage:cam:website_events",
       "kind": "reads"
     },

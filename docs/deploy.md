@@ -194,6 +194,8 @@ Switching email off: `bunx convex env remove --prod REQUEST_NOTIFY_EMAIL`. Switc
 
 Each open claim, correction, removal and objection is drafted by an agent on the VPS (`camsocs-request-agent.timer`, docs/ops-vps.md §13) within about a minute: a summary, rule-based checks on the sender, concerns, the values to apply and a reply to send. The broker opens **Review and confirm…** on the request, where the draft fills the dialog, edits if needed and confirms; the confirm runs the usual acceptance (`acceptCorrections` or `acceptRemoval`): owner-confirmed claims or suppressions, applied at once, on the public pages within 5 minutes (incremental static regeneration). No rebuild and no deploy is involved. Nothing to set on Convex or Vercel: the agent uses the pipeline's own LLM settings (`pipeline/.env`) and production's pipeline key (`.env.prod`).
 
+A request that names the society's events page becomes a plan (ENG-158): the card shows what the agent found on the site, the dialog's **Read this site's events every day** keeps the website for the scraper and queues a job (`camsocs-request-jobs.timer`), and the card reports the events added, to be closed with **Confirm and close**. The new unit needs `install.sh --revision <sha>` once on the host (docs/ops-vps.md §3 and §13).
+
 ## 4. The pipeline against production
 
 The pipeline reads `pipeline/.env` (dev) and, for another environment, a second file on top of it (`pipeline/src/camsocs_pipeline/config.py`):
