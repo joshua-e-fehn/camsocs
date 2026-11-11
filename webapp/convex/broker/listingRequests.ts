@@ -289,8 +289,19 @@ export const acceptCorrections = mutation({
     if (args.corrections.length === 0 && !args.readEvents) {
       throw new ConvexError("Choose at least one field")
     }
-    if (args.readEvents && (request.job?.state === "queued" || request.job?.state === "running")) {
-      throw new ConvexError("This request's site is being read already: wait for its report")
+    if (args.readEvents) {
+      // One job per listing at a time: the scraper keeps one website for a
+      // listing (`websiteSources`), so a second confirmation would change
+      // the site under a job that is waiting or running.
+      for (const state of ["queued", "running"] as const) {
+        const busy = await ctx.db
+          .query("listingRequests")
+          .withIndex("by_job_state", (q) => q.eq("job.state", state))
+          .take(50)
+        if (busy.some((row) => row.orgKey === orgKey)) {
+          throw new ConvexError("This listing's site is being read already: wait for its report")
+        }
+      }
     }
     if (args.corrections.length > MAX_CORRECTIONS) {
       throw new ConvexError(`At most ${MAX_CORRECTIONS} fields at once`)

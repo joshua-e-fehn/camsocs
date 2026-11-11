@@ -502,7 +502,21 @@ describe("the events page of a request (ENG-158)", () => {
       expect((await post(t, "requests/jobs/next", { claim: true })).job).toEqual(job)
       expect((await row(t, key))?.job).toMatchObject({ state: "running", attempts: 1 })
       expect((await post(t, "requests/jobs/next", { claim: true })).job).toBeNull()
-      // A second confirm cannot replace a job that is under way.
+      // A second confirm, of this or another request for the listing, cannot
+      // replace a job that is under way.
+      const second = await insertRequest(t, {
+        key: "lr-eeeeeeeeeeeeeeeeeeee",
+        kind: "claim",
+        message: MESSAGE,
+        fields: {},
+      })
+      await expect(
+        broker.mutation(api.broker.listingRequests.acceptCorrections, {
+          key: second,
+          corrections: [],
+          readEvents: true,
+        }),
+      ).rejects.toThrow()
       await expect(
         broker.mutation(api.broker.listingRequests.acceptCorrections, {
           key,
