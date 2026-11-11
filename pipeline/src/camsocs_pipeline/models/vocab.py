@@ -448,6 +448,7 @@ LISTING_REQUEST_KINDS: tuple[str, ...] = (
 
 LISTING_REQUEST_STATUSES: tuple[str, ...] = (
     "open",
+    "in_progress",
     "accepted",
     "rejected",
     "done",

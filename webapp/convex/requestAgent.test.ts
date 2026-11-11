@@ -487,8 +487,14 @@ describe("the events page of a request (ENG-158)", () => {
         corrections: [{ field: "website", value: "https://www.quokkas.example.org/" }],
         readEvents: true,
       })
+      // In progress, not accepted: it stays on the inbox until it is closed.
       const accepted = await row(t, key)
-      expect(accepted?.status).toBe("accepted")
+      expect(accepted?.status).toBe("in_progress")
+      expect(accepted?.resolvedAt).toBeUndefined()
+      const inbox = await broker.query(api.broker.listingRequests.list, { active: true })
+      expect(inbox.map((item) => [item.key, item.status])).toEqual([[key, "in_progress"]])
+      expect(await broker.query(api.broker.listingRequests.openCount, {})).toBe(1)
+      expect(await broker.query(api.broker.listingRequests.list, { status: "open" })).toEqual([])
       expect(accepted?.outcome?.eventsWebsite).toBe("https://www.quokkas.example.org/")
       expect(accepted?.job).toMatchObject({ state: "queued", attempts: 0 })
       expect((await post(t, "requests/websites", {})).websites).toEqual([
@@ -549,8 +555,16 @@ describe("the events page of a request (ENG-158)", () => {
       // A late report changes nothing.
       expect((await post(t, "requests/job", { key, ok: false, error: "late" })).ok).toBe(false)
 
-      await broker.mutation(api.broker.listingRequests.setStatus, { key, status: "done" })
-      expect((await row(t, key))?.status).toBe("done")
+      // Closing it is what moves it off the inbox, to Accepted.
+      expect((await row(t, key))?.status).toBe("in_progress")
+      await broker.mutation(api.broker.listingRequests.setStatus, { key, status: "accepted" })
+      const closed = await row(t, key)
+      expect(closed?.status).toBe("accepted")
+      expect(closed?.resolvedAt).toBeDefined()
+      // Only the other, still open, request is left on the inbox.
+      const left = await broker.query(api.broker.listingRequests.list, { active: true })
+      expect(left.map((item) => item.key)).toEqual([second])
+      expect(await broker.query(api.broker.listingRequests.openCount, {})).toBe(1)
     })
   })
 

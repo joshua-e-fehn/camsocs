@@ -63,19 +63,42 @@ const SUPPRESSIBLE_FIELDS = ORGANISATION_FIELDS.filter(
   (field) => field !== "name" && field !== "isCounterpart",
 ) as readonly string[]
 
+/** The inbox: what still needs the broker (`open`) or is being carried out
+ * and waits for them to close it (`in_progress`). */
+const ACTIVE = ["open", "in_progress"] as const
+
 export const list = query({
-  args: { status: v.optional(literalUnion(LISTING_REQUEST_STATUSES)) },
+  args: {
+    status: v.optional(literalUnion(LISTING_REQUEST_STATUSES)),
+    /** Open and in-progress requests together, newest first (the inbox). */
+    active: v.optional(v.boolean()),
+  },
   returns: v.array(v.object({ ...listingRequestFields, org: v.union(v.null(), orgRefValidator) })),
   handler: async (ctx, args) => {
     await requireBrokerUser(ctx)
     const status = args.status
-    const rows = status
-      ? await ctx.db
-          .query("listingRequests")
-          .withIndex("by_status_createdAt", (q) => q.eq("status", status))
-          .order("desc")
-          .take(MAX)
-      : await ctx.db.query("listingRequests").order("desc").take(MAX)
+    const rows = args.active
+      ? (
+          await Promise.all(
+            ACTIVE.map((active) =>
+              ctx.db
+                .query("listingRequests")
+                .withIndex("by_status_createdAt", (q) => q.eq("status", active))
+                .order("desc")
+                .take(MAX),
+            ),
+          )
+        )
+          .flat()
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, MAX)
+      : status
+        ? await ctx.db
+            .query("listingRequests")
+            .withIndex("by_status_createdAt", (q) => q.eq("status", status))
+            .order("desc")
+            .take(MAX)
+        : await ctx.db.query("listingRequests").order("desc").take(MAX)
     const refs = brokerOrgRefs(ctx)
     const out = []
     for (const row of rows) {
@@ -88,8 +111,8 @@ export const list = query({
   },
 })
 
-/** Open requests, for the sidebar's badge; counted up to `OPEN_CAP` (the
- * badge then reads "99+"). */
+/** Open and in-progress requests, for the sidebar's badge; counted up to
+ * `OPEN_CAP` (the badge then reads "99+"). */
 export const OPEN_CAP = 100
 
 export const openCount = query({
@@ -97,11 +120,15 @@ export const openCount = query({
   returns: v.number(),
   handler: async (ctx) => {
     await requireBrokerUser(ctx)
-    const rows = await ctx.db
-      .query("listingRequests")
-      .withIndex("by_status_createdAt", (q) => q.eq("status", "open"))
-      .take(OPEN_CAP)
-    return rows.length
+    let count = 0
+    for (const status of ACTIVE) {
+      const rows = await ctx.db
+        .query("listingRequests")
+        .withIndex("by_status_createdAt", (q) => q.eq("status", status))
+        .take(OPEN_CAP)
+      count += rows.length
+    }
+    return Math.min(count, OPEN_CAP)
   },
 })
 
@@ -227,7 +254,7 @@ export const setStatus = mutation({
     const row = await findRequest(ctx, args.key)
     await ctx.db.patch("listingRequests", row._id, {
       status: args.status,
-      resolvedAt: args.status === "open" ? undefined : Date.now(),
+      resolvedAt: args.status === "open" || args.status === "in_progress" ? undefined : Date.now(),
     })
     return null
   },
@@ -269,7 +296,9 @@ const isWebUrl = (value: unknown): value is string =>
  * `readEvents` the site the request's events page is on (the one the agent
  * checked; without a draft, the website confirmed here, else the listing's
  * own) is kept instead and read for events now: the request gets a queued job, which may also be
- * the whole acceptance (no field to change).
+ * the whole acceptance (no field to change). Such a request is `in_progress`,
+ * not `accepted`: it stays on the inbox while the job runs and until the
+ * broker has seen its result and closes it (`setStatus` `accepted`).
  */
 export const acceptCorrections = mutation({
   args: {
@@ -361,9 +390,10 @@ export const acceptCorrections = mutation({
       await confirmWebsite(ctx, orgKey, website, request.key, page)
     }
     const applied = [...new Set([...(request.outcome?.appliedFields ?? []), ...fields])]
+    const queued = args.readEvents === true && website !== undefined
     await ctx.db.patch("listingRequests", request._id, {
-      status: "accepted",
-      resolvedAt: now,
+      status: queued ? "in_progress" : "accepted",
+      resolvedAt: queued ? undefined : now,
       outcome: {
         ...request.outcome,
         appliedFields: applied,

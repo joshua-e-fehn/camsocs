@@ -449,7 +449,18 @@ export function requestNeedsListing(kind: ListingRequestKind, aboutEvent: boolea
   return !(kind === "correct" && aboutEvent)
 }
 
-export const LISTING_REQUEST_STATUSES = ["open", "accepted", "rejected", "done"] as const
+/**
+ * `in_progress` (ENG-158): the broker confirmed a plan whose work runs on the
+ * VPS (the request's `job`). It stays there, on the inbox, until the broker
+ * has seen the result and closes it, which makes it `accepted`.
+ */
+export const LISTING_REQUEST_STATUSES = [
+  "open",
+  "in_progress",
+  "accepted",
+  "rejected",
+  "done",
+] as const
 export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
 
 /** What a suppression covers — an accepted removal or objection (retention.md

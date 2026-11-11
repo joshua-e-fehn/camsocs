@@ -9,6 +9,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   InboxIcon,
+  LoaderIcon,
   ShieldXIcon,
   UndoIcon,
 } from "lucide-react"
@@ -22,6 +23,7 @@ import {
 } from "@/components/organisms/broker-request-dialogs"
 import {
   isDrafted,
+  progressLabel,
   RequestDraftPanel,
   RequestJobPanel,
   readyDraft,
@@ -45,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   type BrokerListingRequest,
@@ -67,7 +70,11 @@ import {
   SUPPRESSION_SCOPE_LABELS,
 } from "@/lib/vocab"
 
-type Filter = BrokerListingRequest["status"] | "all"
+/** `active` is the inbox: open requests and those in progress, which stay
+ * until the broker closes them (ENG-158). */
+type Filter = BrokerListingRequest["status"] | "active" | "all"
+
+const FILTER_LABEL: Partial<Record<Filter, string>> = { active: "Inbox", open: "Open only" }
 
 const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
   claim: "Wants to manage the listing",
@@ -94,10 +101,8 @@ const KIND_HINT: Record<BrokerListingRequest["kind"], string> = {
 export function BrokerRequests() {
   // `?request=<key>`: the link in a notification (ENG-104) opens that request.
   const focus = useSearchParams().get("request")
-  const [filter, setFilter] = useState<Filter>("open")
-  const requests = useBrokerListingRequests(
-    focus || filter === "all" ? undefined : (filter as BrokerListingRequest["status"]),
-  )
+  const [filter, setFilter] = useState<Filter>("active")
+  const requests = useBrokerListingRequests(focus || filter === "all" ? undefined : filter)
 
   if (focus) return <FocusedRequest requestKey={focus} requests={requests} />
 
@@ -117,9 +122,9 @@ export function BrokerRequests() {
         onValueChange={(value) => value && setFilter(value as Filter)}
         aria-label="Status"
       >
-        {LISTING_REQUEST_STATUSES.map((status) => (
+        {(["active", ...LISTING_REQUEST_STATUSES] as const).map((status) => (
           <ToggleGroupItem key={status} value={status}>
-            {humanize(status)}
+            {FILTER_LABEL[status] ?? humanize(status)}
           </ToggleGroupItem>
         ))}
         <ToggleGroupItem value="all">All</ToggleGroupItem>
@@ -134,7 +139,11 @@ export function BrokerRequests() {
               <InboxIcon />
             </EmptyMedia>
             <EmptyTitle>Inbox clear</EmptyTitle>
-            <EmptyDescription>No {filter === "all" ? "" : `${filter} `}requests.</EmptyDescription>
+            <EmptyDescription>
+              {filter === "active"
+                ? "Nothing open or in progress."
+                : `No ${filter === "all" ? "" : `${humanize(filter).toLowerCase()} `}requests.`}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -305,6 +314,8 @@ function RequestCard({
   const correction = request.kind === "claim" || request.kind === "correct"
   const fields = Object.entries(request.fields ?? {})
   const applied = request.outcome?.appliedFields ?? []
+  const progress = progressLabel(request)
+  const working = request.job?.state === "queued" || request.job?.state === "running"
 
   return (
     <Card
@@ -331,6 +342,12 @@ function RequestCard({
             <Badge variant="outline">
               <EyeOffIcon />
               hidden
+            </Badge>
+          )}
+          {progress && (
+            <Badge variant={request.job?.state === "failed" ? "destructive" : "default"}>
+              {working ? <Spinner /> : <LoaderIcon />}
+              {progress}
             </Badge>
           )}
         </CardTitle>
