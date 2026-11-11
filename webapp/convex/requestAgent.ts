@@ -478,12 +478,17 @@ export const saveJob = internalMutation({
     const job = row?.job
     if (!row || !job || job.state !== "running") return { ok: false }
     const now = Date.now()
+    // A request confirmed before `in_progress` existed is `accepted` with its
+    // job still running: its report puts it on the inbox, to be closed there.
+    const inProgress =
+      row.status === "accepted" ? { status: "in_progress" as const, resolvedAt: undefined } : {}
     if (args.ok) {
       // What the broker is told is what the listing shows after the load:
       // its upcoming public events, not what the run staged (the load leaves
       // out notices, unsafe titles and events another source already has).
       const listed = row.orgKey ? await upcomingEvents(ctx, row.orgKey, now) : []
       await ctx.db.patch("listingRequests", row._id, {
+        ...inProgress,
         job: {
           ...job,
           state: "done",
@@ -499,6 +504,7 @@ export const saveJob = internalMutation({
     const error = (args.error ?? "error").replace(/[^\w .:-]/g, "").slice(0, 80)
     const again = job.attempts < JOB_MAX_ATTEMPTS
     await ctx.db.patch("listingRequests", row._id, {
+      ...inProgress,
       job: {
         ...job,
         state: again ? "queued" : "failed",

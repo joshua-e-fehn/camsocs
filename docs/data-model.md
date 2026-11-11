@@ -413,7 +413,7 @@ These are never returned by public queries.
   | message | string |
   | fields | Record? |
   | eventKey | string? — the event it is about, when sent from an event page's "Report or correct this event" link (`?event=`); never with `add` |
-  | status | `open \| accepted \| rejected \| done` |
+  | status | `open \| in_progress \| accepted \| rejected \| done`. `in_progress` (ENG-158): a confirmed plan whose job runs on the VPS; it stays on the inbox with open requests until the broker closes it, which makes it `accepted` |
   | createdAt | number |
   | resolvedAt | number? |
   | outcome | `{ appliedFields?: string[], suppressionKeys?: string[], eventsWebsite?, acceptedAt }`? — what accepting it did; `eventsWebsite` is the website the scraper now reads for the listing (ENG-158) |

@@ -152,8 +152,27 @@ function EventsPlan({ draft, open }: { draft: RequestDraft; open: boolean }) {
 /**
  * The work a confirmed plan started (ENG-158, `listingRequests.job`): queued,
  * running on the VPS, done with what was added, or failed with a way to run
- * it again. Done, the broker looks at the listing and closes the request.
+ * it again. Done, the broker looks at the listing and closes the request,
+ * which moves it from `in_progress` to `accepted`.
  */
+
+/** Where an in-progress request stands, for the badge on its card. */
+export function progressLabel(request: BrokerListingRequest): string | null {
+  if (request.status !== "in_progress") return null
+  switch (request.job?.state) {
+    case "queued":
+      return "In progress: queued"
+    case "running":
+      return "In progress: running"
+    case "done":
+      return "Implemented: confirm to close"
+    case "failed":
+      return "In progress: run failed"
+    default:
+      return "In progress"
+  }
+}
+
 export function RequestJobPanel({ request }: { request: BrokerListingRequest }) {
   const { retryJob } = useListingRequestMutations()
   const setStatus = useSetListingRequestStatus()
@@ -225,11 +244,14 @@ export function RequestJobPanel({ request }: { request: BrokerListingRequest }) 
             </Link>
           </Button>
         )}
-        {request.status === "accepted" && (
+        {request.status === "in_progress" && (
           <Button
             size="sm"
             onClick={() =>
-              runWithToast(setStatus({ key: request.key, status: "done" }), "Request closed")
+              runWithToast(
+                setStatus({ key: request.key, status: "accepted" }),
+                "Request closed: now under Accepted",
+              )
             }
           >
             <CheckIcon />

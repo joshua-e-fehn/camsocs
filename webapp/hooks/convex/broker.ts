@@ -95,8 +95,12 @@ export function useBrokerMatches() {
   return useQuery(api.broker.graph.matches)
 }
 
-export function useBrokerListingRequests(status?: BrokerListingRequest["status"]) {
-  return useQuery(api.broker.listingRequests.list, status ? { status } : {})
+/** `"active"`: the inbox, open and in-progress requests together. */
+export function useBrokerListingRequests(status?: BrokerListingRequest["status"] | "active") {
+  return useQuery(
+    api.broker.listingRequests.list,
+    status === "active" ? { active: true } : status ? { status } : {},
+  )
 }
 
 /** Suppressions of one listing (removals and objections accepted). */
