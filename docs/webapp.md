@@ -943,6 +943,21 @@ read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
 | `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add), formSecret? (only from `/api/request`; required once `REQUEST_FORM_SECRET` is set, ENG-37) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
+### Formal tracker (`convex/formals.ts`, ENG-272)
+
+The first member-owned data on the site (record-of-processing P13). Every function takes the user id from the session, never from an argument; reads return `null` when signed out and never throw. `/formals/tracker` is a static page; its signed-in parts are client-side (`hooks/convex/formals.ts`, skipped until the Convex client is authenticated).
+
+| Function | Args | Returns |
+|---|---|---|
+| `formals.mine` | `{}` | `null` signed out, else the member's `formalEntries` rows and `formalProfiles` row (or null) |
+| `formals.leaderboard` | `{}` | `null` unless the viewer is a verified `@cam.ac.uk` member or the broker; else the top 50 opted-in profiles with a display name whose account is still a verified member: `{ rank, displayName, homeCollege (short name) \| null, colleges, visits, isMe }` (ties: colleges, then visits, then who reached the count first). Never a user id, email, notes or dates |
+| `formals.setAttended` (mutation) | `{ collegeKey, attended }` | `null`; ticking sets `visits` to at least 1, unticking to 0 (date and notes kept) |
+| `formals.saveDetails` (mutation) | `{ collegeKey, visitedOn: YYYY-MM-DD \| null (not in the future), visits (0–200), notes (≤ 2,000) }` | `null` |
+| `formals.saveProfile` (mutation) | `{ displayName \| null (2–24 chars, not an email, web address or CRSid), onLeaderboard, homeCollegeKey \| null }` | `null`; joining needs a verified `@cam.ac.uk` member (or the broker) and a display name |
+| `formals.eraseMine` (mutation) | `{}` | `{ deleted }`: every entry and the profile |
+
+`collegeKey` is a college's organisation key from `lib/data/colleges.json`; `convex/lib/formals.ts` holds the 31 keys (a test keeps them equal to the JSON). The structured weekly formal nights shown on `/formals` live in the same JSON (`formal.nights`, with a confidence per night) and are static, not Convex data. The college wealth ranking (`/colleges/wealth`) is static too: `lib/data/college-wealth.json`, from each college's 2024-25 accounts filed with the Charity Commission.
+
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
 

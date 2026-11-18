@@ -18,6 +18,8 @@ export const COLUMNS = [
       { href: "/term-dates", label: "Term dates" },
       { href: "/finder", label: "Society Finder" },
       { href: "/colleges", label: "Colleges" },
+      { href: "/colleges/wealth", label: "Richest colleges" },
+      { href: "/formals", label: "Formals" },
       { href: "/guides", label: "Guides" },
       { href: "/guides/join-a-society", label: "Joining a society" },
     ],

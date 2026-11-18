@@ -35,6 +35,7 @@ export const PUBLIC_PATHS = [
   "/terms",
   "/term-dates",
   "/colleges",
+  "/formals",
   "/guides",
   "/for",
   "/finder",

@@ -1,0 +1,298 @@
+"use client"
+
+import Link from "next/link"
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
+import { FormalNightRow } from "@/components/molecules/formal-night-row"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import type { Weekday } from "@/lib/colleges"
+import {
+  byWeekday,
+  collegeCount,
+  DEFAULT_FILTERS,
+  dayFromId,
+  dayId,
+  type FormalFilters,
+  type FormalSlot,
+  initialDay,
+  londonWeekday,
+  WEEK,
+  WEEKDAY_NAMES,
+} from "@/lib/formal-week"
+import { cn } from "@/lib/utils"
+
+type Selection = Weekday | "all"
+
+/** The picker's options in order: the seven days, then the whole week. */
+const OPTIONS: readonly Selection[] = [...WEEK, "all"]
+
+function countText(count: number): string {
+  return `${count} ${count === 1 ? "college" : "colleges"}`
+}
+
+/**
+ * The week of formals (/formals, ENG-272). The server's HTML lists every
+ * day's section (ids `monday` … `sunday`), so readers without JavaScript and
+ * crawlers get the whole week. Once mounted it picks the day in the URL's
+ * hash, else today in Europe/London, and shows that day alone; when the day
+ * came from the hash (on load or a later `#saturday` link) it scrolls that
+ * section into view once shown, since a hidden section cannot be scrolled to.
+ * The day picker is a radio group (arrow keys, Home/End) and a choice is
+ * announced politely. The picker and the two filters are local state: nothing
+ * here changes the URL or asks the server again. `unpublished` is how many
+ * colleges publish no nights, so each day can say it is not the whole list.
+ */
+export function FormalsWeek({
+  slots,
+  unpublished = 0,
+}: {
+  slots: readonly FormalSlot[]
+  unpublished?: number
+}) {
+  const [selected, setSelected] = useState<Selection>("all")
+  const [today, setToday] = useState<Weekday | null>(null)
+  const [filters, setFilters] = useState<FormalFilters>(DEFAULT_FILTERS)
+  const [announcement, setAnnouncement] = useState("")
+  const scrollTo = useRef<Weekday | null>(null)
+  const picker = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const now = Date.now()
+    const { day, fromHash } = initialDay(window.location.hash, now)
+    setToday(londonWeekday(now))
+    if (fromHash) scrollTo.current = day
+    setSelected(day)
+    const onHash = () => {
+      const hashDay = dayFromId(window.location.hash)
+      if (!hashDay) return
+      scrollTo.current = hashDay
+      setSelected(hashDay)
+    }
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+
+  // After the chosen section is shown (it had no box while hidden), scroll to it.
+  useEffect(() => {
+    const day = scrollTo.current
+    if (!day || selected !== day) return
+    scrollTo.current = null
+    document.getElementById(dayId(day))?.scrollIntoView({ block: "start" })
+  }, [selected])
+
+  const days = useMemo(() => byWeekday(slots, filters), [slots, filters])
+
+  /** A choice by the reader: select it and announce it (never on mount). */
+  function choose(option: Selection) {
+    setSelected(option)
+    setAnnouncement(
+      option === "all"
+        ? "The whole week"
+        : `${WEEKDAY_NAMES[option]}: ${countText(collegeCount(days[option]))}`,
+    )
+  }
+
+  function onPickerKey(event: KeyboardEvent<HTMLDivElement>) {
+    const at = OPTIONS.indexOf(selected)
+    const last = OPTIONS.length - 1
+    const next =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? at === last
+          ? 0
+          : at + 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? at === 0
+            ? last
+            : at - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null
+    if (next === null) return
+    event.preventDefault()
+    choose(OPTIONS[next])
+    picker.current?.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus()
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
+        <div
+          ref={picker}
+          role="radiogroup"
+          aria-label="Night of the week"
+          onKeyDown={onPickerKey}
+          className="grid grid-cols-4 gap-1.5 sm:grid-cols-8"
+        >
+          {WEEK.map((day) => (
+            <DayButton
+              key={day}
+              label={WEEKDAY_NAMES[day].slice(0, 3)}
+              name={WEEKDAY_NAMES[day]}
+              count={collegeCount(days[day])}
+              controls={dayId(day)}
+              pressed={selected === day}
+              today={today === day}
+              onPress={() => choose(day)}
+            />
+          ))}
+          <DayButton
+            label="Week"
+            name="The whole week"
+            pressed={selected === "all"}
+            today={false}
+            onPress={() => choose("all")}
+          />
+        </div>
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
+          <FilterCheckbox
+            id="formals-visitors"
+            label="Visitors can go"
+            checked={filters.visitorsOnly}
+            onChange={(visitorsOnly) => setFilters((f) => ({ ...f, visitorsOnly }))}
+          />
+          <FilterCheckbox
+            id="formals-graduate"
+            label="Include graduate formals"
+            checked={filters.includeGraduate}
+            onChange={(includeGraduate) => setFilters((f) => ({ ...f, includeGraduate }))}
+          />
+        </div>
+      </div>
+
+      {WEEK.map((day) => {
+        const rows = days[day]
+        const shown = selected === "all" || selected === day
+        return (
+          <section
+            key={day}
+            id={dayId(day)}
+            hidden={!shown}
+            aria-labelledby={`${dayId(day)}-title`}
+            className="flex scroll-mt-20 flex-col gap-2"
+          >
+            <h2
+              id={`${dayId(day)}-title`}
+              className="flex items-baseline gap-3 border-t-2 border-foreground pt-3 font-serif text-2xl font-medium tracking-tight"
+            >
+              {WEEKDAY_NAMES[day]}
+              <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">
+                {countText(collegeCount(rows))}
+              </span>
+              {today === day && (
+                <span className="font-sans text-sm font-medium text-today-text">Today</span>
+              )}
+            </h2>
+            {unpublished > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Not the whole list:{" "}
+                <Link
+                  href="#unpublished-title"
+                  className="underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground"
+                >
+                  {countText(unpublished)} {unpublished === 1 ? "does" : "do"} not publish
+                  {unpublished === 1 ? " its" : " their"} nights
+                </Link>
+                .
+              </p>
+            )}
+            {rows.length > 0 ? (
+              <ul className="flex flex-col divide-y rounded-xl border">
+                {rows.map((slot) => (
+                  <FormalNightRow
+                    // Unique per college and weekday (lib/colleges.test.ts).
+                    key={`${slot.collegeKey}-${slot.night.kind}-${slot.night.audience}`}
+                    slot={slot}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No college publishes a formal on {WEEKDAY_NAMES[day]}s
+                {filters.includeGraduate && !filters.visitorsOnly ? "" : " with these filters"}.
+              </p>
+            )}
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+function DayButton({
+  label,
+  name,
+  count,
+  controls,
+  pressed,
+  today,
+  onPress,
+}: {
+  label: string
+  name: string
+  count?: number
+  /** The id of the day section this option shows. */
+  controls?: string
+  pressed: boolean
+  today: boolean
+  onPress: () => void
+}) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a styled single-choice picker; the radiogroup handles arrow keys, Home/End and the roving tabindex.
+    <button
+      type="button"
+      role="radio"
+      aria-checked={pressed}
+      aria-controls={controls}
+      tabIndex={pressed ? 0 : -1}
+      aria-label={`${name}${today ? " (today)" : ""}${count === undefined ? "" : `, ${countText(count)}`}`}
+      onClick={onPress}
+      className={cn(
+        "relative flex min-h-11 flex-col items-center justify-center rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+        pressed
+          ? "border-brand bg-brand text-brand-foreground"
+          : "bg-background hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <span>{label}</span>
+      {count !== undefined && (
+        <span
+          className={cn(
+            "font-mono text-xs tabular-nums",
+            pressed ? "text-brand-foreground/85" : "text-muted-foreground",
+          )}
+        >
+          {count}
+        </span>
+      )}
+      {today && (
+        <span aria-hidden className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-today" />
+      )}
+    </button>
+  )
+}
+
+function FilterCheckbox({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string
+  label: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <Label htmlFor={id} className="flex min-h-11 cursor-pointer items-center text-sm">
+        {label}
+      </Label>
+    </div>
+  )
+}

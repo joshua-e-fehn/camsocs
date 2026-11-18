@@ -92,6 +92,13 @@ export default async function CollegesPage() {
             How formal hall works across colleges
             <ArrowRightIcon aria-hidden className="size-3.5" />
           </Link>
+          <Link
+            href="/colleges/wealth"
+            className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline underline-offset-4 sm:min-h-0"
+          >
+            Colleges ranked by wealth
+            <ArrowRightIcon aria-hidden className="size-3.5" />
+          </Link>
         </div>
       </header>
 
