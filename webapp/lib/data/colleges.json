@@ -1465,11 +1465,11 @@
         "visitors": "Yes, on a guest ticket: King's formals issue a capped share of guest tickets (70:30 King's to non-King's, Varsity 2026), booked by a King's member through KiFoMaSy; a King's member's own ticket cannot be passed to an outsider.",
         "bookingSummary": "Guest ticket from a King's member (KiFoMaSy)",
         "rulesSummary": "Wednesday formals, 19:30, run by KCSU and KCGU and sold through KiFoMaSy (login); tickets split 70:30 King’s to non-King’s (Varsity, 2026).",
-        "formalNights": "Wednesdays in term, 19:30: KCSU-run, fancy-dress themed, post-formal ent in the bar",
+        "formalNights": "Wednesdays in Full Term, 19:30: KCSU-run, fancy-dress themed, post-formal ent in the bar",
         "guests": null,
         "booking": "KiFoMaSy (store.kcsu.org.uk, login required); details of student formals are sent by email",
         "dress": null,
-        "price": "Around £20 a ticket (student-written SU Alternative Prospectus, about 2022-23); the College subsidises the members' price (Varsity, 2026)",
+        "price": "About £16 for members (College plan to cut it from about £20, Varsity 2024); guest price set per formal on KiFoMaSy",
         "note": "Student formals are **organised by KCSU and KCGU** and tickets are booked through **KiFoMaSy**; details are sent by email. The Student Hub notes that the KCGU website is under construction. [Student Hub](https://www.kings.cam.ac.uk/student-hub), [KCSU](https://www.kcsu.org.uk/). KiFoMaSy itself requires a login, so the guest allowance for a given formal and the dress code are not publicly visible; ask your King's host.\n\nThe regular formal is on **Wednesday at 19:30**, fancy-dress themed, with a post-formal ent in the bar: every regular Formal Hall in [KCSU’s listings](https://web.archive.org/web/20180119143909/http://kcsu.org.uk:80/events/formal-hall-7/) falls on a Wednesday, and the [SU Alternative Prospectus](https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/) describes a themed formal roughly once a week. [Varsity](https://www.varsity.co.uk/news/31242) reported in March 2026 a strict 70:30 split of King’s to non-King’s tickets, with entry checked by CamCard or QR code.\n\nThe **2025 Annual Report** says the unions renegotiated the memorandum of understanding for student-run formals, with guaranteed tickets for each union and free tickets for the students running the event. The College agreed **in principle to two student-run formals a week, funding permitting**; funding for a permanent expansion was not secured that year. An extra graduate formal was approved in Easter Term. [Annual Report 2025](https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html).\n\n**Visitors:** an outside student goes on a **guest ticket**. KCSU's 2-formals motion says \"the same number of guest tickets\" would be offered at the extra formals and that they would give \"more opportunities for people at other colleges to attend\" ([SU referendum motion](https://www.cambridgesu.co.uk/referenda/motion/59/96)); Varsity (March 2026) reports the guest-ticket limits, the 70:30 split, that members' tickets are \"strictly for King's\", and CamCard checks at the door ([Varsity](https://www.varsity.co.uk/news/31242)). Tickets are allocated by ballot (SU motion). The price is around £20 a ticket according to the student-written [SU Alternative Prospectus](https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/).",
         "primarySourceUrl": "https://www.kings.cam.ac.uk/student-hub",
         "sourceUrls": [
@@ -1490,11 +1490,11 @@
             "audience": "all_members",
             "frequency": "weekly",
             "confidence": "found",
-            "notes": "KCSU-run, fancy-dress themed, with a post-formal ent in the bar. KCSU's formal listings put every regular Formal Hall on a Wednesday at 19:30 (Oct and Nov 2016; Feb and Mar 2018). Varsity (Mar 2026): tickets are split 70:30 between King's and non-King's diners."
+            "notes": "Weekly in Full Term, run by KCSU (themed, fancy dress, post-formal ent in the bar) with KCSU and KCGU ticket allocations. Wednesday is the night in KCSU's listings (2016-18, at 19:30) and on KCGU's public 2026 calendar (formals on Wed 4 Mar and Wed 18 Mar 2026, from 19:00). Guest seats are capped at 70:30 King's to non-King's (Varsity, Mar 2026). Dates are agreed each term with the College."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"Formal Hall — Wednesday, 7th February 2018 — 19:30\" (KCSU listing); \"We also have Formal Hall roughly once a week, which unlike other colleges, is fancy dress themed\" (SU Alternative Prospectus); \"Formals are organised by KCSU and KCGU, and tickets can be booked using KiFoMaSy.\" (Student Hub)",
+        "nightsQuote": "\"Formal Hall — Wednesday, 7th February 2018 — 19:30\" (KCSU listing); \"We also have Formal Hall roughly once a week, which unlike other colleges, is fancy dress themed\" (SU Alternative Prospectus); \"Formals are organised by KCSU and KCGU, and tickets can be booked using KiFoMaSy.\" (Student Hub); \"A special dinner, called Formal Hall, takes place weekly during full term\" (King's Facilities page, 2025)",
         "nightsGaps": [],
         "nightsConflict": null,
         "nightsSourceUrls": [
@@ -1503,7 +1503,10 @@
           "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/",
           "https://www.varsity.co.uk/news/31242",
           "https://www.kings.cam.ac.uk/student-hub",
-          "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html"
+          "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html",
+          "https://web.archive.org/web/20250615120254/https://www.kings.cam.ac.uk/study/life-at-kings/facilities",
+          "https://www.kings.cam.ac.uk/rsdam/download/RsdamMedia-465/document",
+          "https://www.varsity.co.uk/news/27795"
         ],
         "nightsSources": [
           {
@@ -1595,17 +1598,35 @@
             "publisher": "King's Entrepreneurship Lab",
             "date": "2025-10-01 event",
             "kind": "other"
+          },
+          {
+            "url": "https://web.archive.org/web/20250615120254/https://www.kings.cam.ac.uk/study/life-at-kings/facilities",
+            "publisher": "King's College, Facilities page (Wayback)",
+            "date": "2025-06-15 snapshot",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.kings.cam.ac.uk/rsdam/download/RsdamMedia-465/document",
+            "publisher": "King's College Events and Meetings Policy",
+            "date": "2024-12",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.varsity.co.uk/news/27795",
+            "publisher": "Varsity",
+            "date": "2024-06-17",
+            "kind": "student_press"
           }
         ],
         "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Guest tickets are capped by the College's 70:30 King's to non-King's ratio; members' tickets are for King's members only and CamCards are checked at entry (Varsity, Mar 2026).",
         "priceGbp": {
-          "student": 20.0,
+          "student": 16.0,
           "guest": null,
-          "asOf": "about 2022-23 (SU Alternative Prospectus)",
-          "sourceUrl": "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/",
-          "note": "SU Alternative Prospectus (King's page, written by a King's student, cites 2022-23 rent): \"tickets are expensive, around £20\". Varsity (7 Mar 2026): the College subsidises the members' price; no figure given.",
+          "asOf": "2024-25 (College plan reported by Varsity)",
+          "sourceUrl": "https://www.varsity.co.uk/news/27795",
+          "note": "Varsity (17 Jun 2024) reported the College's plan to cut the student Formal Hall price to £16; the SU Alternative Prospectus (about 2022-23) gave about £20. The College subsidises the members' price (Varsity, Mar 2026). Guest prices are set per formal on KiFoMaSy.",
           "caveat": "around"
         },
         "bookingDeadline": null
