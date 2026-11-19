@@ -489,7 +489,7 @@ export function CollegeWealthArticle({ view }: { view: WealthView }) {
             belongs to other investors, among them some colleges that invest through the fund.
           </p>
           <p className="leading-relaxed">
-            None of it is college money, so the ranking above leaves it out
+            The University’s own share is not college money, so the ranking above leaves it out
             {universityShown
               ? ": tick “Include the University of Cambridge” under the table to see the University’s share alongside the colleges, without a rank number"
               : ""}
