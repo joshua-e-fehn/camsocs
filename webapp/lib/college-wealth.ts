@@ -308,11 +308,15 @@ export function sourcePage(sourceRef: string): string {
 /** One row as the client table gets it: only what it draws, numbers and
  * their text already worked out, so the table imports no data. */
 export type WealthTableRow = {
+  /** `university`: the University of Cambridge's own figures, shown for
+   * context only when the reader asks (it is not a college and has no rank). */
+  kind: "college" | "university"
   slug: string
   shortName: string
   name: string
   href: string
-  crest: CollegeInfo["crest"]
+  /** Null for the University, which never shows a crest (DESIGN.md). */
+  crest: CollegeInfo["crest"] | null
   values: Record<WealthSortKey, number>
   display: Record<WealthSortKey, string>
   financialYearEnd: string
@@ -329,6 +333,15 @@ export type WealthTable = {
   /** The value of a full bar for each sort key (`barScale`). */
   scales: Record<WealthSortKey, number>
   columns: { key: WealthSortKey; label: string }[]
+  /** The University's row and the orders with it in, when the ranking's
+   * year matches the University's figures; null otherwise. `scales` stay
+   * the colleges' either way. */
+  university: {
+    row: WealthTableRow
+    orders: Record<WealthSortKey, string[]>
+    /** What the note under the table says about the row. */
+    note: string
+  } | null
 }
 
 function byKey<T>(make: (key: WealthSortKey) => T): Record<WealthSortKey, T> {
@@ -346,26 +359,128 @@ type TableSource = Figures &
 export function wealthTable(
   rows: readonly TableSource[],
   hubPath: (college: CollegeInfo) => string,
+  university: UniversityEndowment | null = null,
 ): WealthTable {
+  const collegeRows: WealthTableRow[] = rows.map((row) => ({
+    kind: "college",
+    slug: row.slug,
+    shortName: row.college.shortName,
+    name: row.name,
+    href: hubPath(row.college),
+    crest: row.college.crest,
+    values: byKey((key) => metricValue(row, key)),
+    display: byKey((key) => formatMetric(row, key)),
+    financialYearEnd: row.financialYearEnd,
+    sourceUrl: row.sourceUrl,
+    sourceLabel:
+      row.basis === undefined || row.basis === "verified"
+        ? `Accounts, ${sourcePage(row.sourceRef)}`
+        : "Register",
+    sourceRef: row.sourceRef,
+  }))
+  const universityRow = university ? universityTableRow(university) : null
   return {
-    rows: rows.map((row) => ({
-      slug: row.slug,
-      shortName: row.college.shortName,
-      name: row.name,
-      href: hubPath(row.college),
-      crest: row.college.crest,
-      values: byKey((key) => metricValue(row, key)),
-      display: byKey((key) => formatMetric(row, key)),
-      financialYearEnd: row.financialYearEnd,
-      sourceUrl: row.sourceUrl,
-      sourceLabel:
-        row.basis === undefined || row.basis === "verified"
-          ? `Accounts, ${sourcePage(row.sourceRef)}`
-          : "Register",
-      sourceRef: row.sourceRef,
-    })),
+    rows: collegeRows,
     orders: byKey((key) => rankedBy(rows, key).map((row) => row.slug)),
     scales: byKey((key) => barScale(rows.map((row) => metricValue(row, key)))),
     columns: WEALTH_SORT_KEYS.map((key) => ({ key, label: WEALTH_SORT_LABELS[key] })),
+    university:
+      university && universityRow
+        ? {
+            row: universityRow,
+            orders: byKey((key) => orderByValue([...collegeRows, universityRow], key)),
+            note: universityNote(university),
+          }
+        : null,
   }
+}
+
+/** Slugs highest first by a row's value; ties (and rows without a figure,
+ * which are −∞) by name, as `rankedBy` orders the colleges. */
+function orderByValue(rows: readonly WealthTableRow[], key: WealthSortKey): string[] {
+  return [...rows]
+    .sort((a, b) => b.values[key] - a.values[key] || a.name.localeCompare(b.name))
+    .map((row) => row.slug)
+}
+
+/** The rows in order by `key`, with the University among them when
+ * `withUniversity` is set and the table has it. */
+export function tableRows(
+  table: WealthTable,
+  key: WealthSortKey,
+  withUniversity: boolean,
+): WealthTableRow[] {
+  const shown = withUniversity ? table.university : null
+  const bySlug = new Map(table.rows.map((row) => [row.slug, row]))
+  if (shown) bySlug.set(shown.row.slug, shown.row)
+  return (shown ? shown.orders : table.orders)[key].flatMap((slug) => bySlug.get(slug) ?? [])
+}
+
+/** Each row's rank among the colleges (1..N), by slug; the University has none. */
+export function collegeRanks(rows: readonly WealthTableRow[]): Map<string, number> {
+  const ranks = new Map<string, number>()
+  for (const row of rows) if (row.kind === "college") ranks.set(row.slug, ranks.size + 1)
+  return ranks
+}
+
+// --- the University (context, not a college) -----------------------------------------------
+
+export type UniversityEndowment = typeof data.universityEndowment
+
+/** The University row's id (the prose section's is `university`). */
+export const UNIVERSITY_ROW_SLUG = "university-of-cambridge"
+/** The page section that explains the University's endowment. */
+export const UNIVERSITY_SECTION_ID = "university"
+
+/**
+ * The University of Cambridge as a table row. Its endowment is the part of
+ * the Cambridge University Endowment Fund attributable to the University
+ * group (the rest of the fund belongs to other investors, some of them
+ * colleges, so the whole fund would count college money twice); net assets
+ * and income are the University group's. It has no per-student figure: its
+ * student numbers do not compare with a college's.
+ */
+export function universityTableRow(u: UniversityEndowment = UNIVERSITY_ENDOWMENT): WealthTableRow {
+  const change = changePct({
+    endowmentGbp: u.attributableToUniversityGroupGbp,
+    endowmentPrevGbp: u.attributableToUniversityGroupPrevGbp,
+  })
+  const values: Record<WealthSortKey, number> = {
+    endowment: u.attributableToUniversityGroupGbp,
+    perStudent: Number.NEGATIVE_INFINITY,
+    income: u.groupIncomeGbp,
+    netAssets: u.groupNetAssetsGbp,
+    change: change ?? Number.NEGATIVE_INFINITY,
+  }
+  return {
+    kind: "university",
+    slug: UNIVERSITY_ROW_SLUG,
+    shortName: "University of Cambridge",
+    name: "University of Cambridge",
+    href: `#${UNIVERSITY_SECTION_ID}`,
+    crest: null,
+    values,
+    display: byKey((key) => {
+      if (key === "perStudent") return NO_FIGURE
+      if (key === "change") return change === null ? NO_FIGURE : formatPct(change)
+      return formatGbp(values[key])
+    }),
+    financialYearEnd: u.financialYearEnd,
+    sourceUrl: u.sourceUrl,
+    sourceLabel: `Financial statements, ${u.sourceRef.match(/PDF p\.\d+/)?.[0] ?? "PDF"}`,
+    sourceRef: u.sourceRef,
+  }
+}
+
+/** The note under the table while the University is shown. */
+export function universityNote(u: UniversityEndowment = UNIVERSITY_ENDOWMENT): string {
+  return (
+    "The University of Cambridge is not a college, so it has no rank number and the colleges keep theirs. " +
+    `Its endowment here is its ${formatGbp(u.attributableToUniversityGroupGbp)} share of the ` +
+    `${formatGbp(u.netAssetValueGbp)} Cambridge University Endowment Fund; the rest belongs to other ` +
+    "investors, some of them colleges. Its net assets and income are the whole University group’s, " +
+    `for ${u.financialYear} (the year to ${new Date(`${u.financialYearEnd}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}). ` +
+    "It has no per-student figure, as its student numbers do not compare with a college’s, so it comes last by that. " +
+    "Its bars use the colleges’ scale."
+  )
 }
