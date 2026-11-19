@@ -28,6 +28,7 @@ suppressions           ``{}``                          ingest/suppressions:list
 coverage               `CoverageRequest`               coverage:page
 coverage/events        `EventsCoverageRequest`         coverage:eventsPage
 termDates              `TermDatesBatch`                ingest/termDates:upsert
+collegeFinances        `CollegeFinancesBatch`          ingest/collegeFinances:upsert
 derive                 ``{}``                          derive:daily
 purge                  `PurgeRequest`                  ingest/purge:purge (dev only)
 events/scan            `EventsScanRequest`             ingest/cleanup:eventsPage
@@ -485,6 +486,43 @@ class TermDatesBatch(WireModel):
     terms: list[TermDate]
 
 
+class CollegeFinanceCitation(WireModel):
+    """The accounts page behind an override (`college_finance_overrides.json`)."""
+
+    url: str
+    page: str
+    reason: str
+
+
+class CollegeFinanceSource(WireModel):
+    extract_url: str
+    #: The extract's ``Last-Modified``, epoch ms; omitted when not sent.
+    extract_modified: int | None = None
+    register_url: str
+    override_citation: CollegeFinanceCitation | None = None
+
+
+class CollegeFinance(WireModel):
+    """One college's financial period from the Charity Commission register
+    (convex/ingest/collegeFinances.ts; source-research §22). A figure the
+    return did not state is omitted, never sent as null."""
+
+    charity_number: str
+    college_key: str
+    period_end: str
+    endowment_gbp: int | None = None
+    net_assets_gbp: int | None = None
+    income_gbp: int | None = None
+    status: Literal["register", "override", "needs_review"]
+    checks: list[str] = Field(default_factory=list)
+    source: CollegeFinanceSource
+    retrieved_at: int
+
+
+class CollegeFinancesBatch(WireModel):
+    finances: list[CollegeFinance]
+
+
 class PurgeRequest(WireModel):
     confirm: Literal["PURGE-DEV"] = "PURGE-DEV"
 
@@ -601,6 +639,10 @@ __all__ = [
     "ClaimInput",
     "ClaimsBatch",
     "ClaimsResult",
+    "CollegeFinance",
+    "CollegeFinanceCitation",
+    "CollegeFinanceSource",
+    "CollegeFinancesBatch",
     "CoverageCounts",
     "CoveragePage",
     "CoverageRequest",

@@ -4,7 +4,8 @@ import type { GuideSource } from "./guides"
 /**
  * The formal hall guide's sources (ENG-112): the general pages its text
  * cites, then each college's own page, as lib/colleges.ts checked them. All
- * read on 7 Nov 2026 (the Tracker's research of 8 Oct, re-checked).
+ * read on 7 Nov 2026 (the Tracker's research of 8 Oct, re-checked), but the
+ * two swap sources, read on 19 Nov.
  */
 
 const READ = "2026-11-07"
@@ -57,6 +58,18 @@ export const FORMAL_SOURCES = {
     title: "1441 Foundation Dinner 2026",
     url: "https://www.kings.cam.ac.uk/events/1441-foundation-dinner-2026",
     retrieved: READ,
+  },
+  clareMcr: {
+    publisher: "Clare MCR",
+    title: "College Swaps",
+    url: "https://mcr.clare.cam.ac.uk/social/college-swaps",
+    retrieved: "2026-11-19",
+  },
+  varsitySwaps: {
+    publisher: "Varsity",
+    title: "Social Deconstruction: Cambridge Swaps (5 May 2017)",
+    url: "https://varsity.co.uk/violet/12866",
+    retrieved: "2026-11-19",
   },
 } as const satisfies Record<string, GuideSource>
 

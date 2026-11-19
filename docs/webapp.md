@@ -126,11 +126,11 @@ convex/
   schema.ts                  The domain schema (docs/data-model.md is the contract; header states the rules)
   http.ts                    Better Auth routes + /api/pipeline/* (Bearer PIPELINE_API_KEY)
                              + /api/inbound/email (forwarded list mail; Svix / Bearer, see below)
-  orgs.ts events.ts venues.ts termDates.ts listingRequests.ts sitemap.ts
+  orgs.ts events.ts venues.ts termDates.ts collegeFinances.ts listingRequests.ts sitemap.ts
                              PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
-                             relationships + eventOrganisers, broker, files, inbound, termDates, purge,
-                             suppressions, cleanup)
+                             relationships + eventOrganisers, broker, files, inbound, termDates,
+                             collegeFinances, purge, suppressions, cleanup)
   derive.ts / crons.ts       background re-derivation (daily 03:30 UTC)
   retention.ts               the retention schedule as paginated walks (daily 04:15 UTC;
                              docs/compliance/retention.md)
@@ -317,7 +317,11 @@ read. What makes that work, and what keeps it working:
   exception: a fixed vocabulary, listed by `generateStaticParams` with `dynamicParams = false`, so
   a real build prerenders them like `/categories` and any other slug is an unmatched URL that gets
   `app/not-found.tsx`'s static 404 (x-matched-path /404, edge-cached; re-check 2026-11-03
-  not-found-template). In a placeholder or failed-read build the route is `ƒ` and the page's own
+  not-found-template). The 31 colleges' formal hall pages (`/formals/[slug]`, formals SEO
+  audit 2026-11-19) follow the same pattern but read only lib/data/colleges.json, never Convex, so
+  every build (a placeholder one included) prerenders them; pages.xml lists them
+  (`lib/formal-college-page.ts` `formalCollegeSitemapEntries`, `lastmod` = the nights' check
+  date) under a `{ sitemap: "pages.xml", rows }` entry in `lib/route-indexing.ts`. In a placeholder or failed-read build the route is `ƒ` and the page's own
   `notFound()` answers unknown slugs as before. A build against
   `scripts/build-env-defaults.sh`'s placeholder must not contact Convex, so there every cached read
   calls `connection()` first and those pages become dynamic in that build only (`lib/convex-url.ts`
@@ -940,6 +944,8 @@ read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 | `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
 | `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
+| `collegeFinances.history` | `{}` | `{ collegeKey, periods: { periodEnd, endowmentGbp?, netAssetsGbp?, incomeGbp?, status }[], needsReview }[]`, one per college (all 31), oldest period first; a `needs_review` period is listed without its figures and counted in `needsReview` (source-research §22) |
+| `collegeFinances.latestCompleteYear` | `{}` | `{ financialYear: "2024-25" \| null, colleges: 31, next: { financialYear, filed, needsReview, total } \| null, updatedAt, retrievedAt }`: the newest financial year in which every college has an accepted row, the next year's filings so far, when the data last changed and was last read (epoch ms or null). `lib/college-finances.ts` `resolveWealthYear` turns these and the verified dataset into the year /colleges/wealth ranks |
 | `runs.lastHarvest` | `{}` | `{ finishedAt } \| null`: when the last run that wrote data (`success` / `partial`) finished — the run log's only public read |
 | `listingRequests.submit` (mutation) | `{ kind: "claim"\|"correct"\|"remove"\|"object"\|"add", orgKey? (required unless add, or a correct with an eventKey: a University listing has no host), submitterEmail, role?, message (10–5000 chars), fields?: Record<field, string>, eventKey? (`evt-…` of a stored event; not with add), formSecret? (only from `/api/request`; required once `REQUEST_FORM_SECRET` is set, ENG-37) }` | `{ key }`. Throws a `ConvexError` whose `data` is a user-readable message on invalid input, an unknown listing or event, or a full budget: per address, per listing (when one is named), or overall, hourly and daily (removals and objections have their own; a listing's first requests of the day may pass the overall one, up to a bounded reserve; `convex/listingRequests.ts`) (a plain `Error`'s message is hidden in production) |
 
@@ -956,7 +962,7 @@ The first member-owned data on the site (record-of-processing P13). Every functi
 | `formals.saveProfile` (mutation) | `{ displayName \| null (2–24 chars, not an email, web address or CRSid), onLeaderboard, homeCollegeKey \| null }` | `null`; joining needs a verified `@cam.ac.uk` member (or the broker) and a display name |
 | `formals.eraseMine` (mutation) | `{}` | `{ deleted }`: every entry and the profile |
 
-`collegeKey` is a college's organisation key from `lib/data/colleges.json`; `convex/lib/formals.ts` holds the 31 keys (a test keeps them equal to the JSON). The structured weekly formal nights shown on `/formals` live in the same JSON (`formal.nights`, with a confidence per night) and are static, not Convex data. The college wealth ranking (`/colleges/wealth`) is static too: `lib/data/college-wealth.json`, from each college's 2024-25 accounts filed with the Charity Commission.
+`collegeKey` is a college's organisation key from `lib/data/colleges.json`; `convex/lib/formals.ts` holds the 31 keys (a test keeps them equal to the JSON). The structured weekly formal nights shown on `/formals` live in the same JSON (`formal.nights`, with a confidence per night) and are static, not Convex data. The college wealth ranking (`/colleges/wealth`) is static and revalidated: its year, rows and every sentence (title, description, lede, FAQ, JSON-LD with a FAQPage and a Dataset) come from one view, `lib/college-wealth-view.ts`, built from `lib/data/college-wealth.json` (each college's 2024-25 accounts, cross-checked against the Charity Commission register: `registerCheck` per row) and the cached anonymous `collegeFinances.history` / `latestCompleteYear` reads (`lib/college-wealth-data.ts` `loadWealthView`). Once every college has an accepted row for a later year, that year takes over; without Convex the page renders the verified year. The same view feeds `/colleges/wealth.csv` (the Dataset's `distribution`, with the OGL v3.0 attribution), the page's own share card (`opengraph-image.tsx`, a top-10 bar chart; in `OWN_IMAGE_PATHS`) and the one-line "Wealth" box on each college hub (`/societies/<college>`, linking `/colleges/wealth#<slug>`, the table row's id).
 
 Labels for vocabularies: `CATEGORY_LABELS` and the other `*_LABELS` records in `lib/vocab.ts`
 (`ORGANISATION_FIELD_LABELS` names each claimable field for visitors).
@@ -1081,6 +1087,7 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `coverage` | read: `{cursor?, limit?}` → `{counts, rows, isDone, continueCursor}`, one page of organisations folded into coverage counts (the coverage report sums them) |
 | `coverage/events` | read: `{from, cursor?, limit?}` → events starting at or after `from` by source and visibility, a page at a time |
 | `termDates` | Full Term dates by (academicYear, term); re-labels events |
+| `collegeFinances` | `{finances: [{charityNumber, collegeKey, periodEnd, endowmentGbp?, netAssetsGbp?, incomeGbp?, status, checks, source: {extractUrl, extractModified?, registerUrl, overrideCitation?}, retrievedAt}]}` (≤ 500) → `{inserted, updated, unchanged}`: the colleges' register figures by (charityNumber, periodEnd); refuses any charity but the 31 colleges, a key that does not match, fractional pounds, a `needs_review` without checks and an `override` without a citation; a re-read that changes only `retrievedAt` / `extractModified` counts as unchanged (stage `college_finances`, source-research §22) |
 | `derive` | schedules the daily re-derivation now |
 | `purge` | `{confirm: "PURGE-DEV"}`; empties pipeline tables, **dev deployment only** |
 | `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |

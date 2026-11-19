@@ -45,14 +45,19 @@ const memberDomain = campus.facts.memberEmail.domains[0]
  * rendered per request (docs/webapp.md "Caching"), so each prefetch would be
  * a server render on every page view, three per view, for a payload Next
  * then cuts at the page anyway (SEO audit 2026-11-02,
- * extra-invocations-per-view). About is a cached page: its prefetch is an
- * edge hit.
+ * extra-invocations-per-view). Formals, Guides and About are cached pages:
+ * their prefetch is an edge hit.
+ *
+ * Width (768–1023px, `md`): six sections, the wordmark, the account menu
+ * and the search as an icon fit in 768px; the "Search everything" box comes
+ * back from `lg`. Never drop a section to make room.
  */
 export const NAV = [
   { href: "/events", label: "Events", hint: "Socials, shows, matches", prefetch: false },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures", prefetch: false },
   { href: "/societies", label: "Societies", hint: "The directory", prefetch: false },
   { href: "/formals", label: "Formals", hint: "Formal hall, night by night", prefetch: undefined },
+  { href: "/guides", label: "Guides", hint: "How Cambridge works", prefetch: undefined },
   { href: "/about", label: "About", hint: "Sources and method", prefetch: undefined },
 ] as const
 
@@ -62,7 +67,7 @@ function isActive(pathname: string, href: string) {
 
 /**
  * Site header (DESIGN.md "River & ink"): the crest and wordmark, Events ·
- * Talks · Societies · Formals · About with a teal mark under the current one, the
+ * Talks · Societies · Formals · Guides · About with a teal mark under the current one, the
  * "Search everything ⌘K" box (opens the palette) and the account menu.
  *
  * The account menu holds Sign in when signed out; signed in it shows a
@@ -96,7 +101,7 @@ export function PublicHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/93 backdrop-blur-md">
-      <div className="mx-auto flex h-15 w-full max-w-7xl items-center gap-3 px-4 sm:h-17 sm:px-8 lg:gap-8">
+      <div className="mx-auto flex h-15 w-full max-w-7xl items-center gap-3 px-4 sm:h-17 sm:px-8 lg:gap-6 xl:gap-8">
         <Link
           href="/"
           className="-mx-1 flex min-h-11 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -115,7 +120,7 @@ export function PublicHeader() {
                 prefetch={item.prefetch}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative flex items-center px-3 text-[0.9375rem] font-medium text-muted-foreground transition-colors duration-150 hover:text-brand-text focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                  "group relative flex items-center px-2 text-[0.9375rem] font-medium whitespace-nowrap text-muted-foreground transition-colors duration-150 hover:text-brand-text focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:px-3",
                   active && "text-foreground",
                 )}
               >
@@ -123,7 +128,7 @@ export function PublicHeader() {
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute inset-x-3 -bottom-px h-0.5 origin-left rounded-full bg-brand transition-transform duration-200",
+                    "absolute inset-x-2 -bottom-px h-0.5 origin-left rounded-full bg-brand transition-transform duration-200 lg:inset-x-3",
                     active ? "scale-x-100" : "scale-x-0",
                   )}
                 />
@@ -136,7 +141,7 @@ export function PublicHeader() {
           <button
             type="button"
             onClick={() => openPalette()}
-            className="hidden h-10 w-56 items-center gap-2.5 rounded-[10px] border bg-background pr-2 pl-3 text-sm text-muted-foreground transition-colors hover:border-brand hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex lg:w-60"
+            className="hidden h-10 w-56 items-center gap-2.5 rounded-[10px] border bg-background pr-2 pl-3 text-sm text-muted-foreground transition-colors hover:border-brand hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex md:hidden lg:flex lg:w-52 xl:w-60"
           >
             <SearchIcon aria-hidden className="size-4" />
             <span>Search everything</span>
@@ -147,7 +152,7 @@ export function PublicHeader() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-11 sm:hidden"
+            className="size-11 sm:hidden md:inline-flex lg:hidden"
             onClick={() => openPalette()}
           >
             <SearchIcon aria-hidden />
@@ -181,6 +186,7 @@ export function PublicHeader() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={item.prefetch}
                       onClick={() => setMenuOpen(false)}
                       aria-current={active ? "page" : undefined}
                       className={cn(

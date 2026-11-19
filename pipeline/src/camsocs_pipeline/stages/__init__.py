@@ -138,6 +138,21 @@ STAGES: list[Stage] = [
         docs=("source-research§19",),
     ),
     #
+    # The colleges' endowment, net assets and income from the Charity
+    # Commission register's Part B extract, checked and corrected (§22). The
+    # societies pillar: colleges are organisations of the directory. No timer
+    # of its own: the weekly `full` group runs it.
+    Stage(
+        "college_finances",
+        description="Charity Commission register → collegeFinances",
+        phase="seed",
+        pillar="societies",
+        campus="cam",
+        sinks=("collegeFinances",),
+        network=True,
+        docs=("source-research§22",),
+    ),
+    #
     # ── harvest (T3): who exists — each writes var/staging/<source_type>/ ──────
     # SU Find a Society directory + profiles (§1).
     Stage(

@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { FormalNightRow } from "@/components/molecules/formal-night-row"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,7 +13,7 @@ import {
   dayId,
   type FormalFilters,
   type FormalSlot,
-  initialDay,
+  initialSelection,
   londonWeekday,
   WEEK,
   WEEKDAY_NAMES,
@@ -32,36 +31,40 @@ function countText(count: number): string {
 
 /**
  * The week of formals (/formals, ENG-272). The server's HTML lists every
- * day's section (ids `monday` … `sunday`), so readers without JavaScript and
- * crawlers get the whole week. Once mounted it picks the day in the URL's
- * hash, else today in Europe/London, and shows that day alone; when the day
- * came from the hash (on load or a later `#saturday` link) it scrolls that
- * section into view once shown, since a hidden section cannot be scrolled to.
- * The day picker is a radio group (arrow keys, Home/End) and a choice is
- * announced politely. The picker and the two filters are local state: nothing
- * here changes the URL or asks the server again. `unpublished` is how many
- * colleges publish no nights, so each day can say it is not the whole list.
+ * day's section (ids `monday` … `sunday`), and the page keeps the whole week
+ * once mounted, so nothing moves on hydration (formals SEO audit 2026-11-19:
+ * CLS) and a searcher sees every night; today is marked. A day in the URL's
+ * hash (on load or a later `#saturday` link) shows that day alone and
+ * scrolls to it. The day picker is a radio group of real `#monday` links
+ * (crawlers and "open in new tab" get the fragment), handled in place: a tap
+ * shows that day alone and writes it to the URL with `history.replaceState`,
+ * so a shared link keeps the day. Arrow keys and Home/End move the choice,
+ * and a choice is announced politely. The filters are local state.
  */
 export function FormalsWeek({
   slots,
-  unpublished = 0,
+  serverDay,
 }: {
   slots: readonly FormalSlot[]
-  unpublished?: number
+  /** The London weekday the server rendered on: today is marked from the
+   * first paint, and the browser corrects it only on a page cached from an
+   * earlier day, so the "Today" label never moves a heading on hydration. */
+  serverDay: Weekday
 }) {
   const [selected, setSelected] = useState<Selection>("all")
-  const [today, setToday] = useState<Weekday | null>(null)
+  const [today, setToday] = useState<Weekday>(serverDay)
   const [filters, setFilters] = useState<FormalFilters>(DEFAULT_FILTERS)
   const [announcement, setAnnouncement] = useState("")
   const scrollTo = useRef<Weekday | null>(null)
   const picker = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const now = Date.now()
-    const { day, fromHash } = initialDay(window.location.hash, now)
-    setToday(londonWeekday(now))
-    if (fromHash) scrollTo.current = day
-    setSelected(day)
+    setToday(londonWeekday(Date.now()))
+    const initial = initialSelection(window.location.hash)
+    if (initial !== "all") {
+      scrollTo.current = initial
+      setSelected(initial)
+    }
     const onHash = () => {
       const hashDay = dayFromId(window.location.hash)
       if (!hashDay) return
@@ -82,9 +85,16 @@ export function FormalsWeek({
 
   const days = useMemo(() => byWeekday(slots, filters), [slots, filters])
 
-  /** A choice by the reader: select it and announce it (never on mount). */
+  /** A choice by the reader: select it, keep it in the URL and announce it
+   * (never on mount). */
   function choose(option: Selection) {
     setSelected(option)
+    const { pathname, search } = window.location
+    window.history.replaceState(
+      window.history.state,
+      "",
+      option === "all" ? `${pathname}${search}` : `${pathname}${search}#${dayId(option)}`,
+    )
     setAnnouncement(
       option === "all"
         ? "The whole week"
@@ -112,11 +122,11 @@ export function FormalsWeek({
     if (next === null) return
     event.preventDefault()
     choose(OPTIONS[next])
-    picker.current?.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus()
+    picker.current?.querySelectorAll<HTMLAnchorElement>("[role=radio]")[next]?.focus()
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div id="week" className="flex scroll-mt-20 flex-col gap-5">
       <div className="flex flex-col gap-4">
         <div
           ref={picker}
@@ -126,8 +136,9 @@ export function FormalsWeek({
           className="grid grid-cols-4 gap-1.5 sm:grid-cols-8"
         >
           {WEEK.map((day) => (
-            <DayButton
+            <DayLink
               key={day}
+              href={`#${dayId(day)}`}
               label={WEEKDAY_NAMES[day].slice(0, 3)}
               name={WEEKDAY_NAMES[day]}
               count={collegeCount(days[day])}
@@ -137,7 +148,8 @@ export function FormalsWeek({
               onPress={() => choose(day)}
             />
           ))}
-          <DayButton
+          <DayLink
+            href="#week"
             label="Week"
             name="The whole week"
             pressed={selected === "all"}
@@ -175,31 +187,18 @@ export function FormalsWeek({
             aria-labelledby={`${dayId(day)}-title`}
             className="flex scroll-mt-20 flex-col gap-2"
           >
-            <h2
-              id={`${dayId(day)}-title`}
-              className="flex items-baseline gap-3 border-t-2 border-foreground pt-3 font-serif text-2xl font-medium tracking-tight"
-            >
-              {WEEKDAY_NAMES[day]}
-              <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t-2 border-foreground pt-3">
+              <h2
+                id={`${dayId(day)}-title`}
+                className="font-serif text-2xl font-medium tracking-tight"
+              >
+                Formals on {WEEKDAY_NAMES[day]}
+              </h2>
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">
                 {countText(collegeCount(rows))}
               </span>
-              {today === day && (
-                <span className="font-sans text-sm font-medium text-today-text">Today</span>
-              )}
-            </h2>
-            {unpublished > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Not the whole list:{" "}
-                <Link
-                  href="#unpublished-title"
-                  className="underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground"
-                >
-                  {countText(unpublished)} {unpublished === 1 ? "does" : "do"} not publish
-                  {unpublished === 1 ? " its" : " their"} nights
-                </Link>
-                .
-              </p>
-            )}
+              {today === day && <span className="text-sm font-medium text-today-text">Today</span>}
+            </div>
             {rows.length > 0 ? (
               <ul className="flex flex-col divide-y rounded-xl border">
                 {rows.map((slot) => (
@@ -223,7 +222,8 @@ export function FormalsWeek({
   )
 }
 
-function DayButton({
+function DayLink({
+  href,
   label,
   name,
   count,
@@ -232,6 +232,8 @@ function DayButton({
   today,
   onPress,
 }: {
+  /** The day section's fragment (`#saturday`), or `#week` for all of them. */
+  href: string
   label: string
   name: string
   count?: number
@@ -242,15 +244,27 @@ function DayButton({
   onPress: () => void
 }) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a styled single-choice picker; the radiogroup handles arrow keys, Home/End and the roving tabindex.
-    <button
-      type="button"
+    // biome-ignore lint/a11y/useSemanticElements: a styled single-choice picker of real fragment links; the radiogroup handles arrow keys, Home/End and the roving tabindex.
+    <a
+      href={href}
       role="radio"
       aria-checked={pressed}
       aria-controls={controls}
       tabIndex={pressed ? 0 : -1}
       aria-label={`${name}${today ? " (today)" : ""}${count === undefined ? "" : `, ${countText(count)}`}`}
-      onClick={onPress}
+      onClick={(event) => {
+        // A plain click is handled in place; a modified one opens the link.
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        onPress()
+      }}
+      onKeyDown={(event) => {
+        // A radio is chosen with Space, as a button would be.
+        if (event.key === " ") {
+          event.preventDefault()
+          onPress()
+        }
+      }}
       className={cn(
         "relative flex min-h-11 flex-col items-center justify-center rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
         pressed
@@ -272,7 +286,7 @@ function DayButton({
       {today && (
         <span aria-hidden className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-today" />
       )}
-    </button>
+    </a>
   )
 }
 

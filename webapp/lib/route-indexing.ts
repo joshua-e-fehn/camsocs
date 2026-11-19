@@ -14,6 +14,12 @@
  *    from the page named in `linkedFrom`;
  *  - indexable, one URL per row: the sitemap file whose route lists the rows
  *    (`societies.xml`, `events.xml`);
+ *  - indexable, one URL per row of a fixed data file, built with the site
+ *    (`generateStaticParams`, `dynamicParams = false`): `{ sitemap:
+ *    "pages.xml", rows, linkedFrom }`; app/sitemaps/[file] adds the rows'
+ *    paths to pages.xml (`/formals/[slug]`: the 31 colleges' formal pages,
+ *    lib/formal-college-page.ts `formalCollegeSitemapEntries`), and the page
+ *    named in `linkedFrom` links every row;
  *  - not for search: `{ excluded: "<why>" }` (and noindex on the page, or a
  *    robots.txt rule).
  *
@@ -21,8 +27,11 @@
  * route groups: `/societies/[slug]`.
  */
 
+type LinkedFrom = "footer" | `page:${string}` | "header"
+
 export type RouteIndexing =
-  | { sitemap: "pages.xml"; linkedFrom: "footer" | `page:${string}` | "header" }
+  | { sitemap: "pages.xml"; linkedFrom: LinkedFrom }
+  | { sitemap: "pages.xml"; rows: "colleges"; linkedFrom: LinkedFrom }
   | { sitemap: "societies.xml" | "events.xml" }
   | { excluded: string }
 
@@ -35,6 +44,7 @@ export const ROUTE_INDEXING: Record<string, RouteIndexing> = {
   "/colleges/wealth": { sitemap: "pages.xml", linkedFrom: "footer" },
   "/formals": { sitemap: "pages.xml", linkedFrom: "header" },
   "/formals/tracker": { sitemap: "pages.xml", linkedFrom: "page:/formals" },
+  "/formals/[slug]": { sitemap: "pages.xml", rows: "colleges", linkedFrom: "page:/formals" },
   "/finder": { sitemap: "pages.xml", linkedFrom: "footer" },
   "/finder/events": { sitemap: "pages.xml", linkedFrom: "page:/finder" },
   "/finder/calendar": { excluded: "a browser's own Finder calendar: noindex, nothing to find" },

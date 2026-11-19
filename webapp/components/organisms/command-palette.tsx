@@ -3,6 +3,7 @@
 import { Command as CommandPrimitive } from "cmdk"
 import {
   ArrowRightIcon,
+  BookOpenIcon,
   CalendarDaysIcon,
   ClockIcon,
   CornerDownLeftIcon,
@@ -28,6 +29,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useColleges, useEventSearch, useOrgSearch, useTalkSearch } from "@/hooks/convex"
 import { useTrackSearch } from "@/hooks/use-analytics"
 import { formatEventTime, londonIsoDate, monthShort } from "@/lib/calendar"
+import { matchGuidePages } from "@/lib/guide-links"
 import { monogram } from "@/lib/monogram"
 import {
   firstPaletteValue,
@@ -55,7 +57,8 @@ import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/vocab"
  *
  * Societies come from `orgs.list` (search relevance), events from
  * `events.list` (title words, next four weeks), talks from `talks.search`
- * (upcoming, best match first); colleges, categories and pages are matched
+ * (upcoming, best match first); colleges, categories, the guides and
+ * static pages ("Guides & pages", lib/guide-links.ts) and pages are matched
  * locally. cmdk's own filtering is off: the server ranks.
  *
  * The listbox holds options only (axe `nested-interactive`): the "Try" words
@@ -71,11 +74,14 @@ const EVENT_ROWS = 5
 const TALK_ROWS = 3
 const TALK_ROWS_SCOPED = 6
 const LOCAL_ROWS = 4
+/** Guides and static pages a query matches. */
+const GUIDE_ROWS = 5
 
 const PAGES = [
   { href: "/societies", label: "Societies and clubs", hint: "The directory" },
   { href: "/events", label: "Events", hint: "This term's calendar" },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures" },
+  { href: "/guides", label: "Guides", hint: "How Cambridge works" },
   { href: "/about", label: "About CAMsocs", hint: "Sources and method" },
   { href: "/request?kind=add", label: "Add a missing society", hint: "Request" },
   { href: "/request?kind=claim", label: "Claim or correct a listing", hint: "Request" },
@@ -195,6 +201,7 @@ export function CommandPalette({
         LOCAL_ROWS,
       )
     : []
+  const localGuides = query ? matchGuidePages(query, GUIDE_ROWS) : []
   const localPages = query
     ? PAGES.filter((page) => matchesWords(`${page.label} ${page.hint}`, query))
     : PAGES
@@ -222,7 +229,7 @@ export function CommandPalette({
     (show("events") ? eventRows.length : 0) +
     (show("talks") ? talkRows.length : 0) +
     (show("colleges") ? localColleges.length : 0) +
-    (scope === "all" ? localCategories.length + localPages.length : 0)
+    (scope === "all" ? localCategories.length + localGuides.length + localPages.length : 0)
   useTrackSearch("palette", open && searchable ? query : undefined, settled ? shownRows : undefined)
 
   // Each shown group's row values in render order; the first one is
@@ -247,6 +254,7 @@ export function CommandPalette({
             ? localColleges.map((college) => `/societies?college=${college.key}`)
             : [],
           scope === "all" ? localCategories.map((category) => `/societies?cat=${category}`) : [],
+          scope === "all" ? localGuides.map((link) => link.href) : [],
           scope === "all" ? localPages.map((page) => page.href) : [],
         ],
   )
@@ -290,8 +298,8 @@ export function CommandPalette({
       >
         <DialogTitle className="sr-only">Search CAMsocs</DialogTitle>
         <DialogDescription className="sr-only">
-          Societies, events, talks, colleges, categories and pages. Use the arrow keys to move and
-          Enter to open; Delete forgets a highlighted recent search.
+          Societies, events, talks, colleges, categories, guides and pages. Use the arrow keys to
+          move and Enter to open; Delete forgets a highlighted recent search.
         </DialogDescription>
         <Command
           ref={rootRef}
@@ -621,6 +629,20 @@ export function CommandPalette({
                     </PaletteItem>
                   )
                 })}
+              </CommandGroup>
+            )}
+
+            {scope === "all" && localGuides.length > 0 && (
+              <CommandGroup heading="Guides & pages" className={HEADING}>
+                {localGuides.map((link) => (
+                  <PaletteItem key={link.href} value={link.href} onSelect={() => go(link.href)}>
+                    <BookOpenIcon aria-hidden className="text-muted-foreground" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium">{link.label}</span>
+                      <span className="truncate text-xs text-muted-foreground">{link.hint}</span>
+                    </span>
+                  </PaletteItem>
+                ))}
               </CommandGroup>
             )}
 

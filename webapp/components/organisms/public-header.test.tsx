@@ -81,3 +81,24 @@ describe("the header's account menu", () => {
     }
   })
 })
+
+describe("the header's sections", () => {
+  test("Events · Talks · Societies · Formals · Guides · About, each with a hint", async () => {
+    const { NAV } = await import("@/components/organisms/public-header")
+    expect(NAV.map((item) => item.label)).toEqual([
+      "Events",
+      "Talks",
+      "Societies",
+      "Formals",
+      "Guides",
+      "About",
+    ])
+    for (const item of NAV) expect(item.hint.length).toBeGreaterThan(0)
+  })
+
+  test("only the dynamic pages skip prefetch (docs/webapp.md Caching)", async () => {
+    const { NAV } = await import("@/components/organisms/public-header")
+    const { dynamicPrefetch } = await import("@/lib/crawl-traps")
+    for (const item of NAV) expect(item.prefetch).toBe(dynamicPrefetch(item.href))
+  })
+})

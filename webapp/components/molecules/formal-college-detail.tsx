@@ -19,9 +19,8 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { type FormalEntry, formalErrorMessage, useSaveFormalDetails } from "@/hooks/convex/formals"
 import { londonIsoDate } from "@/lib/calendar"
-import { FORMAL_ANCHOR } from "@/lib/college-anchors"
 import type { CollegeRef } from "@/lib/colleges"
-import { collegeHubPath } from "@/lib/directory-hubs"
+import { formalCollegePath } from "@/lib/formal-paths"
 
 const NOTES_MAX = 2000
 const VISITS_MAX = 200
@@ -137,7 +136,7 @@ export function FormalCollegeDetail({
           </FieldGroup>
           <FieldError>{error}</FieldError>
           <Link
-            href={`${collegeHubPath(college)}#${FORMAL_ANCHOR}`}
+            href={formalCollegePath(college.slug)}
             className="inline-flex min-h-11 items-center gap-1 self-start text-sm text-brand-text underline underline-offset-4 sm:min-h-0"
           >
             How a visitor gets into {college.shortName}’s formal

@@ -7,7 +7,8 @@ import {
   collegeInfo,
   FORMAL_NIGHTS_CHECKED_ON,
   FORMALS_CHECKED_ON,
-  NIGHTS_STATUSES,
+  NIGHT_FREQUENCIES,
+  NIGHT_SOURCE_KINDS,
   WEEKDAYS,
 } from "./colleges"
 import { parseRichText } from "./rich-text"
@@ -70,29 +71,67 @@ describe("the colleges' formal nights (ENG-272)", () => {
     }
   })
 
-  test("every college has a nights status, consistent with its nights", () => {
+  test("every college's nights are found, and every night says how often it runs", () => {
     for (const { name, formal } of COLLEGE_INFO) {
-      expect(NIGHTS_STATUSES).toContain(formal.nightsStatus)
-      const found = formal.nights.filter((n) => n.confidence === "found")
-      if (formal.nightsStatus === "found") expect([name, found.length > 0]).toEqual([name, true])
-      if (formal.nightsStatus === "inferred") {
-        // Something is deduced: a night, or the pattern the found nights rest on.
-        expect([name, formal.nights.length > 0]).toEqual([name, true])
-        expect([name, formal.nightsGaps.length > 0]).toEqual([name, true])
-      }
-      if (formal.nightsStatus === "unknown") {
-        // Nothing stated night by night, and the page can say why.
-        expect([name, found]).toEqual([name, []])
-        expect([name, formal.nightsGaps.length > 0]).toEqual([name, true])
+      expect([name, formal.nightsStatus]).toEqual([name, "found"])
+      expect([name, formal.nights.length > 0]).toEqual([name, true])
+      for (const night of formal.nights) {
+        expect([name, night.confidence]).toEqual([name, "found"])
+        expect([name, NIGHT_FREQUENCIES.includes(night.frequency)]).toEqual([name, true])
       }
     }
   })
 
-  test("an inferred night always says why", () => {
+  test("the nights' frequencies follow the research (19 Nov 2026)", () => {
+    const frequency = (slug: string, weekday: string, kind = "formal") =>
+      COLLEGE_INFO.find((c) => c.slug === slug)?.formal.nights.find(
+        (n) => n.weekday === weekday && n.kind === kind,
+      )?.frequency
+    expect(frequency("peterhouse", "fri")).toBe("some_weeks")
+    expect(frequency("peterhouse", "mon")).toBe("weekly")
+    expect(frequency("murray-edwards-college", "fri")).toBe("first_of_month")
+    expect(frequency("newnham-college", "tue", "grad_formal")).toBe("fortnightly")
+    expect(frequency("fitzwilliam-college", "fri")).toBe("weekly")
+    expect(frequency("kings-college", "wed")).toBe("weekly")
+  })
+
+  test("the six researched colleges hold their researched nights (19 Nov 2026)", () => {
+    const nights = (slug: string) =>
+      COLLEGE_INFO.find((c) => c.slug === slug)
+        ?.formal.nights.map((n) => `${n.weekday}:${n.kind}`)
+        .sort()
+    expect(nights("christs-college")).toEqual(
+      [
+        "sun:formal",
+        "mon:formal",
+        "tue:formal",
+        "tue:grad_formal",
+        "wed:formal",
+        "thu:formal",
+        "fri:formal",
+      ].sort(),
+    )
+    expect(nights("fitzwilliam-college")).toEqual(["fri:formal", "wed:formal"])
+    expect(nights("kings-college")).toEqual(["wed:formal"])
+    expect(nights("murray-edwards-college")).toEqual(["fri:formal", "tue:formal"])
+    expect(nights("newnham-college")).toEqual(["tue:grad_formal", "wed:formal"])
+    expect(nights("peterhouse")).toEqual(
+      ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((d) => `${d}:formal`).sort(),
+    )
+  })
+
+  test("secondary sources are dated, attributed and https", () => {
     for (const { name, formal } of COLLEGE_INFO) {
-      for (const night of formal.nights.filter((n) => n.confidence === "inferred")) {
-        expect([name, (night.notes ?? "").length > 10]).toEqual([name, true])
+      for (const source of formal.nightsSources) {
+        expect([name, source.url]).toEqual([name, expect.stringMatching(/^https:\/\//)])
+        expect([name, source.publisher.length > 0]).toEqual([name, true])
+        expect([name, source.date.length > 0]).toEqual([name, true])
+        expect(NIGHT_SOURCE_KINDS).toContain(source.kind)
       }
+    }
+    for (const slug of ["kings-college", "newnham-college", "peterhouse"]) {
+      const college = COLLEGE_INFO.find((c) => c.slug === slug)
+      expect([slug, (college?.formal.nightsSources.length ?? 0) > 0]).toEqual([slug, true])
     }
   })
 

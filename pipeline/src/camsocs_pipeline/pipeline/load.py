@@ -92,6 +92,7 @@ from camsocs_pipeline.models.observation import (
 from camsocs_pipeline.models.wire import (
     BrokerProfileInput,
     ClaimInput,
+    CollegeFinance,
     CoverageCounts,
     CoveragePage,
     CoverageRequest,
@@ -681,6 +682,10 @@ class ConvexLoader:
 
     def upsert_term_dates(self, terms: Sequence[TermDate]) -> BatchResult:
         return self.post_batches("termDates", "terms", terms, unit="terms")
+
+    def upsert_college_finances(self, finances: Sequence[CollegeFinance]) -> BatchResult:
+        """The colleges' register figures (stage `college_finances`, §22)."""
+        return self.post_batches("collegeFinances", "finances", finances, unit="periods")
 
     def derive(self) -> dict[str, Any]:
         """Re-derive every organisation, event label and stale flag now."""

@@ -4,6 +4,7 @@ import { ExternalLink } from "@/components/molecules/external-link"
 import { RichText } from "@/components/molecules/rich-text"
 import { formatDate } from "@/lib/calendar"
 import { type CollegeInfo, FORMAL_ANCHOR } from "@/lib/colleges"
+import { formalCollegePath } from "@/lib/formal-paths"
 
 /**
  * A college's formal hall rules (lib/colleges.ts) on its own page: the facts
@@ -52,6 +53,13 @@ export function FormalHallBox({ college }: { college: CollegeInfo }) {
         </ExternalLink>{" "}
         is the authority; rules change between terms.
       </p>
+      <Link
+        href={formalCollegePath(college.slug)}
+        className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline underline-offset-4 sm:min-h-0"
+      >
+        Full formal hall details: nights, price, booking, dress code
+        <ArrowRightIcon aria-hidden className="size-3.5" />
+      </Link>
       <Link
         href="/guides/formal-hall"
         className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline underline-offset-4 sm:min-h-0"

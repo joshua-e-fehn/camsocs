@@ -32,21 +32,26 @@ export type CollegeFormal = {
   primarySourceUrl: string
   sourceUrls: string[]
   /**
-   * The weekly formal nights (ENG-272), re-checked against the colleges', JCRs'
-   * and MCRs' own pages on `nightsCheckedOn`. Only weekly (or near-weekly)
-   * nights; Super Halls and once-a-term dinners stay in the text above.
+   * The regular formal nights (ENG-272), re-checked against the colleges',
+   * JCRs' and MCRs' own pages and, where a college publishes no weekdays,
+   * secondary sources (student guides, menus, archived listings) on
+   * `nightsCheckedOn`. Each night says how often it runs (`frequency`); Super
+   * Halls and once-a-term dinners stay in the text above.
    */
   nights: FormalNight[]
-  /** `found`: a page lists the nights; `inferred`: deduced from what pages
-   * say; `unknown`: no public page gives the weekdays. */
+  /** `found`: the nights are established from the sources below (every
+   * college since 19 Nov 2026). */
   nightsStatus: NightsStatus
   /** The source's own words the nights rest on. */
   nightsQuote: string
-  /** What is still not published (why a status is not `found`). */
+  /** Details around the nights still not published (a guest cap, a price). */
   nightsGaps: string[]
   /** A page that disagrees, and why it was not used; null when none. */
   nightsConflict: string | null
   nightsSourceUrls: string[]
+  /** The sources the nights rest on, with who published them and when, for a
+   * college whose nights needed secondary sources; empty otherwise. */
+  nightsSources: NightsSource[]
   /** `YYYY-MM-DD`: when the nights, visitor route and price were checked. */
   nightsCheckedOn: string
   /** `as_guest`: a visitor goes as a member's guest; `unknown`: not published. */
@@ -67,11 +72,36 @@ export type FormalKind = (typeof FORMAL_KINDS)[number]
 export const FORMAL_AUDIENCES = ["all_members", "jcr", "mcr"] as const
 export type FormalAudience = (typeof FORMAL_AUDIENCES)[number]
 
-export const NIGHTS_STATUSES = ["found", "inferred", "unknown"] as const
+export const NIGHTS_STATUSES = ["found"] as const
 export type NightsStatus = (typeof NIGHTS_STATUSES)[number]
 
-export const NIGHT_CONFIDENCES = ["found", "inferred"] as const
+export const NIGHT_CONFIDENCES = ["found"] as const
 export type NightConfidence = (typeof NIGHT_CONFIDENCES)[number]
+
+/** How often a night runs in term: every week, every other week, the first
+ * of its weekday in each month, or only some weeks (a Super Hall or themed
+ * dinner takes its place on the others). */
+export const NIGHT_FREQUENCIES = ["weekly", "fortnightly", "first_of_month", "some_weeks"] as const
+export type NightFrequency = (typeof NIGHT_FREQUENCIES)[number]
+
+export const NIGHT_SOURCE_KINDS = [
+  "official",
+  "jcr_mcr",
+  "archive",
+  "guide",
+  "student_press",
+  "other",
+] as const
+export type NightSourceKind = (typeof NIGHT_SOURCE_KINDS)[number]
+
+export type NightsSource = {
+  url: string
+  /** Who published it ("Christ's JCR, Freshers' Guide 2024"). */
+  publisher: string
+  /** The date the source gives or was read, in its own words. */
+  date: string
+  kind: NightSourceKind
+}
 
 export const VISITOR_ROUTES = ["as_guest", "unknown"] as const
 export type VisitorRoute = (typeof VISITOR_ROUTES)[number]
@@ -87,7 +117,9 @@ export type FormalNight = {
   termOnly: boolean
   /** Who may book it: every member, undergraduates (JCR) or graduates (MCR). */
   audience: FormalAudience
-  /** `inferred`: not stated night by night; `notes` says why. */
+  /** How often it runs in term. */
+  frequency: NightFrequency
+  /** `found`: established from the college's sources. */
   confidence: NightConfidence
   notes: string | null
   /** This night's own published price, when it differs from the college's
@@ -140,18 +172,21 @@ function oneOf<T extends string>(values: readonly T[], value: string, what: stri
 }
 
 type RawCollege = (typeof data.colleges)[number]
-type RawNight = Omit<FormalNight, "weekday" | "kind" | "audience" | "confidence"> & {
+type RawNight = Omit<FormalNight, "weekday" | "kind" | "audience" | "frequency" | "confidence"> & {
   weekday: string
   kind: string
   audience: string
+  frequency: string
   confidence: string
 }
+type RawSource = Omit<NightsSource, "kind"> & { kind: string }
 
 /** The JSON's string fields narrowed to their vocabularies, failing loudly on
  * a value outside them (JSON imports type every string as `string`). */
 function toCollege(raw: RawCollege): CollegeInfo {
   const { formal } = raw
   const nights: RawNight[] = formal.nights
+  const sources: RawSource[] = formal.nightsSources
   return {
     ...raw,
     formal: {
@@ -161,7 +196,12 @@ function toCollege(raw: RawCollege): CollegeInfo {
         weekday: oneOf(WEEKDAYS, night.weekday, "weekday"),
         kind: oneOf(FORMAL_KINDS, night.kind, "formal kind"),
         audience: oneOf(FORMAL_AUDIENCES, night.audience, "audience"),
+        frequency: oneOf(NIGHT_FREQUENCIES, night.frequency, "night frequency"),
         confidence: oneOf(NIGHT_CONFIDENCES, night.confidence, "night confidence"),
+      })),
+      nightsSources: sources.map((source) => ({
+        ...source,
+        kind: oneOf(NIGHT_SOURCE_KINDS, source.kind, "night source kind"),
       })),
       nightsStatus: oneOf(NIGHTS_STATUSES, formal.nightsStatus, "nights status"),
       visitorRoute: oneOf(VISITOR_ROUTES, formal.visitorRoute, "visitor route"),

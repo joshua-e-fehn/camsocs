@@ -1,0 +1,160 @@
+{
+  "_comment": "The 31 colleges registered with the Charity Commission, by charity number: the college_finances stage keeps only these rows of the register extract (source-research §22). Kept equal to webapp/lib/data/college-wealth.json by tests/test_college_finances.py.",
+  "colleges": [
+    {
+      "charityNumber": "1137540",
+      "collegeKey": "org-christs-college",
+      "name": "Christ's College"
+    },
+    {
+      "charityNumber": "1137476",
+      "collegeKey": "org-churchill-college",
+      "name": "Churchill College"
+    },
+    {
+      "charityNumber": "1137531",
+      "collegeKey": "org-clare-college",
+      "name": "Clare College"
+    },
+    {
+      "charityNumber": "1137491",
+      "collegeKey": "org-clare-hall",
+      "name": "Clare Hall"
+    },
+    {
+      "charityNumber": "1137453",
+      "collegeKey": "org-corpus-christi-college",
+      "name": "Corpus Christi College"
+    },
+    {
+      "charityNumber": "1141105",
+      "collegeKey": "org-darwin-college",
+      "name": "Darwin College"
+    },
+    {
+      "charityNumber": "1137455",
+      "collegeKey": "org-downing-college",
+      "name": "Downing College"
+    },
+    {
+      "charityNumber": "1137456",
+      "collegeKey": "org-emmanuel-college",
+      "name": "Emmanuel College"
+    },
+    {
+      "charityNumber": "1137496",
+      "collegeKey": "org-fitzwilliam-college",
+      "name": "Fitzwilliam College"
+    },
+    {
+      "charityNumber": "1137541",
+      "collegeKey": "org-girton-college",
+      "name": "Girton College"
+    },
+    {
+      "charityNumber": "1137536",
+      "collegeKey": "org-gonville-and-caius-college",
+      "name": "Gonville & Caius College"
+    },
+    {
+      "charityNumber": "1137497",
+      "collegeKey": "org-homerton-college",
+      "name": "Homerton College"
+    },
+    {
+      "charityNumber": "1137471",
+      "collegeKey": "org-hughes-hall",
+      "name": "Hughes Hall"
+    },
+    {
+      "charityNumber": "1137462",
+      "collegeKey": "org-jesus-college",
+      "name": "Jesus College"
+    },
+    {
+      "charityNumber": "1139422",
+      "collegeKey": "org-kings-college",
+      "name": "King's College"
+    },
+    {
+      "charityNumber": "1137875",
+      "collegeKey": "org-lucy-cavendish-college",
+      "name": "Lucy Cavendish College"
+    },
+    {
+      "charityNumber": "1137542",
+      "collegeKey": "org-magdalene-college",
+      "name": "Magdalene College"
+    },
+    {
+      "charityNumber": "1137530",
+      "collegeKey": "org-murray-edwards-college",
+      "name": "Murray Edwards College"
+    },
+    {
+      "charityNumber": "1137512",
+      "collegeKey": "org-newnham-college",
+      "name": "Newnham College"
+    },
+    {
+      "charityNumber": "1137492",
+      "collegeKey": "org-pembroke-college",
+      "name": "Pembroke College"
+    },
+    {
+      "charityNumber": "1137457",
+      "collegeKey": "org-peterhouse",
+      "name": "Peterhouse"
+    },
+    {
+      "charityNumber": "1137495",
+      "collegeKey": "org-queens-college",
+      "name": "Queens' College"
+    },
+    {
+      "charityNumber": "1137494",
+      "collegeKey": "org-robinson-college",
+      "name": "Robinson College"
+    },
+    {
+      "charityNumber": "1137517",
+      "collegeKey": "org-selwyn-college",
+      "name": "Selwyn College"
+    },
+    {
+      "charityNumber": "1137586",
+      "collegeKey": "org-sidney-sussex-college",
+      "name": "Sidney Sussex College"
+    },
+    {
+      "charityNumber": "1137463",
+      "collegeKey": "org-st-catharines-college",
+      "name": "St Catharine's College"
+    },
+    {
+      "charityNumber": "1137454",
+      "collegeKey": "org-st-edmunds-college",
+      "name": "St Edmund's College"
+    },
+    {
+      "charityNumber": "1137428",
+      "collegeKey": "org-st-johns-college",
+      "name": "St John's College"
+    },
+    {
+      "charityNumber": "1137604",
+      "collegeKey": "org-trinity-college",
+      "name": "Trinity College"
+    },
+    {
+      "charityNumber": "1137458",
+      "collegeKey": "org-trinity-hall",
+      "name": "Trinity Hall"
+    },
+    {
+      "charityNumber": "1138143",
+      "collegeKey": "org-wolfson-college",
+      "name": "Wolfson College"
+    }
+  ]
+}

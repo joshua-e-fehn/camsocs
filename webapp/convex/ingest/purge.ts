@@ -71,6 +71,7 @@ const PIPELINE_TABLES = [
   "sources",
   "orgInternal",
   "termDates",
+  "collegeFinances",
   "storedFiles",
 ] as const satisfies readonly TableNames[]
 

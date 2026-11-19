@@ -58,6 +58,7 @@ export const AUDIENCE_PAGES: readonly AudiencePage[] = [
     related: [
       ["/guides/postgraduates", "Postgraduate life in Cambridge"],
       ["/colleges", "Every college's MCR"],
+      ["/colleges/wealth", "Colleges ranked by endowment, richest to poorest"],
     ],
   },
   {

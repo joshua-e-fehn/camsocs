@@ -7,13 +7,13 @@ import {
   dayId,
   type FormalSlot,
   formalSlots,
-  initialDay,
+  frequencyLabel,
+  initialSelection,
   isGraduateNight,
   londonWeekday,
   matchesFilters,
   nightPrice,
   priceLabel,
-  unpublishedNights,
   WEEK,
 } from "./formal-week"
 
@@ -40,6 +40,7 @@ function slot(
       startTime: "19:30",
       termOnly: true,
       audience: "all_members",
+      frequency: "weekly",
       confidence: "found",
       notes: null,
       ...night,
@@ -138,9 +139,9 @@ describe("byWeekday", () => {
     expect(days.fri.map((s) => s.shortName)).toEqual(["Robinson"])
   })
 
-  test("over the real data: no Saturday but Emmanuel's and Trinity's", () => {
+  test("over the real data: Saturday is Emmanuel, Peterhouse and Trinity only", () => {
     const days = byWeekday(formalSlots(COLLEGE_INFO, (c) => `/colleges/${c.slug}`))
-    expect(days.sat.map((s) => s.shortName).sort()).toEqual(["Emmanuel", "Trinity"])
+    expect(days.sat.map((s) => s.shortName).sort()).toEqual(["Emmanuel", "Peterhouse", "Trinity"])
     for (const day of WEEK) expect(collegeCount(days[day])).toBeGreaterThan(0)
   })
 })
@@ -195,33 +196,31 @@ describe("nightPrice", () => {
 
   test("the row knows when a college price exists but not for that night", () => {
     const slots = formalSlots(COLLEGE_INFO, (c) => `/colleges/${c.slug}`)
-    const newnham = slots.find((s) => s.collegeKey === college("newnham-college").key)
-    expect(newnham?.priceWithheld).toBe(true)
+    const newnham = slots.filter((s) => s.collegeKey === college("newnham-college").key)
+    expect(newnham.find((s) => s.night.kind === "grad_formal")?.priceWithheld).toBe(true)
+    expect(newnham.find((s) => s.night.kind === "formal")?.priceWithheld).toBe(false)
     const darwin = slots.find((s) => s.collegeKey === college("darwin-college").key)
     expect(darwin?.priceWithheld).toBe(false)
   })
 })
 
-describe("initialDay", () => {
-  // Wed 18 Nov 2026, 12:00 GMT.
-  const now = Date.UTC(2026, 10, 18, 12)
-  test("the hash's day wins, and says it came from the hash", () => {
-    expect(initialDay("#saturday", now)).toEqual({ day: "sat", fromHash: true })
+describe("initialSelection", () => {
+  test("the hash's day wins", () => {
+    expect(initialSelection("#saturday")).toBe("sat")
   })
-  test("otherwise today in London", () => {
-    expect(initialDay("", now)).toEqual({ day: "wed", fromHash: false })
-    expect(initialDay("#formal-hall", now)).toEqual({ day: "wed", fromHash: false })
+  test("otherwise the whole week, as the server drew it", () => {
+    expect(initialSelection("")).toBe("all")
+    expect(initialSelection("#formal-hall")).toBe("all")
   })
 })
 
-describe("unpublishedNights", () => {
-  test("names each college whose nights are not public, with a reason", () => {
-    const unknown = unpublishedNights(COLLEGE_INFO)
-    expect(unknown.map((u) => u.college.slug).sort()).toEqual([
-      "kings-college",
-      "newnham-college",
-      "peterhouse",
-    ])
-    for (const { reason } of unknown) expect(reason.length).toBeGreaterThan(10)
+describe("frequencyLabel", () => {
+  test("a weekly night needs no words; the others say how often, in plain words", () => {
+    expect(frequencyLabel({ weekday: "wed", frequency: "weekly" })).toBeNull()
+    expect(frequencyLabel({ weekday: "tue", frequency: "fortnightly" })).toBe("every other week")
+    expect(frequencyLabel({ weekday: "fri", frequency: "first_of_month" })).toBe(
+      "first Friday of the month",
+    )
+    expect(frequencyLabel({ weekday: "fri", frequency: "some_weeks" })).toBe("some weeks")
   })
 })

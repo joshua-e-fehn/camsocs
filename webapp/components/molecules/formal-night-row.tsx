@@ -1,9 +1,8 @@
 import Link from "next/link"
 import { CollegeCrest } from "@/components/molecules/college-crest"
 import { ExternalLink } from "@/components/molecules/external-link"
-import { FormalNightUnconfirmed } from "@/components/molecules/formal-night-unconfirmed"
 import type { FormalAudience } from "@/lib/colleges"
-import { type FormalSlot, priceLabel } from "@/lib/formal-week"
+import { type FormalSlot, frequencyLabel, priceLabel } from "@/lib/formal-week"
 
 const AUDIENCE: Readonly<Record<FormalAudience, string | null>> = {
   all_members: null,
@@ -15,13 +14,14 @@ const AUDIENCE: Readonly<Record<FormalAudience, string | null>> = {
  * One college's formal on one night (/formals, ENG-272): crest, the college
  * (its formal hall section), the college's name for the dinner, the start
  * time, how a visitor gets in and the published price with its date, any
- * qualifier ("with wine") and source. A night that also runs out of term says
- * so; one no page lists as such carries the "not confirmed" marker.
+ * qualifier ("with wine") and source. A night that is not every week says how
+ * often it runs ("every other week"); one that also runs out of term says so.
  */
 export function FormalNightRow({ slot }: { slot: FormalSlot }) {
   const { night } = slot
   const audience = AUDIENCE[night.audience]
   const price = priceLabel(slot.price)
+  const frequency = frequencyLabel(night)
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-4 py-3 sm:grid-cols-[auto_minmax(0,14rem)_minmax(0,1fr)_auto] sm:gap-x-4">
       <CollegeCrest
@@ -40,6 +40,7 @@ export function FormalNightRow({ slot }: { slot: FormalSlot }) {
         <span className="text-sm text-muted-foreground">
           {night.label}
           {audience && ` · ${audience}`}
+          {frequency && ` · ${frequency}`}
         </span>
       </div>
       <p className="col-start-2 text-sm sm:col-start-3 sm:row-start-1">
@@ -74,12 +75,6 @@ export function FormalNightRow({ slot }: { slot: FormalSlot }) {
         </span>
         {!night.termOnly && (
           <span className="font-mono text-xs text-muted-foreground">also out of term</span>
-        )}
-        {night.confidence === "inferred" && (
-          <FormalNightUnconfirmed
-            college={slot.shortName}
-            reason={night.notes ?? "No page lists this night as such."}
-          />
         )}
       </div>
     </li>

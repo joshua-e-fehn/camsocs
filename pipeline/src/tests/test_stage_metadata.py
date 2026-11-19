@@ -36,6 +36,9 @@ XW = ("crosswalk",)
 #: name → (phase, pillar, campus, writes, reads, sinks, network, llm, docs)
 ANNOTATIONS: dict[str, tuple] = {
     "term_dates": ("seed", "shared", None, (), (), ("termDates",), False, False, ("§19",)),
+    "college_finances": (
+        "seed", "societies", "cam", (), (), ("collegeFinances",), True, False, ("§22",)
+    ),
     "su_directory": (
         "harvest", "societies", "cam", ("su_directory", "su_profile"), (), (), True, False, ("§1",)
     ),

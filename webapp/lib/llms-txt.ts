@@ -53,6 +53,12 @@ const PAGES: { path: string; name: string; about: string }[] = [
     about: "all 31 colleges with their JCR, MCR, boat club, societies and formal hall rules",
   },
   {
+    path: "/colleges/wealth",
+    name: "Cambridge colleges ranked by endowment",
+    about:
+      "all 31 colleges ranked by endowment, per student and net assets, from their filed accounts, with a CSV",
+  },
+  {
     path: "/about",
     name: `About ${SITE_NAME}`,
     about: "who runs it, where every fact comes from and how the data is collected",

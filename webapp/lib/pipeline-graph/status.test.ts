@@ -176,7 +176,7 @@ describe("viewFromStatus", () => {
       rows: [row("talks", { lastStatus: "running" })],
       group: "talks",
     })
-    expect(Object.keys(views)).toHaveLength(25)
+    expect(Object.keys(views)).toHaveLength(26)
     expect(views.talks.state).toBe("running")
     expect(views.load.state).toBe("not_requested")
   })
@@ -290,7 +290,7 @@ describe("text and numbers", () => {
     expect(counts.ok).toBe(1)
     expect(counts.failed).toBe(1)
     expect(counts.yieldDrop).toBe(1)
-    expect(counts.not_run).toBe(23)
+    expect(counts.not_run).toBe(24)
   })
 })
 

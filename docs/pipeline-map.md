@@ -15,6 +15,7 @@ Convex.
 flowchart LR
   subgraph lane_cam_societies["Societies · Cambridge"]
     direction TB
+    stage_college_finances["college_finances · seed"]
     stage_su_directory["su_directory · harvest"]
     stage_proctors_register["proctors_register · harvest"]
     stage_sport_clubs["sport_clubs · harvest"]
@@ -88,6 +89,7 @@ flowchart LR
   sel_all_observations{{"@all_observations"}}
   subgraph convex["Convex /api/pipeline"]
     sink_termDates[/"termDates"/]
+    sink_collegeFinances[/"collegeFinances"/]
     sink_crosswalk[/"crosswalk"/]
     sink_requests_websites[/"requests/websites"/]
     sink_inbound_pending[/"inbound/pending"/]
@@ -110,6 +112,7 @@ flowchart LR
     sink_coverage_events[/"coverage/events"/]
   end
   stage_term_dates ==> sink_termDates
+  stage_college_finances ==> sink_collegeFinances
   stage_su_directory --> dir_su_directory
   stage_su_directory --> dir_su_profile
   stage_proctors_register --> dir_proctors_register
@@ -208,37 +211,38 @@ flowchart LR
 | # | Stage | Phase | Pillar | Lane | Groups | Network | LLM | Docs |
 |---|---|---|---|---|---|---|---|---|
 | 0 | `term_dates` | seed | shared | engine/shared | events, full | no | no | [§19](source-research.md#19-university-full-term-dates) |
-| 1 | `su_directory` | harvest | societies | cam/societies | full | yes | no | [§1](source-research.md#1-cambridge-su-find-a-society) |
-| 2 | `proctors_register` | harvest | societies | cam/societies | full | yes | no | [§2](source-research.md#2-proctors-register) |
-| 3 | `sport_clubs` | harvest | societies | cam/societies | full | yes | no | [§3](source-research.md#3-sport-cambridge-az-and-club-pages) |
-| 4 | `sport_guide_pdf` | harvest | societies | cam/societies | full | yes | no | [§4](source-research.md#4-sports-club-guide-2026-27-pdf) |
-| 5 | `camdram_societies` | harvest | societies | cam/societies | full | yes | no | [§5](source-research.md#5-camdram) |
-| 6 | `cucbc_clubs` | harvest | societies | cam/societies | full | yes | no | [§7](source-research.md#7-cucbc) |
-| 7 | `colleges` | harvest | societies | cam/societies | full | yes | no | [§8](source-research.md#8-colleges-and-jcrmcr) |
-| 8 | `resolve` | resolve | societies | engine/societies | full | no | no | – |
-| 9 | `enrich` | enrich | societies | engine/societies | full | yes | yes | [§13](source-research.md#13-linktree), [§14](source-research.md#14-society-websites) |
-| 10 | `classify` | classify | societies | engine/societies | full | yes | yes | – |
-| 11 | `camdram_events` | events | events | cam/events | events, full | yes | no | [§5](source-research.md#5-camdram) |
-| 12 | `talks_cam` (talks.cam lists (G1)) | events | events | cam/events | events, full | yes | no | [§6](source-research.md#6-talkscam) |
-| 13 | `cucbc_events` | events | events | cam/events | events, full | yes | no | [§7](source-research.md#7-cucbc) |
-| 14 | `playwaze` | events | events | cam/events | events, full | yes | no | [§9](source-research.md#9-playwaze-college-leagues-and-bucs) |
-| 15 | `uni_events` | events | events | cam/events | events, full | yes | no | [§10](source-research.md#10-university-events-programme-read-with-permission) |
-| 16 | `calendar_feeds` | events | events | engine/events | events, full | yes | no | [§11](source-research.md#11-calendar-feeds-that-societies-publish) |
-| 17 | `su_whatson` | events | events | cam/events | events, full | yes | no | [§12](source-research.md#12-su-whats-on) |
-| 18 | `website_events` | events | events | engine/events | events, full | yes | yes | [§14](source-research.md#14-society-websites) |
-| 19 | `inbox` | inbox | events | engine/events | events, full | no | yes | [§16](source-research.md#16-mailing-list-inbox), [§20](source-research.md#20-sympa-public-list-search) |
-| 20 | `instagram` | inbox | events | engine/events | events, full | yes | yes | [§17](source-research.md#17-meta-instagram-business-discovery) |
-| 21 | `termcards` | inbox | events | engine/events | events, full | yes | yes | [§21](source-research.md#21-termcards) |
-| 22 | `load` | load | shared | engine/shared | events, full | no | no | – |
-| 23 | `talks` | talks | talks | cam/talks | events, full, talks | yes | no | [talks-redesign-spec](talks-redesign-spec.md) |
-| 24 | `report` | report | shared | engine/shared | events, full | no | no | – |
+| 1 | `college_finances` | seed | societies | cam/societies | full | yes | no | [§22](source-research.md#22-charity-commission-register-the-colleges-finances) |
+| 2 | `su_directory` | harvest | societies | cam/societies | full | yes | no | [§1](source-research.md#1-cambridge-su-find-a-society) |
+| 3 | `proctors_register` | harvest | societies | cam/societies | full | yes | no | [§2](source-research.md#2-proctors-register) |
+| 4 | `sport_clubs` | harvest | societies | cam/societies | full | yes | no | [§3](source-research.md#3-sport-cambridge-az-and-club-pages) |
+| 5 | `sport_guide_pdf` | harvest | societies | cam/societies | full | yes | no | [§4](source-research.md#4-sports-club-guide-2026-27-pdf) |
+| 6 | `camdram_societies` | harvest | societies | cam/societies | full | yes | no | [§5](source-research.md#5-camdram) |
+| 7 | `cucbc_clubs` | harvest | societies | cam/societies | full | yes | no | [§7](source-research.md#7-cucbc) |
+| 8 | `colleges` | harvest | societies | cam/societies | full | yes | no | [§8](source-research.md#8-colleges-and-jcrmcr) |
+| 9 | `resolve` | resolve | societies | engine/societies | full | no | no | – |
+| 10 | `enrich` | enrich | societies | engine/societies | full | yes | yes | [§13](source-research.md#13-linktree), [§14](source-research.md#14-society-websites) |
+| 11 | `classify` | classify | societies | engine/societies | full | yes | yes | – |
+| 12 | `camdram_events` | events | events | cam/events | events, full | yes | no | [§5](source-research.md#5-camdram) |
+| 13 | `talks_cam` (talks.cam lists (G1)) | events | events | cam/events | events, full | yes | no | [§6](source-research.md#6-talkscam) |
+| 14 | `cucbc_events` | events | events | cam/events | events, full | yes | no | [§7](source-research.md#7-cucbc) |
+| 15 | `playwaze` | events | events | cam/events | events, full | yes | no | [§9](source-research.md#9-playwaze-college-leagues-and-bucs) |
+| 16 | `uni_events` | events | events | cam/events | events, full | yes | no | [§10](source-research.md#10-university-events-programme-read-with-permission) |
+| 17 | `calendar_feeds` | events | events | engine/events | events, full | yes | no | [§11](source-research.md#11-calendar-feeds-that-societies-publish) |
+| 18 | `su_whatson` | events | events | cam/events | events, full | yes | no | [§12](source-research.md#12-su-whats-on) |
+| 19 | `website_events` | events | events | engine/events | events, full | yes | yes | [§14](source-research.md#14-society-websites) |
+| 20 | `inbox` | inbox | events | engine/events | events, full | no | yes | [§16](source-research.md#16-mailing-list-inbox), [§20](source-research.md#20-sympa-public-list-search) |
+| 21 | `instagram` | inbox | events | engine/events | events, full | yes | yes | [§17](source-research.md#17-meta-instagram-business-discovery) |
+| 22 | `termcards` | inbox | events | engine/events | events, full | yes | yes | [§21](source-research.md#21-termcards) |
+| 23 | `load` | load | shared | engine/shared | events, full | no | no | – |
+| 24 | `talks` | talks | talks | cam/talks | events, full, talks | yes | no | [talks-redesign-spec](talks-redesign-spec.md) |
+| 25 | `report` | report | shared | engine/shared | events, full | no | no | – |
 
 ## Groups
 
 | Group | Schedule | Stages | Needs | Stale after |
 |---|---|---|---|---|
 | `events` | daily 04:30 Europe/London | 15 | `_resolved`, `society_website`, `su_profile` | 8 days |
-| `full` | weekly Sun 02:00 Europe/London | 25 | – | – |
+| `full` | weekly Sun 02:00 Europe/London | 26 | – | – |
 | `talks` | by hand | 1 | – | – |
 
 ## Sources
@@ -246,6 +250,7 @@ flowchart LR
 | Source | Stage | Pillar | Source types | Event sources | § | Permission |
 |---|---|---|---|---|---|---|
 | University Full Term dates (verified seed) | `term_dates` | shared | – | – | [§19](source-research.md#19-university-full-term-dates) | – |
+| Charity Commission register: the colleges' annual-return finances | `college_finances` | societies | – | – | [§22](source-research.md#22-charity-commission-register-the-colleges-finances) | robots |
 | Cambridge SU society directory and profiles | `su_directory` | societies | `su_directory`, `su_profile` | – | [§1](source-research.md#1-cambridge-su-find-a-society) | D3 |
 | Proctors' register of societies | `proctors_register` | societies | `proctors_register` | – | [§2](source-research.md#2-proctors-register) | robots |
 | Sport Cambridge A–Z and club pages | `sport_clubs` | societies | `sport_az`, `sport_club_page` | – | [§3](source-research.md#3-sport-cambridge-az-and-club-pages) | robots |

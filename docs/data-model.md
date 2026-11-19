@@ -288,6 +288,24 @@ Graph edges between organisations.
 
 The table is seeded from the University's published Full Term dates (source-research §19) and is used for `termWeekLabel`.
 
+### collegeFinances
+
+One college's financial period from the Charity Commission register's Part B annual-return extract (source-research §22), written by the `college_finances` stage through `POST /api/pipeline/collegeFinances` (`convex/ingest/collegeFinances.ts`) and upserted by (charityNumber, periodEnd). Rows are never deleted: the register keeps five years, the table keeps every year it was sent. Indexes `by_charity_period`, `by_periodEnd`.
+
+| Field | Type | Notes |
+|---|---|---|
+| charityNumber | string | one of the 31 colleges in `webapp/lib/data/college-wealth.json`; any other is refused |
+| collegeKey | string | `org-<slug>`, must match the charity |
+| periodEnd | `YYYY-MM-DD` | the financial year's last day (30 June; 31 July for Emmanuel, Fitzwilliam, Hughes Hall) |
+| endowmentGbp / netAssetsGbp / incomeGbp | number? | whole pounds: `assets_long_term_investment`, `funds_total`, `income_total_income_and_endowments`; absent when the return does not state it, never null |
+| status | `register \| override \| needs_review` | `override`: a reviewed correction from the accounts (`pipeline/.../data/college_finance_overrides.json`); `needs_review`: failed a check without one, left out of the figures |
+| checks | string[] | the checks the register's row failed: `year_change:+31.2%`, `endowment_over_net_assets`, `lines_swapped`, `too_small:<field>`, `missing:<field>`, `review:<reason>`, `override_stale:<field>` (the college re-filed since its override was reviewed) |
+| source | `{extractUrl, extractModified?, registerUrl, overrideCitation?: {url, page, reason}}` | the extract, its `Last-Modified` (epoch ms), the charity's register page, the accounts page behind an override |
+| retrievedAt | number | when the pipeline last read the extract |
+| createdAt / updatedAt | number | `updatedAt` moves only when a figure, status, check or citation changes, not on a re-read |
+
+`/colleges/wealth` ranks the newest financial year in which all 31 colleges have an accepted (`register` / `override`) row with all three figures (`collegeFinances.latestCompleteYear`, `webapp/lib/college-finances.ts`); until a later year is complete it shows the verified dataset's year, whose figures come from the dataset.
+
 ## 2a. The talks pillar (decision D7)
 
 Academic talks across the departments (`docs/talks-redesign-spec.md` §2–§4). They are **not** claims: one talk listing is the provenance unit (`sourceUrl`, `retrievedAt` per talk), so rows are written whole by `convex/ingest/talks.ts` behind `POST /api/pipeline/talks/{departments,batch,sweep,runs}`, never field by field, and need no D1 redaction (speakers are the point of a listing; talks.cam titles are works). Vocabularies: `TALK_SCHOOLS`, `TALK_KINDS`, `TALK_SOURCE_TYPES`, `TALK_LISTINGS`, `TALK_RUN_STATUSES`.

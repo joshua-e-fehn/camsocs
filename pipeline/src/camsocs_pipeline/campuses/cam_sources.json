@@ -12,6 +12,15 @@
       "permission": null
     },
     {
+      "key": "college_finances",
+      "label": "Charity Commission register: the colleges' annual-return finances",
+      "stage": "college_finances",
+      "sourceTypes": [],
+      "eventSources": [],
+      "section": "22",
+      "permission": "robots"
+    },
+    {
       "key": "su_directory",
       "label": "Cambridge SU society directory and profiles",
       "stage": "su_directory",

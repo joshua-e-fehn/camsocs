@@ -185,6 +185,8 @@ ingestionRoute("relationships", internal.ingest.relationships.upsert)
 ingestionRoute("eventOrganisers", internal.ingest.relationships.setEventOrganisers)
 ingestionRoute("brokerInferences", internal.ingest.broker.ingest)
 ingestionRoute("termDates", internal.ingest.termDates.upsert)
+// The colleges' register finances (source-research §22, /colleges/wealth).
+ingestionRoute("collegeFinances", internal.ingest.collegeFinances.upsert)
 // The mailing-list inbox (source-research §16).
 readRoute("inbound/pending", internal.ingest.inbound.pending)
 // Every organisation key with its identifiers, for the pipeline's resolver.

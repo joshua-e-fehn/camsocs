@@ -3,6 +3,9 @@ import { readdirSync } from "node:fs"
 import { join, relative } from "node:path"
 import { NAV } from "@/components/organisms/public-header"
 import { COLUMNS } from "@/components/organisms/site-footer"
+import { COLLEGE_INFO } from "./colleges"
+import { formalCollegeSitemapEntries } from "./formal-college-page"
+import { formalCollegePath } from "./formal-paths"
 import { ROUTE_INDEXING, routeOfPageFile } from "./route-indexing"
 import { PAGE_PATHS } from "./sitemap"
 
@@ -43,7 +46,7 @@ describe("route indexing", () => {
 
   test("pages.xml lists exactly the single pages marked for it", () => {
     const marked = Object.entries(ROUTE_INDEXING)
-      .filter(([, how]) => "sitemap" in how && how.sitemap === "pages.xml")
+      .filter(([, how]) => "sitemap" in how && how.sitemap === "pages.xml" && !("rows" in how))
       .map(([route]) => route)
       .sort()
     expect(([...PAGE_PATHS] as string[]).sort()).toEqual(marked)
@@ -64,5 +67,18 @@ describe("route indexing", () => {
     }
     const unlinked = PAGE_PATHS.filter((path) => !linked(path))
     expect(unlinked).toEqual([])
+  })
+
+  test("a per-row route in pages.xml lists every row, under a page that is linked", () => {
+    const rows = Object.entries(ROUTE_INDEXING).filter(([, how]) => "rows" in how)
+    expect(rows.map(([route]) => route)).toEqual(["/formals/[slug]"])
+    const paths = formalCollegeSitemapEntries().map((entry) => entry.path)
+    expect(paths).toEqual(COLLEGE_INFO.map((college) => formalCollegePath(college.slug)))
+    expect(paths).toHaveLength(31)
+    for (const [, how] of rows) {
+      if (!("linkedFrom" in how) || !how.linkedFrom.startsWith("page:"))
+        throw new Error("linkedFrom")
+      expect(PAGE_PATHS as readonly string[]).toContain(how.linkedFrom.slice("page:".length))
+    }
   })
 })

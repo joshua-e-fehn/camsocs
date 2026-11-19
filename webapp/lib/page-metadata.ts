@@ -21,12 +21,20 @@ export const SHARE_IMAGE = {
 
 /**
  * Pages whose route segment draws its own share card (an `opengraph-image`
- * file): a society's profile and an event's page (og-share-cards). Next uses
+ * file): a society's profile and an event's page (og-share-cards), and the
+ * college wealth ranking's bar chart, and /formals and its tracker (formals
+ * SEO audit 2026-11-19). Next uses
  * that file only when the page's metadata names no Open Graph image, so
  * `pageMetadata` leaves the generic one out for these paths. A test holds
  * the list and the files together.
  */
-export const OWN_IMAGE_PATHS: readonly RegExp[] = [/^\/societies\/[^/]+$/, /^\/events\/[^/]+$/]
+export const OWN_IMAGE_PATHS: readonly RegExp[] = [
+  /^\/societies\/[^/]+$/,
+  /^\/events\/[^/]+$/,
+  /^\/colleges\/wealth$/,
+  /^\/formals$/,
+  /^\/formals\/tracker$/,
+]
 
 /** The longest meta description worth sending: search results cut at about
  * 155–160 characters, mid-word (SEO audit, meta-description-quality). */

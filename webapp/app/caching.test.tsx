@@ -71,6 +71,7 @@ describe("public pages", () => {
     ...pages,
     "lib/event-page.ts",
     "lib/term-dates.ts",
+    "lib/college-wealth-data.ts",
     "lib/sport-events.ts",
     "lib/welcome-events.ts",
     "lib/sign-in-options.ts",
@@ -98,16 +99,22 @@ describe("public pages", () => {
   // nothing, except the category hubs.
   const segments = pages.filter((file) => /\[[^\]]+\][/\\]page\.tsx$/.test(file))
   test("the scan sees every dynamic segment", () => {
-    expect(segments.length).toBe(5)
+    expect(segments.length).toBe(6)
   })
   // The category hubs are the exception: a fixed list of 16, built with the
   // site, so that any other slug gets the site's static 404 (re-check
   // 2026-11-03, not-found-template; app/(site)/categories/[category]/page.tsx).
   const CATEGORY_HUB = path.join(SITE, "categories", "[category]", "page.tsx")
+  // So are the colleges' formal hall pages: the 31 colleges of
+  // lib/data/colleges.json, static data that needs no Convex read at build
+  // (formals SEO audit 2026-11-19; app/(site)/formals/[slug]/page.tsx).
+  const FORMAL_COLLEGE = path.join(SITE, "formals", "[slug]", "page.tsx")
+  const BUILT = [CATEGORY_HUB, FORMAL_COLLEGE]
   test("the exception is a dynamic segment", () => {
     expect(segments).toContain(CATEGORY_HUB)
+    expect(segments).toContain(FORMAL_COLLEGE)
   })
-  for (const file of segments.filter((file) => file !== CATEGORY_HUB)) {
+  for (const file of segments.filter((file) => !BUILT.includes(file))) {
     test(`${file} builds no page and renders each on demand`, () => {
       expect(read(file)).toMatch(
         /export function generateStaticParams\(\)[^\n]*\{\n\s*return \[\]\n\}/,
@@ -117,6 +124,12 @@ describe("public pages", () => {
   }
   test(`${CATEGORY_HUB} builds every hub and no other slug`, () => {
     expect(read(CATEGORY_HUB)).toMatch(/^export const dynamicParams = false$/m)
+  })
+  test(`${FORMAL_COLLEGE} builds every college from static data and no other slug`, () => {
+    const source = read(FORMAL_COLLEGE)
+    expect(source).toMatch(/^export const dynamicParams = false$/m)
+    expect(source).toMatch(/return COLLEGE_INFO\.map\(/)
+    expect(source).not.toMatch(/publicQuery|publicPreload|fetchQuery|convex\/_generated/)
   })
 })
 
