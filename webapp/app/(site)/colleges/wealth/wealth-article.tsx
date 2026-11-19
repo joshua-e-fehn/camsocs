@@ -16,6 +16,7 @@ import {
   perStudent,
   rankedBy,
   SHORT_TERM_HOLDERS,
+  UNIVERSITY_ENDOWMENT,
   WEALTH_CAVEATS,
   WEALTH_QUOTED,
   WEALTH_REGISTER_CHECK,
@@ -29,6 +30,7 @@ import {
   endowmentRank,
   type FaqPart,
   freshnessText,
+  longDate,
   netAssetsMover,
   nextYearText,
   possessive,
@@ -78,7 +80,13 @@ export function CollegeWealthArticle({ view }: { view: WealthView }) {
   const count = view.rows.length
   const year = view.financialYear
   const runnerUp = view.byEndowment[1]
-  const table = wealthTable(view.rows, collegeHubPath)
+  // The University's figures are for one year; a later register year leaves them out.
+  const universityShown = year === UNIVERSITY_ENDOWMENT.financialYear
+  const table = wealthTable(
+    view.rows,
+    collegeHubPath,
+    universityShown ? UNIVERSITY_ENDOWMENT : null,
+  )
   const top = view.byEndowment.slice(0, 10)
   const bottom = view.byEndowment.slice(-5).reverse()
   const byStudent = rankedBy(view.rows, "perStudent")
@@ -460,6 +468,43 @@ export function CollegeWealthArticle({ view }: { view: WealthView }) {
               </p>
             </div>
           ))}
+        </section>
+
+        <section aria-labelledby="university" className="flex max-w-3xl flex-col gap-4">
+          <h2 id="university" className={H2}>
+            The University’s own endowment
+          </h2>
+          <p className="leading-relaxed">
+            The University of Cambridge is a separate body from its {count} colleges, with its own
+            money. Its main investment pot, the Cambridge University Endowment Fund, was worth{" "}
+            <strong>{formatGbp(UNIVERSITY_ENDOWMENT.netAssetValueGbp)}</strong> at{" "}
+            {longDate(UNIVERSITY_ENDOWMENT.asAt)} (a year earlier{" "}
+            {formatGbp(UNIVERSITY_ENDOWMENT.netAssetValuePrevGbp)}). Of that,{" "}
+            {formatGbp(UNIVERSITY_ENDOWMENT.attributableToUniversityGroupGbp)} belongs to the
+            University itself; the other{" "}
+            {formatGbp(
+              UNIVERSITY_ENDOWMENT.netAssetValueGbp -
+                UNIVERSITY_ENDOWMENT.attributableToUniversityGroupGbp,
+            )}{" "}
+            belongs to other investors, among them some colleges that invest through the fund.
+          </p>
+          <p className="leading-relaxed">
+            The University’s own share is not college money, so the ranking above leaves it out
+            {universityShown
+              ? ": tick “Include the University of Cambridge” under the table to see the University’s share alongside the colleges, without a rank number"
+              : ""}
+            . The fund is larger than any single college’s endowment (
+            {possessive(richest.college.shortName)} {formatGbp(richest.endowmentGbp)} is the
+            largest) but smaller than the {count} colleges’ {formatGbp(total)} combined. The
+            University’s total net assets were {formatGbp(UNIVERSITY_ENDOWMENT.groupNetAssetsGbp)}.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Source:{" "}
+            <ExternalLink href={UNIVERSITY_ENDOWMENT.sourceUrl} className="underline">
+              University of Cambridge Reports and Financial Statements 2024-25
+            </ExternalLink>
+            , {UNIVERSITY_ENDOWMENT.sourceRef.split(";")[0]}.
+          </p>
         </section>
 
         <nav aria-label="More on colleges" className="flex flex-col gap-2">

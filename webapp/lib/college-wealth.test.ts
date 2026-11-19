@@ -5,18 +5,24 @@ import {
   barWidth,
   COLLEGE_WEALTH,
   changePct,
+  collegeRanks,
   formatGbp,
   formatPct,
   INCOME_FROM_ANNUAL_RETURN,
   JULY_YEAR_END,
   listNames,
   metricValue,
+  NO_FIGURE,
   ordinal,
   perStudent,
   RECORDED_TOTAL_GBP,
   rankedBy,
   SHORT_TERM_HOLDERS,
   sourcePage,
+  tableRows,
+  UNIVERSITY_ENDOWMENT,
+  UNIVERSITY_ROW_SLUG,
+  universityTableRow,
   WEALTH_CHECKED_ON,
   WEALTH_FINANCIAL_YEAR_NOTE,
   WEALTH_PUBLISHED_ON,
@@ -192,6 +198,94 @@ describe("table props", () => {
     const trinity = table.rows.find((row) => row.slug === "trinity-college")
     expect(trinity?.display.endowment).toBe("£2.70bn")
     expect(trinity?.href).toBe("/societies/trinity-college")
+  })
+})
+
+describe("the University row (context, not a college)", () => {
+  const hub = (college: { slug: string }) => `/societies/${college.slug}`
+
+  test("its figures come from the financial statements, with no per-student figure", () => {
+    const row = universityTableRow()
+    expect(row.kind).toBe("university")
+    expect(row.slug).toBe(UNIVERSITY_ROW_SLUG)
+    expect(row.name).toBe("University of Cambridge")
+    expect(row.crest).toBeNull()
+    expect(row.href).toBe("#university")
+    // The University group's share of the fund, not the whole fund (which holds college money too).
+    expect(row.values.endowment).toBe(4_141_900_000)
+    expect(row.values.endowment).toBe(UNIVERSITY_ENDOWMENT.attributableToUniversityGroupGbp)
+    expect(row.values.netAssets).toBe(8_263_000_000)
+    expect(row.values.income).toBe(2_660_000_000)
+    expect(row.values.change).toBe(6)
+    expect(row.values.perStudent).toBe(Number.NEGATIVE_INFINITY)
+    expect(row.display).toEqual({
+      endowment: "£4.14bn",
+      perStudent: NO_FIGURE,
+      income: "£2.66bn",
+      netAssets: "£8.26bn",
+      change: "+6.0%",
+    })
+    expect(row.financialYearEnd).toBe("2025-07-31")
+    expect(row.sourceUrl).toBe(UNIVERSITY_ENDOWMENT.sourceUrl)
+    expect(row.sourceLabel).toBe("Financial statements, PDF p.29")
+    expect(UNIVERSITY_ENDOWMENT.status).toBe("verified")
+    expect(UNIVERSITY_ENDOWMENT.financialYear).toBe("2024-25")
+  })
+
+  test("left out of the table unless asked for, and out of the default orders", () => {
+    const table = wealthTable(COLLEGE_WEALTH, hub)
+    expect(table.university).toBeNull()
+    expect(tableRows(table, "endowment", true)).toHaveLength(31)
+    const withUni = wealthTable(COLLEGE_WEALTH, hub, UNIVERSITY_ENDOWMENT)
+    expect(withUni.rows).toHaveLength(31)
+    expect(withUni.rows.every((row) => row.kind === "college")).toBe(true)
+    for (const key of WEALTH_SORT_KEYS) {
+      expect(withUni.orders[key]).toEqual(table.orders[key])
+      expect(withUni.scales[key]).toBe(table.scales[key])
+    }
+  })
+
+  test("sorted into place by each figure, last by per student; the colleges keep ranks 1..31", () => {
+    const table = wealthTable(COLLEGE_WEALTH, hub, UNIVERSITY_ENDOWMENT)
+    for (const key of WEALTH_SORT_KEYS) {
+      const rows = tableRows(table, key, true)
+      expect(rows).toHaveLength(32)
+      // Without it, the order is the colleges' own.
+      expect(rows.filter((row) => row.kind === "college").map((row) => row.slug)).toEqual(
+        table.orders[key],
+      )
+      const ranks = collegeRanks(rows)
+      expect(ranks.has(UNIVERSITY_ROW_SLUG)).toBe(false)
+      expect([...ranks.values()]).toEqual(Array.from({ length: 31 }, (_, i) => i + 1))
+      expect(ranks.get(table.orders[key][0])).toBe(1)
+    }
+    expect(tableRows(table, "endowment", true)[0].slug).toBe(UNIVERSITY_ROW_SLUG)
+    expect(tableRows(table, "netAssets", true)[0].slug).toBe(UNIVERSITY_ROW_SLUG)
+    expect(tableRows(table, "income", true)[0].slug).toBe(UNIVERSITY_ROW_SLUG)
+    expect(tableRows(table, "perStudent", true).at(-1)?.slug).toBe(UNIVERSITY_ROW_SLUG)
+    // +6.0% sits between the colleges either side of it.
+    const byChange = tableRows(table, "change", true)
+    const at = byChange.findIndex((row) => row.slug === UNIVERSITY_ROW_SLUG)
+    expect(byChange[at - 1]?.values.change ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(6)
+    expect(byChange[at + 1].values.change).toBeLessThanOrEqual(6)
+  })
+
+  test("its bars use the colleges' scale and are cut off where it is larger", () => {
+    const table = wealthTable(COLLEGE_WEALTH, hub, UNIVERSITY_ENDOWMENT)
+    const row = universityTableRow()
+    // Still St John's: the University does not squash the colleges' bars.
+    expect(table.scales.endowment).toBe(BY_ENDOWMENT[1].endowmentGbp)
+    for (const key of ["endowment", "netAssets", "income"] as const) {
+      expect(barWidth(row.values[key], table.scales[key]).cut).toBe(true)
+    }
+    expect(barWidth(row.values.perStudent, table.scales.perStudent)).toEqual({
+      fraction: 0,
+      cut: false,
+    })
+    expect(table.university?.note).toContain("no rank number")
+    expect(table.university?.note).toContain("£4.14bn share of the £4.61bn")
+    expect(table.university?.note).toContain("31 July 2025")
+    expect(table.university?.note).toContain("colleges’ scale")
   })
 })
 

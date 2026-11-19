@@ -55,6 +55,8 @@
     "attributableToUniversityGroupGbp": 4141900000,
     "attributableToUniversityGroupPrevGbp": 3906700000,
     "asAt": "2025-07-31",
+    "financialYear": "2024-25",
+    "financialYearEnd": "2025-07-31",
     "quote": "At 31 July 2025, the net asset value of the CUEF was £4,606.8m (2024: £4,285.9m) of which £4,141.9m (2024: £3,906.7m) is attributable to the University Group.",
     "groupEndowmentReserveGbp": 2764000000,
     "groupEndowmentReservePrevGbp": 2622100000,
@@ -64,6 +66,7 @@
     "sourceUrl": "https://www.cam.ac.uk/system/files/university_of_cambridge_group_annual_reports_financial_statements_2024-25.pdf",
     "sourceRef": "Reports and Financial Statements 2024-25, Investments / CUEF section (printed p.27, PDF p.29); balance sheet 'Income and expenditure reserve – endowment' (note 32); net assets and income also on the 2024-25 highlights page",
     "status": "verified",
+    "retrieved": "2026-11-19",
     "notes": "The CUEF's own financial year ends 30 June; the NAV quoted is as reported at 31 July 2025. About £465m of the CUEF belongs to other investors, including several colleges (e.g. Wolfson), so the University and college figures overlap. The University is a separate body from the colleges; this is for context only."
   },
   "caveats": [

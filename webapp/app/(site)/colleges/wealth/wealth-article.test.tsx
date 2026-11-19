@@ -54,6 +54,7 @@ describe("/colleges/wealth (server render, verified year)", () => {
       "How we measured this",
       "What the numbers don’t say",
       "Questions",
+      "The University’s own endowment",
     ])
   })
 
@@ -88,6 +89,16 @@ describe("/colleges/wealth (server render, verified year)", () => {
     expect(doc.querySelector('a[href="/colleges/wealth.csv"]')).not.toBeNull()
     expect(text(doc)).not.toMatch(/undefined|NaN|\[object/)
   })
+
+  test("the University is offered under the table (off) and explained at the bottom", () => {
+    expect(text(doc)).toContain("Include the University of Cambridge (not a college)")
+    const ranking = doc.querySelector("#ranking")?.closest("section")
+    expect(ranking?.querySelectorAll("tbody tr")).toHaveLength(31)
+    expect(doc.querySelector("#university-of-cambridge")).toBeNull()
+    expect(doc.querySelector("#university")?.closest("section")?.textContent).toContain(
+      "tick “Include the University of Cambridge” under the table",
+    )
+  })
 })
 
 describe("/colleges/wealth (a later register year)", () => {
@@ -103,6 +114,11 @@ describe("/colleges/wealth (a later register year)", () => {
     const sources = [...doc.querySelectorAll("tbody a[href^='https://register-of-charities']")]
     expect(sources.length).toBeGreaterThanOrEqual(31)
     expect(text(doc)).not.toMatch(/undefined|NaN|\[object/)
+  })
+
+  test("the University's 2024-25 figures are not offered beside another year", () => {
+    expect(text(doc)).not.toContain("Include the University of Cambridge")
+    expect(text(doc)).not.toContain("tick “Include the University")
   })
 })
 

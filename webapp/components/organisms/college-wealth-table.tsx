@@ -1,13 +1,25 @@
 "use client"
 
-import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpDownIcon, LandmarkIcon } from "lucide-react"
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useId, useState } from "react"
 import { CollegeCrest } from "@/components/molecules/college-crest"
 import { CollegeWealthBar } from "@/components/molecules/college-wealth-bar"
+import { UniversityBadge } from "@/components/molecules/event-item"
 import { ExternalLink } from "@/components/molecules/external-link"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { WealthSortKey, WealthTable, WealthTableRow } from "@/lib/college-wealth"
+import {
+  barWidth,
+  collegeRanks,
+  NO_FIGURE,
+  tableRows,
+  UNIVERSITY_SECTION_ID,
+  type WealthSortKey,
+  type WealthTable,
+  type WealthTableRow,
+} from "@/lib/college-wealth"
 import { cn } from "@/lib/utils"
 
 const LINK =
@@ -21,6 +33,11 @@ const LINK =
  * only switches between them. Each row's id is its college's slug, which
  * the college pages link. On a phone the table keeps rank, college and
  * the chosen figure, with the other four on a line under the name.
+ *
+ * A checkbox under the table (off by default, so the server's HTML is the
+ * colleges alone) adds the University of Cambridge's own figures for
+ * context: in its sorted place, marked "University", with no rank number,
+ * and on the colleges' bar scale.
  */
 /** How the phone summary line words each figure. */
 const SUMMARY: Record<WealthSortKey, (value: string) => string> = {
@@ -37,10 +54,23 @@ const STICKY_HEAD =
 
 export function CollegeWealthTable({ table }: { table: WealthTable }) {
   const [sortKey, setSortKey] = useState<WealthSortKey>("endowment")
-  const bySlug = useMemo(() => new Map(table.rows.map((row) => [row.slug, row])), [table.rows])
-  const rows = table.orders[sortKey].flatMap((slug) => bySlug.get(slug) ?? [])
+  const [withUniversity, setWithUniversity] = useState(false)
+  const [announcement, setAnnouncement] = useState("")
+  const checkboxId = useId()
+  const rows = tableRows(table, sortKey, withUniversity)
+  const ranks = collegeRanks(rows)
   const scale = table.scales[sortKey]
-  const cut = rows.filter((row) => Math.abs(row.values[sortKey]) > scale)
+  // `barWidth`, as the bars do: a row without the figure (−∞) has no bar to cut.
+  const cut = rows.filter((row) => barWidth(row.values[sortKey], scale).cut)
+
+  function toggleUniversity(checked: boolean) {
+    setWithUniversity(checked)
+    setAnnouncement(
+      checked
+        ? "University of Cambridge added to the ranking, without a rank number."
+        : "University of Cambridge removed from the ranking.",
+    )
+  }
   const label = table.columns.find((column) => column.key === sortKey)?.label ?? ""
 
   return (
@@ -133,11 +163,11 @@ export function CollegeWealthTable({ table }: { table: WealthTable }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row, index) => (
+          {rows.map((row) => (
             <WealthRow
               key={row.slug}
               row={row}
-              rank={index + 1}
+              rank={ranks.get(row.slug) ?? null}
               sortKey={sortKey}
               scale={scale}
               columns={table.columns}
@@ -146,17 +176,55 @@ export function CollegeWealthTable({ table }: { table: WealthTable }) {
         </TableBody>
       </table>
 
-      {cut.length > 0 && (
+      {table.university && (
+        <div className="flex flex-wrap items-center gap-x-4">
+          <Label
+            htmlFor={checkboxId}
+            className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm leading-snug font-normal"
+          >
+            <Checkbox
+              id={checkboxId}
+              checked={withUniversity}
+              onCheckedChange={(checked) => toggleUniversity(checked === true)}
+            />
+            Include the University of Cambridge (not a college)
+          </Label>
+          <a
+            href={`#${UNIVERSITY_SECTION_ID}`}
+            className={cn("inline-flex min-h-11 items-center text-sm", LINK)}
+          >
+            About the University’s endowment
+          </a>
+        </div>
+      )}
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
+      {(cut.length > 0 || (withUniversity && table.university)) && (
         <p className="text-xs text-muted-foreground">
           {cut.map((row) => (
             <span key={row.slug}>
-              {row.shortName}’s bar is cut off: to scale it would be{" "}
-              <span className="font-mono tabular-nums">
-                {(Math.abs(row.values[sortKey]) / scale).toFixed(1)}
-              </span>{" "}
-              times as long as the next college’s.{" "}
+              {row.kind === "university" ? (
+                <>
+                  The University’s bar is cut off: on the colleges’ scale it would be{" "}
+                  <span className="font-mono tabular-nums">
+                    {(Math.abs(row.values[sortKey]) / scale).toFixed(1)}
+                  </span>{" "}
+                  times as long as a full bar.{" "}
+                </>
+              ) : (
+                <>
+                  {row.shortName}’s bar is cut off: to scale it would be{" "}
+                  <span className="font-mono tabular-nums">
+                    {(Math.abs(row.values[sortKey]) / scale).toFixed(1)}
+                  </span>{" "}
+                  times as long as the next college’s.{" "}
+                </>
+              )}
             </span>
           ))}
+          {withUniversity && table.university?.note}
         </p>
       )}
     </div>
@@ -171,28 +239,63 @@ function WealthRow({
   columns,
 }: {
   row: WealthTableRow
-  rank: number
+  /** Null for the University, which is not ranked among the colleges. */
+  rank: number | null
   sortKey: WealthSortKey
   scale: number
   columns: WealthTable["columns"]
 }) {
+  const university = row.kind === "university"
   const summary = columns
     .filter((column) => column.key !== sortKey)
+    // The University has no per-student figure; a college row keeps every one.
+    .filter((column) => !university || row.display[column.key] !== NO_FIGURE)
     .map((column) => SUMMARY[column.key](row.display[column.key]))
   return (
     // `id`: the college hubs link each college's row (`/colleges/wealth#<slug>`);
     // the margin keeps it clear of the sticky header.
-    <TableRow id={row.slug} className="scroll-mt-28 align-top target:bg-muted/60 sm:scroll-mt-32">
+    <TableRow
+      id={row.slug}
+      data-kind={row.kind}
+      className={cn(
+        "scroll-mt-28 align-top target:bg-muted/60 sm:scroll-mt-32",
+        university && "bg-muted/40",
+      )}
+    >
       <TableCell className="px-0 py-3 pr-2 align-top font-mono text-xs text-muted-foreground tabular-nums">
-        {rank}
+        {rank ?? (
+          <>
+            <span aria-hidden>{NO_FIGURE}</span>
+            <span className="sr-only">Not ranked: not a college</span>
+          </>
+        )}
       </TableCell>
       <TableCell className="px-0 py-3 pr-3 align-top whitespace-normal">
         <div className="flex items-center gap-3">
-          <CollegeCrest crest={row.crest} size={32} decorative />
+          {row.crest ? (
+            <CollegeCrest crest={row.crest} size={32} decorative />
+          ) : (
+            // The University's marker as elsewhere on the site: a landmark, never its arms.
+            <span
+              aria-hidden
+              className="flex size-8 shrink-0 items-center justify-center rounded-md border border-foreground/25 bg-muted/60 text-foreground/80"
+            >
+              <LandmarkIcon className="size-4" />
+            </span>
+          )}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Link href={row.href} className={cn("font-medium", LINK)}>
-              {row.shortName}
-            </Link>
+            {university ? (
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <a href={row.href} className={cn("font-medium", LINK)}>
+                  {row.shortName}
+                </a>
+                <UniversityBadge />
+              </span>
+            ) : (
+              <Link href={row.href} className={cn("font-medium", LINK)}>
+                {row.shortName}
+              </Link>
+            )}
             <CollegeWealthBar value={row.values[sortKey]} scale={scale} />
             <p className="font-mono text-xs text-muted-foreground tabular-nums sm:hidden">
               {summary.join(" · ")} ·{" "}
