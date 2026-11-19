@@ -209,6 +209,26 @@ describe("profile and leaderboard", () => {
     expect(board?.map((row) => row.displayName)).toEqual(["Early", "Late"])
   })
 
+  test("a tie at the cut is read to its end: the first to get there is never cut", async () => {
+    const t = newTest()
+    // 55 members, each one college and one formal. The first to get there
+    // is also the oldest row, so the index (newest first within a tie)
+    // reaches it last, after 50 others.
+    for (let i = 0; i < 55; i++) {
+      const member = await as(t, `tt${100 + i}@cam.ac.uk`)
+      await member.mutation(api.formals.setAttended, { collegeKey: TRINITY, attended: true })
+      await member.mutation(api.formals.saveProfile, {
+        displayName: `Member ${i}`,
+        onLeaderboard: true,
+        homeCollegeKey: null,
+      })
+    }
+    const viewer = await as(t, "zz999@cam.ac.uk")
+    const board = await viewer.query(api.formals.leaderboard, {})
+    expect(board).toHaveLength(50)
+    expect(board?.[0]?.displayName).toBe("Member 0")
+  })
+
   test("saving a profile before any tick creates it with zero counts", async () => {
     const t = newTest()
     const me = await as(t, "aa111@cam.ac.uk")

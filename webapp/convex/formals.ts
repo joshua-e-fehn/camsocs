@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values"
 import { isBrokerEmail } from "../lib/broker-access"
 import { deploymentProfile } from "../lib/campus/deployment"
 import { isMemberEmail } from "../lib/campus/member-email"
+import type { Doc } from "./_generated/dataModel"
 import { type MutationCtx, mutation, type QueryCtx, query } from "./_generated/server"
 import { authComponent } from "./betterAuth/auth"
 import { requireUserId } from "./lib/auth"
@@ -31,12 +32,14 @@ import { formalEntryFields, formalProfileFields } from "./schema"
  */
 
 /**
- * Profiles read to build the leaderboard, in index order (colleges, then
- * formals, both descending), so the cut falls on the first two sort keys;
- * only the "who got there first" tie and the membership re-check below are
- * resolved in memory, and the margin over the 50 shown covers both.
+ * At most this many opted-in profiles are read for one leaderboard (a
+ * backstop for Convex's read limits, far above the board's size). Rows come
+ * in index order (colleges, then formals, both descending); the read stops
+ * once 50 eligible members are in hand and the tied group at the cut is
+ * complete, so the "who got there first" tie-break, resolved in memory, sees
+ * every member it could rank (PR #82 review).
  */
-const LEADERBOARD_SCAN = 500
+const LEADERBOARD_MAX_READ = 5_000
 
 /** Who may see the leaderboard, and join it. */
 function isMember(viewer: Viewer): boolean {
@@ -212,17 +215,19 @@ export const leaderboard = query({
   handler: async (ctx) => {
     const viewer = await getViewer(ctx)
     if (!isMember(viewer)) return null
-    const profiles = await ctx.db
+    const eligible: Doc<"formalProfiles">[] = []
+    let read = 0
+    for await (const profile of ctx.db
       .query("formalProfiles")
       .withIndex("by_onLeaderboard_and_colleges_and_visits", (q) => q.eq("onLeaderboard", true))
-      .order("desc")
-      .take(LEADERBOARD_SCAN)
-    const ranked = profiles.filter((profile) => profile.displayName !== null).sort(compareProfiles)
-    const listed: typeof ranked = []
-    for (const profile of ranked) {
-      if (listed.length === FORMAL_LIMITS.leaderboard) break
-      if (await isStillMember(ctx, profile.userId)) listed.push(profile)
+      .order("desc")) {
+      const cut = eligible[FORMAL_LIMITS.leaderboard - 1]
+      if (cut && (profile.colleges !== cut.colleges || profile.visits !== cut.visits)) break
+      if (++read > LEADERBOARD_MAX_READ) break
+      if (profile.displayName === null) continue
+      if (await isStillMember(ctx, profile.userId)) eligible.push(profile)
     }
+    const listed = eligible.sort(compareProfiles).slice(0, FORMAL_LIMITS.leaderboard)
     return listed.map((profile, index) => ({
       rank: index + 1,
       displayName: profile.displayName ?? "",
