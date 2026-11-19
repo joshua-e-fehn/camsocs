@@ -4,6 +4,7 @@ import type {
   CollegeInfo,
   FormalNight,
   FormalPrice,
+  NightFrequency,
   VisitorRoute,
   Weekday,
 } from "@/lib/colleges"
@@ -49,7 +50,7 @@ export function londonWeekday(ms: number): Weekday {
 export type FormalSlot = {
   collegeKey: string
   shortName: string
-  /** The college hub's formal hall section. */
+  /** The college's formal hall page (`formalCollegePath`). */
   href: string
   crest: CollegeCrest
   bookingSummary: string
@@ -165,25 +166,22 @@ export function priceLabel(price: FormalPrice | null): string | null {
   return parts.length > 0 ? `${parts.join(" · ")} (${price.asOf ?? "undated"})` : null
 }
 
-/** The day to show once the page has mounted: the one the URL's hash names
- * (and whether it came from the hash, so the page scrolls to it), else today
- * in Europe/London. */
-export function initialDay(hash: string, nowMs: number): { day: Weekday; fromHash: boolean } {
-  const fromHash = dayFromId(hash)
-  return fromHash
-    ? { day: fromHash, fromHash: true }
-    : { day: londonWeekday(nowMs), fromHash: false }
+const FREQUENCY: Readonly<Record<NightFrequency, string | null>> = {
+  weekly: null,
+  fortnightly: "every other week",
+  first_of_month: "first {day} of the month",
+  some_weeks: "some weeks",
 }
 
-/** The colleges whose weekly nights are not published, with why: the page's
- * "Nights not published" note. */
-export function unpublishedNights(
-  colleges: readonly CollegeInfo[],
-): { college: CollegeInfo; reason: string }[] {
-  return colleges
-    .filter((college) => college.formal.nightsStatus === "unknown")
-    .map((college) => ({
-      college,
-      reason: college.formal.nightsGaps[0] ?? "No public page lists the weekdays.",
-    }))
+/** How often a night runs, in plain words ("every other week", "first Friday
+ * of the month"), or null for a weekly one, which needs no words. */
+export function frequencyLabel(night: Pick<FormalNight, "frequency" | "weekday">): string | null {
+  return FREQUENCY[night.frequency]?.replace("{day}", WEEKDAY_NAMES[night.weekday]) ?? null
+}
+
+/** The view the page opens on once mounted: the day the URL's hash names
+ * (`#saturday`), else the whole week, as the server drew it, so nothing
+ * moves when the page hydrates (formals SEO audit 2026-11-19: CLS). */
+export function initialSelection(hash: string): Weekday | "all" {
+  return dayFromId(hash) ?? "all"
 }

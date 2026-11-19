@@ -5,6 +5,7 @@ import { ArrowRightIcon, LockIcon, Trash2Icon } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { CollegeCrest } from "@/components/molecules/college-crest"
 import { FormalBadges } from "@/components/molecules/formal-badges"
 import { FormalCollegeDetail } from "@/components/molecules/formal-college-detail"
 import { FormalCollegeTile } from "@/components/molecules/formal-college-tile"
@@ -33,6 +34,7 @@ import {
 } from "@/hooks/convex/formals"
 import type { CollegeRef } from "@/lib/colleges"
 import { linkProps } from "@/lib/crawl-traps"
+import { formalCollegePath } from "@/lib/formal-paths"
 import { badgeProgress, nextRank, percentDone, rankFor, TOTAL_COLLEGES } from "@/lib/formal-ranks"
 
 /** Where a signed-out reader signs in: the Cambridge option, back here after. */
@@ -49,29 +51,55 @@ const SECTION_HEAD =
  * The member's formal tracker (/formals/tracker, ENG-272), ported from the
  * Cambridge Tracker: progress and rank, badges, a crest grid to tick, each
  * college's details, the leaderboard opt-in and the leaderboard, and
- * "Erase my tracker". Everything is read in the browser once the session
- * reaches the Convex client; the server's HTML (cached, anonymous) is the
- * loading state, so nothing personal is ever in it.
+ * "Erase my tracker". Everything personal is read in the browser once the
+ * session reaches the Convex client. The server's HTML (cached, anonymous)
+ * and the loading state are the signed-out view: the sign-in prompt above a
+ * plain grid of the colleges, each linking its formal hall page, so a
+ * signed-out reader (every search visitor) sees nothing move on hydration
+ * (formals SEO audit 2026-11-19: CLS) and crawlers get real links. Only a
+ * signed-in reader's tracker replaces it.
  */
 export function FormalTracker({ colleges }: { colleges: readonly CollegeRef[] }) {
-  const { isLoading, isAuthenticated } = useConvexAuth()
+  const { isAuthenticated } = useConvexAuth()
   const tracker = useFormalTracker()
-  if (isLoading || (isAuthenticated && tracker === undefined))
-    return <TrackerSkeleton colleges={colleges} />
-  if (!isAuthenticated || !tracker) return <SignInPrompt />
-  return <SignedInTracker tracker={tracker} colleges={colleges} />
+  if (isAuthenticated && tracker) return <SignedInTracker tracker={tracker} colleges={colleges} />
+  return (
+    <div className="flex flex-col gap-12">
+      <SignInPrompt loading={isAuthenticated} />
+      <CollegeGrid colleges={colleges} />
+    </div>
+  )
 }
 
-function TrackerSkeleton({ colleges }: { colleges: readonly CollegeRef[] }) {
+/** The colleges as crests and names, each linking its formal hall page. */
+function CollegeGrid({ colleges }: { colleges: readonly CollegeRef[] }) {
   return (
-    <div className="flex flex-col gap-6" role="status" aria-label="Loading your tracker">
-      <Skeleton className="h-28 w-full rounded-xl" />
-      <div className={COLLEGE_GRID}>
-        {colleges.map((college) => (
-          <Skeleton key={college.key} className="h-36 rounded-xl" />
-        ))}
+    <section aria-labelledby="formal-colleges" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 id="formal-colleges" className={SECTION_HEAD}>
+          The {colleges.length} colleges
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Each college’s nights, price, dress code and how a visitor gets in.
+        </p>
       </div>
-    </div>
+      <ul className={COLLEGE_GRID}>
+        {colleges.map((college) => (
+          <li key={college.key} className="flex">
+            <Link
+              href={formalCollegePath(college.slug)}
+              className="flex min-h-36 flex-1 flex-col items-center justify-center gap-2 rounded-xl border p-3 text-center transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <CollegeCrest crest={college.crest} size={48} decorative />
+              <span className="text-sm leading-tight font-medium text-balance">
+                {college.shortName}
+              </span>
+              <span className="font-mono text-xs text-muted-foreground">Formal hall</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -92,8 +120,20 @@ function LeaderboardSkeleton() {
   )
 }
 
-function SignInPrompt() {
+/** "Start your tracker", or, for a reader already signed in whose tracker
+ * is still on its way, a note that it is loading. */
+function SignInPrompt({ loading }: { loading: boolean }) {
   const options = useSignInOptions()
+  if (loading)
+    return (
+      <div
+        role="status"
+        className="flex items-center gap-3 rounded-xl border p-6 text-sm text-muted-foreground"
+      >
+        <Spinner className="size-4" />
+        Loading your tracker…
+      </div>
+    )
   return (
     <div className="flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">

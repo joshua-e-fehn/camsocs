@@ -1,0 +1,97 @@
+{
+  "_comment": "Corrections and reviews of the Charity Commission register's Part B figures for the colleges (stage college_finances, source-research §22). One entry per (charityNumber, periodEnd). An entry with values replaces those fields (status `override`); an entry with `review` keeps the row out of the figures (status `needs_review`) for that reason; an entry with neither accepts the register's row as filed after a human read the accounts (status `register`, its checks kept, the citation recorded). Every entry cites the accounts PDF, the page and why. A correcting or accepting entry pins `registerFiled`, the register's figure(s) the reviewer read: if the college re-files and the register then says otherwise, the entry no longer applies and the row is posted needs_review (`override_stale:<field>`). `standing` lists colleges whose register figure differs in definition from the page's every year: each of their periods without its own entry is held back (needs_review) until an entry for it is added from that year's accounts.",
+  "overrides": [
+    {
+      "charityNumber": "1137531",
+      "periodEnd": "2025-06-30",
+      "endowmentGbp": 203897000,
+      "registerFiled": {
+        "endowmentGbp": 257798000
+      },
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Consolidated balance sheet, Non-current assets: Investments (note 10a)",
+        "reason": "The register's long-term investments (£257,798,000) add the inflation-swap investments (note 10b, £53,901,000) to the balance-sheet Investments; the page's measure is Investments alone."
+      }
+    },
+    {
+      "charityNumber": "1137531",
+      "periodEnd": "2024-06-30",
+      "endowmentGbp": 187501000,
+      "registerFiled": {
+        "endowmentGbp": 238121000
+      },
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Consolidated balance sheet, Investments (note 10a), 2024 comparative",
+        "reason": "The register's long-term investments (£238,121,000) add the inflation-swap investments (£50,620,000) to the balance-sheet Investments; the page's measure is Investments alone."
+      }
+    },
+    {
+      "charityNumber": "1137531",
+      "periodEnd": "2023-06-30",
+      "review": "The register's long-term investments include Clare's inflation-swap investments, which the page's measure leaves out; this year's split needs the 2022-23 accounts.",
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Investments (note 10a) and Inflation swap investments (note 10b)",
+        "reason": "Definition differs from the page's measure."
+      }
+    },
+    {
+      "charityNumber": "1137531",
+      "periodEnd": "2022-06-30",
+      "review": "The register's long-term investments include Clare's inflation-swap investments, which the page's measure leaves out; this year's split needs the 2021-22 accounts.",
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Investments (note 10a) and Inflation swap investments (note 10b)",
+        "reason": "Definition differs from the page's measure."
+      }
+    },
+    {
+      "charityNumber": "1137531",
+      "periodEnd": "2021-06-30",
+      "review": "The register's long-term investments include Clare's inflation-swap investments, which the page's measure leaves out; this year's split needs the 2020-21 accounts.",
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Investments (note 10a) and Inflation swap investments (note 10b)",
+        "reason": "Definition differs from the page's measure."
+      }
+    },
+    {
+      "charityNumber": "1137512",
+      "periodEnd": "2025-06-30",
+      "endowmentGbp": 138626000,
+      "registerFiled": {
+        "endowmentGbp": 157539000
+      },
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137512/2025-06-30-accounts.pdf",
+        "page": "PDF p.36: Consolidated balance sheet, Investments (note 25)",
+        "reason": "The register's 2024-25 return swaps two lines: its long-term investments (£157,539,000) are the accounts' fixed assets, and its own-use assets (£138,626,000) are the accounts' Investments."
+      }
+    },
+    {
+      "charityNumber": "1137471",
+      "periodEnd": "2025-07-31",
+      "registerFiled": {
+        "endowmentGbp": 19487623
+      },
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137471/2025-07-31-accounts.pdf",
+        "page": "PDF p.33: Consolidated balance sheet, Investments (note 11)",
+        "reason": "Read and accepted as filed: the 2024-25 accounts restate the prior year's investments (£17,090,289 against £42,261,430 in the 2023-24 return; about £21m is now held as current-asset investments), so the fall from the previous return is a reclassification, not a loss."
+      }
+    }
+  ],
+  "standing": [
+    {
+      "charityNumber": "1137531",
+      "review": "The register's long-term investments include Clare's inflation-swap investments, which the page's measure leaves out; each year's figure needs that year's accounts (balance-sheet Investments, note 10a).",
+      "citation": {
+        "url": "https://files.opencharities.uk/ew/1137531/2025-06-30-accounts.pdf",
+        "page": "PDF p.25: Investments (note 10a) and Inflation swap investments (note 10b)",
+        "reason": "Definition differs from the page's measure every year."
+      }
+    }
+  ]
+}

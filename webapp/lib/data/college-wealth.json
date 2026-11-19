@@ -1,5 +1,6 @@
 {
-  "checkedOn": "2026-11-18",
+  "checkedOn": "2026-11-19",
+  "publishedOn": "2026-11-19",
   "financialYear": "2024-25",
   "financialYearNote": "2024-25 (year ended 30 June 2025 for 28 colleges; 31 July 2025 for Emmanuel, Fitzwilliam and Hughes Hall)",
   "definitions": {
@@ -72,10 +73,9 @@
     "Student numbers are a later academic year (2025-26) than the financial year (2024-25), except Girton (2024-25)."
   ],
   "verification": {
-    "checkedOn": "2026-11-18",
-    "method": "For each checked college the filed accounts PDF (sourceUrl) was re-downloaded; investments, prior-year investments and total income were read from the balance sheet / SOCI (pdftotext for text PDFs; fresh tesseract OCR of the cited page for scans: Darwin, Emmanuel, Girton, Hughes Hall, Peterhouse, Trinity, Trinity Hall). Net assets and income were compared with the register financial-history record (opencharities.uk/ew/<number>.json). Student numbers for all 31 colleges were re-read from the postgraduate 'College key facts and figures' page; endowmentPerStudentGbp, endowmentChangePct and the totals sum were recomputed for all 31.",
+    "checkedOn": "2026-11-19",
+    "method": "For each checked college the filed accounts PDF (sourceUrl) was re-downloaded; investments, prior-year investments and total income were read from the balance sheet / SOCI (pdftotext for text PDFs; fresh tesseract OCR of the cited page for scans: Darwin, Emmanuel, Girton, Hughes Hall, Peterhouse, Trinity, Trinity Hall). Net assets and income were compared with the register financial-history record (opencharities.uk/ew/<number>.json). Student numbers for all 31 colleges were re-read from the postgraduate 'College key facts and figures' page; endowmentPerStudentGbp, endowmentChangePct and the totals sum were recomputed for all 31. On 2026-11-19 every college's 2024-25 investments, net assets and income were also compared with its annual return in the Charity Commission register's bulk extract (registerCrossCheck): net assets agree for all 31, investments for 29 (Clare and Newnham explained in their notes) and income for 30 (Emmanuel explained).",
     "remainingDoubts": [
-      "Not independently re-checked this pass: Churchill, Clare Hall, Corpus Christi, Homerton, Jesus, Magdalene, Murray Edwards, Newnham, Pembroke, Robinson, Selwyn, Sidney Sussex, St Catharine's (13 colleges). Their derived fields and student numbers were rechecked, but not the accounts figures.",
       "Girton (£20,281,000) and Fitzwilliam (£20,281,003) have near-identical total income; both were confirmed from their own SOCI pages, so this is a coincidence, not a copy error.",
       "Emmanuel income: accounts SOCI total (£27.05m) vs Charity Commission return (£22.87m); the choice of definition affects comparisons.",
       "Hughes Hall (£21.0m) and Fitzwilliam (£22.0m) hold large current-asset investments excluded from endowmentGbp, so the balance-sheet measure understates their invested funds relative to colleges that hold such money as non-current investments.",
@@ -106,6 +106,11 @@
       "collegeAccountsUrl": "https://www.christs.cam.ac.uk/sites/default/files/inline-files/2024-25-christs-college-annual-report-and-accounts.pdf",
       "sourceRef": "PDF p.46: Consolidated balance sheet, Non-current assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": "2026-11-18"
     },
@@ -131,6 +136,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.27: Consolidated balance sheet, Non-Current Assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": null
     },
@@ -156,7 +166,12 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.25: Consolidated balance sheet, Non-current assets: Investments (note 10a)",
       "status": "verified",
-      "notes": "Operating and financial review: 'market value of the endowment investment portfolio at 30 June 2025 was £203.9m (2024: £187.5m)'.",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "explained",
+        "income": "match"
+      },
+      "notes": "Operating and financial review: 'market value of the endowment investment portfolio at 30 June 2025 was £203.9m (2024: £187.5m)'. The Charity Commission register's annual return gives £257.8m because it adds the inflation swap investments (note 10b, £53.9m) to the balance-sheet Investments (note 10a, £203.9m); the swaps are left out here, as for every other college.",
       "recheckedOn": "2026-11-18"
     },
     {
@@ -181,6 +196,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.27: Balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Accounts PDF on the register is a signed scan; figures read by OCR of the balance sheet; total income figure also stated in the financial review.",
       "recheckedOn": null
     },
@@ -206,6 +226,11 @@
       "collegeAccountsUrl": "https://www.corpus.cam.ac.uk/sites/default/files/downloads/corpus_christi_june_2025_unsigned.pdf",
       "sourceRef": "PDF p.32: Consolidated balance sheet, Investments (note 9)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Financial review: 'capital value of the College's investments stood at £153.7m on 30 June 2025 (2024: £147.8m)'. Scanned PDF read by OCR.",
       "recheckedOn": null
     },
@@ -231,6 +256,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.27: Balance sheet, Fixed assets: Investment Assets (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF read by OCR. Note: endowment reserve on the balance sheet is £28.1m.",
       "recheckedOn": "2026-11-18"
     },
@@ -256,6 +286,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.55: Balance sheet, Non-current assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": "2026-11-18"
     },
@@ -281,6 +316,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.27: Consolidated balance sheet, Non-current assets: Investments (note 11)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "explained"
+      },
       "notes": "Year ends 31 July. Emmanuel's income and expenditure account total income (£27.05m) includes an 'Endowment return transfer' line of £4.18m on top of investment income; the income figure filed with the Charity Commission is £22.87m. Scanned PDF read by OCR. Verification 2026-11-18: independent OCR of PDF p.27 confirms Investments £361,698,336 (2024: £346,269,633) and total net assets £403,308,820; independent OCR of PDF p.25 confirms SOCI 'Total Income' £27,045,417, which includes an 'Endowment return transfer' of £4,179,891. The income in the Charity Commission annual return is £22,865,525; the accounts figure is kept for consistency with the other colleges (which also use SOCI total income).",
       "recheckedOn": "2026-11-18"
     },
@@ -306,6 +346,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.38: Balance sheet, Non-current Assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Year ends 31 July. A further £22.0m (2024: £19.0m) is held as current-asset investments (note 13), not included here.",
       "recheckedOn": "2026-11-18"
     },
@@ -331,6 +376,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.58: Consolidated balance sheet, Non-current assets: Investments",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet and cross-checked with the register's OCR text.",
       "recheckedOn": "2026-11-18"
     },
@@ -356,6 +406,11 @@
       "collegeAccountsUrl": "https://www.cai.cam.ac.uk/discover/strategy-and-policies/finance-and-annual-reports",
       "sourceRef": "PDF p.29: Consolidated balance sheet, Non-current assets: Investment assets (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": "2026-11-18"
     },
@@ -381,6 +436,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.24: Consolidated balance sheet, Investments (note 13)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet, cross-checked with the register's OCR text (consolidated column).",
       "recheckedOn": null
     },
@@ -406,7 +466,12 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.33: Consolidated balance sheet, Investments (note 11)",
       "status": "verified",
-      "notes": "Year ends 31 July. Scanned PDF read by OCR. Financial review: income £11.79m before donations/legacies (£0.41m) and Colleges Fund grant (£0.68m); the £16.74m income filed with the Charity Commission also includes new restricted donations/endowments; the SOCI total line, re-read on 2026-11-18 by OCR of the rotated PDF p.31, is £16,742,151, matching the register. A further £21.0m (2024: £6.4m) is held as short-term (current-asset) investments (note 14), not included in endowmentGbp.",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
+      "notes": "Year ends 31 July. Scanned PDF read by OCR. Financial review: income £11.79m before donations/legacies (£0.41m) and Colleges Fund grant (£0.68m); the £16.74m income filed with the Charity Commission also includes new restricted donations/endowments; the SOCI total line, re-read on 2026-11-18 by OCR of the rotated PDF p.31, is £16,742,151, matching the register. A further £21.0m (2024: £6.4m) is held as short-term (current-asset) investments (note 14), not included in endowmentGbp. The 2023-24 investments (£17.1m) are the restated comparative in the 2024-25 accounts; the register's 2023-24 annual return gives £42.3m.",
       "recheckedOn": "2026-11-18"
     },
     {
@@ -431,6 +496,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.29: Consolidated balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": null
     },
@@ -456,6 +526,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.34: Consolidated balance sheet, Non-current assets: Investment assets (note 12)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": "2026-11-18"
     },
@@ -481,6 +556,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.40: Consolidated balance sheet, Non-current Assets: Investments (note 9)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Income includes large donations/capital grants in the year.",
       "recheckedOn": "2026-11-18"
     },
@@ -506,6 +586,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.33: Balance sheet, Non-current assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": null
     },
@@ -531,6 +616,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.35: Consolidated balance sheet, Non-current assets: Investments (note 9)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": null
     },
@@ -556,7 +646,12 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.36: Consolidated balance sheet, Investments (note 25)",
       "status": "verified",
-      "notes": "",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "explained",
+        "income": "match"
+      },
+      "notes": "The register's 2024-25 annual return has two lines swapped: its long-term investments figure (£157.5m) is the balance sheet's fixed assets, and its own-use assets figure is the investments. The accounts balance sheet (note 25) gives Investments £138.6m (2024: £135.9m), used here.",
       "recheckedOn": null
     },
     {
@@ -579,8 +674,13 @@
       "sourceUrl": "https://files.opencharities.uk/ew/1137492/2025-06-30-accounts.pdf",
       "sourceRegisterUrl": "https://register-of-charities.charitycommission.gov.uk/charity-search/-/charity-details/1137492",
       "collegeAccountsUrl": null,
-      "sourceRef": "PDF p.36: Consolidated balance sheet, Non-current assets: Investments (note 9)",
+      "sourceRef": "PDF p.31 (printed p.29): Balance Sheet, Investments (note 9)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet and cross-checked with the register's OCR text.",
       "recheckedOn": null
     },
@@ -606,6 +706,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.28: Consolidated balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF read by OCR. Net assets rose from £361.3m to £417.3m while investments fell slightly; the rise is outside the investment portfolio.",
       "recheckedOn": "2026-11-18"
     },
@@ -631,6 +736,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.46: Consolidated balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Balance sheet page is an image in the PDF; value read from the register's OCR text.",
       "recheckedOn": "2026-11-18"
     },
@@ -656,6 +766,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.22: Consolidated balance sheet, Investments",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet, cross-checked with the register's OCR text (consolidated column; College-only column is £89.0m).",
       "recheckedOn": null
     },
@@ -681,6 +796,11 @@
       "collegeAccountsUrl": "https://www.sel.cam.ac.uk/sites/default/files/assets/about/financial/Selwyn%20College%20Accounts%202024-25%20FINAL%20SIGNED_0.pdf",
       "sourceRef": "PDF p.39: Balance sheet, Non-current assets: Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": null
     },
@@ -706,6 +826,11 @@
       "collegeAccountsUrl": "https://www.sid.cam.ac.uk/about-sidney/published-information/financial-statements",
       "sourceRef": "PDF p.51: Consolidated balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet, cross-checked with the register's OCR text; financial summary labels it 'Investments (securities and commercial property)'.",
       "recheckedOn": null
     },
@@ -731,6 +856,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.43: Consolidated balance sheet (p.43), Non-current assets: Investments; note 10 (p.52) fixed asset investments balance at end of year",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF read by OCR; matches the review text 'investment portfolio valuation was £139.9 million (2024: £139.7 million)'.",
       "recheckedOn": null
     },
@@ -756,6 +886,11 @@
       "collegeAccountsUrl": "https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/2024-2025-Financial-Accounts.pdf",
       "sourceRef": "PDF p.27: Balance sheet, Non-current assets: Investments (note 11)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "",
       "recheckedOn": "2026-11-18"
     },
@@ -781,6 +916,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.39: Consolidated balance sheet, Investments including investment in joint venture (note 9)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Investments before the joint venture are £771.7m (2024: £730.9m).",
       "recheckedOn": "2026-11-18"
     },
@@ -806,6 +946,11 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.18: Consolidated balance sheet, Fixed assets: Investments (note 9.1)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Note 9.1 market value at 30 June 2025; includes £1,174.1m property. Endowment funds on the balance sheet total £2,322.5m. College-only investments £2,469.1m.",
       "recheckedOn": "2026-11-18"
     },
@@ -831,6 +976,11 @@
       "collegeAccountsUrl": "https://www.trinhall.cam.ac.uk/wp-content/uploads/2025/12/TH-Accounts-30Jun25-Final-for-Web.pdf",
       "sourceRef": "PDF p.31: Consolidated balance sheet, Non-current assets: Investments (note 11)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Scanned PDF; value read from OCR of the balance sheet and cross-checked with the register's OCR text. The College's review states 'endowment and cash' of £411.1m (2024: £401.3m).",
       "recheckedOn": "2026-11-18"
     },
@@ -856,8 +1006,23 @@
       "collegeAccountsUrl": null,
       "sourceRef": "PDF p.28: Consolidated balance sheet, Investments (note 10)",
       "status": "verified",
+      "registerCheck": {
+        "netAssets": "match",
+        "endowment": "match",
+        "income": "match"
+      },
       "notes": "Endowment investments are mainly held in the Cambridge University Endowment Fund; the review gives endowment investments of £44.33m.",
       "recheckedOn": "2026-11-18"
     }
-  ]
+  ],
+  "registerCrossCheck": {
+    "checkedOn": "2026-11-19",
+    "source": "Charity Commission register of charities, bulk data extract: annual return Part B (publicextract.charity_annual_return_partb), five financial periods per charity",
+    "url": "https://register-of-charities.charitycommission.gov.uk/register/full-register-download",
+    "licence": "Contains public sector information licensed under the Open Government Licence v3.0.",
+    "licenceUrl": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+    "method": "Each college's 2024-25 investments, net assets and total income were compared with the same fields of its 2024-25 annual return on the register (assets_long_term_investment, funds_total, income_total_income_and_endowments). 'match' means within £5,000 (the dataset reads some figures in £ thousands); 'explained' means a difference whose cause was read in the filed accounts and is recorded in the college's notes.",
+    "extractUrl": "https://ccewuksprdoneregsadata1.blob.core.windows.net/data/txt/publicextract.charity_annual_return_partb.zip",
+    "toleranceGbp": 5000
+  }
 }

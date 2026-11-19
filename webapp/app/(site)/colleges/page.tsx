@@ -4,6 +4,7 @@ import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { CollegeCrest } from "@/components/molecules/college-crest"
 import { ExternalLink } from "@/components/molecules/external-link"
+import { RelatedGuides } from "@/components/molecules/related-guides"
 import { api } from "@/convex/_generated/api"
 import { formatDate } from "@/lib/calendar"
 import { collegeCards } from "@/lib/college-index"
@@ -16,6 +17,7 @@ import {
   FORMALS_CHECKED_ON,
 } from "@/lib/colleges"
 import { collectionJsonLd, collegeHubPath } from "@/lib/directory-hubs"
+import { guide } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
 import { DISCLAIMER } from "@/lib/site"
@@ -93,6 +95,13 @@ export default async function CollegesPage() {
             <ArrowRightIcon aria-hidden className="size-3.5" />
           </Link>
           <Link
+            href="/formals"
+            className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline underline-offset-4 sm:min-h-0"
+          >
+            Formals night by night: which college dines when
+            <ArrowRightIcon aria-hidden className="size-3.5" />
+          </Link>
+          <Link
             href="/colleges/wealth"
             className="inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium underline underline-offset-4 sm:min-h-0"
           >
@@ -153,6 +162,12 @@ export default async function CollegesPage() {
             )
           })}
         </ul>
+
+        <RelatedGuides
+          guides={[guide("formal-hall"), guide("postgraduates"), guide("glossary")]}
+          title="Guides to college life"
+          columns
+        />
 
         <footer className="flex max-w-3xl flex-col gap-2 text-sm text-muted-foreground">
           <p>

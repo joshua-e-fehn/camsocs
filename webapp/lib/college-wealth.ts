@@ -18,27 +18,61 @@ export const WEALTH_PATH = "/colleges/wealth"
 
 type RawWealth = (typeof data.colleges)[number]
 
-export type CollegeWealth = Omit<RawWealth, "recheckedOn" | "collegeAccountsUrl"> & {
+export type CollegeWealth = Omit<
+  RawWealth,
+  "recheckedOn" | "collegeAccountsUrl" | "registerCheck"
+> & {
   /** The college's own copy of the accounts, when it publishes one. */
   collegeAccountsUrl: string | null
   /** `YYYY-MM-DD` of the independent re-check of the accounts figures, or
    * null when only the derived figures were re-checked. */
   recheckedOn: string | null
+  /** How each figure compares with the register's annual return. */
+  registerCheck: Record<RegisterCheckField, RegisterCheckResult>
   college: CollegeInfo
 }
+
+export type RegisterCheckField = "endowment" | "netAssets" | "income"
+/** `match`: within the cross-check's tolerance; `explained`: a difference
+ * whose cause the college's notes record. */
+export type RegisterCheckResult = "match" | "explained"
+
+/**
+ * A row as the ranking draws it: a verified row, or a later year's figures
+ * from the register (lib/college-wealth-view.ts). `endowmentPrevGbp` is null
+ * when the year before has no accepted figure.
+ */
+export type WealthRow = Omit<CollegeWealth, "endowmentPrevGbp"> & {
+  endowmentPrevGbp: number | null
+  /** `verified`: read from the accounts; `register`/`override`: the
+   * register's annual return (as is, or corrected from the accounts). */
+  basis: "verified" | "register" | "override"
+}
+
+/** What ranking and totals need of a row. */
+type Figures = Pick<
+  WealthRow,
+  "name" | "endowmentGbp" | "endowmentPrevGbp" | "netAssetsGbp" | "incomeGbp" | "students"
+>
 
 const BY_SLUG = new Map(COLLEGE_INFO.map((college) => [college.slug, college]))
 
 function joinCollege(raw: RawWealth): CollegeWealth {
   const college = BY_SLUG.get(raw.slug)
   if (!college) throw new Error(`lib/data/college-wealth.json: no college "${raw.slug}"`)
-  return { ...raw, college }
+  return { ...raw, registerCheck: raw.registerCheck as CollegeWealth["registerCheck"], college }
 }
 
 export const COLLEGE_WEALTH: readonly CollegeWealth[] = data.colleges.map(joinCollege)
 
-/** The day the figures were checked. */
+/** The day the figures were last checked (the page's "Updated" date and
+ * its JSON-LD `dateModified` while the ranking shows this year). */
 export const WEALTH_CHECKED_ON: string = data.checkedOn
+/** The day the page was first published (JSON-LD `datePublished`). */
+export const WEALTH_PUBLISHED_ON: string = data.publishedOn
+/** The comparison of every 2024-25 figure with the Charity Commission
+ * register's annual return (each row's `registerCheck`). */
+export const WEALTH_REGISTER_CHECK = data.registerCrossCheck
 /** "2024-25". */
 export const WEALTH_FINANCIAL_YEAR: string = data.financialYear
 /** Which year end each college's accounts use. */
@@ -72,8 +106,9 @@ export const WEALTH_SORT_LABELS: Record<WealthSortKey, string> = {
   change: "1-year change",
 }
 
-/** The number a sort key ranks by (pounds, or percent for `change`). */
-export function metricValue(row: CollegeWealth, key: WealthSortKey): number {
+/** The number a sort key ranks by (pounds, or percent for `change`; a
+ * change that cannot be worked out ranks last, as −∞). */
+export function metricValue(row: Figures, key: WealthSortKey): number {
   switch (key) {
     case "endowment":
       return row.endowmentGbp
@@ -84,7 +119,7 @@ export function metricValue(row: CollegeWealth, key: WealthSortKey): number {
     case "netAssets":
       return row.netAssetsGbp
     case "change":
-      return changePct(row)
+      return changePct(row) ?? Number.NEGATIVE_INFINITY
   }
 }
 
@@ -93,13 +128,19 @@ export function perStudent(row: Pick<CollegeWealth, "endowmentGbp" | "students">
   return Math.round(row.endowmentGbp / row.students)
 }
 
-/** The change in endowment over the year, in percent to one decimal. */
-export function changePct(row: Pick<CollegeWealth, "endowmentGbp" | "endowmentPrevGbp">): number {
-  return Math.round(((row.endowmentGbp - row.endowmentPrevGbp) / row.endowmentPrevGbp) * 1000) / 10
+/** The change in endowment over the year, in percent to one decimal; null
+ * without the year before. */
+export function changePct(
+  row: Pick<WealthRow, "endowmentGbp" | "endowmentPrevGbp">,
+): number | null {
+  const prev = row.endowmentPrevGbp
+  if (prev === null || prev <= 0) return null
+  return Math.round(((row.endowmentGbp - prev) / prev) * 1000) / 10
 }
 
-/** The rows highest first by `key`; ties by name, so the order is stable. */
-export function rankedBy(rows: readonly CollegeWealth[], key: WealthSortKey): CollegeWealth[] {
+/** The rows highest first by `key`; ties (and rows without the figure) by
+ * name, so the order is stable. */
+export function rankedBy<Row extends Figures>(rows: readonly Row[], key: WealthSortKey): Row[] {
   return [...rows].sort(
     (a, b) => metricValue(b, key) - metricValue(a, key) || a.name.localeCompare(b.name),
   )
@@ -110,22 +151,25 @@ export const BY_ENDOWMENT: readonly CollegeWealth[] = rankedBy(COLLEGE_WEALTH, "
 
 // --- headline figures ----------------------------------------------------------------------
 
-export type WealthTotals = {
+export type WealthTotals<Row = CollegeWealth> = {
   total: number
-  richest: CollegeWealth
-  poorest: CollegeWealth
+  /** The colleges' net assets added up. */
+  netAssetsTotal: number
+  richest: Row
+  poorest: Row
   /** The middle college by endowment (31 colleges: the 16th). */
-  median: CollegeWealth
+  median: Row
   /** The richest college's share of the total, 0–1. */
   richestShare: number
 }
 
-export function wealthTotals(rows: readonly CollegeWealth[]): WealthTotals {
+export function wealthTotals<Row extends Figures>(rows: readonly Row[]): WealthTotals<Row> {
   const ranked = rankedBy(rows, "endowment")
   const total = ranked.reduce((sum, row) => sum + row.endowmentGbp, 0)
   const richest = ranked[0]
   return {
     total,
+    netAssetsTotal: ranked.reduce((sum, row) => sum + row.netAssetsGbp, 0),
     richest,
     poorest: ranked[ranked.length - 1],
     median: ranked[Math.floor(ranked.length / 2)],
@@ -134,6 +178,29 @@ export function wealthTotals(rows: readonly CollegeWealth[]): WealthTotals {
 }
 
 export const WEALTH_TOTALS: WealthTotals = wealthTotals(COLLEGE_WEALTH)
+
+/** How many colleges' figures match the register, field by field, and the
+ * colleges whose difference is explained. */
+export function registerCheckCounts(rows: readonly Pick<CollegeWealth, "registerCheck">[]) {
+  const count = (field: RegisterCheckField) =>
+    rows.filter((row) => row.registerCheck[field] === "match").length
+  return {
+    colleges: rows.length,
+    endowment: count("endowment"),
+    netAssets: count("netAssets"),
+    income: count("income"),
+  }
+}
+
+/** The colleges whose `field` differs from the register for a reason in their notes. */
+export function registerExplained<Row extends Pick<CollegeWealth, "registerCheck" | "name">>(
+  rows: readonly Row[],
+  field: RegisterCheckField,
+): Row[] {
+  return rows
+    .filter((row) => row.registerCheck[field] === "explained")
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
 
 // --- facts the page states ----------------------------------------------------------------
 
@@ -185,14 +252,17 @@ export const WEALTH_QUOTED = {
  * full and marked as cut off. Uses absolute values (a change can be negative).
  */
 export function barScale(values: readonly number[]): number {
-  const sorted = values.map(Math.abs).sort((a, b) => b - a)
+  const sorted = values
+    .filter(Number.isFinite)
+    .map(Math.abs)
+    .sort((a, b) => b - a)
   const [top = 0, next = 0] = sorted
   return next > 0 && top > 2 * next ? next : top
 }
 
 /** A bar's width as a fraction 0–1 of the scale, and whether it was cut. */
 export function barWidth(value: number, scale: number): { fraction: number; cut: boolean } {
-  if (scale <= 0) return { fraction: 0, cut: false }
+  if (scale <= 0 || !Number.isFinite(value)) return { fraction: 0, cut: false }
   const fraction = Math.abs(value) / scale
   return fraction > 1 ? { fraction: 1, cut: true } : { fraction, cut: false }
 }
@@ -215,9 +285,14 @@ export function formatPct(value: number): string {
   return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}%`
 }
 
+/** What a figure that cannot be worked out shows. */
+export const NO_FIGURE = "–"
+
 /** A metric's value as the table shows it. */
-export function formatMetric(row: CollegeWealth, key: WealthSortKey): string {
-  return key === "change" ? formatPct(changePct(row)) : formatGbp(metricValue(row, key))
+export function formatMetric(row: Figures, key: WealthSortKey): string {
+  if (key !== "change") return formatGbp(metricValue(row, key))
+  const pct = changePct(row)
+  return pct === null ? NO_FIGURE : formatPct(pct)
 }
 
 /** "PDF p.46" from a source reference ("PDF p.46: Consolidated balance sheet…"). */
@@ -242,8 +317,8 @@ export type WealthTableRow = {
   display: Record<WealthSortKey, string>
   financialYearEnd: string
   sourceUrl: string
-  /** "PDF p.46". */
-  sourcePage: string
+  /** "Accounts, PDF p.46", or "Register" for a register year. */
+  sourceLabel: string
   sourceRef: string
 }
 
@@ -263,8 +338,13 @@ function byKey<T>(make: (key: WealthSortKey) => T): Record<WealthSortKey, T> {
   >
 }
 
+type TableSource = Figures &
+  Pick<WealthRow, "slug" | "college" | "financialYearEnd" | "sourceUrl" | "sourceRef"> & {
+    basis?: WealthRow["basis"]
+  }
+
 export function wealthTable(
-  rows: readonly CollegeWealth[],
+  rows: readonly TableSource[],
   hubPath: (college: CollegeInfo) => string,
 ): WealthTable {
   return {
@@ -278,7 +358,10 @@ export function wealthTable(
       display: byKey((key) => formatMetric(row, key)),
       financialYearEnd: row.financialYearEnd,
       sourceUrl: row.sourceUrl,
-      sourcePage: sourcePage(row.sourceRef),
+      sourceLabel:
+        row.basis === undefined || row.basis === "verified"
+          ? `Accounts, ${sourcePage(row.sourceRef)}`
+          : "Register",
       sourceRef: row.sourceRef,
     })),
     orders: byKey((key) => rankedBy(rows, key).map((row) => row.slug)),

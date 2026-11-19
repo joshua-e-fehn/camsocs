@@ -429,6 +429,44 @@ export const relationshipFields = {
   ...stamps,
 }
 
+/** How a college's register figures stand (convex/ingest/collegeFinances.ts). */
+export const COLLEGE_FINANCE_STATUSES = ["register", "override", "needs_review"] as const
+
+/**
+ * One college's financial period from the Charity Commission register's Part B
+ * annual-return extract (source-research §22), upserted by (charityNumber,
+ * periodEnd). A figure the return did not state is absent, never null.
+ * `needs_review` rows failed a check (`checks`) and stay out of the figures.
+ */
+export const collegeFinanceFields = {
+  charityNumber: v.string(),
+  /** The college's organisation key, `org-<slug>`. */
+  collegeKey: v.string(),
+  /** `YYYY-MM-DD`, the financial year's last day. */
+  periodEnd: v.string(),
+  /** Non-current investments at market value (the wealth page's endowment). */
+  endowmentGbp: v.optional(v.number()),
+  netAssetsGbp: v.optional(v.number()),
+  incomeGbp: v.optional(v.number()),
+  status: literalUnion(COLLEGE_FINANCE_STATUSES),
+  /** The checks the register's row failed: `year_change:+31.2%`, `lines_swapped`… */
+  checks: v.array(v.string()),
+  source: v.object({
+    extractUrl: v.string(),
+    /** The extract's `Last-Modified`, epoch ms. */
+    extractModified: v.optional(v.number()),
+    /** The charity's page on the register. */
+    registerUrl: v.string(),
+    /** The accounts page behind an override. */
+    overrideCitation: v.optional(
+      v.object({ url: v.string(), page: v.string(), reason: v.string() }),
+    ),
+  }),
+  /** When the pipeline last read the extract (epoch ms). */
+  retrievedAt: v.number(),
+  ...stamps,
+}
+
 export const termDateFields = {
   academicYear: v.string(),
   term: literalUnion(TERMS),
@@ -1333,6 +1371,9 @@ export default defineSchema({
     .index("by_from", ["fromKey", "type"])
     .index("by_to", ["toKey", "type"]),
   termDates: defineTable(termDateFields).index("by_year_term", ["academicYear", "term"]),
+  collegeFinances: defineTable(collegeFinanceFields)
+    .index("by_charity_period", ["charityNumber", "periodEnd"])
+    .index("by_periodEnd", ["periodEnd"]),
 
   // public, pipeline-owned: the talks pillar (D7)
   departments: defineTable(departmentFields)

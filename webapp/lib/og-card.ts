@@ -73,3 +73,25 @@ export function eventCard(
     detail: [host, event.venueText].filter(Boolean).join(" · ") || undefined,
   }
 }
+
+/** /formals' card (formals SEO audit 2026-11-19): how many colleges dine on
+ * each night, from lib/data/colleges.json. */
+export function formalsCard(counts: Readonly<Record<string, number>>, total: number): CardText {
+  const days = Object.entries(counts).map(
+    ([day, count]) => `${day[0].toUpperCase()}${day.slice(1)} ${count}`,
+  )
+  return {
+    eyebrow: `Colleges dining each night: ${days.join(" · ")}`,
+    headline: "Formal hall in Cambridge, night by night",
+    detail: `All ${total} colleges: nights, prices, dress codes and swaps`,
+  }
+}
+
+/** /formals/tracker's card. */
+export function formalTrackerCard(total: number): CardText {
+  return {
+    eyebrow: "Formal tracker",
+    headline: "The every-college formal challenge",
+    detail: `One formal at each of the ${total} colleges: tick them off as you go`,
+  }
+}

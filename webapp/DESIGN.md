@@ -280,11 +280,15 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
 
 ## Shell & motifs
 
-- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · Formals · About with a
-  teal underline on the current page, the "Search everything ⌘K" box, the account menu (Sign in
-  lives there); a right sheet on phones.
+- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · Formals · Guides ·
+  About with a teal underline on the current page, the "Search everything ⌘K" box (an icon from
+  `md` to `lg`, so all six sections fit at 768px; never drop a section for room), the account menu
+  (Sign in lives there); a right sheet on phones, each section with its hint.
 - **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the
-  header box, or `openPalette()` (`lib/palette.ts`).
+  header box, or `openPalette()` (`lib/palette.ts`). Typing also matches "Guides & pages", every
+  guide and the static pages (`lib/guide-links.ts`), locally.
+- **Related guides** (`molecules/related-guides.tsx`): ruled rows of guides (short name, summary)
+  and "All guides", in each guide's aside and under /societies, /events and /colleges.
 - **Footer** (`site-footer.tsx`): the sky band; crest and one line about the site, Browse / For
   societies / CAMsocs columns with the contact address, then the disclaimer and the term
   (`loadTermClock`, lib/term-dates.ts). "Cookie settings" in the CAMsocs column reopens the
@@ -304,7 +308,8 @@ site is (an unofficial, independent directory, `SITE_INTRO`) then today's counts
 one search box that opens the palette, "Try" links, the large crest) → Today / This week:
 Events · Talks · Societies in three columns, five rows each (three on phones) → "The week
 ahead", seven days that switch the columns above to that day → "Find your people", the
-categories as compact rows → "Talks by School" → a one-line method note. No photography and no
+categories as compact rows → "Guides", six guides as compact rows and "All guides"
+(`HOME_GUIDES`, static) → "Talks by School" → a one-line method note. No photography and no
 fake numbers: a pillar without real data renders nothing.
 
 ## Do NOT

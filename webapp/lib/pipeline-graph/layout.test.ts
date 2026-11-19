@@ -39,7 +39,7 @@ describe("pipeline-graph.cam.json against the TS type", () => {
 
   test("every stage has a phase, a pillar and a declared lane", () => {
     const stages = stageNodes(PIPELINE_GRAPH)
-    expect(stages).toHaveLength(25)
+    expect(stages).toHaveLength(26)
     const lanes = new Set(PIPELINE_GRAPH.lanes.map((lane) => lane.id))
     const phases = new Set(PIPELINE_GRAPH.phases.map((phase) => phase.key))
     for (const stage of stages) {

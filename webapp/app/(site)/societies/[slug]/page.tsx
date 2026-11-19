@@ -3,6 +3,7 @@ import Link from "next/link"
 import { notFound, unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { CollegeCrest } from "@/components/molecules/college-crest"
+import { CollegeWealthFact } from "@/components/molecules/college-wealth-fact"
 import { FormalHallBox } from "@/components/molecules/formal-hall-box"
 import { MayBallBox } from "@/components/molecules/may-ball-box"
 import { TrackView } from "@/components/molecules/track-view"
@@ -11,6 +12,8 @@ import { OrgProfile } from "@/components/organisms/org-profile"
 import { ProfileCamOnlyEvents } from "@/components/organisms/profile-cam-only-events"
 import { api } from "@/convex/_generated/api"
 import { DAY_MS, londonIsoDate, londonMidnight } from "@/lib/calendar"
+import { loadWealthView } from "@/lib/college-wealth-data"
+import { hubWealthFact } from "@/lib/college-wealth-view"
 import { COLLEGES_PATH, collegeInfo } from "@/lib/colleges"
 import {
   collectionJsonLd,
@@ -169,12 +172,17 @@ function JsonLd({ data }: { data: Record<string, unknown> }) {
  * listings by category, not an empty "claim this society" profile. */
 async function CollegeHubPage({ page }: { page: OrgPage }) {
   const { org } = page
-  const [cards, colleges] = await Promise.all([loadCollegeHub(org.key), loadColleges()])
+  const [cards, colleges, wealth] = await Promise.all([
+    loadCollegeHub(org.key),
+    loadColleges(),
+    loadWealthView(),
+  ])
   const collegeNames = Object.fromEntries(colleges.map((college) => [college.key, college.name]))
   const title = collegeHubTitle(org.name)
   const intro = collegeHubIntro(org.name, cards)
   const path = collegeHubPath(org)
   const info = collegeInfo(org.key)
+  const wealthFact = info ? hubWealthFact(wealth, info.slug) : null
   const jsonLd = collectionJsonLd({
     path,
     title,
@@ -216,6 +224,7 @@ async function CollegeHubPage({ page }: { page: OrgPage }) {
           <>
             {info && <FormalHallBox college={info} />}
             {info && <MayBallBox balls={ballsOf(org.key)} college={info.shortName} />}
+            {wealthFact && <CollegeWealthFact fact={wealthFact} />}
             {others.length > 0 && (
               <section aria-labelledby="other-colleges" className="flex flex-col gap-3">
                 <h2

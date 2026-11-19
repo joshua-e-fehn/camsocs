@@ -41,6 +41,8 @@ export type Guide = {
   path: `/guides/${GuideSlug}`
   /** The page's name and h1; the `<title>` adds " · CAMsocs" while it fits. */
   title: string
+  /** A few words for the header's palette, the home page and "Related guides". */
+  short: string
   /** Meta description, at most 155 characters (a test holds it). */
   description: string
   /** One line for the guides index and llms.txt. */
@@ -60,6 +62,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "join-a-society",
     path: "/guides/join-a-society",
+    short: "Joining a society",
     title: "How to find and join societies in Cambridge",
     description:
       "How to find and join Cambridge student societies and sports clubs: the Freshers' and Sports Fairs, joining later in the year, costs, and where to get help.",
@@ -71,6 +74,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "start-a-society",
     path: "/guides/start-a-society",
+    short: "Starting a society",
     title: "How to start a society in Cambridge",
     description:
       "How to start a student society in Cambridge: registering with Cambridge SU, the Junior Proctor or your college, a constitution, money, rooms and events.",
@@ -82,17 +86,19 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "formal-hall",
     path: "/guides/formal-hall",
+    short: "Formal hall",
     title: "Formal hall in Cambridge: a guide for every college",
     description:
       "How formal hall works in Cambridge, how to go to another college's formal, and each of the 31 colleges' rules on guests, gowns and booking.",
     summary:
       "What formal hall is, how to get into another college's formal (a host or a swap), gowns and dress, and the rules of all 31 colleges.",
     published: "2026-11-07",
-    updated: "2026-11-07",
+    updated: "2026-11-19",
   },
   {
     slug: "may-balls",
     path: "/guides/may-balls",
+    short: "May Balls",
     title: "May Balls in Cambridge: dates, tickets and every college",
     description:
       "Every Cambridge May Ball and June Event: 2027 dates, how tickets and worker tickets work, and dress codes, each linked to the ball's own site.",
@@ -104,6 +110,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "rowing",
     path: "/guides/rowing",
+    short: "Rowing and the Bumps",
     title: "Rowing in Cambridge: Bumps, Fairbairns and the Boat Race",
     description:
       "How Cambridge rowing works: college boat clubs and novices, Fairbairns, Lent and May Bumps explained, the Boat Race, and the races coming up.",
@@ -115,6 +122,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "varsity",
     path: "/guides/varsity",
+    short: "Varsity and the ski trip",
     title: "Varsity in Cambridge: Oxford fixtures and the ski trip",
     description:
       "Cambridge v Oxford: the Boat Race, the Varsity Match and other Varsity fixtures, the Varsity ski trip, and how to watch, with this season's dates.",
@@ -126,6 +134,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "university-sport",
     path: "/guides/university-sport",
+    short: "University sport",
     title: "University sport in Cambridge: trials, Blues and the Hawks",
     description:
       "How to play sport at Cambridge: University clubs and college teams, trials and beginners, Cuppers, Full and Half Blues, the Hawks' Club and the facilities.",
@@ -137,6 +146,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "theatre",
     path: "/guides/theatre",
+    short: "Theatre and comedy",
     title: "Student theatre and comedy in Cambridge: ADC and Footlights",
     description:
       "Student theatre and comedy in Cambridge: the ADC Theatre, Footlights and drama societies, auditions on Camdram, backstage roles and pitching a show.",
@@ -148,6 +158,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "postgraduates",
     path: "/guides/postgraduates",
+    short: "Postgraduate life",
     title: "Postgraduate life in Cambridge: colleges, MCRs and support",
     description:
       "For new MPhil and PhD students: how department and college fit together, graduate colleges, the MCR and your Tutor, the SU, supervision, welfare and money.",
@@ -159,6 +170,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "freshers",
     path: "/guides/freshers",
+    short: "Freshers' Week",
     title: "Freshers' Week and Refreshers' in Cambridge",
     description:
       "Starting at Cambridge: before you arrive, Freshers' Week, the fairs, postgraduate inductions, the Refreshers' Fair in January, and settling in.",
@@ -170,6 +182,7 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "glossary",
     path: "/guides/glossary",
+    short: "Cambridge glossary",
     title: "Cambridge words explained: a student glossary",
     description:
       "What Cambridge words mean: Full Term, Tripos, supervisions, bedders, the Porters' Lodge, JCR and MCR, formals, May Week and Blues, each with its source.",

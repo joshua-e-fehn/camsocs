@@ -23,6 +23,8 @@ import {
 import { linkProps } from "@/lib/crawl-traps"
 import { categoryHubPath } from "@/lib/directory-hubs"
 import { type EventRun, groupRuns, splitOngoing } from "@/lib/event-runs"
+import { HOME_GUIDES } from "@/lib/guide-links"
+import { GUIDES, GUIDES_PATH } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
 import type { EventListItem } from "@/lib/public-api"
 import { publicQuery } from "@/lib/public-data"
@@ -438,6 +440,37 @@ export default async function HomePage() {
                       .join(", ")}
                   </span>
                 )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* Guides: static, so the page stays cached (lib/guide-links.ts) --------------------- */}
+      <section
+        id="guides"
+        aria-labelledby="guides-heading"
+        className="mx-auto w-full max-w-7xl scroll-mt-24 px-4 pb-11 sm:px-8"
+      >
+        <RowHead
+          id="guides-heading"
+          title="Guides"
+          sub={`How Cambridge works, in ${GUIDES.length} guides; every fact links its source`}
+          link={{ href: GUIDES_PATH, label: "All guides" }}
+        />
+        <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
+          {HOME_GUIDES.map((entry) => (
+            <li key={entry.slug} className="flex min-w-0">
+              <Link
+                href={entry.path}
+                className="group flex min-h-12 min-w-0 flex-1 flex-col justify-center border-b py-3 focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                <span className="text-[0.9375rem] leading-snug font-semibold group-hover:text-brand-text group-hover:underline group-hover:decoration-1 group-hover:underline-offset-[3px] sm:text-[0.96875rem]">
+                  {entry.short}
+                </span>
+                <span className="mt-0.5 truncate text-[0.84375rem] text-muted-foreground">
+                  {entry.summary}
+                </span>
               </Link>
             </li>
           ))}

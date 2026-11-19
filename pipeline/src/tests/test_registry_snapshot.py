@@ -17,6 +17,7 @@ from camsocs_pipeline.stages import GROUPS, STAGES, stage_names
 #: (name, requires, fetches), in registry order.
 STAGE_SNAPSHOT: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     ("term_dates", (), False),
+    ("college_finances", (), False),
     ("su_directory", (), False),
     ("proctors_register", (), False),
     ("sport_clubs", (), False),
@@ -74,7 +75,7 @@ GROUP_SNAPSHOT: dict[str, dict[str, object]] = {
 
 def test_the_ordered_stage_names_are_frozen() -> None:
     names = [name for name, _requires, _fetches in STAGE_SNAPSHOT]
-    assert len(names) == 25
+    assert len(names) == 26
     assert stage_names() == names
     assert list(STAGE_ORDER) == names
 
@@ -88,6 +89,7 @@ def test_each_stage_keeps_its_requires_and_fetches() -> None:
 #: ``stages.<name>`` (whose ``run`` may re-export another module's), shows here.
 STAGE_TARGETS: dict[str, str] = {
     "term_dates": "camsocs_pipeline.stages.term_dates:run",
+    "college_finances": "camsocs_pipeline.stages.college_finances:run",
     "su_directory": "camsocs_pipeline.stages.su_directory:run",
     "proctors_register": "camsocs_pipeline.stages.proctors_register:run",
     "sport_clubs": "camsocs_pipeline.stages.sport_clubs:run",

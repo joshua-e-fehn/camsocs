@@ -1,6 +1,6 @@
 {
   "checkedOn": "2026-11-07",
-  "nightsCheckedOn": "2026-11-18",
+  "nightsCheckedOn": "2026-11-19",
   "colleges": [
     {
       "key": "org-christs-college",
@@ -17,13 +17,13 @@
         "checkedOn": "2026-11-07",
         "visitors": "Yes, as the guest of a Christ’s member who books you in on the intranet system; the Christ’s MCR also runs swaps for its own members.",
         "bookingSummary": "Christ’s member books you as a guest; MCR swaps",
-        "rulesSummary": "Formal Hall six nights a week in term, none on Saturdays; students wear gowns. Student guest cap and booking deadline are not published.",
-        "formalNights": "Six nights a week in term (no Saturdays), dinner from 19:30; MCR Grad Hall on Tuesdays",
+        "rulesSummary": "Formal Hall Sunday to Friday in term, none on Saturdays; students wear gowns; book by noon the day before. Student guest cap not published.",
+        "formalNights": "Sunday to Friday in term (none on Saturdays), food from 19:30; MCR Grad Hall on Tuesdays",
         "guests": null,
-        "booking": "Host books in the Christ’s intranet meal-booking system (Raven login); student booking deadline not published",
+        "booking": "Host books in the Christ’s intranet meal-booking system (Raven login) by noon the day before, or by noon Thursday for Sunday (JCR guide 2024-25)",
         "dress": "Students wear gowns and usually dress smartly; MCR Grad Hall on Tuesdays has no gown or formal dress requirement",
-        "price": "No dated tariff. Undated college Hall page: about £11.50 for three courses; MCR page (undated): Grad Hall £8.00 for Christ’s members",
-        "note": "The college [Meals page](https://www.christs.cam.ac.uk/student-life/meals) quotes a student calling Formal Hall “a great place to invite friends from other colleges”, so attending as a Christ’s member’s guest is the documented route; no public page gives visitors their own booking access. Members book through the intranet meal-booking system linked from the [college’s High Table & Formal Hall page](https://www.christs.cam.ac.uk/high-table-formal-hall); that system needs a Raven login. The [Hall page](https://www.christs.cam.ac.uk/facilities/hall) says Formal Hall runs six nights a week and costs about £11.50 for three courses plus coffee; the page is undated, so treat the price as indicative only. The [alumni booking form](https://www.christs.cam.ac.uk/form/high-table-and-formal-hall) says food is served from 19:30, Formal Hall is term-time only and there is none on Saturdays. Its 14:00, two-days-ahead deadline, guest price and “guests do not need to wear gowns” line apply **to alumni bookings** and are not stated as student rules. No student guest cap or student booking deadline is published.\n\nThe [Meals page](https://www.christs.cam.ac.uk/student-life/meals) says students have to wear gowns and people tend to dress smartly; Christmas and Halloween “super halls” cost slightly more. Ask your host whether a guest from another college needs a gown. The [MCR Halls page](https://www.christsmcr.co.uk/halls), which describes itself as informal student guidance, says Grad Hall runs every Tuesday in term: drinks in the MCR at 19:00, a two-course meal around 19:30, £8.00 for Christ’s members, no formal dress or gown requirement. For swaps, the MCR emails its members to sign up and shares out the usually limited places so that everyone can attend at least one; seating-plan changes for special halls close at 13:00 the day before.\n\n**Practical assessment:** find a Christ’s host, or join your own MCR or JCR’s swap with Christ’s. Six weekly sittings make dates easier to find, but the guest allowance and cut-off must come from your host.",
+        "price": "2024-25: £12.60 student, £17.39 guest for three courses (Christ’s JCR Freshers’ Guide 2024); MCR page (undated): Grad Hall £8.00 for Christ’s members",
+        "note": "The college [Meals page](https://www.christs.cam.ac.uk/student-life/meals) quotes a student calling Formal Hall “a great place to invite friends from other colleges”, so attending as a Christ’s member’s guest is the documented route; no public page gives visitors their own booking access. Members book through the intranet meal-booking system linked from the [college’s High Table & Formal Hall page](https://www.christs.cam.ac.uk/high-table-formal-hall); that system needs a Raven login. The [Hall page](https://www.christs.cam.ac.uk/facilities/hall) says Formal Hall runs six nights a week. The [JCR Freshers’ Guide 2024](https://drive.google.com/file/d/1hkcOm_ZzY_eRssSob5M_r1E8JYPGnnPO/view), still the guide the [JCR](https://thejcr.co.uk/get-involved/freshers) links, says it is open daily except Saturdays, costs £12.60 for three courses (£17.39 for guests), and is booked on the intranet by noon the day before, or by noon on Thursday for Sunday. The [alumni booking form](https://www.christs.cam.ac.uk/form/high-table-and-formal-hall) says food is served from 19:30, Formal Hall is term-time only and there is none on Saturdays. Its 14:00, two-days-ahead deadline, guest price and “guests do not need to wear gowns” line apply **to alumni bookings** and are not stated as student rules. No student guest cap is published.\n\nThe [Meals page](https://www.christs.cam.ac.uk/student-life/meals) says students have to wear gowns and people tend to dress smartly; Christmas and Halloween “super halls” cost slightly more. Ask your host whether a guest from another college needs a gown. The [MCR Halls page](https://www.christsmcr.co.uk/halls), which describes itself as informal student guidance, says Grad Hall runs every Tuesday in term: drinks in the MCR at 19:00, a two-course meal around 19:30, £8.00 for Christ’s members, no formal dress or gown requirement. For swaps, the MCR emails its members to sign up and shares out the usually limited places so that everyone can attend at least one; seating-plan changes for special halls close at 13:00 the day before.\n\n**Practical assessment:** find a Christ’s host, or join your own MCR or JCR’s swap with Christ’s. Six weekly sittings, Sunday to Friday, make dates easier to find; the guest allowance must come from your host.",
         "primarySourceUrl": "https://www.christs.cam.ac.uk/student-life/meals",
         "sourceUrls": [
           "https://www.christs.cam.ac.uk/student-life/meals",
@@ -34,14 +34,26 @@
         ],
         "nights": [
           {
+            "weekday": "sun",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; Sunday bookings close at noon on Thursday. College alumni form: 'Food is served from 19:30.'"
+          },
+          {
             "weekday": "mon",
             "kind": "formal",
             "label": "Formal Hall",
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; the college's alumni form: 'Food is served from 19:30.'"
           },
           {
             "weekday": "tue",
@@ -50,8 +62,9 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; the college's alumni form: 'Food is served from 19:30.'"
           },
           {
             "weekday": "tue",
@@ -60,6 +73,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "MCR-run; pre-drinks 19:00 in the MCR, two-course meal around 19:30; no formal dress or gown requirement.",
             "price": {
@@ -78,8 +92,9 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; the college's alumni form: 'Food is served from 19:30.'"
           },
           {
             "weekday": "thu",
@@ -88,8 +103,9 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; the college's alumni form: 'Food is served from 19:30.'"
           },
           {
             "weekday": "fri",
@@ -98,42 +114,78 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
-          },
-          {
-            "weekday": "sun",
-            "kind": "formal",
-            "label": "Formal Hall",
-            "startTime": "19:30",
-            "termOnly": true,
-            "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Weekday set deduced from 'six nights a week' plus 'no ... Formal Hall on Saturdays'; no page lists the six nights."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "JCR Freshers' Guide 2024: 'Open daily except Saturdays'; the college's alumni form: 'Food is served from 19:30.'"
           }
         ],
-        "nightsStatus": "inferred",
-        "nightsQuote": "\"Formal Hall is available six nights a week\" (Hall page); \"There is no High Table or Formal Hall on Saturdays.\" and \"Formal Hall only takes place during term-time.\" (alumni booking form); Grad Hall: \"Every Tuesday during term time at Christ's\" (MCR Halls page)",
-        "nightsGaps": ["Which six nights is not stated verbatim", "Student guest price and cap"],
+        "nightsStatus": "found",
+        "nightsQuote": "\"Open daily except Saturdays, serving a three-course meal for £12.60 with guests paying £17.39\" (Christ's JCR Freshers' Guide 2024); \"Formal Hall is available six nights a week\" (college Hall page); \"Food is served from 19:30. ... There is no High Table or Formal Hall on Saturdays. ... Formal Hall only takes place during term-time.\" (college booking form); Grad Hall: \"Every Tuesday during term time at Christ's\" (MCR Halls page)",
+        "nightsGaps": ["Student guest cap"],
         "nightsConflict": null,
         "nightsSourceUrls": [
+          "https://drive.google.com/file/d/1hkcOm_ZzY_eRssSob5M_r1E8JYPGnnPO/view",
+          "https://thejcr.co.uk/get-involved/freshers",
           "https://www.christs.cam.ac.uk/facilities/hall",
           "https://www.christs.cam.ac.uk/form/high-table-and-formal-hall",
           "https://www.christsmcr.co.uk/halls",
           "https://www.christs.cam.ac.uk/student-life/meals"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://drive.google.com/file/d/1hkcOm_ZzY_eRssSob5M_r1E8JYPGnnPO/view",
+            "publisher": "Christ's JCR, Freshers' Guide 2024 (linked from thejcr.co.uk/get-involved/freshers)",
+            "date": "2024-09-19 (PDF creation date; guide titled 2024)",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://thejcr.co.uk/get-involved/freshers",
+            "publisher": "Christ's JCR website",
+            "date": "accessed 2026-11-19 (still links the 2024 guide as the current Freshers' Guide)",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://www.christs.cam.ac.uk/facilities/hall",
+            "publisher": "Christ's College (official)",
+            "date": "undated, accessed 2026-11-19",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.christs.cam.ac.uk/form/high-table-and-formal-hall",
+            "publisher": "Christ's College alumni High Table & Formal Hall booking form (official)",
+            "date": "undated, accessed 2026-11-19",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.christsmcr.co.uk/halls",
+            "publisher": "Christ's MCR",
+            "date": "undated, accessed 2026-11-19",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://alumni.christs.cam.ac.uk/page.aspx?pid=436",
+            "publisher": "Christ's College alumni office (official, Blackbaud-hosted)",
+            "date": "undated; only a search-result snippet was available on 2026-11-19 (the TLS certificate did not match, so the page could not be fetched)",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.christs.cam.ac.uk/node/2362",
+            "publisher": "Christ's College (official)",
+            "date": "undated, accessed 2026-11-19",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Attend as a Christ's member's guest (booked on the Raven-login intranet system); Christ's MCR runs swaps for its members. No student guest cap published.",
         "priceGbp": {
-          "student": 11.5,
-          "guest": null,
-          "asOf": null,
-          "sourceUrl": "https://www.christs.cam.ac.uk/facilities/hall",
-          "note": "Hall page (undated): 'about £11.50 for three courses plus coffee'. Alumni form lists £18.63 for Formal Hall guests of alumni, not student guests. MCR Grad Hall £8.00 for Christ's members (undated).",
-          "caveat": "about; three courses plus coffee"
+          "student": 12.6,
+          "guest": 17.39,
+          "asOf": "2024-25",
+          "sourceUrl": "https://drive.google.com/file/d/1hkcOm_ZzY_eRssSob5M_r1E8JYPGnnPO/view",
+          "note": "Christ's JCR Freshers' Guide 2024 (still the guide the JCR links): three courses £12.60, guests £17.39. The undated college Hall page's 'about £11.50' is older; the alumni form's £18.63 is for alumni guests. MCR Grad Hall £8.00 for Christ's members (undated)."
         },
-        "bookingDeadline": "Student deadline not published. Alumni bookings: before 14:00 two days before."
+        "bookingDeadline": "Students: noon the day before; noon Thursday for Sunday (JCR guide 2024-25). Alumni: before 14:00 two days before."
       }
     },
     {
@@ -156,8 +208,8 @@
         "guests": "Guests allowed; numbers may be limited by demand. No fixed cap published",
         "booking": "Host books on the internal Student Hub (login required); no ordinary booking deadline published",
         "dress": "Gowns not required (and not usual); slightly more formal dress encouraged",
-        "price": "£15.70 students, £16.75 guests (dining page, as at June 2026)",
-        "note": "The [Dining page](https://www.chu.cam.ac.uk/about/campus/dining-at-college/) says Formal Hall runs on Thursdays, Fridays and Sundays from 19:30 and sends current students to the internal Student Hub (a login-only SharePoint site) to book. It gives prices of £15.70 for students and £16.75 for guests (as at June 2026). Gowns are not required and slightly more formal dress is encouraged; wine is not provided, but diners may bring strictly limited amounts.\n\nThe [2025/26 undergraduate handbook](https://www.chu.cam.ac.uk/wp-content/uploads/2025/12/Undergraduate-Handbook-2025-26.pdf) (pp. 24–26 and 40–41) allows guests but says formal hall guest numbers may be limited because of high demand; questions go to catering@chu.cam.ac.uk. No fixed guest cap or ordinary booking deadline is published. Diners may bring **one bottle of wine between two**, and staff may ask rule-breakers to leave. Children may not attend formal halls. Guests’ food allergies must be notified to Catering at least 48 hours ahead. Latecomers wait until the first course is cleared; members pay their guests’ fines. Invitations go out for major Feasts and larger dinners; that is separate from ordinary Formal Hall. University or college societies making block bookings must name a responsible officer, who attends, to Catering at least 24 hours before. The handbook’s prices (£15.40 members, £16.40 guests) are superseded by the June 2026 figures on the dining page.\n\n**Practical assessment:** ask a Churchill member to host you and check the live guest allocation; the college says demand can limit guest places but publishes no sell-out data.",
+        "price": "£15.70 students, £16.70 guests (dining page, as at June 2026)",
+        "note": "The [Dining page](https://www.chu.cam.ac.uk/about/campus/dining-at-college/) says Formal Hall runs on Thursdays, Fridays and Sundays from 19:30 and sends current students to the internal Student Hub (a login-only SharePoint site) to book. It gives prices of £15.70 for students and £16.70 for guests (as at June 2026). Gowns are not required and slightly more formal dress is encouraged; wine is not provided, but diners may bring strictly limited amounts.\n\nThe [2025/26 undergraduate handbook](https://www.chu.cam.ac.uk/wp-content/uploads/2025/12/Undergraduate-Handbook-2025-26.pdf) (pp. 24–26 and 40–41) allows guests but says formal hall guest numbers may be limited because of high demand; questions go to catering@chu.cam.ac.uk. No fixed guest cap or ordinary booking deadline is published. Diners may bring **one bottle of wine between two**, and staff may ask rule-breakers to leave. Children may not attend formal halls. Guests’ food allergies must be notified to Catering at least 48 hours ahead. Latecomers wait until the first course is cleared; members pay their guests’ fines. Invitations go out for major Feasts and larger dinners; that is separate from ordinary Formal Hall. University or college societies making block bookings must name a responsible officer, who attends, to Catering at least 24 hours before. The handbook’s prices (£15.40 members, £16.40 guests) are superseded by the June 2026 figures on the dining page.\n\n**Practical assessment:** ask a Churchill member to host you and check the live guest allocation; the college says demand can limit guest places but publishes no sell-out data.",
         "primarySourceUrl": "https://www.chu.cam.ac.uk/about/campus/dining-at-college/",
         "sourceUrls": [
           "https://www.chu.cam.ac.uk/about/campus/dining-at-college/",
@@ -171,6 +223,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -181,6 +234,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -191,6 +245,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           }
@@ -203,15 +258,16 @@
           "https://www.chu.cam.ac.uk/about/campus/dining-at-college/",
           "https://www.chu.cam.ac.uk/wp-content/uploads/2025/12/Undergraduate-Handbook-2025-26.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Guests allowed; numbers may be limited by demand (2025/26 handbook). Host books on the internal Student Hub. No fixed cap.",
         "priceGbp": {
           "student": 15.7,
-          "guest": 16.75,
+          "guest": 16.7,
           "asOf": "June 2026",
           "sourceUrl": "https://www.chu.cam.ac.uk/about/campus/dining-at-college/",
-          "note": "\"Formal Halls cost £15.70 for students and £16.75 for guests (as at June 2026).\" 2025-26 UG Handbook lists older prices £15.40/£16.40; web page (June 2026) used."
+          "note": "\"Formal Halls cost £15.70 for students and £16.70 for guests (as at June 2026).\" 2025-26 UG Handbook lists older prices £15.40/£16.40; web page (June 2026) used."
         },
         "bookingDeadline": "Not published."
       }
@@ -253,6 +309,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Undergraduate Formal Hall; arrive by 19:20."
           },
@@ -263,6 +320,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Undergraduate Formal Hall; arrive by 19:20."
           },
@@ -273,6 +331,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Undergraduate Formal Hall; arrive by 19:20."
           },
@@ -283,6 +342,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Undergraduate Formal Hall; arrive by 19:20."
           },
@@ -293,6 +353,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Drinks in the MCR from 19:00; usually in the Great Hall; gowns optional."
           }
@@ -306,7 +367,8 @@
           "https://mcr.clare.cam.ac.uk/about/getting-involved",
           "https://mcr.clare.cam.ac.uk/social/college-swaps"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Undergraduates: \"You can book for you and up to 1 guests\" on Upay. MCR members: \"normally at least one guest ticket\". MCR runs exchanges (swaps) with other colleges.",
         "priceGbp": {
@@ -354,6 +416,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'7pm for 7.30pm to 10pm'; page does not limit it to term (summer guest allowance mentioned)."
           }
@@ -366,7 +429,8 @@
           "https://www.clarehall.cam.ac.uk/dining/",
           "https://www.clarehall.cam.ac.uk/wp-content/uploads/2026/10/Clare-Hall-Meal-Prices-Oct-26.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"Student may invite two guests, and Seniors may invite three guests\"; more need Domestic Bursar approval. Graduate Student Body runs swaps.",
         "priceGbp": {
@@ -418,6 +482,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Full Term; seated by 19:30, no entry after First Grace."
           },
@@ -428,6 +493,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Full Term; seated by 19:30, no entry after First Grace."
           }
@@ -441,7 +507,8 @@
           "https://www.corpus.cam.ac.uk/sites/default/files/downloads/formal_hall_code_of_conduct_april_2024.pdf",
           "https://www.jcr.corpus.cam.ac.uk/finance"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Up to three guests per student (more with the Dean's advance permission); host must be at check-in; no guest tickets at special formals such as Bridgemas.",
         "priceGbp": {
@@ -474,7 +541,7 @@
         "guests": "Up to 3 guests (1 on especially busy nights such as Burns Night or the Christmas Formal Halls); more with Catering Manager permission; guests must be 16+",
         "booking": "Host books in Upay (current Darwin members only) with every guest’s full name; cancel or amend by 14:00 the day before",
         "dress": "Lounge suit/jacket and tie or equivalent; gowns encouraged for members and for guests who are members of the University; jeans and trainers refused",
-        "price": null,
+        "price": "31 Jan 2025 menu: £14.50 student, £18.85 student guest (default vegetarian); opt-in menu £15.50 / £20.15",
         "note": "The [Formal Hall page](https://www.darwin.cam.ac.uk/dine/formal-hall/) says Upay booking is **available to current Darwin members only**. The member who made the booking must accompany their guests; unaccompanied guests are not allowed to dine, and members may not ask other members to book guests for them. A formal dinner is served on most Wednesdays and Fridays, with check-in from 19:00 and dinner at 19:30, for up to 140 diners. Members can book up to **three guests**, but only one on especially busy evenings such as Burns Night or the Christmas Formal Halls; more need the Catering Manager’s permission. Guests must be 16 or over. Every guest’s full name and any dietary requirements must be entered in Upay; the menu is vegetarian by default, with higher-carbon meals an opt-in extra. Bookings can be cancelled or amended until **14:00 the day before**; after that payment is not normally refunded. No price is published; check Upay.\n\nThe dress code is a lounge suit or jacket and tie, or an equivalent; members, and guests who are members of the University, are encouraged to wear gowns. A shirt without jacket and tie, jeans, trainers, beach footwear or hats mean refusal of entry. You cannot bring your own wine; buy it through the café after check-in. Student ticket status is checked before admission, and a booking is complete only once the confirmation email arrives. Phones must be off in Hall.\n\n**Practical assessment:** you need a Darwin member who will book you by name and come with you; on the busiest nights each member can bring only one guest.",
         "primarySourceUrl": "https://www.darwin.cam.ac.uk/dine/formal-hall/",
         "sourceUrls": ["https://www.darwin.cam.ac.uk/dine/formal-hall/"],
@@ -486,6 +553,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Most' Wednesdays/Fridays; check-in from 19:00. Term-only not stated."
           },
@@ -496,6 +564,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Most' Wednesdays/Fridays; check-in from 19:00. Term-only not stated."
           }
@@ -505,10 +574,25 @@
         "nightsGaps": [],
         "nightsConflict": null,
         "nightsSourceUrls": ["https://www.darwin.cam.ac.uk/dine/formal-hall/"],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.darwin.cam.ac.uk/wp-content/uploads/2025/01/25-01-31-Formal-Hall-menu.pdf",
+            "publisher": "Darwin College, Formal Hall menu (PDF)",
+            "date": "31 January 2025",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Upay booking for current Darwin members only; up to three guests (one on busy nights e.g. Burns Night, Christmas); guests 16+ and must be accompanied by the booking member.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 14.5,
+          "guest": 18.85,
+          "asOf": "31 January 2025 menu",
+          "sourceUrl": "https://www.darwin.cam.ac.uk/wp-content/uploads/2025/01/25-01-31-Formal-Hall-menu.pdf",
+          "note": "Formal Hall menu, 31 Jan 2025: default vegetarian meal £14.50 student, £18.85 student guest (£17.40 alumni, £34.00 external guest); opt-in menu £15.50 / £20.15.",
+          "caveat": "default vegetarian menu"
+        },
         "bookingDeadline": "Book/cancel/amend until 14:00 the day before."
       }
     },
@@ -532,7 +616,7 @@
         "guests": "Up to 4 guests per Downing student (5 places including the host)",
         "booking": "Host books on Upay; bookings, changes and cancellations close 11:00 two days before",
         "dress": "Gowns throughout dinner for Downing members and their guests from other colleges; smart clothes and smart shoes, no shorts or trainers",
-        "price": null,
+        "price": "2023-24: JCR Formal Hall £12.45 student, £18.40 guest; MCR Formal Hall £11.95 / £17.90 (College FOI disclosure log, 2024)",
         "note": "The [Catering page](https://www.dow.cam.ac.uk/current-students/catering) describes Formal Hall as an occasion for junior members to bring in students from other colleges and other visitors as guests. It also says Formal Hall charges are lower for College members than for guests, but gives no figure.\n\n[Formal Hall booking](https://www.dow.cam.ac.uk/current-students/catering/formal-hall-booking): Monday, Wednesday, Friday and Sunday evenings in term only, 19:30–21:00. A Downing student books themselves and up to **four guests** (five in total) through Upay. The cut-off is **11:00 two days before** the dinner, and the same cut-off applies to changes and cancellations. Arrive by 19:15 for the 19:30 seating; latecomers are not admitted and are not refunded. Each person may bring one bottle of wine, with no corkage fee. Groups of up to 20 can ask catering@dow.cam.ac.uk to be seated together by the same deadline, giving the full names of all group members; the host still waits for all guests to arrive before going in. Downing groups larger than 20 contact the Internal Events team about a private Formal Hall, non-Downing students are directed to the Conference Office rather than a private formal, and society or external university groups discuss bookings with Internal Events. No route for a non-member to book independently is published.\n\n[Dress and conduct](https://www.dow.cam.ac.uk/current-students/catering/formal-hall-dress-and-conduct): gowns must be worn throughout dinner by members of the College **and their guests from other colleges**. Dress must be smart: collared shirts with a tie or cravat (collarless shirts allowed as cultural dress), smart shoes, no trainers or shorts; clean jeans are acceptable. No drinking games or drinking fines, no electronic devices once dinner begins, and photographs only after the Fellows leave. Staff may ask disruptive or drunk diners to leave, and hosts are responsible for their guests.\n\nThe [MCR Social Membership Scheme](https://www.dow.cam.ac.uk/postgraduate-admissions/downing-college-mcr-social-membership-scheme) is for selected postdocs and visiting postgraduate students who are **not already members of another Cambridge college**; social members may bring only one guest. It is not a route for students of other colleges.\n\n**Practical assessment:** four weekly sittings and four guest places give a Downing host plenty of options; the host must book by 11:00 two days ahead, and guests need a gown. No measured sell-out data.",
         "primarySourceUrl": "https://www.dow.cam.ac.uk/current-students/catering/formal-hall-booking",
         "sourceUrls": [
@@ -549,6 +633,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Arrive by 19:15."
           },
@@ -559,6 +644,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Arrive by 19:15."
           },
@@ -569,6 +655,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Arrive by 19:15."
           },
@@ -579,6 +666,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Arrive by 19:15."
           }
@@ -592,10 +680,24 @@
           "https://www.dow.cam.ac.uk/current-students/catering",
           "https://www.dow.cam.ac.uk/current-students/catering/formal-hall-dress-and-conduct"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.dow.cam.ac.uk/sites/default/files/Disclosure%20Log%20Jan-Nov%202024.pdf",
+            "publisher": "Downing College, Freedom of Information disclosure log Jan-Nov 2024 (PDF)",
+            "date": "2024 (quotes 2023-24 charges)",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"You can book up to four guests, making five in total\"; guests from other colleges must wear gowns.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 12.45,
+          "guest": 18.4,
+          "asOf": "2023-24",
+          "sourceUrl": "https://www.dow.cam.ac.uk/sites/default/files/Disclosure%20Log%20Jan-Nov%202024.pdf",
+          "note": "College FOI disclosure log (Jan-Nov 2024), 'Catering charges 2023-24': JCR Formal Hall £12.45 student, £18.40 guest; MCR Formal Hall £11.95 / £17.90; meal only, no wine."
+        },
         "bookingDeadline": "\"The cut-off for booking tickets is 11am, two days before the event\" (also for changes/cancellations)."
       }
     },
@@ -619,7 +721,7 @@
         "guests": "Up to 4 non-Emmanuel guests per student on Mon, Fri, Sat, Sun; up to 10 per student on Tue and Thu (club, society and group nights)",
         "booking": "Host books online by 19:00 three days (72 hours) ahead; groups at least 10 days ahead. Online cancellation until 18:45 the day before, then email the Head of Catering by 10:00 on the day",
         "dress": "Gowns must be worn by members of the College; the 2026/27 guide does not say whether guests wear gowns",
-        "price": null,
+        "price": "£13.10 living in College, £13.95 living out; first guest £22.65, further guests £28.30 (College Formal Hall sheet, PDF dated Nov 2025)",
         "note": "The [Domestic Matters (Undergraduates) 2026/2027 guide](https://apps.emma.cam.ac.uk/college/documents/pdfs/FINAL%20-%20DOMESTIC%20MATTERS%202026-27.pdf), dated August 2026, section 29 'Catering arrangements 2026-2027': Formal Hall is at **19:30 every evening except Wednesday** during the Normal Period of Residence; you and your guests must arrive before 19:15 and late arrivals are refused entry. Each Emmanuel student books online for themselves; one student cannot book for another. Monday, Friday, Saturday and Sunday have a limit of **four non-Emmanuel guests** per person; Tuesday and Thursday are open to clubs, societies and groups, with up to **ten guests per Emmanuel student**. Book by **19:00 three days (72 hours) ahead**; group bookings need at least **ten days**. Guests must be over 18 unless the Bursar or Senior Tutor has agreed an exception. Online cancellation is free until 18:45 the day before; after that, email the Head of Catering by 10:00 on the day, after which the meal is charged. Students who started from 1 October 2025 pay through the Pay-As-You-Go system when booking.\n\nGowns must be worn by members of the College; the guide does not say whether guests must wear them. No toasting, singing or drinking games; photographs only after the Fellows leave or after coffee. Staff refuse admission to anyone not in a fit state, and diners must stay in their seats. Parents' Formal Halls admit close family only, with no other guests.\n\nBooking uses the member portal, which needs a Raven login. No route for a non-member to book independently is published. An [undated Formal Hall leaflet](https://apps.emma.cam.ac.uk/college/documents/pdfs/FORMALS.pdf) gives different group nights and prices and contradicts itself on which nights take groups; rely on the 2026/27 guide. No current price is published. The guide is the undergraduate edition; postgraduate arrangements were not checked.\n\n**Practical assessment:** six formal nights a week and a four-guest quota (ten on Tuesday and Thursday) make it straightforward with a host, but the 72-hour booking deadline, or ten days for groups, means planning ahead. No measured sell-out data.",
         "primarySourceUrl": "https://apps.emma.cam.ac.uk/college/documents/pdfs/FINAL%20-%20DOMESTIC%20MATTERS%202026-27.pdf",
         "sourceUrls": [
@@ -634,6 +736,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Up to 4 non-Emmanuel guests per person. Runs during the Normal Period of Residence (slightly longer than Full Term)."
           },
@@ -644,6 +747,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Club/society night: up to 10 guests per Emmanuel student."
           },
@@ -654,6 +758,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Club/society night: up to 10 guests per Emmanuel student."
           },
@@ -664,6 +769,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Up to 4 non-Emmanuel guests per person. Runs during the Normal Period of Residence (slightly longer than Full Term)."
           },
@@ -674,6 +780,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Up to 4 non-Emmanuel guests per person. Runs during the Normal Period of Residence (slightly longer than Full Term)."
           },
@@ -684,6 +791,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Up to 4 non-Emmanuel guests per person. Runs during the Normal Period of Residence (slightly longer than Full Term)."
           }
@@ -695,10 +803,25 @@
         "nightsSourceUrls": [
           "https://apps.emma.cam.ac.uk/college/documents/pdfs/FINAL%20-%20DOMESTIC%20MATTERS%202026-27.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://apps.emma.cam.ac.uk/college/documents/pdfs/FORMALS.pdf",
+            "publisher": "Emmanuel College, Formal Hall Arrangements (FORMALS.pdf)",
+            "date": "undated; PDF created 2025-11-10",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Emmanuel student books non-Emmanuel guests online; guests over 18 unless Bursar/Senior Tutor agree. Undergraduate edition of the guide.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 13.1,
+          "guest": 22.65,
+          "asOf": "undated (PDF dated Nov 2025)",
+          "sourceUrl": "https://apps.emma.cam.ac.uk/college/documents/pdfs/FORMALS.pdf",
+          "note": "College Formal Hall Arrangements sheet: £13.10 living in College, £13.95 living out; first guest £22.65, each further guest £28.30. Undated; PDF created 10 Nov 2025.",
+          "caveat": "first guest; £13.10 living in College"
+        },
         "bookingDeadline": "Book by 19:00 three days (72 hours) ahead; groups at least 10 days ahead. Free online cancellation until 18:45 the day before."
       }
     },
@@ -717,13 +840,13 @@
         "checkedOn": "2026-11-07",
         "visitors": "Yes, as a guest of a Fitzwilliam member, who waits in the Screens for the guest and presents their University card; Fitz MCR also runs formal swaps with other MCRs.",
         "bookingSummary": "Fitz member books you via College Bills, or MCR swap",
-        "rulesSummary": "Wednesdays and occasional Fridays, 19:30. Host meets guests and shows University card. Super Halls normally one guest; ordinary cap not stated by college.",
-        "formalNights": "Wednesdays and occasional Fridays in term, 19:30 (in Hall by 19:25)",
+        "rulesSummary": "Wednesdays and Fridays in term, 19:30. Host meets guests and shows University card. Super Halls normally one guest; ordinary cap not stated by college.",
+        "formalNights": "Wednesdays and Fridays in term, 19:30 (in Hall by 19:25)",
         "guests": "Ordinary cap not stated in current college documents; Super Halls normally one guest per member (2026/27 Regulations). The MCR page, last updated October 2023, says up to 5",
         "booking": "Members-only College Bills portal (Raven login). Postgraduates are asked to book at least 48 hours ahead (2026/27 welcome pack); the MCR page (2023) says bookings and cancellations close 14:00 two days before",
         "dress": "Gowns worn, with jacket, collar and tie, cultural dress or smart evening wear (2026/27 Regulations); older MCR pages say guests need not wear gowns",
-        "price": null,
-        "note": "The college [Food and drink page](https://www.fitz.cam.ac.uk/cafe-bar-and-buttery) says Formal Halls, open to the whole College, are traditionally held on **Wednesdays and occasional Fridays**, and its booking link is labelled 'Book for Formal (Members only)'; it goes to College Bills, which needs a Raven login. Guests from other colleges therefore attend through a Fitzwilliam host.\n\nThe [2026/27 College Regulations](https://www.fitz.cam.ac.uk/sites/default/files/2026-10/College%20Regulations%20for%202026-27_FINAL.pdf) (paragraph 62 and Appendix 4) say guests of Fitzwilliam members may attend, and Super Halls are normally limited to one guest per member. Entry is by University card: the host waits in the Screens for their guest and presents their card. Diners must be in Hall by 19:25; those arriving after 19:30 may be refused. Anyone who appears intoxicated is refused entry. One bottle of wine per diner may be brought in, no beer containers, and no alcohol is served from the Bar during dinner. Coining or other incitement to excessive drinking leads to ejection. Diners should generally be over 18, or over 16 with a host over 18. Dress should suit the occasion (jacket, collar and tie, cultural dress or smart evening wear) and gowns are worn; the regulations do not say whether guests are exempt.\n\nThe [2026 postgraduate welcome pack](https://www.fitz.cam.ac.uk/sites/default/files/2026-08/2026%20Welcome%20Pack.pdf) asks postgraduates to book at least 48 hours ahead and says places are first come, first served. It no longer gives a maximum number of places.\n\nOlder MCR pages differ in places. The [MCR Formal Hall page](https://mcr.fitz.cam.ac.uk/overview/formal-hall/), last updated October 2023, lists Wednesdays and Fridays, up to **five guests**, bookings and cancellations until 14:00 two days before, gowns for College members only (not guests), and formals by arrangement for at least 20 people. An [MCR FAQ from 2018](https://mcr.fitz.cam.ac.uk/faq/formal-hall-work/) also says guests need not wear gowns. On swaps, the [MCR swaps page](https://mcr.fitz.cam.ac.uk/overview/college-swaps/) says you book only yourself, with no guests, and the [MCR FAQ](https://mcr.fitz.cam.ac.uk/faq/whats-the-best-way-to-attend-formals-at-other-colleges/) aims for three swaps a term and warns they sell out fast. Confirm the guest cap and deadline with the host for the current term. No current price is published.\n\n**Practical assessment:** one regular formal night a week plus occasional Fridays, booked only by a member through a Raven-protected portal; ask the host to confirm the current guest cap and whether guests need gowns. No measured sell-out data.",
+        "price": "Around £15 (student-written SU Alternative Prospectus, about 2022-23); no guest price published",
+        "note": "The college [Food and drink page](https://www.fitz.cam.ac.uk/cafe-bar-and-buttery) says Formal Halls are open to the whole College and links the current formal menus, which list a formal **every Wednesday and every Friday** in term (18, 20, 25 and 27 November 2026, as in Michaelmas 2024 and Lent 2025); the page’s older line says “occasional Fridays”. Its booking link is labelled 'Book for Formal (Members only)'; it goes to College Bills, which needs a Raven login. Guests from other colleges therefore attend through a Fitzwilliam host.\n\nThe [2026/27 College Regulations](https://www.fitz.cam.ac.uk/sites/default/files/2026-10/College%20Regulations%20for%202026-27_FINAL.pdf) (paragraph 62 and Appendix 4) say guests of Fitzwilliam members may attend, and Super Halls are normally limited to one guest per member. Entry is by University card: the host waits in the Screens for their guest and presents their card. Diners must be in Hall by 19:25; those arriving after 19:30 may be refused. Anyone who appears intoxicated is refused entry. One bottle of wine per diner may be brought in, no beer containers, and no alcohol is served from the Bar during dinner. Coining or other incitement to excessive drinking leads to ejection. Diners should generally be over 18, or over 16 with a host over 18. Dress should suit the occasion (jacket, collar and tie, cultural dress or smart evening wear) and gowns are worn; the regulations do not say whether guests are exempt.\n\nThe [2026 postgraduate welcome pack](https://www.fitz.cam.ac.uk/sites/default/files/2026-08/2026%20Welcome%20Pack.pdf) asks postgraduates to book at least 48 hours ahead and says places are first come, first served. It no longer gives a maximum number of places.\n\nOlder MCR pages differ in places. The [MCR Formal Hall page](https://mcr.fitz.cam.ac.uk/overview/formal-hall/), last updated October 2023, lists Wednesdays and Fridays, up to **five guests**, bookings and cancellations until 14:00 two days before, gowns for College members only (not guests), and formals by arrangement for at least 20 people. An [MCR FAQ from 2018](https://mcr.fitz.cam.ac.uk/faq/formal-hall-work/) also says guests need not wear gowns. On swaps, the [MCR swaps page](https://mcr.fitz.cam.ac.uk/overview/college-swaps/) says you book only yourself, with no guests, and the [MCR FAQ](https://mcr.fitz.cam.ac.uk/faq/whats-the-best-way-to-attend-formals-at-other-colleges/) aims for three swaps a term and warns they sell out fast. Confirm the guest cap and deadline with the host for the current term. No current price is published.\n\n**Practical assessment:** two formal nights a week, Wednesday and Friday, booked only by a member through a Raven-protected portal; ask the host to confirm the current guest cap and whether guests need gowns. No measured sell-out data.",
         "primarySourceUrl": "https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
         "sourceUrls": [
           "https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
@@ -742,33 +865,130 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Time from MCR page; College Regulations: in Hall by 19:25."
+            "notes": "Every Wednesday in full term. College formal menus show it every week in Michaelmas 2024, Lent 2025 and Michaelmas 2026 (18 and 25 Nov 2026). The 2026 PG Welcome Pack says 'Formal dinners start at 19.30', and the MCR page says 'Wednesdays and Fridays – 19:30'."
           },
           {
             "weekday": "fri",
             "kind": "formal",
-            "label": "Formal Hall (occasional)",
+            "label": "Formal Hall",
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "College says 'Wednesdays and occasional Fridays' (re-checked 18 Nov); MCR page lists 'Wednesdays and Fridays – 19:30'. Not every Friday: do not show as a guaranteed weekly night."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Every Friday in full term in practice. College formal menu PDFs list Friday formals every week checked: 18 Oct, 25 Oct, 1 Nov and 8 Nov 2024; 24 and 31 Jan 2025; 20 and 27 Nov 2026. The MCR page and FAQ say Wednesdays and Fridays. The college's general page still carries the older wording 'occasional Fridays'. Some Fridays are themed (e.g. Burns Night), and the MCR's own special formals are on Fridays."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"Formal Halls - open to the whole College - are traditionally held on Wednesdays and occasional Fridays.\"",
+        "nightsQuote": "\"Fitz Formal Hall Menu Friday 20th November ... Wednesday 25th November ... Friday 27th November\" (college formal menu, Nov 2026); \"Formal Hall: Wednesdays and Fridays – 19:30\" (MCR Formal Hall page)",
         "nightsGaps": [],
-        "nightsConflict": "MCR page 'Wednesdays and Fridays – 19:30' vs College 'Wednesdays and occasional Fridays'.",
+        "nightsConflict": "The college Food and drink page still says 'Wednesdays and occasional Fridays'; the college's own formal menus (Michaelmas 2024, Lent 2025, Michaelmas 2026) list a formal every Wednesday and every Friday, as the MCR page does.",
         "nightsSourceUrls": [
-          "https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
+          "https://www.fitz.cam.ac.uk/sites/default/files/2026-11/Formal%20Hall%20Menu%2020.11.26.pdf",
+          "https://www.fitz.cam.ac.uk/sites/default/files/2026-11/Formal%20Hall%20Menu%2018.11.26.pdf",
           "https://mcr.fitz.cam.ac.uk/overview/formal-hall/",
+          "https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
           "https://www.fitz.cam.ac.uk/sites/default/files/2026-10/College%20Regulations%20for%202026-27_FINAL.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
+            "publisher": "Fitzwilliam College (official Food and drink page)",
+            "date": "live 2026-11-19; identical wording in Wayback snapshots 2024-04-20, 2025-03-19, 2026-04-27",
+            "kind": "official"
+          },
+          {
+            "url": "https://web.archive.org/web/20260427135739/https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
+            "publisher": "Wayback Machine copy of Fitzwilliam Food and drink page",
+            "date": "2026-04-27",
+            "kind": "archive"
+          },
+          {
+            "url": "https://mcr.fitz.cam.ac.uk/overview/formal-hall/",
+            "publisher": "Fitzwilliam MCR",
+            "date": "published 2015-03-19, modified 2023-10-19",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://mcr.fitz.cam.ac.uk/faq/formal-hall-work/",
+            "publisher": "Fitzwilliam MCR FAQ",
+            "date": "2018-09-11 (modified 2018-09-12)",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2026-08/2026%20Welcome%20Pack.pdf",
+            "publisher": "Fitzwilliam College 2026 Postgraduate Welcome Pack",
+            "date": "2026-08",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/fitzwilliam/",
+            "publisher": "Cambridge SU Alternative Prospectus",
+            "date": "undated (live 2026-11-19)",
+            "kind": "guide"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2026-11/Formal%20Hall%20Menu%2020.11.26.pdf",
+            "publisher": "Fitzwilliam College formal hall menu (linked from the Food and drink page)",
+            "date": "2026-11 (live 2026-11-19)",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2026-11/Formal%20Hall%20Menu%2018.11.26.pdf",
+            "publisher": "Fitzwilliam College formal hall menu",
+            "date": "PDF created 2026-11-12",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2024-10/Formal%20Hall%20Menu%20%281%29.pdf",
+            "publisher": "Fitzwilliam College formal hall menu",
+            "date": "2024-10",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2024-10/Formal%20Hall%20Menu%20%282%29.pdf",
+            "publisher": "Fitzwilliam College formal hall menu",
+            "date": "2024-10",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2024-10/Formal%20Hall%20Menu%20%283%29.pdf",
+            "publisher": "Fitzwilliam College formal hall menu",
+            "date": "2024-10",
+            "kind": "official"
+          },
+          {
+            "url": "https://web.archive.org/web/20241103220943id_/https://www.fitz.cam.ac.uk/sites/default/files/2024-10/Formal%20Hall%20Menu%20%284%29.pdf",
+            "publisher": "Wayback copy of Fitzwilliam formal hall menu",
+            "date": "2024-11-03",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.fitz.cam.ac.uk/sites/default/files/2025-01/Formal%20Hall%20Menu%20%288%29.pdf",
+            "publisher": "Fitzwilliam College formal hall menu",
+            "date": "2025-01",
+            "kind": "official"
+          },
+          {
+            "url": "https://web.archive.org/web/20250119192323/https://www.fitz.cam.ac.uk/cafe-bar-and-buttery",
+            "publisher": "Wayback copy of Fitzwilliam Food and drink page",
+            "date": "2025-01-19",
+            "kind": "archive"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Host waits in the Screens and presents University card; Super Halls normally one guest per member (2026/27 Regulations). MCR page (older) says up to 5 guests. MCR runs swaps.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 15.0,
+          "guest": null,
+          "asOf": "about 2022-23 (SU Alternative Prospectus)",
+          "sourceUrl": "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/fitzwilliam/",
+          "note": "SU Alternative Prospectus (Fitzwilliam page, student-written, cites 2022-23 rent): formals 'cost around £15'. No guest price published.",
+          "caveat": "around"
+        },
         "bookingDeadline": "MCR page (older): 'Bookings and cancellations are available until 14:00, two days before.' 2026 PG welcome pack: book at least 48 hours ahead."
       }
     },
@@ -808,6 +1028,7 @@
             "startTime": "19:15",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Drinks around 18:45; meal 19:15-19:30; occasionally moved for special events."
           }
@@ -820,7 +1041,8 @@
           "https://www.girton.cam.ac.uk/postgraduates/incoming-postgraduates/about-university-and-college",
           "https://www.girton.cam.ac.uk/dining-and-socialising"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Up to two named guests per student where guests are permitted; college mentions inviting guests from other colleges.",
         "priceGbp": {
@@ -853,7 +1075,7 @@
         "guests": "Not stated on current college pages; the GCSU (JCR) food page, last updated December 2022, says up to 2 guests per meal",
         "booking": "Host books online (college 'Booking meals online' link goes to Upay; the JCR calls it the Meal Booking System). JCR page (2022): opens about 4 days before, closes 10:00 on the day",
         "dress": "Members of the University, including students from other colleges, must wear gowns at Formal Hall (including Guest Nights) in Full Term; no other dress code for ordinary Formal Hall",
-        "price": null,
+        "price": "One MDR meal ticket, £4.93; guests beyond the five on your own tickets £7.18 (JCR page, undated)",
         "note": "The college [Hall page](https://www.cai.cam.ac.uk/living-here/food-and-drink/hall) says there are two evening sittings, usually on six nights a week: Second, or Formal, Hall is at **19:20**, students wear gowns, and there is no other dress code. It does not name the six nights. The [Food and drink page](https://www.cai.cam.ac.uk/living-here/food-and-drink) says students book through an online system and often invite friends from other colleges, for example for birthdays; it also mentions a twice-termly Superhall. The site-wide 'Booking meals online' link goes to Upay, which needs a login. A Caius host is therefore the documented route; no route for a non-member to book independently is published.\n\nThe [College Regulations](https://www.cai.cam.ac.uk/discover/strategy-and-policies/statutes-ordinances-regulations-and-handbooks/college-regulations), last updated by the College Council on **20 October 2026**, require **members of the University** to wear gowns when dining at Formal Hall, including Guest Nights, during Full Term. This covers students visiting from other colleges.\n\nThe [GCSU (JCR) food page](https://jcr.cai.cam.ac.uk/college-life/food-bar/), last updated December 2022, says booking on the Meal Booking System typically opens four days before and closes at 10:00 on the day for dinner; a student can bring **up to two guests** per meal; up to half a bottle of wine per person may be brought, with corkage unless bought at the College Bar; and diners scan their CamCard on entry. Its guest and corkage prices date from 2022, so no current price is given here; confirm the guest cap with the host.\n\nThe [MCR dining page](https://mcr.cai.cam.ac.uk/index.php/prospective/dining/) says Formal Hall runs every night in term except Saturday, apart from special dinners. MCR Superhalls are twice per Full Term, four courses, MCR-only, black tie and no gowns. The MCR Dining Officers (mcr-dining@cai.cam.ac.uk) organise formal swaps, with visiting postgraduates typically dining at a Superhall; ask your own MCR. For Superhall dress, follow the organiser's instructions.\n\n**Practical assessment:** frequent sittings give a Caius host many dates to choose from, but bring a gown and confirm the guest cap and deadline with the host. No measured sell-out data.",
         "primarySourceUrl": "https://www.cai.cam.ac.uk/living-here/food-and-drink/hall",
         "sourceUrls": [
@@ -871,6 +1093,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -881,6 +1104,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -891,6 +1115,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -901,6 +1126,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Gallery reserved for postgraduates on Thursdays."
           },
@@ -911,6 +1137,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -921,6 +1148,7 @@
             "startTime": "19:20",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           }
@@ -934,10 +1162,25 @@
           "https://mcr.cai.cam.ac.uk/index.php/prospective/dining/",
           "https://jcr.cai.cam.ac.uk/college-life/food-bar/"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://jcr.cai.cam.ac.uk/college-life/food-bar/",
+            "publisher": "Gonville & Caius Students' Union (GCSU), Food & Bar page",
+            "date": "undated (checked 2026-11-19)",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "College says students often invite friends from other colleges. JCR page (Dec 2022): up to two guests per meal. MCR swaps usually at a Superhall (twice per Full Term).",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": null,
+          "guest": 7.18,
+          "asOf": null,
+          "sourceUrl": "https://jcr.cai.cam.ac.uk/college-life/food-bar/",
+          "note": "JCR food page (undated): each Hall meal, Formal Hall included, costs one MDR ticket, 'Current MDR ticket cost = £4.93'; five of your tickets can book guests in, after which 'Additional guest MDR ticket cost = £7.18'.",
+          "caveat": "extra guest; members dine on prepaid MDR tickets (£4.93)"
+        },
         "bookingDeadline": "JCR page (Dec 2022): opens about 4 days before, closes 10:00 on the day."
       }
     },
@@ -978,6 +1221,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Undergraduate 8-week term; open to UG and PG; New Dining Hall; wine included."
           },
@@ -988,6 +1232,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Two courses, no drinks (HUS page)."
           }
@@ -1001,7 +1246,8 @@
           "https://www.hus-jcr.co.uk/college-life/food/",
           "https://www.homerton.cam.ac.uk/catering"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"There is usually the option to book 2 guest tickets for a formal.\" College: guest tickets for friends who do not attend Homerton. Postgraduate-only formals on selected other nights (dates on Upay).",
         "priceGbp": {
@@ -1048,6 +1294,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually'; drinks 19:00 in the Peter Richards Room."
           },
@@ -1058,6 +1305,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually'; drinks 19:00 in the Peter Richards Room."
           }
@@ -1069,7 +1317,8 @@
         "nightsSourceUrls": [
           "https://www.hughes.cam.ac.uk/student-centre/practical/dining/formal-halls/"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"Each student may bring up to three guests\"; guests only with their hosting member; swaps and larger groups need approval via formal.hall@hughes.cam.ac.uk.",
         "priceGbp": {
@@ -1102,7 +1351,7 @@
         "guests": "Up to 3 guests per member",
         "booking": "Upay, with dietary details added to the booking; the college advises booking up to seven days ahead, especially for Sundays and themed dinners; deadlines are not published publicly",
         "dress": "Suit and tie or cocktail dress; students and Fellows wear academic gowns",
-        "price": null,
+        "price": "By May 2023 (College page, since removed): £7.10 undergraduates, £9.40 guests and postgraduates; Wednesday Postgraduate Hall £10.40 / £14.35",
         "note": "Formal Hall runs **four times a week at 19:30: Tuesday, Wednesday, Friday and Sunday**; postgraduates dine separately on Wednesdays in Upper Hall. A member can bring **up to three guests**, who must know and follow the dress code and the code of conduct. Bookings, including dietary details, are made on **Upay**. The college suggests booking **up to seven days ahead**, especially for Sundays and themed dinners; this is advice, not a stated deadline. Key dates and prices are on JNet, the College intranet, which needs a login. No public route for booking without a Jesus host is described. [Official Formal Hall page](https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall).\n\nThe college recommends arriving before 19:15 as there is often a queue; everyone must be seated by 19:30, when the Master says grace. Dress is suit and tie or cocktail dress; students and Fellows wear gowns. Iced water is provided; diners may bring soft drinks and **up to one 750ml bottle of wine per person**, and the College bar sells wine. Public guidance does not set out host check-in or ID rules. Enquiries: manciple@jesus.cam.ac.uk. [Official Formal Hall page](https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall).\n\n**Practical assessment:** you need a Jesus member to book you as one of their three guests on Upay; with four formals a week, booking about a week ahead is the college's own advice.",
         "primarySourceUrl": "https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall",
         "sourceUrls": ["https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall"],
@@ -1114,6 +1363,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Term-only not stated on the page."
           },
@@ -1124,6 +1374,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Term-only not stated on the page."
           },
@@ -1134,8 +1385,17 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Postgraduates dine separately on Wednesdays in Upper Hall."
+            "notes": "Postgraduates dine separately on Wednesdays in Upper Hall.",
+            "price": {
+              "student": 10.4,
+              "guest": 14.35,
+              "asOf": "by May 2023 (College page, since removed)",
+              "sourceUrl": "https://web.archive.org/web/20230523122954/https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall",
+              "note": "Archived College page (May 2023): 'Tickets for Postgraduate Halls on Wednesdays are £10.40 for College members and £14.35 for guests', port and cheese included.",
+              "caveat": "2023 figure"
+            }
           },
           {
             "weekday": "fri",
@@ -1144,6 +1404,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Term-only not stated on the page."
           },
@@ -1154,6 +1415,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Term-only not stated on the page."
           }
@@ -1165,10 +1427,25 @@
         "nightsSourceUrls": [
           "https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://web.archive.org/web/20230523122954/https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall",
+            "publisher": "Jesus College, Formal Hall page (Wayback Machine)",
+            "date": "2023-05-23 snapshot",
+            "kind": "archive"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"You can bring up to three guests\" (booked by the member on Upay).",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 7.1,
+          "guest": 9.4,
+          "asOf": "by May 2023 (College page, since removed)",
+          "sourceUrl": "https://web.archive.org/web/20230523122954/https://www.jesus.cam.ac.uk/college/life-jesus/food-and-drink/formal-hall",
+          "note": "College Formal Hall page as archived 23 May 2023: 'Tickets cost £7.10 for Jesus undergraduates and £9.40 for each guest and for postgraduates'; Wednesday Postgraduate Halls £10.40 members, £14.35 guests. The current page gives no prices (they are on JNet).",
+          "caveat": "2023 figure"
+        },
         "bookingDeadline": "No deadline published; college advises booking up to seven days ahead."
       }
     },
@@ -1185,34 +1462,152 @@
       },
       "formal": {
         "checkedOn": "2026-11-07",
-        "visitors": "No public rule; the only documented route is KiFoMaSy, which needs a login, so ask a King's student or KCSU/KCGU whether guest tickets are offered for a given formal.",
-        "bookingSummary": "King's member books via KiFoMaSy (KCSU/KCGU formals)",
-        "rulesSummary": "Formals are run by KCSU and KCGU and sold through KiFoMaSy, which needs a login; guest numbers, prices, dates and dress are not published.",
-        "formalNights": null,
+        "visitors": "Yes, on a guest ticket: King's formals issue a capped share of guest tickets (70:30 King's to non-King's, Varsity 2026), booked by a King's member through KiFoMaSy; a King's member's own ticket cannot be passed to an outsider.",
+        "bookingSummary": "Guest ticket from a King's member (KiFoMaSy)",
+        "rulesSummary": "Wednesday formals, 19:30, run by KCSU and KCGU and sold through KiFoMaSy (login); tickets split 70:30 King’s to non-King’s (Varsity, 2026).",
+        "formalNights": "Wednesdays in term, 19:30: KCSU-run, fancy-dress themed, post-formal ent in the bar",
         "guests": null,
         "booking": "KiFoMaSy (store.kcsu.org.uk, login required); details of student formals are sent by email",
         "dress": null,
-        "price": null,
-        "note": "Student formals are **organised by KCSU and KCGU** and tickets are booked through **KiFoMaSy**; details are sent by email. The Student Hub notes that the KCGU website is under construction. [Student Hub](https://www.kings.cam.ac.uk/student-hub), [KCSU](https://www.kcsu.org.uk/). KiFoMaSy itself requires a login, so no guest quota, price, dates, dress code or outside-student booking rule is publicly visible. Ask a King's host or KCSU/KCGU about guest tickets for the formal you want.\n\nThe **2025 Annual Report** says the unions renegotiated the memorandum of understanding for student-run formals, with guaranteed tickets for each union and free tickets for the students running the event. The College agreed **in principle to two student-run formals a week, funding permitting**; funding for a permanent expansion was not secured that year. An extra graduate formal was approved in Easter Term. [Annual Report 2025](https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html).\n\n**Practical assessment:** the route runs through a King's student and a login-only ticketing system; no public rule tells an outside student whether or how they can get a ticket.",
+        "price": "Around £20 a ticket (student-written SU Alternative Prospectus, about 2022-23); the College subsidises the members' price (Varsity, 2026)",
+        "note": "Student formals are **organised by KCSU and KCGU** and tickets are booked through **KiFoMaSy**; details are sent by email. The Student Hub notes that the KCGU website is under construction. [Student Hub](https://www.kings.cam.ac.uk/student-hub), [KCSU](https://www.kcsu.org.uk/). KiFoMaSy itself requires a login, so the guest allowance for a given formal and the dress code are not publicly visible; ask your King's host.\n\nThe regular formal is on **Wednesday at 19:30**, fancy-dress themed, with a post-formal ent in the bar: every regular Formal Hall in [KCSU’s listings](https://web.archive.org/web/20180119143909/http://kcsu.org.uk:80/events/formal-hall-7/) falls on a Wednesday, and the [SU Alternative Prospectus](https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/) describes a themed formal roughly once a week. [Varsity](https://www.varsity.co.uk/news/31242) reported in March 2026 a strict 70:30 split of King’s to non-King’s tickets, with entry checked by CamCard or QR code.\n\nThe **2025 Annual Report** says the unions renegotiated the memorandum of understanding for student-run formals, with guaranteed tickets for each union and free tickets for the students running the event. The College agreed **in principle to two student-run formals a week, funding permitting**; funding for a permanent expansion was not secured that year. An extra graduate formal was approved in Easter Term. [Annual Report 2025](https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html).\n\n**Visitors:** an outside student goes on a **guest ticket**. KCSU's 2-formals motion says \"the same number of guest tickets\" would be offered at the extra formals and that they would give \"more opportunities for people at other colleges to attend\" ([SU referendum motion](https://www.cambridgesu.co.uk/referenda/motion/59/96)); Varsity (March 2026) reports the guest-ticket limits, the 70:30 split, that members' tickets are \"strictly for King's\", and CamCard checks at the door ([Varsity](https://www.varsity.co.uk/news/31242)). Tickets are allocated by ballot (SU motion). The price is around £20 a ticket according to the student-written [SU Alternative Prospectus](https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/).",
         "primarySourceUrl": "https://www.kings.cam.ac.uk/student-hub",
         "sourceUrls": [
           "https://www.kings.cam.ac.uk/student-hub",
           "https://www.kcsu.org.uk/",
-          "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html"
+          "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html",
+          "https://www.varsity.co.uk/news/31242",
+          "https://www.cambridgesu.co.uk/referenda/motion/59/96",
+          "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/"
         ],
-        "nights": [],
-        "nightsStatus": "unknown",
-        "nightsQuote": "\"Formals are organised by KCSU and KCGU, and tickets can be booked using KiFoMaSy.\" \"Details about student formals are sent via email.\"",
-        "nightsGaps": ["Weekdays, times, guest policy and prices are not public"],
+        "nights": [
+          {
+            "weekday": "wed",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "KCSU-run, fancy-dress themed, with a post-formal ent in the bar. KCSU's formal listings put every regular Formal Hall on a Wednesday at 19:30 (Oct and Nov 2016; Feb and Mar 2018). Varsity (Mar 2026): tickets are split 70:30 between King's and non-King's diners."
+          }
+        ],
+        "nightsStatus": "found",
+        "nightsQuote": "\"Formal Hall — Wednesday, 7th February 2018 — 19:30\" (KCSU listing); \"We also have Formal Hall roughly once a week, which unlike other colleges, is fancy dress themed\" (SU Alternative Prospectus); \"Formals are organised by KCSU and KCGU, and tickets can be booked using KiFoMaSy.\" (Student Hub)",
+        "nightsGaps": [],
         "nightsConflict": null,
         "nightsSourceUrls": [
+          "https://web.archive.org/web/20180119143909/http://kcsu.org.uk:80/events/formal-hall-7/",
+          "https://web.archive.org/web/20170108041546/http://kcsu.org.uk/events/formal-hall-and-post-formal-ent/",
+          "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/",
+          "https://www.varsity.co.uk/news/31242",
           "https://www.kings.cam.ac.uk/student-hub",
           "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html"
         ],
-        "nightsCheckedOn": "2026-11-18",
-        "visitorRoute": "unknown",
-        "guestNote": "No public guest rule; KiFoMaSy needs a login. 2025 Annual Report: College agreed in principle to two student-run formals a week, funding permitting.",
-        "priceGbp": null,
+        "nightsSources": [
+          {
+            "url": "https://web.archive.org/web/20180119143909/http://kcsu.org.uk:80/events/formal-hall-7/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2018-01-19 snapshot (event 2018-02-07)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20180119143914/http://kcsu.org.uk:80/events/formal-hall-8/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2018-01-19 snapshot (event 2018-02-28)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20180119143919/http://kcsu.org.uk:80/events/formal-hall-9/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2018-01-19 snapshot (event 2018-03-07)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20170108041546/http://kcsu.org.uk/events/formal-hall-and-post-formal-ent/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2017-01-08 snapshot (event 2016-11-09)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20161020001255/http://kcsu.org.uk/events/formal-and-post-formal-ent/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2016-10-20 snapshot (event 2016-10-12)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20160516191205/http://kcsu.org.uk/events/formal-hall-ent/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2016-05-16 snapshot (event 2016-02-24)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20160304031213/http://kcsu.org.uk:80/events/graduate-formal-hall-ent/",
+            "publisher": "KCSU (Wayback Machine)",
+            "date": "2016-03-04 snapshot (event 2016-03-02)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.cambridgesu.co.uk/referenda/motion/59/96",
+            "publisher": "Cambridge SU referenda (KCSU motion)",
+            "date": "undated",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://kingscollege.shorthandstories.com/kings-college-cambridge-annual-report-2025/index.html",
+            "publisher": "King's College Annual Report 2025 (KCGU report)",
+            "date": "2025",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/",
+            "publisher": "Cambridge SU Alternative Prospectus",
+            "date": "about 2022-23 (cites 2022-23 rent)",
+            "kind": "guide"
+          },
+          {
+            "url": "https://web.archive.org/web/20190801230208/http://www.kings.cam.ac.uk/study/life/social-life.html",
+            "publisher": "King's College (Wayback Machine)",
+            "date": "2019-08-01 snapshot",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.varsity.co.uk/news/31242",
+            "publisher": "Varsity",
+            "date": "2026-03-07",
+            "kind": "student_press"
+          },
+          {
+            "url": "https://www.kings.cam.ac.uk/student-hub",
+            "publisher": "King's College Student Hub",
+            "date": "checked 2026-11",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.kcsu.org.uk/links",
+            "publisher": "KCSU",
+            "date": "checked 2026-11-19 (Wayback copy 2025-01-16)",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://www.kingselab.org/all-events/e-lab-annual-dinner-2025",
+            "publisher": "King's Entrepreneurship Lab",
+            "date": "2025-10-01 event",
+            "kind": "other"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
+        "visitorRoute": "as_guest",
+        "guestNote": "Guest tickets are capped by the College's 70:30 King's to non-King's ratio; members' tickets are for King's members only and CamCards are checked at entry (Varsity, Mar 2026).",
+        "priceGbp": {
+          "student": 20.0,
+          "guest": null,
+          "asOf": "about 2022-23 (SU Alternative Prospectus)",
+          "sourceUrl": "https://www.cambridgesu.co.uk/access/alternative-prospectus/colleges/kings/",
+          "note": "SU Alternative Prospectus (King's page, written by a King's student, cites 2022-23 rent): \"tickets are expensive, around £20\". Varsity (7 Mar 2026): the College subsidises the members' price; no figure given.",
+          "caveat": "around"
+        },
         "bookingDeadline": null
       }
     },
@@ -1254,6 +1649,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Drinks 19:00 in Warburton Hall."
           },
@@ -1264,6 +1660,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Drinks 19:00 in Warburton Hall."
           }
@@ -1277,7 +1674,8 @@
           "https://www.lucy.cam.ac.uk/formal-hall-faqs",
           "https://services.lucy.cam.ac.uk/"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Members book up to five guests online; gowns required for all University members including visitors from other colleges. A visitor log-in exists (password from Finance Office) but no rule says outside students may book themselves.",
         "priceGbp": {
@@ -1330,6 +1728,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Listed on the JCR page; audience on other pages is all students."
           },
@@ -1340,6 +1739,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Listed on the JCR page; audience on other pages is all students."
           },
@@ -1350,6 +1750,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "MCR students and their guests; pre-drinks from 18:45; listed on MCR events for 13, 20, 27 Nov and 4 Dec 2026."
           },
@@ -1360,6 +1761,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Listed on the JCR page; audience on other pages is all students."
           }
@@ -1374,7 +1776,8 @@
           "https://www.mcr.magd.cam.ac.uk/events",
           "https://www.magd.cam.ac.uk/sites/default/files/2025-06/code_of_practice_for_dinner_in_college_hall.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Host must come into Hall with guests. Code of Practice: up to 10 guests Mon-Wed, up to 2 Thu-Sun; MCR: two guests per student. No under-13s.",
         "priceGbp": {
@@ -1403,11 +1806,11 @@
         "visitors": "Yes: the college says students can invite friends from other colleges to its weekly formals; a Murray Edwards student books them as guests.",
         "bookingSummary": "Murray Edwards member books you as a guest online",
         "rulesSummary": "College says students may invite friends from other colleges; the 2024/25 packs cap guests at 3 (UG) or 2 (PG), and 1 at Super Hall.",
-        "formalNights": "Tuesdays and the first Friday of each month in full term (2024/25 packs)",
+        "formalNights": "Tuesdays and the first Friday of each month in full term; seated in the Dome by 19:00",
         "guests": "2024/25 packs: up to 3 guests (undergraduates) or 2 (postgraduates) at Formal Hall, 1 at Super Hall; the current facilities page says 'as many friends as you want'",
         "booking": "Online meal booking system (Raven), paid from college card; 2024/25 packs: Tuesday closes 12:00 Sunday, Friday closes 14:00 Wednesday",
         "dress": "2024/25 packs: always wear your gown; dress shoes, no trainers",
-        "price": null,
+        "price": "2023-24: £12.48 undergraduates, £14.98 guests; Super Hall £16.64 / £19.97 (UG Freshers' Pack 2024/25); postgraduates one free Formal Hall a week",
         "note": "The current **college facilities page** says the Dome hosts weekly themed formals and that students **can invite as many friends as they want from other colleges**. This describes a hosted guest route, not booking by outsiders. [College facilities](https://www.murrayedwards.cam.ac.uk/college-life/college-facilities).\n\nThe most recent detailed rules are in the **2024/25 Freshers' Packs**, still the packs linked from the college's Freshers page. Formal Hall is on **Tuesdays and the first Friday of each month in full term**. Undergraduates may book **up to three guests**, postgraduates **up to two**, and everyone **one** at Super Halls. Block bookings: undergraduates up to 12 places plus the booker, by form at least 10 days ahead; postgraduates up to 10 places including the booker. Super Halls have no group bookings. Bookings open at the start of term and close at **12:00 on Sunday for Tuesday** and **14:00 on Wednesday for Friday**. [UG pack 2024/25](https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/UG%20Freshers%27%20Pack%202024.pdf), [PG pack 2024/25](https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/PG%20Freshers%27%20Pack%202024.pdf), [Freshers page](https://www.murrayedwards.cam.ac.uk/node/27).\n\nThe packs also say: always wear a gown; dress shoes only, no trainers; tickets are collected from 18:45 by the Fellows' Dining Room with College ID; postgraduates go up to the Dome at 19:10; college rules allow half a bottle of wine per person; latecomers may be refused. Their prices are for 2023-24 and are not repeated here. Questions go to catering@murrayedwards.cam.ac.uk. [PG pack 2024/25](https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/PG%20Freshers%27%20Pack%202024.pdf). These dining sources do not restrict guests by gender.\n\n**Practical assessment:** the college explicitly welcomes friends from other colleges, but a Murray Edwards student must book you; confirm the current guest limit, since the facilities page and the 2024/25 packs differ.",
         "primarySourceUrl": "https://www.murrayedwards.cam.ac.uk/college-life/college-facilities",
         "sourceUrls": [
@@ -1421,36 +1824,95 @@
             "weekday": "tue",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:00",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "In the Dome; full term. Tuesday per the 2024/25 Freshers' Pack (still linked); no current page names the weekday, and the facilities page only says 'weekly Formals'."
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Every Tuesday in full term, in the Dome; be seated by 19:00 sharp, tickets collected from 18:30 (UG Freshers' Pack 2024/25). Postgraduates collect tickets by the Fellows' Dining Room from 18:45 and go up at 19:10 (PG pack)."
           },
           {
             "weekday": "fri",
             "kind": "formal",
-            "label": "Formal Hall (first Friday of the month)",
-            "startTime": null,
+            "label": "Formal Hall",
+            "startTime": "19:00",
             "termOnly": true,
             "audience": "all_members",
-            "confidence": "inferred",
-            "notes": "Only the first Friday of each month in full term, per the 2024/25 Freshers' Pack (no 2026/27 schedule published). Monthly, not weekly."
+            "frequency": "first_of_month",
+            "confidence": "found",
+            "notes": "The first Friday of each month in full term, same format as Tuesday (UG and PG Freshers' Packs 2024/25; college dining page)."
           }
         ],
-        "nightsStatus": "inferred",
-        "nightsQuote": "\"Formal Hall is held every Tuesday and every first Friday of the month during full term.\" (UG Freshers' Pack 2024/25) Current facilities page (18 Nov 2026) only says the Dome 'hosts weekly Formals' without weekdays, so the Tuesday pattern rests on the 2024/25 pack.",
-        "nightsGaps": ["No 2026/27 schedule published; start time not published"],
+        "nightsStatus": "found",
+        "nightsQuote": "\"Formal Hall is held every Tuesday and every first Friday of the month during full term. ... Please be seated in the Dome by 19.00 sharp.\" (UG Freshers' Pack 2024/25, linked from the college's Freshers page)",
+        "nightsGaps": [],
         "nightsConflict": null,
         "nightsSourceUrls": [
           "https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/UG%20Freshers%27%20Pack%202024.pdf",
           "https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/PG%20Freshers%27%20Pack%202024.pdf",
+          "https://www.murrayedwards.cam.ac.uk/node/27",
           "https://www.murrayedwards.cam.ac.uk/college-life/college-facilities"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/UG%20Freshers%27%20Pack%202024.pdf",
+            "publisher": "Murray Edwards College (UG Freshers' Pack 2024/25, still linked from the current Freshers page /node/27)",
+            "date": "2024-08",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/PG%20Freshers%27%20Pack%202024.pdf",
+            "publisher": "Murray Edwards College (PG Freshers' Pack 2024/25)",
+            "date": "2024-08",
+            "kind": "official"
+          },
+          {
+            "url": "https://web.archive.org/web/20240227234612/https://www.murrayedwards.cam.ac.uk/booking-formal-hall",
+            "publisher": "Murray Edwards College booking page (Wayback Machine copy; the live page now 404s)",
+            "date": "2024-02-27",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/sites/default/files/files/20%20Freshers%202023-2024%20Catering%20letter.pdf",
+            "publisher": "Murray Edwards College (Freshers 2023-24 Catering letter; removed from the live site, text seen via search index only)",
+            "date": "2023",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/college-life/college-facilities",
+            "publisher": "Murray Edwards College (College facilities page, current)",
+            "date": "2026-11 (fetched 2026-11-19)",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/college-news/colours-and-captains-dinner-2026",
+            "publisher": "Murray Edwards College news",
+            "date": "2026-05-12",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/node/152",
+            "publisher": "Murray Edwards College dining page (search-engine snippet only; returns 403 to anonymous fetches, no Wayback copy)",
+            "date": "undated, seen 2026-11-19 via web search",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.murrayedwards.cam.ac.uk/node/27",
+            "publisher": "Murray Edwards College Freshers page (current)",
+            "date": "fetched 2026-11-19",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "College facilities page: students \"can invite as many friends as you want from other colleges\"; 2024/25 packs: max 3 guests (UG), 2 (PG), 1 at Super Hall.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 12.48,
+          "guest": 14.98,
+          "asOf": "2023-24",
+          "sourceUrl": "https://www.murrayedwards.cam.ac.uk/sites/default/files/2024-08/UG%20Freshers%27%20Pack%202024.pdf",
+          "note": "UG Freshers' Pack 2024/25: 'The cost for a Formal Hall meal for the academic year 2023-2024 was £12.48 for MEC Undergraduates and £14.98 for a guest' (2024/25 to be confirmed). Super Hall £16.64 / £19.97. PG pack: postgraduates get one free Formal Hall a week."
+        },
         "bookingDeadline": "2024/25 pack: closes 12:00 Sunday for Tuesday; 14:00 Wednesday for the Friday formal."
       }
     },
@@ -1470,12 +1932,12 @@
         "visitors": "Yes, as the guest of a Newnham member who books and attends with you, or through a JCR/MCR swap agreed with Catering before term; guests cannot attend Subject Formal Halls.",
         "bookingSummary": "Newnham host books and attends; or JCR/MCR swap",
         "rulesSummary": "Host must attend. UG halls: 2 guests (3 at the termly Friday hall); PG halls: 3. Booking opens Monday 17:00 the week before.",
-        "formalNights": "Regular halls about 1-2 a week (dates on the members' portal); graduate halls every other Tuesday; dinner 19:30",
+        "formalNights": "Wednesdays in Full Term, 19:30; graduate halls every other Tuesday",
         "guests": "Undergraduate-bookable halls: up to 2 guests (3 at the once-a-term Friday hall); postgraduate halls: up to 3; host must attend",
         "booking": "Members' meal portal (login); opens Monday 17:00 the week before, closes Wednesday 22:00; charged to the College bill",
         "dress": "Gowns to be worn; guest gown rule not stated",
         "price": "Member £19.90, non-member £24.90 (undated College food-and-drink page, as shown on 7 Nov 2026)",
-        "note": "**Formal dinners are private events and a Newnham host must be present.** Under the [ticket policy, updated 5 May 2026](https://newn.cam.ac.uk/sites/default/files/2026-05/policy-re-formal-hall-tickets-speakers.pdf), an undergraduate may buy **three tickets including their own (two guests)**, or four (three guests) at the Friday hall held normally once a term. A postgraduate may buy **four tickets including their own (three guests)** for postgraduate halls, which only postgraduates may book. Bookings open at **17:00 on the Monday one week before**, and tickets are charged to the College bill. Arrive in Hall by **19:15** to check in; gowns are worn; each person may bring half a bottle of wine, with no corkage. Matriculation Feast, Half-Way Hall and Subject Formal Halls are by named invitation and cannot be passed on, sold or swapped. JCR or MCR swaps are allowed when organised through the committee and agreed with the Catering Operations Manager (catman@newn.cam.ac.uk) before the start of term, usually for up to 15-20 (JCR) or 30 (MCR) places.\n\nThe College's [food and drink page](https://newn.cam.ac.uk/study-here/life-newnham/societies-and-facilities/food-and-drink) (undated) says bookings close at **22:00 on the Wednesday of the week before**, dinner starts at 19:30, every guest must be accompanied by their host, and lists **£19.90 member / £24.90 non-member**. The [student eating page](https://newn.cam.ac.uk/student-hub/living-college/eating-drinking-and-events) adds that doors close at 19:30, guests cannot enter late or without their host, groups wanting to sit together should arrive by 19:00, drinking games are banned, and guests cannot attend Subject Formal Halls. The [MCR page](https://newnhammcr.soc.srcf.net/formal-hall.html) says regular formals are typically held once or twice a week, graduate formals every other Tuesday, and that students from other subjects may sign up for a subject hall with guests if space allows; this conflicts with the College page, so follow the College rule. Booking is through the members-only [meal portal](https://foodanddrink.newn.cam.ac.uk/).\n\n**Practical assessment:** you need a Newnham member to book you and attend, or a place on a JCR/MCR swap; caps are two or three guests per host and booking closes the week before the hall.",
+        "note": "Formal Hall is on **Wednesdays** in Full Term and Postgraduate Formal Hall on **Tuesdays**, every other week, per the College’s [alumnae dining page](https://newn.cam.ac.uk/alumnae/benefits-and-groups/alumnae-benefits) for 2026/27. **Formal dinners are private events and a Newnham host must be present.** Under the [ticket policy, updated 5 May 2026](https://newn.cam.ac.uk/sites/default/files/2026-05/policy-re-formal-hall-tickets-speakers.pdf), an undergraduate may buy **three tickets including their own (two guests)**, or four (three guests) at the Friday hall held normally once a term. A postgraduate may buy **four tickets including their own (three guests)** for postgraduate halls, which only postgraduates may book. Bookings open at **17:00 on the Monday one week before**, and tickets are charged to the College bill. Arrive in Hall by **19:15** to check in; gowns are worn; each person may bring half a bottle of wine, with no corkage. Matriculation Feast, Half-Way Hall and Subject Formal Halls are by named invitation and cannot be passed on, sold or swapped. JCR or MCR swaps are allowed when organised through the committee and agreed with the Catering Operations Manager (catman@newn.cam.ac.uk) before the start of term, usually for up to 15-20 (JCR) or 30 (MCR) places.\n\nThe College's [food and drink page](https://newn.cam.ac.uk/study-here/life-newnham/societies-and-facilities/food-and-drink) (undated) says bookings close at **22:00 on the Wednesday of the week before**, dinner starts at 19:30, every guest must be accompanied by their host, and lists **£19.90 member / £24.90 non-member**. The [student eating page](https://newn.cam.ac.uk/student-hub/living-college/eating-drinking-and-events) adds that doors close at 19:30, guests cannot enter late or without their host, groups wanting to sit together should arrive by 19:00, drinking games are banned, and guests cannot attend Subject Formal Halls. The [MCR page](https://newnhammcr.soc.srcf.net/formal-hall.html) says regular formals are typically held once or twice a week, graduate formals every other Tuesday, and that students from other subjects may sign up for a subject hall with guests if space allows; this conflicts with the College page, so follow the College rule. Booking is through the members-only [meal portal](https://foodanddrink.newn.cam.ac.uk/).\n\n**Practical assessment:** you need a Newnham member to book you and attend, or a place on a JCR/MCR swap; caps are two or three guests per host and booking closes the week before the hall.",
         "primarySourceUrl": "https://newn.cam.ac.uk/sites/default/files/2026-05/policy-re-formal-hall-tickets-speakers.pdf",
         "sourceUrls": [
           "https://newn.cam.ac.uk/sites/default/files/2026-05/policy-re-formal-hall-tickets-speakers.pdf",
@@ -1488,26 +1950,75 @@
             "weekday": "tue",
             "kind": "grad_formal",
             "label": "Graduate Formal",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
-            "confidence": "inferred",
-            "notes": "Every other Tuesday, alternating with Grad Supper (MCR page)."
+            "frequency": "fortnightly",
+            "confidence": "found",
+            "notes": "Postgraduate Formal Hall every other Tuesday in Full Term, alternating with Grad Supper (MCR page; alumnae page 2026/27: 'Postgraduate Formal Halls on Tuesdays'). Dinner 19:30 (College food and drink page)."
+          },
+          {
+            "weekday": "wed",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Alumnae dining page 2026/27: 'Formal Halls take place on Wednesdays'; Michaelmas 2026 halls on 21 Oct, 28 Oct, 4 Nov and 18 Nov. Dinner 19:30 (College food and drink page). Subject Formal Halls (Tuesdays, occasionally Thursdays) are by invitation and guests cannot attend, so they are not listed."
           }
         ],
-        "nightsStatus": "unknown",
-        "nightsQuote": "MCR: regular Formal Halls are \"typically held 1-2 times a week\"; graduate formals \"happening every 2 weeks on Tuesday (alternating with Grad Supper)\". College: \"Dinner starts at 7.30pm\"; Friday Formal Hall \"held once a term\".",
-        "nightsGaps": [
-          "Weekdays of regular halls not public (dates on member portal); all halls start 19:30 per College page"
-        ],
-        "nightsConflict": null,
+        "nightsStatus": "found",
+        "nightsQuote": "\"Formal Halls take place on Wednesdays, and Postgraduate Formal Halls on Tuesdays, during Full Term.\" (College alumnae dining page, 2026/27); graduate formals \"happening every 2 weeks on Tuesday (alternating with Grad Supper)\" (MCR); \"Dinner starts at 7.30pm\" (College food and drink page)",
+        "nightsGaps": [],
+        "nightsConflict": "The older 2024-25 Roll dining page put regular Formal Halls on Thursdays; the 2026/27 alumnae page and its Michaelmas 2026 dates put them on Wednesdays.",
         "nightsSourceUrls": [
+          "https://newn.cam.ac.uk/alumnae/benefits-and-groups/alumnae-benefits",
           "https://newn.cam.ac.uk/study-here/life-newnham/societies-and-facilities/food-and-drink",
           "https://newnhammcr.soc.srcf.net/formal-hall.html",
           "https://newn.cam.ac.uk/sites/default/files/2026-05/policy-re-formal-hall-tickets-speakers.pdf",
           "https://newn.cam.ac.uk/student-hub/living-college/eating-drinking-and-events"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://newn.cam.ac.uk/alumnae/benefits-and-groups/alumnae-benefits",
+            "publisher": "Newnham College (Alumnae dining privileges page)",
+            "date": "2026-27 (shows 'Costs for 2026/2027' and 'MICHAELMAS TERM 2026'; fetched 2026-11-19)",
+            "kind": "official"
+          },
+          {
+            "url": "https://newnhammcr.soc.srcf.net/formal-hall.html",
+            "publisher": "Newnham MCR",
+            "date": "undated (fetched 2026-11-19)",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://newnhammcr.soc.srcf.net/assets/MCRFreshersHandbook_2024_2025.pdf",
+            "publisher": "Newnham MCR Freshers Handbook 2024-25",
+            "date": "2024-25",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://newn.cam.ac.uk/privileges-dining",
+            "publisher": "Newnham College (Roll privileges and dining page, older)",
+            "date": "2024-25 (costs and dates headed 2024/2025)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://newn.cam.ac.uk/study-here/life-newnham/societies-and-facilities/food-and-drink",
+            "publisher": "Newnham College (Food and drink page)",
+            "date": "undated",
+            "kind": "official"
+          },
+          {
+            "url": "https://newn.cam.ac.uk/student-hub/living-college/eating-drinking-and-events",
+            "publisher": "Newnham College Student Hub (Eating, drinking and events)",
+            "date": "undated (fetched 2026-11-19)",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"College members may bring up to two guests\" (three at the once-a-term Friday hall; postgraduates three at PG halls); host must accompany; no guests at Subject Formal Halls. JCR/MCR swaps by prior agreement with Catering.",
         "priceGbp": {
@@ -1560,6 +2071,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually' (may vary year to year). Monday is the only night for groups of ten or more."
           },
@@ -1570,6 +2082,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually' (may vary year to year)."
           },
@@ -1580,6 +2093,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually' (may vary year to year)."
           },
@@ -1587,11 +2101,12 @@
             "weekday": "fri",
             "kind": "grad_formal",
             "label": "BA Dinner",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Graduate-only; usually Old Library; prosecco pre-drinks 19:00 in the GP."
+            "notes": "Graduate-only; usually Old Library; prosecco pre-drinks 19:00 in the GP (2026 welcome document). Dinner served at 19:30: the GP Freshers' Week list for Michaelmas 2023 gives the Friday BA Formal in the Old Library as 7pm-9pm, 'Dinner served at 7:30pm'."
           },
           {
             "weekday": "sun",
@@ -1600,6 +2115,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "'Usually' (may vary year to year)."
           }
@@ -1611,9 +2127,18 @@
         "nightsSourceUrls": [
           "https://www.pem.cam.ac.uk/sites/default/files/downloads/grad_welcome_document_2026.docx.pdf",
           "https://www.pem.cam.ac.uk/current-students/finance-information/student-prices",
-          "https://www.pem.cam.ac.uk/college/catering/information-students/formal-hall-procedure"
+          "https://www.pem.cam.ac.uk/college/catering/information-students/formal-hall-procedure",
+          "https://www.pem.cam.ac.uk/sites/default/files/downloads/freshers_week_list_view_mt2023.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.pem.cam.ac.uk/sites/default/files/downloads/freshers_week_list_view_mt2023.pdf",
+            "publisher": "Pembroke Graduate Parlour, Freshers' Week list view, Michaelmas 2023 (PDF on the College site)",
+            "date": "Michaelmas 2023 (Friday 13 Oct 2023 BA Formal)",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Per-host cap not published; bookings with more than three guests go through Catering (formal@pem.cam.ac.uk); groups of ten+ need permission, Monday only, Pembroke stewards.",
         "priceGbp": {
@@ -1642,12 +2167,12 @@
         "visitors": "Yes, as the guest of a Peterhouse member who books on Upay and attends the whole dinner; guests whose host does not attend are refused without refund.",
         "bookingSummary": "Peterhouse host books in Upay and must attend",
         "rulesSummary": "2026/27: max 2 guests per member; host must admit guests and stay for dinner; booking closes 11:00 the day before.",
-        "formalNights": "19:30 in Full Term; bookable dates listed on Upay",
+        "formalNights": "Every night in Full Term at 19:30, Fridays only some weeks (Super-Halls take their place); dates on Upay",
         "guests": "Up to 2 guest tickets per Junior Member (2026/27 handbooks)",
         "booking": "Upay; opens one week ahead, closes 11:00 the previous day; no changes or refunds after it closes",
         "dress": "Junior Members must wear gowns at Formal Hall and Super-Hall; guest gown rule not stated",
         "price": "2026/27: £9.75 member; £16.45 per guest including VAT (2026/27 student handbooks)",
-        "note": "The **2026/27** [Undergraduate](https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf) and [Postgraduate](https://www.pet.cam.ac.uk/sites/default/files/2026-10/PG%20handbook%202026_Final.pdf) Student Handbooks (linked from the [handbooks page](https://www.pet.cam.ac.uk/student-handbooks-college-regulations-and-procedures)) give the current rules. Formal Hall is at **19:30 in Full Term**, with bookable dates on Upay. It costs **£9.75**; bookings open **one week ahead** and close at **11:00 the day before**, after which they cannot be changed, cancelled or refunded. Junior Members must wear a gown to Formal Hall and Super-Hall.\n\nA Junior Member may buy **up to two guest tickets** per Formal Hall, at **£16.45 per guest including VAT**. The host must be present to admit their guests and stay for the whole dinner; if the member who booked does not attend, the guests are not admitted and no refund is given. Wine may be bought at the College Bar or brought in with £2.00 corkage per standard 75cl bottle; larger bottles, beer, spirits, liqueurs and port are not allowed. Super-Halls and themed dinners are booked on Upay with their own guest limits, prices and earlier closing times. The College's [Upay booking page](https://www.pet.cam.ac.uk/booking-function-tickets-upay) says to show your University card at check-in; the undergraduate [living page](https://www.pet.cam.ac.uk/living-undergraduates) describes Formal Hall as a chance to invite guests from other colleges. The older [Formal Hall page](https://www.pet.cam.ac.uk/formal-hall-and-events) (undated, with Easter 2022 menus, six-guest limit and £7.20 price) is out of date; use the handbooks. Guest gown rules are not stated.\n\n**Practical assessment:** a Peterhouse member must book you on Upay by 11:00 the day before and sit through dinner with you; each member can bring at most two guests.",
+        "note": "The **2026/27** [Undergraduate](https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf) and [Postgraduate](https://www.pet.cam.ac.uk/sites/default/files/2026-10/PG%20handbook%202026_Final.pdf) Student Handbooks (linked from the [handbooks page](https://www.pet.cam.ac.uk/student-handbooks-college-regulations-and-procedures)) give the current rules. Formal Hall is at **19:30 in Full Term**, with bookable dates on Upay. The college’s Michaelmas 2026 formal menu, published by the student site [PETMENU](https://petmenu.soc.srcf.net/), lists Formal Hall on **every night of the week**; Fridays only some weeks, when no Super-Hall or themed dinner takes their place. It costs **£9.75**; bookings open **one week ahead** and close at **11:00 the day before**, after which they cannot be changed, cancelled or refunded. Junior Members must wear a gown to Formal Hall and Super-Hall.\n\nA Junior Member may buy **up to two guest tickets** per Formal Hall, at **£16.45 per guest including VAT**. The host must be present to admit their guests and stay for the whole dinner; if the member who booked does not attend, the guests are not admitted and no refund is given. Wine may be bought at the College Bar or brought in with £2.00 corkage per standard 75cl bottle; larger bottles, beer, spirits, liqueurs and port are not allowed. Super-Halls and themed dinners are booked on Upay with their own guest limits, prices and earlier closing times. The College's [Upay booking page](https://www.pet.cam.ac.uk/booking-function-tickets-upay) says to show your University card at check-in; the undergraduate [living page](https://www.pet.cam.ac.uk/living-undergraduates) describes Formal Hall as a chance to invite guests from other colleges. The older [Formal Hall page](https://www.pet.cam.ac.uk/formal-hall-and-events) (undated, with Easter 2022 menus, six-guest limit and £7.20 price) is out of date; use the handbooks. Guest gown rules are not stated.\n\n**Practical assessment:** a Peterhouse member must book you on Upay by 11:00 the day before and sit through dinner with you; each member can bring at most two guests.",
         "primarySourceUrl": "https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf",
         "sourceUrls": [
           "https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf",
@@ -1656,17 +2181,153 @@
           "https://www.pet.cam.ac.uk/booking-function-tickets-upay",
           "https://www.pet.cam.ac.uk/living-undergraduates"
         ],
-        "nights": [],
-        "nightsStatus": "unknown",
-        "nightsQuote": "\"Formal Hall takes place at 7.30pm in Full Term\"; \"Bookable dates for Formal Hall during Full Term can be found on Upay.\"",
-        "nightsGaps": ["Weekdays not public (Upay only); start time 19:30 known"],
-        "nightsConflict": "Older College page https://www.pet.cam.ac.uk/living-0 says Peterhouse offers 'a more formal dinner every evening' at about £6.50; that page is stale (2026 UG handbook gives £9.75 and says dates are on Upay). Not used for nights[].",
+        "nights": [
+          {
+            "weekday": "mon",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Formal Hall menu published for every Monday of Michaelmas 2026 except 9 Nov (PETMENU, from college menu PDF formal_m2026.pdf)."
+          },
+          {
+            "weekday": "tue",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Menu for every Tuesday 13 Oct-24 Nov 2026 (not 1 Dec, end of term)."
+          },
+          {
+            "weekday": "wed",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Menu for every Wednesday 7 Oct-2 Dec 2026."
+          },
+          {
+            "weekday": "thu",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Menu for every Thursday except 29 Oct 2026; 8 Oct was the Freshers Formal Hall."
+          },
+          {
+            "weekday": "fri",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "some_weeks",
+            "confidence": "found",
+            "notes": "Standard Formal Hall on some Fridays only: 16 Oct and 13 Nov in Michaelmas 2026 (2 of 8), 4 in Easter 2025. On other Fridays Super-Halls or themed dinners take its place, as the 2026/27 handbook says they do, and the servery serves dinner."
+          },
+          {
+            "weekday": "sat",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Menu for every Saturday 17 Oct-21 Nov 2026 (not 10 Oct or 28 Nov)."
+          },
+          {
+            "weekday": "sun",
+            "kind": "formal",
+            "label": "Formal Hall",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "all_members",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "Menu for every Sunday 11 Oct-29 Nov 2026. The MCR guide says Sunday formal is usually a roast and popular with graduates."
+          }
+        ],
+        "nightsStatus": "found",
+        "nightsQuote": "\"Formal Hall takes place at 7.30pm in Full Term\" (UG handbook 2026/27); the college's Michaelmas 2026 formal menu (formal_m2026.pdf, via PETMENU) lists 46 Formal Halls from 7 Oct to 2 Dec on every weekday, Fridays only on 16 Oct and 13 Nov; \"Formal Hall is ordinarily available every evening during Full Term\" (college Formal Hall page)",
+        "nightsGaps": [],
+        "nightsConflict": null,
         "nightsSourceUrls": [
+          "https://petmenu.soc.srcf.net/formal.json",
           "https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf",
-          "https://www.pet.cam.ac.uk/sites/default/files/2026-10/PG%20handbook%202026_Final.pdf",
+          "https://www.peterhousemcr.co.uk/s/The-New-Petrean-2023-24.pdf",
+          "https://www.pet.cam.ac.uk/formal-hall-and-events",
           "https://www.pet.cam.ac.uk/booking-function-tickets-upay"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://petmenu.soc.srcf.net/formal.json",
+            "publisher": "PETMENU (unofficial Peterhouse student menu site, SRCF; mirror petmenu.co.uk)",
+            "date": "2026-10-01 (Last-Modified); term_name Michaelmas 2026",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://web.archive.org/web/20251111114840id_/https://petmenu.co.uk/formal.json",
+            "publisher": "PETMENU via Wayback Machine (college Word file authored by peter.larman)",
+            "date": "Easter 2025 (captured 2025-11-11)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.peterhousemcr.co.uk/s/The-New-Petrean-2023-24.pdf",
+            "publisher": "Peterhouse MCR, The New Petrean 2023-24 freshers' guide",
+            "date": "2023",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://www.pet.cam.ac.uk/formal-hall-and-events",
+            "publisher": "Peterhouse (older official page)",
+            "date": "undated (Easter 2022 menus)",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.pet.cam.ac.uk/sites/default/files/2026-10/UG%20handbook%202026_Final.pdf",
+            "publisher": "Peterhouse Undergraduate Student Handbook 2026/27",
+            "date": "2026-10",
+            "kind": "official"
+          },
+          {
+            "url": "https://petmenu.soc.srcf.net/servery.json",
+            "publisher": "PETMENU (servery/self-service menus)",
+            "date": "2026-10-01 (Last-Modified), Michaelmas 2026",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://web.archive.org/web/20240512113509id_/https://petmenu.co.uk/formal.json",
+            "publisher": "PETMENU via Wayback (college Word file by peter.larman)",
+            "date": "Easter 2024 (captured 2024-05-12)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://web.archive.org/web/20240306122548id_/https://petmenu.soc.srcf.net/formal.json",
+            "publisher": "PETMENU via Wayback",
+            "date": "Lent 2024 (captured 2024-03-06)",
+            "kind": "archive"
+          },
+          {
+            "url": "https://www.peterhousemcr.co.uk/term-card?format=json",
+            "publisher": "Peterhouse MCR term card (Squarespace events)",
+            "date": "Lent 2024 events",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"Junior Members may purchase a maximum of two guest tickets for a single Formal Hall\"; host must be present for the whole dinner or guests are refused without refund.",
         "priceGbp": {
@@ -1699,7 +2360,7 @@
         "guests": "Up to 5 guests per member (6 tickets including the member)",
         "booking": "Upay; closes 14:00 two days before; the printed confirmation page is the ticket",
         "dress": "Gowns must be worn by all members of College; guest gown rule not stated",
-        "price": null,
+        "price": "£12.95 for formal hall (QJCR costs page, 2025-26); no guest price published",
         "note": "**Guests from other colleges are explicitly welcome.** Formal Hall is at **19:30 on Wednesday and Sunday** in Cripps Dining Hall. A Queens’ member books through Upay: **up to six tickets, one for themselves and five for guests**, paid at booking. Bookings close at **14:00 two days before** the event. The printed confirmation page acts as the ticket. Formal Hall is limited to 150 places; for more guests or a group booking, contact the Catering Management Team (catering@queens.cam.ac.uk). External group bookings are currently not permitted. Nothing is said about outside students booking on their own.\n\nGuests under 18 are not permitted. Enter Hall by 19:30; latecomers and their guests are refused entry and tickets are not refunded. Gowns must be worn by all members of College; no guest gown rule is stated. Tutorial policy allows at most half a bottle of wine per person, with no spirits or fortified wine, and drinking games are banned. Refund requests go first to the JCR/MCR Steward. No price is published on the page; check it in Upay. [Formal Hall rules and booking](https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/).\n\n**Practical assessment:** find a Queens’ member to book you by 14:00 two days before; the five-guest allowance is generous, but organised outside groups are not currently accepted.",
         "primarySourceUrl": "https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/",
         "sourceUrls": ["https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/"],
@@ -1711,8 +2372,9 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "In Cripps Dining Hall; term-only not stated."
+            "notes": "In Cripps Dining Hall; enter by 19:30. Listed on the current Formal Hall menu for w/c 16 Nov 2026."
           },
           {
             "weekday": "sun",
@@ -1721,19 +2383,49 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "In Cripps Dining Hall; term-only not stated."
+            "notes": "In Cripps Dining Hall; enter by 19:30. Listed on the current Formal Hall menu for w/c 16 Nov 2026."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"Formal Hall takes place at 7.30pm on Wednesday and Sunday evenings.\"",
+        "nightsQuote": "\"Formal Hall takes place at 7.30pm on Wednesday and Sunday evenings.\" Formal Hall menu, w/c 16 November 2026: \"Wednesday's Formal Hall Dinner ... Sunday's Formal Hall Dinner\"",
         "nightsGaps": [],
-        "nightsConflict": null,
-        "nightsSourceUrls": ["https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/"],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsConflict": "The undated QMCR page (www.qmcr.org/events-2, 2023/24 or later) says JCR Formal Halls are on \"Wednesdays, Fridays, and Sundays\", and grub.cam lists Old Hall \"Fri · 19:30\" with no source; the College's current page and this week's menu list only Wednesday and Sunday. MCR graduate dinners (alternating Thursdays or Fridays), Guest Nights and termly Feasts are MCR events, not a weekly formal.",
+        "nightsSourceUrls": [
+          "https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/",
+          "https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/formal-hall-menu"
+        ],
+        "nightsSources": [
+          {
+            "url": "https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/",
+            "publisher": "Queens' College, Catering: Formal Hall",
+            "date": "current (checked 2026-11-19)",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.queens.cam.ac.uk/life-at-queens/catering/formal-hall/formal-hall-menu",
+            "publisher": "Queens' College, Formal Hall Menu",
+            "date": "Week commencing 16 November 2026",
+            "kind": "official"
+          },
+          {
+            "url": "https://qjcr.org.uk/content/Queens%27-Alternative-Prospectus-2025-1.pdf",
+            "publisher": "Queens' JCR, Alternative Prospectus 2025",
+            "date": "2025",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"a maximum of 6 tickets, 1 for yourself and for five guests\"; intended for entertaining guests \"both private and guests from other colleges\"; under-18s not permitted; external group bookings not permitted.",
-        "priceGbp": null,
+        "priceGbp": {
+          "student": 12.95,
+          "guest": null,
+          "asOf": "2025-26 (QJCR costs page)",
+          "sourceUrl": "https://qjcr.org.uk/resources/costs/",
+          "note": "QJCR Key College Expenditure page (with 2025-26 accommodation figures; same text in the QJCR cost-of-living sheet, Aug 2025): '£12.95 for formal hall'. No guest price published."
+        },
         "bookingDeadline": "\"The system will not accept bookings after 2.00pm, two days before the event.\""
       }
     },
@@ -1753,7 +2445,7 @@
         "visitors": "Yes, as a named guest (with your college) of a Robinson member, or in a group booking arranged with Catering, normally on a Tuesday.",
         "bookingSummary": "Robinson host books online; groups via Catering",
         "rulesSummary": "Up to 3 guests per member; Tuesday groups up to 36 with no member ratio; Friday groups up to 18 at 3 guests per member.",
-        "formalNights": "Tue and Fri in Full Term; doors open 19:20",
+        "formalNights": "Tue and Fri in Full Term at 19:30; doors open 19:20",
         "guests": "Up to 3 guests per member without further permission; more through a group booking",
         "booking": "Meal Booking Website (login); opens about six days ahead, closes 17:00 the day before; guests' full names and colleges required",
         "dress": "Smart casual; Robinson members must wear gowns",
@@ -1770,21 +2462,23 @@
             "weekday": "tue",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Doors open 19:20. Club/society night: groups up to 36, no member-to-guest ratio. Doors open 19:20 (booking-procedure page); dinner start time not stated."
+            "notes": "Doors open 19:20. Club/society night: groups up to 36, no member-to-guest ratio. Doors open 19:20 (booking-procedure page); 'Formal Hall is held on both Tuesday and Friday evenings at 7.30pm during Full Term' (Info for Bye Fellows 2023)."
           },
           {
             "weekday": "fri",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Doors open 19:20. Groups up to 18 with 3 guests per member. Doors open 19:20 (booking-procedure page); dinner start time not stated."
+            "notes": "Doors open 19:20. Groups up to 18 with 3 guests per member. Doors open 19:20 (booking-procedure page); 'Formal Hall is held on both Tuesday and Friday evenings at 7.30pm during Full Term' (Info for Bye Fellows 2023)."
           }
         ],
         "nightsStatus": "found",
@@ -1793,9 +2487,18 @@
         "nightsConflict": null,
         "nightsSourceUrls": [
           "https://www.robinson.cam.ac.uk/college-life/formal-halls",
-          "https://www.robinson.cam.ac.uk/college-life/formal-halls/booking-procedure"
+          "https://www.robinson.cam.ac.uk/college-life/formal-halls/booking-procedure",
+          "https://www.robinson.cam.ac.uk/sites/default/files/assets/prospective-students/Info%20for%20Bye%20Fellows%202023.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.robinson.cam.ac.uk/sites/default/files/assets/prospective-students/Info%20for%20Bye%20Fellows%202023.pdf",
+            "publisher": "Robinson College, Info for Bye Fellows 2023 (PDF)",
+            "date": "2023",
+            "kind": "official"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Member books self plus up to three guests (full names and college required); Tuesday group bookings via Catering at least 14 days ahead.",
         "priceGbp": {
@@ -1845,6 +2548,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Doors close promptly at 19:30."
           },
@@ -1855,6 +2559,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Doors close promptly at 19:30."
           }
@@ -1868,7 +2573,8 @@
           "https://www.sel.cam.ac.uk/ughandbook/finance/summary-undergraduate-fees-charges",
           "https://www.sel.cam.ac.uk/pghandbook/finance/summary-postgraduate-fees-charges"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"Students may book tickets online for up to two guests\"; Deans may allow two more personally known to host; guests over 16; not for large groups/societies.",
         "priceGbp": {
@@ -1919,6 +2625,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -1929,6 +2636,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           },
@@ -1939,6 +2647,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": null
           }
@@ -1952,7 +2661,8 @@
           "https://www.sscsu.org.uk/hall",
           "https://www.sid.cam.ac.uk/sites/default/files/G11_College%20Hall20241120.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Regulation G11: up to three adult (18+) guests who are not College members; guests from other colleges may wear gowns.",
         "priceGbp": {
@@ -2001,6 +2711,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "jcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Seated by 19:30."
           },
@@ -2011,6 +2722,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "In Hall, or the SCR once a month (one guest only). Pre-drinks 18:45."
           },
@@ -2021,6 +2733,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Shared JCR/MCR."
           }
@@ -2034,7 +2747,8 @@
           "https://mcr.caths.cam.ac.uk/hallinfo",
           "https://www.caths.cam.ac.uk/students/college-facilities-and-forms/catering-for-our-community/formal-hall-code-behaviour"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Only members and their named guests; member enters Hall with guests. MCR: up to three guests for a normal Hall formal, one in the SCR. Super Hall on a Friday twice a term (not weekly).",
         "priceGbp": null,
@@ -2057,12 +2771,12 @@
         "visitors": "The booking system works only for current St Edmund’s members, so a student from another college can attend only as a guest booked by, and dining with, a member.",
         "bookingSummary": "Member books guests on members-only Dinner Booking System",
         "rulesSummary": "Guest numbers set per event in the DBS. 2025/26 rules: host must dine with guests, no resale, no late cancellation. Fellowship Dinners invite-only.",
-        "formalNights": "Most Tuesdays and Fridays in term (start time not published)",
+        "formalNights": "Most Tuesdays (Formal Hall) and Fridays (College Guest Night) in term; drinks 19:00, dinner about 19:30",
         "guests": "As indicated in the Dinner Booking System for each dinner (2025/26 Notes for Members); no fixed cap published",
         "booking": "Member books on the Dinner Booking System (current members only), entering guests' names; cancel before the list closes or pay in full (2025/26 rules)",
         "dress": "Business attire with academic gown for most weekday formals; 2025/26 Notes: formal dress and gowns at Formal Hall",
         "price": null,
-        "note": "The College holds optional Formal Halls **twice a week, on most Tuesdays and Fridays**. For most weekday dinners the dress code is business attire with an academic gown. [College dining page](https://www.st-edmunds.cam.ac.uk/college-life/dining/) Bookings go through the [Dinner Booking System](https://my.st-edmunds.cam.ac.uk/dinner-booking-system/), and the College says the link **only works for current members of St Edmund’s**. [Part-time study page](https://www.st-edmunds.cam.ac.uk/part-time-study-at-st-edmunds/)\n\nThe latest public rules are in the **2025/26** Notes for Members; the College's Notes page now needs a login, so no 2026/27 version could be checked. Under the 2025/26 rules, members enter their own and their guests' names on the system. Guests must be **accompanied at the meal by the member who booked them**, resale of places is not permitted, and children under 16 are not admitted. Members may normally invite guests **as indicated in the DBS**; no fixed number is published. Formal Hall is a three-course meal including wine; members must not bring wine into the Dining Hall. Phones and laptops must be put away, and photography is not permitted. Cancellations go through the DBS until the list closes. After that the full charge applies unless the Fellows' Stewards reallocate the place to the standby list, and private arrangements between individuals are not allowed. Prices are set each Easter Term for the following year but are not published. **Fellowship Dinners** are open to Fellows by invitation only. Admissions and Matriculation Dinners are only for new members, Fellows and the CR Executive. [Notes for Members 2025/26, §7](https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/Notes-for-Members-2025-26-v1.2.pdf)\n\n**Practical assessment:** A visitor needs a current St Edmund’s member to book them through the DBS and dine with them. Check the guest allowance and closing time shown for that dinner. The detailed rules come from the 2025/26 Notes and may have changed.",
+        "note": "The College holds optional Formal Halls **twice a week, on most Tuesdays and Fridays** in term: Tuesday is **Formal Hall** (three courses with wine) and Friday is **College Guest Night** (four courses, adding cheese and port). Both begin with drinks in the Garden Room at **19:00**, and diners go into Hall at about **19:30**. For most weekday dinners the dress code is business attire with an academic gown. [College dining page](https://www.st-edmunds.cam.ac.uk/college-life/dining/) Bookings go through the [Dinner Booking System](https://my.st-edmunds.cam.ac.uk/dinner-booking-system/), and the College says the link **only works for current members of St Edmund’s**. [Part-time study page](https://www.st-edmunds.cam.ac.uk/part-time-study-at-st-edmunds/)\n\nThe latest public rules are in the **2025/26** Notes for Members; the College's Notes page now needs a login, so no 2026/27 version could be checked. Under the 2025/26 rules, members enter their own and their guests' names on the system. Guests must be **accompanied at the meal by the member who booked them**, resale of places is not permitted, and children under 16 are not admitted. Members may normally invite guests **as indicated in the DBS**; no fixed number is published. Formal Hall is a three-course meal including wine; members must not bring wine into the Dining Hall. Phones and laptops must be put away, and photography is not permitted. Cancellations go through the DBS until the list closes. After that the full charge applies unless the Fellows' Stewards reallocate the place to the standby list, and private arrangements between individuals are not allowed. Prices are set each Easter Term for the following year but are not published. **Fellowship Dinners** are open to Fellows by invitation only. Admissions and Matriculation Dinners are only for new members, Fellows and the CR Executive. [Notes for Members 2025/26, §7](https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/Notes-for-Members-2025-26-v1.2.pdf)\n\n**Practical assessment:** A visitor needs a current St Edmund’s member to book them through the DBS and dine with them. Check the guest allowance and closing time shown for that dinner. The detailed rules come from the 2025/26 Notes and may have changed.",
         "primarySourceUrl": "https://www.st-edmunds.cam.ac.uk/college-life/dining/",
         "sourceUrls": [
           "https://www.st-edmunds.cam.ac.uk/college-life/dining/",
@@ -2074,32 +2788,81 @@
             "weekday": "tue",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "'Most' Tuesdays/Fridays; start time not published."
+            "notes": "Three-course meal including wine, held on most Tuesdays in term. Pre-dinner drinks in the Garden Room at 19:00, then into Hall behind the Master or presiding Fellow when the bell sounds, about 19:30. Members book in advance on the members-only Dinner Booking System. Visitors come only as guests of a member, who books them and dines with them, within the guest allowance shown for that dinner. Formal dress (jacket and tie or lounge suit) and academic gowns."
           },
           {
             "weekday": "fri",
             "kind": "formal",
-            "label": "Formal Hall",
-            "startTime": null,
+            "label": "College Guest Night",
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "'Most' Tuesdays/Fridays; start time not published."
+            "notes": "Four-course meal including wine: the Formal Hall menu plus a cheese-and-port course. Held on most Fridays in term. Drinks reception in the Garden Room at 19:00, dinner at about 19:30. Members book on the Dinner Booking System, and guests are allowed as the system shows for each dinner. The college says inviting Senior Members of the University is particularly appropriate, and guests who are University members should wear gowns. Formal dress and gowns. Some Guest Nights are alumni Guest Nights (for example 11 Dec 2026)."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"The College holds optional Formal Halls twice a week, on most Tuesdays and Fridays\"",
+        "nightsQuote": "\"The College holds optional Formal Halls twice a week, on most Tuesdays and Fridays\"; 2025/26 Financial Information: \"Formal Halls (Tuesdays), Guest Nights (Fridays)\"; Dinner Booking System: \"diners should congregate in the Garden Room at 19:00hrs for pre-dinner drinks\"",
         "nightsGaps": [],
-        "nightsConflict": "Page does not say 'term'; 2025/26 Notes frame these as term-time.",
+        "nightsConflict": null,
         "nightsSourceUrls": [
           "https://www.st-edmunds.cam.ac.uk/college-life/dining/",
-          "https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/Notes-for-Members-2025-26-v1.2.pdf"
+          "https://my.st-edmunds.cam.ac.uk/wp-content/uploads/2023/04/2025_2026.pdf",
+          "https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/Notes-for-Members-2025-26-v1.2.pdf",
+          "https://www.st-edmunds.cam.ac.uk/?p=8689",
+          "https://civi.st-edmunds.cam.ac.uk/civicrm/event/list"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.st-edmunds.cam.ac.uk/college-life/dining/",
+            "publisher": "St Edmund's College, dining page",
+            "date": "undated (current, fetched 2026-11-19)",
+            "kind": "official"
+          },
+          {
+            "url": "https://my.st-edmunds.cam.ac.uk/wp-content/uploads/2023/04/2025_2026.pdf",
+            "publisher": "St Edmund's College, Financial Information for Students 2025/2026",
+            "date": "2025-09",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.st-edmunds.cam.ac.uk/wp-content/uploads/2025/11/Notes-for-Members-2025-26-v1.2.pdf",
+            "publisher": "St Edmund's College, Notes for Members 2025/26, ss.7.7-7.8",
+            "date": "2025-11",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.st-edmunds.cam.ac.uk/?p=8689",
+            "publisher": "St Edmund's College, alumni Guest Night event",
+            "date": "2026-03-20",
+            "kind": "official"
+          },
+          {
+            "url": "https://civi.st-edmunds.cam.ac.uk/civicrm/event/list",
+            "publisher": "St Edmund's College, events list (College Guest Night with Alumni)",
+            "date": "2026-12-11",
+            "kind": "official"
+          },
+          {
+            "url": "https://my.st-edmunds.cam.ac.uk/?p=6475",
+            "publisher": "St Edmund's College, Dinner Booking System page (members-only; search snippet only)",
+            "date": "undated",
+            "kind": "other"
+          },
+          {
+            "url": "https://my-cr.st-edmunds.cam.ac.uk/?p=18",
+            "publisher": "St Edmund's Combination Room, Meals in Hall",
+            "date": "undated",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "Dinner Booking System works only for current members; guests must dine with the booking member; allowance 'as indicated in the DBS' (2025/26 Notes).",
         "priceGbp": null,
@@ -2142,6 +2905,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "SBR (postgraduate) informal guide 2026."
           },
@@ -2152,6 +2916,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Postgraduate table in Hall; separate Upay ticket; often sells out."
           },
@@ -2162,6 +2927,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "SBR (postgraduate) informal guide 2026."
           },
@@ -2172,6 +2938,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "SBR (postgraduate) informal guide 2026."
           },
@@ -2182,6 +2949,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "SBR (postgraduate) informal guide 2026."
           },
@@ -2192,6 +2960,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Postgraduate table in Hall; separate Upay ticket; often sells out."
           },
@@ -2202,6 +2971,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "SBR (postgraduate) informal guide 2026."
           }
@@ -2215,7 +2985,8 @@
           "https://drive.google.com/file/d/1vPmbdIw2yIEAaw-goCRs07Y6I4Q2S2XQ/view",
           "https://johnscam.lon1.cdn.digitaloceanspaces.com/STATEMENTS%20&%20REPORTS/25-09-26%20Guide%20to%20Student%20Behaviour.pdf"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "College Guide to Student Behaviour (25 Sep 2026): more than two guests needs the Dean for Student Conduct's permission (SBR guide says up to four). Host responsible for guests.",
         "priceGbp": {
@@ -2245,12 +3016,12 @@
         "visitors": "A student from another college can attend as one Trinity student's named guest, accompanied throughout, or through an exchange dinner run by a Trinity college society with its counterpart society.",
         "bookingSummary": "Trinity student books one guest on Upay",
         "rulesSummary": "One guest when capacity allows; extra guest by request 10 days ahead. Upay opens 10 days, closes 3 days before (20:00). Host stays with guests.",
-        "formalNights": "Thu and Sat in Full Term (Sat only in Easter Term), 20:00",
+        "formalNights": "Thu and Sat in Full Term (Sat only in Easter Term), 20:00; BA Dinner for postgraduates on Fridays, 20:00",
         "guests": "One guest when there is capacity; in exceptional cases one extra guest by emailing the Head of Catering ten days before",
         "booking": "Upay: opens ten days before (08:00), closes three days before (20:00); sales final after closing",
         "dress": "Smart dress and gowns (academical dress) at Formal Hall",
-        "price": null,
-        "note": "The **2026–27 White Book** (revised August 2026) lists Formal Hall at **20:00 on Thursday and Saturday** in Full Term, Saturday only in Easter Term. The postgraduate BA Dinner on Friday is separate. Students buy tickets on Upay. Booking opens **ten days before (08:00)** and closes **three days before (20:00)**, after which sales are final and non-refundable. Upay shows the price; the White Book gives no figure. When there is capacity, a student may bring **one guest** at a time. In exceptional cases, a student may request **one additional guest ticket** by emailing the Head of Catering **ten days before**, with a justification and all guests' full names. Hosts must accompany their guests **at all times** on College premises and enter guests' correct names. Guests must identify themselves and their host when asked. Under-18s need the Head of Catering's prior permission, and under-16s may not dine. Smart dress and gowns are worn. Photography and phones are not permitted, and students found taking part in drinking games are ejected. Some special dinners do not allow guests.\n\nSeating follows the High Table convention: places cannot be reserved, and the White Book says groups should make other arrangements. **University societies** may not dine in Hall without extraordinary College Council permission. Trinity **college societies** may introduce guests from counterpart college societies at formal hall exchange dinners. [White Book 2026–27, §§42, 43, 45, 51, 57](https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228) The [Postdoctoral Society page](https://postdocsoc.trin.cam.ac.uk/formal-halls/) gives the same ten-day/three-day Upay window for postdoc bookings.\n\n**Practical assessment:** A visitor needs a Trinity student to book them as their single guest on Upay three to ten days ahead and to stay with them throughout. Exchanges between college societies are the only documented group route.",
+        "price": "Shown in Upay; the White Book gives no figure",
+        "note": "The **2026–27 White Book** (revised August 2026) lists Formal Hall at **20:00 on Thursday and Saturday** in Full Term, Saturday only in Easter Term. The postgraduate **BA Dinner** is separate: every Friday of term at **20:00** (19:30 outside standard term), with drinks from 19:00 and no entry to Hall after 20:00 ([BA Society](https://basociety.net/ba-dinners/)). Students buy tickets on Upay. Booking opens **ten days before (08:00)** and closes **three days before (20:00)**, after which sales are final and non-refundable. Upay shows the price; the White Book gives no figure. When there is capacity, a student may bring **one guest** at a time. In exceptional cases, a student may request **one additional guest ticket** by emailing the Head of Catering **ten days before**, with a justification and all guests' full names. Hosts must accompany their guests **at all times** on College premises and enter guests' correct names. Guests must identify themselves and their host when asked. Under-18s need the Head of Catering's prior permission, and under-16s may not dine. Smart dress and gowns are worn. Photography and phones are not permitted, and students found taking part in drinking games are ejected. Some special dinners do not allow guests.\n\nSeating follows the High Table convention: places cannot be reserved, and the White Book says groups should make other arrangements. **University societies** may not dine in Hall without extraordinary College Council permission. Trinity **college societies** may introduce guests from counterpart college societies at formal hall exchange dinners. [White Book 2026–27, §§42, 43, 45, 51, 57](https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228) The [Postdoctoral Society page](https://postdocsoc.trin.cam.ac.uk/formal-halls/) gives the same ten-day/three-day Upay window for postdoc bookings.\n\n**Practical assessment:** A visitor needs a Trinity student to book them as their single guest on Upay three to ten days ahead and to stay with them throughout. Exchanges between college societies are the only documented group route.",
         "primarySourceUrl": "https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228",
         "sourceUrls": [
           "https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228",
@@ -2264,8 +3035,9 @@
             "startTime": "20:00",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Full Term, Michaelmas and Lent only (not Easter Term)."
+            "notes": "Full Term in Michaelmas and Lent only; no Thursday Formal Hall in Easter Term. Tickets via Upay."
           },
           {
             "weekday": "fri",
@@ -2274,8 +3046,9 @@
             "startTime": "20:00",
             "termOnly": true,
             "audience": "mcr",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Postgraduates."
+            "notes": "For postgraduates (BA Society members, including associate members and mature students). Every Friday of term. Drinks reception from 19:00; no entry to Hall after 20:00. Starts at 19:30 outside standard term."
           },
           {
             "weekday": "sat",
@@ -2284,19 +3057,34 @@
             "startTime": "20:00",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Full Term, all three terms."
+            "notes": "Full Term in all three terms (the only Formal Hall night in Easter Term). Tickets via Upay."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"Formal Hall, which is a rather more elaborate dinner, is served on Thursdays and Saturdays in Full Term (Saturdays only in Easter Term).\" Timetable: \"Formal Hall 20:00 (Thursday and Saturday. Saturday only during Easter Term)\"; \"BA Dinner 20:00 (Friday)\"",
+        "nightsQuote": "\"Formal Hall, which is a rather more elaborate dinner, is served on Thursdays and Saturdays in Full Term (Saturdays only in Easter Term).\" Timetable: \"Formal Hall 20:00 (Thursday and Saturday. Saturday only during Easter Term)\"; \"BA Dinner 20:00 (Friday) except outside standard term when dinners start at 19:30\". BA Society: \"BA Dinners typically occur every Friday of the term.\"",
         "nightsGaps": [],
-        "nightsConflict": null,
+        "nightsConflict": "trinitymcr.com is the MCR of Trinity College, Oxford (Broad Street, OX1 3BH), not Cambridge; its prices (£6, £25 Guest Night) and Mon/Wed/Sun claims were dropped.",
         "nightsSourceUrls": [
           "https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228",
-          "https://postdocsoc.trin.cam.ac.uk/formal-halls/"
+          "https://basociety.net/ba-dinners/"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.trin.cam.ac.uk/download/the-white-book/?masterkey=5fe2b486e8747&wpdmdl=1228",
+            "publisher": "Trinity College Cambridge, The White Book 2026-27, ss.42 and 45",
+            "date": "Revised August 2026",
+            "kind": "official"
+          },
+          {
+            "url": "https://basociety.net/ba-dinners/",
+            "publisher": "Trinity College BA Society, BA Dinners page",
+            "date": "undated (fetched 2026-11-19)",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "One guest per student when capacity allows (one extra in exceptional cases via the Head of Catering ten days before); host accompanies guests throughout; college-society exchange dinners are the group route.",
         "priceGbp": null,
@@ -2318,13 +3106,13 @@
         "checkedOn": "2026-11-07",
         "visitors": "No public rule lets outsiders book; a student from another college attends as a member's guest or through an MCR exchange dinner.",
         "bookingSummary": "Trinity Hall host books, or an MCR exchange dinner",
-        "rulesSummary": "Formal Thu and Sun in term, Super Halls on some Fridays. Guest cap, booking deadline, start time and price are not published.",
-        "formalNights": "Thu and Sun in term (JCR: Full Term); Super Halls usually on Fridays once or twice a term; start time not published",
+        "rulesSummary": "Formal Thu and Sun in Full Term at 19:30, Grad Hall on Wednesdays, Super Halls on some Fridays. Guest cap, booking deadline and price are not published.",
+        "formalNights": "Thu and Sun in Full Term, 19:30 (drinks from 19:00); Grad Hall for postgraduates on Wednesdays, 19:30; Super Halls on a Friday once or twice a term, 18:45",
         "guests": null,
         "booking": "Member books on the College's Meal Booking and Accounts System (Raven login); deadline not published",
         "dress": "Smart dress; no jeans, trainers, beach footwear, hats or caps; jackets and gowns kept on. College members wear gowns",
         "price": null,
-        "note": "The College's incoming-undergraduate page lists Formal Halls on **Thursday and Sunday evenings during term**, with Super Halls usually on Fridays once or twice a term. Places are booked through the Meal Booking and Accounts System on the intranet. [College incoming-student page](https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/) The MCR links to the [meal-booking portal](https://mcr.trinhall.cam.ac.uk/useful-links/), which requires a Raven login. The College's catering FAQs and swaps-information pages are on the intranet and not public. **No public guest cap, booking deadline, start time or price was found.**\n\nThe College dress guide applies to all students and guests: smart dress; no jeans, training shoes, beach footwear, hats or caps; jackets and gowns kept on. Members must make sure their guests comply. [College dress guide](https://www.trinhall.cam.ac.uk/student-hub/guide-to-dress-codes/) The JCR says formals are every Thursday and Sunday in Full Term, members wear gowns, and diners may bring an **unopened bottle of wine**. Superhalls are booked through the same system; gowns are not worn, but there is a no-trainers, no-jeans rule. [JCR food and drink](https://jcr.trinhall.cam.ac.uk/college-life/facilities/food-drink) The MCR constitution makes the External Entertainments Officer responsible for **organising exchange dinners with other colleges**. [MCR constitution](https://mcr.trinhall.cam.ac.uk/wp-content/uploads/2026/03/MCR-Constitution-October-2024-1.pdf)\n\n**Practical assessment:** A visitor needs a Trinity Hall member to book them, or a place at an MCR exchange dinner. Guest numbers and deadlines are only visible inside the College system.",
+        "note": "The College's incoming-undergraduate page lists Formal Halls on **Thursday and Sunday evenings during term**, with Super Halls usually on Fridays once or twice a term. Dinner is at **19:30**, with drinks from 19:00. Postgraduates also have a weekly **Grad Hall** on Wednesdays at 19:30, after MCR pre-drinks at 19:00 in the Blue Room. This term's Super Halls were on Friday 30 October and Friday 20 November 2026, at 18:45 ([MCR calendar](https://mcr.trinhall.cam.ac.uk/mcr-calendar/)). Places are booked through the Meal Booking and Accounts System on the intranet. [College incoming-student page](https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/) The MCR links to the [meal-booking portal](https://mcr.trinhall.cam.ac.uk/useful-links/), which requires a Raven login. The College's catering FAQs and swaps-information pages are on the intranet and not public. **No public guest cap, booking deadline or price was found.**\n\nThe College dress guide applies to all students and guests: smart dress; no jeans, training shoes, beach footwear, hats or caps; jackets and gowns kept on. Members must make sure their guests comply. [College dress guide](https://www.trinhall.cam.ac.uk/student-hub/guide-to-dress-codes/) The JCR says formals are every Thursday and Sunday in Full Term, members wear gowns, and diners may bring an **unopened bottle of wine**. Superhalls are booked through the same system; gowns are not worn, but there is a no-trainers, no-jeans rule. [JCR food and drink](https://jcr.trinhall.cam.ac.uk/college-life/facilities/food-drink) The MCR constitution makes the External Entertainments Officer responsible for **organising exchange dinners with other colleges**. [MCR constitution](https://mcr.trinhall.cam.ac.uk/wp-content/uploads/2026/03/MCR-Constitution-October-2024-1.pdf)\n\n**Practical assessment:** A visitor needs a Trinity Hall member to book them, or a place at an MCR exchange dinner. Guest numbers and deadlines are only visible inside the College system.",
         "primarySourceUrl": "https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/",
         "sourceUrls": [
           "https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/",
@@ -2335,36 +3123,83 @@
         ],
         "nights": [
           {
+            "weekday": "wed",
+            "kind": "grad_formal",
+            "label": "Grad Hall (Postgraduate Hall)",
+            "startTime": "19:30",
+            "termOnly": true,
+            "audience": "mcr",
+            "frequency": "weekly",
+            "confidence": "found",
+            "notes": "MCR calendar: pre-drinks are 19:00-19:30 in the Blue Room, MCR, every Wednesday, and dinner in Hall follows at 19:30. Michaelmas 2026 runs 7 Oct-25 Nov, with none on 18 Nov. Lent 2027 runs 20 Jan-10 Mar, with none on 27 Jan or 3 Mar. Booked on the College meal-booking system; booking opened 1 Oct 2026."
+          },
+          {
             "weekday": "thu",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Full Term per JCR; start time not published."
+            "notes": "Full Term. Three courses; gowns worn; BYO one unopened bottle of wine (JCR). Drinks from 19:00 and dinner at 19:30 (College dining page)."
           },
           {
             "weekday": "sun",
             "kind": "formal",
             "label": "Formal Hall",
-            "startTime": null,
+            "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
-            "notes": "Full Term per JCR; start time not published."
+            "notes": "Full Term. Same as Thursday; dinner at 19:30."
           }
         ],
         "nightsStatus": "found",
-        "nightsQuote": "\"The College also hosts formal dinners during term time with Formal Halls on Thursday and Sunday evenings, and Super Halls usually on Fridays once or twice per term.\"",
-        "nightsGaps": ["Start time, guest cap, deadline, price not public"],
+        "nightsQuote": "\"The College also hosts formal dinners during term time with Formal Halls on Thursday and Sunday evenings, and Super Halls usually on Fridays once or twice per term.\" JCR: \"Formal Hall is a three course meal served every Thursday and Sunday during full-term.\" MCR calendar: weekly \"Graduate Hall Pre Drinks\" on Wednesdays at 19:00, Blue Room, MCR.",
+        "nightsGaps": ["Guest cap, deadline, price not public"],
         "nightsConflict": null,
         "nightsSourceUrls": [
           "https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/",
           "https://jcr.trinhall.cam.ac.uk/college-life/facilities/food-drink",
-          "https://mcr.trinhall.cam.ac.uk/useful-links/"
+          "https://mcr.trinhall.cam.ac.uk/useful-links/",
+          "https://www.trinhall.cam.ac.uk/alumni/alumni-benefits/dining-privileges/",
+          "https://calendar.google.com/calendar/ical/c_eb5e676164d947583f631aebe05972b55ed5a06735724890529f33ee234da2de%40group.calendar.google.com/public/basic.ics"
         ],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [
+          {
+            "url": "https://www.trinhall.cam.ac.uk/information-for-new-undergraduate-students/",
+            "publisher": "Trinity Hall, information for new undergraduates",
+            "date": "2026-27 edition (Matriculation Friday 9 October), accessed 2026-11-19",
+            "kind": "official"
+          },
+          {
+            "url": "https://www.trinhall.cam.ac.uk/alumni/alumni-benefits/dining-privileges/",
+            "publisher": "Trinity Hall, alumni Dining Privileges page",
+            "date": "accessed 2026-11-19",
+            "kind": "official"
+          },
+          {
+            "url": "https://calendar.google.com/calendar/ical/c_eb5e676164d947583f631aebe05972b55ed5a06735724890529f33ee234da2de%40group.calendar.google.com/public/basic.ics",
+            "publisher": "Trinity Hall MCR public calendar (embedded at mcr.trinhall.cam.ac.uk/mcr-calendar/)",
+            "date": "2025-26 and 2026-27 entries, accessed 2026-11-19",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://mcr.trinhall.cam.ac.uk/useful-links/",
+            "publisher": "Trinity Hall MCR, useful links",
+            "date": "accessed 2026-11-19",
+            "kind": "jcr_mcr"
+          },
+          {
+            "url": "https://jcr.trinhall.cam.ac.uk/college-life/facilities/food-drink",
+            "publisher": "Trinity Hall JCR, food and drink",
+            "date": "undated, accessed 2026-11-19",
+            "kind": "jcr_mcr"
+          }
+        ],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "No public guest cap; members book on the intranet Meal Booking and Accounts System; MCR External Entertainments Officer organises exchange dinners.",
         "priceGbp": null,
@@ -2403,6 +3238,7 @@
             "startTime": "19:30",
             "termOnly": false,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Tuesday also outside Full Term. Drinks 19:15."
           },
@@ -2413,6 +3249,7 @@
             "startTime": "19:30",
             "termOnly": true,
             "audience": "all_members",
+            "frequency": "weekly",
             "confidence": "found",
             "notes": "Full Term only. Drinks 19:15."
           }
@@ -2422,7 +3259,8 @@
         "nightsGaps": [],
         "nightsConflict": null,
         "nightsSourceUrls": ["https://www.wolfson.cam.ac.uk/college-life/food/formal-halls"],
-        "nightsCheckedOn": "2026-11-18",
+        "nightsSources": [],
+        "nightsCheckedOn": "2026-11-19",
         "visitorRoute": "as_guest",
         "guestNote": "\"Members may bring up to three non-Wolfson guests to Formal Hall\"; host must attend; minimum age 18; groups of 10+ need permission a week ahead.",
         "priceGbp": {

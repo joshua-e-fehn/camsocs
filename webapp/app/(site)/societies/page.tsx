@@ -3,10 +3,12 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { FinderLink } from "@/components/molecules/finder-link"
+import { RelatedGuides } from "@/components/molecules/related-guides"
 import { OrgDirectory } from "@/components/organisms/org-directory"
 import { api } from "@/convex/_generated/api"
 import { CATEGORIES_PATH, collectionJsonLd, directorySeo } from "@/lib/directory-hubs"
 import { directoryTitle } from "@/lib/directory-title"
+import { guide } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
 import type { OrgBusy } from "@/lib/public-api"
 import { publicPreload, publicQuery } from "@/lib/public-data"
@@ -76,6 +78,9 @@ async function loadBusy(): Promise<OrgBusy | null> {
  * in the first chunk of the server's HTML, not in a hidden streamed `<div>`
  * after the footer (content-in-hidden-suspense).
  */
+/** Under the directory (lib/guide-links.ts): joining, starting, the first weeks. */
+const SOCIETY_GUIDES = [guide("join-a-society"), guide("start-a-society"), guide("freshers")]
+
 export default async function SocietiesPage({ searchParams }: Props) {
   const state = parseDirectoryParams(await searchParams)
   const [preloadedList, preloadedFacets, preloadedColleges, busy] = await Promise.all([
@@ -149,6 +154,9 @@ export default async function SocietiesPage({ searchParams }: Props) {
         preloadedColleges={preloadedColleges}
         busy={busy}
       />
+      <div className="mx-auto w-full max-w-7xl px-4 pt-4 pb-12 sm:px-6">
+        <RelatedGuides guides={SOCIETY_GUIDES} title="Guides to societies" columns />
+      </div>
     </>
   )
 }

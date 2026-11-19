@@ -1,6 +1,7 @@
 import { fetchQuery } from "convex/nextjs"
 import type { NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
+import { formalCollegeSitemapEntries } from "@/lib/formal-college-page"
 import {
   isSitemapFile,
   PAGE_PATHS,
@@ -14,7 +15,8 @@ import { loadSocietySitemap } from "@/lib/sitemap-societies"
 
 /**
  * `GET /sitemaps/<file>` — one file of the sitemap index (lib/sitemap.ts):
- *  - `pages.xml`: the site's own pages;
+ *  - `pages.xml`: the site's own pages, and each college's formal hall page
+ *    (`/formals/<slug>`, with the day its nights were checked);
  *  - `societies.xml`: the category hubs, every listing the directory shows
  *    but thin ones (owner decision G3) and each college's hub page, with
  *    when it last changed (lib/sitemap-societies.ts, `orgs.sitemap`);
@@ -31,7 +33,7 @@ const PAGE = 200
 async function entries(file: string): Promise<SitemapEntry[]> {
   switch (file) {
     case "pages.xml":
-      return PAGE_PATHS.map((path) => ({ path }))
+      return [...PAGE_PATHS.map((path) => ({ path })), ...formalCollegeSitemapEntries()]
     case "societies.xml":
       return loadSocietySitemap((args) => fetchQuery(api.orgs.sitemap, args))
     default: {

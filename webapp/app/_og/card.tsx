@@ -33,6 +33,10 @@ const BRAND = currentCampus().brand
 const WORDMARK = `${BRAND.wordmark.lead}${BRAND.wordmark.rest}`
 const FOOTNOTE = BRAND.footerLine
 
+/** The card's colours and brand lines, for a route that draws its own
+ * layout in the same identity (the wealth ranking's bar chart). */
+export const CARD_STYLE = { PAPER, INK, MUTED, SKY, SKY_LINE, APRICOT, WORDMARK, FOOTNOTE } as const
+
 /** A logo request may take this long: a stalled one must not hang a render. */
 const FETCH_TIMEOUT_MS = 5_000
 

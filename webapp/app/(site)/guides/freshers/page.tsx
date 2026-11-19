@@ -92,6 +92,12 @@ export default async function FreshersGuide() {
           >
             Cambridge words explained
           </Link>
+          <Link
+            href="/colleges/wealth"
+            className="font-medium text-brand-text underline-offset-4 hover:underline"
+          >
+            Colleges ranked by endowment
+          </Link>
         </div>
       }
     >

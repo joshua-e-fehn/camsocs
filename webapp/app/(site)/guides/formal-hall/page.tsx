@@ -5,9 +5,10 @@ import { Cite } from "@/components/molecules/guide-parts"
 import { ProseSection } from "@/components/molecules/prose-section"
 import { GuideArticle } from "@/components/organisms/guide-article"
 import { formatDate } from "@/lib/calendar"
-import { COLLEGE_INFO, COLLEGES_PATH, FORMAL_ANCHOR, FORMALS_CHECKED_ON } from "@/lib/colleges"
-import { collegeHubPath } from "@/lib/directory-hubs"
-import { formalGuideSources, FORMAL_SOURCES as S } from "@/lib/formal-guide"
+import { COLLEGE_INFO, COLLEGES_PATH, FORMALS_CHECKED_ON } from "@/lib/colleges"
+import { dressMentions } from "@/lib/formal-facts"
+import { collegeSource, formalGuideSources, FORMAL_SOURCES as S } from "@/lib/formal-guide"
+import { FORMAL_TRACKER_PATH, FORMALS_PATH, formalCollegePath } from "@/lib/formal-paths"
 import { guide } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
 
@@ -28,6 +29,8 @@ export const metadata: Metadata = {
 
 const TOC = [
   ["#routes", "Getting into another college’s formal"],
+  ["#swaps", "Formal swaps"],
+  ["#dress", "What to wear"],
   ["#before", "Before you pay"],
   ["#feasts", "Feasts and invitation-only dinners"],
   ["#colleges", "College by college"],
@@ -36,7 +39,17 @@ const TOC = [
 const TH =
   "px-3 py-2 text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase"
 
+/** A college by slug, for the examples the text quotes from its data. */
+function college(slug: string) {
+  const found = COLLEGE_INFO.find((entry) => entry.slug === slug)
+  if (!found) throw new Error(`formal hall guide: no college "${slug}"`)
+  return found
+}
+
 export default function FormalHallGuide() {
+  const caius = college("gonville-and-caius-college")
+  const homerton = college("homerton-college")
+  const gowns = dressMentions(COLLEGE_INFO, /gown/i).length
   return (
     <GuideArticle
       guide={GUIDE}
@@ -47,7 +60,11 @@ export default function FormalHallGuide() {
           Formal hall is a college’s served dinner in its hall, on set evenings in term. Members
           book through their college; a student from another college usually goes as a member’s
           guest or on a swap run by a common room or society. Here is how that works, and what all{" "}
-          {COLLEGE_INFO.length} colleges publish about guests, gowns and booking.
+          {COLLEGE_INFO.length} colleges publish about guests, gowns and booking. To see{" "}
+          <Link href={FORMALS_PATH}>which colleges hold formal hall tonight</Link>, or on a{" "}
+          <Link href={`${FORMALS_PATH}#weekend`}>Saturday or Sunday</Link>, use the week of formals;
+          to try a formal at every college, keep the{" "}
+          <Link href={FORMAL_TRACKER_PATH}>formal tracker</Link>.
         </>
       }
       aside={
@@ -62,6 +79,12 @@ export default function FormalHallGuide() {
             className="font-medium text-brand-text underline-offset-4 hover:underline"
           >
             All colleges compared
+          </Link>
+          <Link
+            href={FORMALS_PATH}
+            className="font-medium text-brand-text underline-offset-4 hover:underline"
+          >
+            Formals night by night
           </Link>
         </div>
       }
@@ -105,13 +128,51 @@ export default function FormalHallGuide() {
           </Link>{" "}
           describes regular formal swaps across colleges and has a mailing list
           <Cite source={S.fhn} />. Check each event’s eligibility and ticket release: a listing does
-          not guarantee places this term.
+          not guarantee places this term. The{" "}
+          <Link href={`${FORMALS_PATH}#swaps`}>swaps and society formals coming up</Link> are listed
+          under the week of formals.
         </p>
         <h3>4. For a group, ask for the group route</h3>
         <p>
           A group may need the college’s permission, a minimum share of the college’s own members,
           or a special night. The rules differ a lot between colleges (see the table below); do not
           split a group across several ordinary guest bookings without asking.
+        </p>
+      </ProseSection>
+
+      <ProseSection id="swaps" title="Formal swaps">
+        <p>
+          On a formal swap, members of one college’s common room go together to another college’s
+          formal hall. The common room runs it: Clare’s MCR, for example, has an officer who emails
+          members about coming swaps, and members book through the MCR’s events system
+          <Cite source={S.clareMcr} />. To go on one, sign up when your JCR or MCR announces it.
+        </p>
+        <p>
+          The word has a second meaning in Cambridge: a “swap” is also two drinking or sports
+          societies meeting for a meal in a restaurant
+          <Cite source={S.varsitySwaps} />. That kind has nothing to do with formal hall.
+        </p>
+      </ProseSection>
+
+      <ProseSection id="dress" title="What to wear: gowns and dress code">
+        <p>
+          Each college sets its own dress code and its own rule on gowns, and {gowns} of the{" "}
+          {COLLEGE_INFO.length} publish one that mentions gowns.
+          {caius.formal.dress && homerton.formal.dress && (
+            <>
+              {" "}
+              They differ a lot. {caius.shortName}: “{caius.formal.dress}”
+              <Cite source={collegeSource(caius)} />. {homerton.shortName}: “{homerton.formal.dress}
+              ”
+              <Cite source={collegeSource(homerton)} />.
+            </>
+          )}
+        </p>
+        <p>
+          Ask your host what a guest wears and whether you need a gown of your own. The{" "}
+          <Link href={`${FORMALS_PATH}#dress-code`}>dress code of every college</Link> is on the
+          formals page, beside the{" "}
+          <Link href={`${FORMALS_PATH}#cheapest`}>cheapest published prices</Link>.
         </p>
       </ProseSection>
 
@@ -177,7 +238,7 @@ export default function FormalHallGuide() {
                 <tr key={college.key}>
                   <th scope="row" className="px-3 py-2.5 text-left align-top font-medium">
                     <Link
-                      href={`${collegeHubPath(college)}#${FORMAL_ANCHOR}`}
+                      href={formalCollegePath(college.slug)}
                       className="inline-flex items-center gap-2 underline-offset-4 hover:underline"
                     >
                       <CollegeCrest crest={college.crest} size={28} decorative />

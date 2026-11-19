@@ -17,10 +17,14 @@ import {
   rankedBy,
   SHORT_TERM_HOLDERS,
   sourcePage,
+  WEALTH_CHECKED_ON,
   WEALTH_FINANCIAL_YEAR_NOTE,
+  WEALTH_PUBLISHED_ON,
   WEALTH_QUOTED,
+  WEALTH_REGISTER_CHECK,
   WEALTH_SORT_KEYS,
   WEALTH_TOTALS,
+  WEALTH_VERIFICATION,
   wealthTable,
   wealthTotals,
 } from "@/lib/college-wealth"
@@ -68,6 +72,33 @@ describe("college wealth data", () => {
     const sum = COLLEGE_WEALTH.reduce((total, row) => total + row.endowmentGbp, 0)
     expect(sum).toBe(RECORDED_TOTAL_GBP)
     expect(WEALTH_TOTALS.total).toBe(sum)
+  })
+
+  test("every college was compared with the register; differences are explained", () => {
+    for (const row of COLLEGE_WEALTH) {
+      for (const result of Object.values(row.registerCheck)) {
+        expect(["match", "explained"]).toContain(result)
+      }
+      if (Object.values(row.registerCheck).includes("explained")) {
+        expect(row.notes).toMatch(/register|Charity Commission/)
+      }
+    }
+    expect(WEALTH_REGISTER_CHECK.checkedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(WEALTH_REGISTER_CHECK.licence).toContain("Open Government Licence v3.0")
+    // The one-read caveat is gone: every college is cross-checked.
+    expect(WEALTH_VERIFICATION.remainingDoubts.join(" ")).not.toMatch(/Not independently/)
+  })
+
+  test("the dates are in step", () => {
+    expect(WEALTH_VERIFICATION.checkedOn).toBe(WEALTH_CHECKED_ON)
+    expect(WEALTH_REGISTER_CHECK.checkedOn <= WEALTH_CHECKED_ON).toBe(true)
+    expect(WEALTH_PUBLISHED_ON <= WEALTH_CHECKED_ON).toBe(true)
+  })
+
+  test("Pembroke's investments are cited to the balance sheet's page", () => {
+    const pembroke = COLLEGE_WEALTH.find((row) => row.slug === "pembroke-college")
+    expect(pembroke?.sourceRef).toBe("PDF p.31 (printed p.29): Balance Sheet, Investments (note 9)")
+    expect(sourcePage(pembroke?.sourceRef ?? "")).toBe("PDF p.31")
   })
 
   test("the Old money badge is the five largest endowments", () => {

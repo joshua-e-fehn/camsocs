@@ -60,9 +60,15 @@ describe("routes with their own share card (og-share-cards)", () => {
     expect(OWN_IMAGE_PATHS.map(String)).toEqual([
       String(/^\/societies\/[^/]+$/),
       String(/^\/events\/[^/]+$/),
+      String(/^\/colleges\/wealth$/),
+      String(/^\/formals$/),
+      String(/^\/formals\/tracker$/),
     ])
     expect(existsSync(join(app, "societies", "[slug]", "opengraph-image.tsx"))).toBe(true)
     expect(existsSync(join(app, "events", "[key]", "opengraph-image.tsx"))).toBe(true)
+    expect(existsSync(join(app, "colleges", "wealth", "opengraph-image.tsx"))).toBe(true)
+    expect(existsSync(join(app, "formals", "opengraph-image.tsx"))).toBe(true)
+    expect(existsSync(join(app, "formals", "tracker", "opengraph-image.tsx"))).toBe(true)
   })
 })
 

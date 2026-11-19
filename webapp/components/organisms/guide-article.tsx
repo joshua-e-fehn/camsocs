@@ -1,7 +1,9 @@
 import Link from "next/link"
 import { GuideSourceList } from "@/components/molecules/guide-parts"
 import { ProseSection } from "@/components/molecules/prose-section"
+import { RelatedGuides } from "@/components/molecules/related-guides"
 import { formatDate } from "@/lib/calendar"
+import { relatedGuides } from "@/lib/guide-links"
 import { GUIDES_PATH, type Guide, type GuideSource, guideJsonLd } from "@/lib/guides"
 import { DISCLAIMER } from "@/lib/site"
 import { jsonLdScript } from "@/lib/structured-data"
@@ -9,7 +11,8 @@ import { jsonLdScript } from "@/lib/structured-data"
 /**
  * A guide's page (lib/guides.ts), set like About: the text in a readable
  * measure, an aside with "On this page" and anything the page adds (live
- * counts, the term), and, last, the sources every fact on it cites.
+ * counts, the term) and its "Related guides" (lib/guide-links.ts), and,
+ * last, the sources every fact on it cites.
  */
 export function GuideArticle({
   guide,
@@ -81,6 +84,7 @@ export function GuideArticle({
             </a>
           ))}
         </nav>
+        <RelatedGuides guides={relatedGuides(guide.slug)} className="mt-2" />
       </aside>
     </div>
   )

@@ -18,7 +18,8 @@ const LINK =
  * chosen figure: endowment (the default, which the server's HTML shows),
  * endowment per student, income, net assets or the 1-year change. Every
  * number and order arrives worked out from lib/college-wealth.ts, so this
- * only switches between them. On a phone the table keeps rank, college and
+ * only switches between them. Each row's id is its college's slug, which
+ * the college pages link. On a phone the table keeps rank, college and
  * the chosen figure, with the other four on a line under the name.
  */
 /** How the phone summary line words each figure. */
@@ -179,7 +180,9 @@ function WealthRow({
     .filter((column) => column.key !== sortKey)
     .map((column) => SUMMARY[column.key](row.display[column.key]))
   return (
-    <TableRow className="align-top">
+    // `id`: the college hubs link each college's row (`/colleges/wealth#<slug>`);
+    // the margin keeps it clear of the sticky header.
+    <TableRow id={row.slug} className="scroll-mt-28 align-top target:bg-muted/60 sm:scroll-mt-32">
       <TableCell className="px-0 py-3 pr-2 align-top font-mono text-xs text-muted-foreground tabular-nums">
         {rank}
       </TableCell>
@@ -194,7 +197,7 @@ function WealthRow({
             <p className="font-mono text-xs text-muted-foreground tabular-nums sm:hidden">
               {summary.join(" · ")} ·{" "}
               <ExternalLink href={row.sourceUrl} className="underline" icon={false}>
-                {row.sourcePage}
+                {row.sourceLabel}
                 <span className="sr-only">: {row.sourceRef}</span>
               </ExternalLink>
             </p>
@@ -216,7 +219,7 @@ function WealthRow({
       ))}
       <TableCell className="hidden px-0 py-3 pl-3 text-right align-top text-xs md:table-cell">
         <ExternalLink href={row.sourceUrl} className="underline">
-          <span title={row.sourceRef}>Accounts, {row.sourcePage}</span>
+          <span title={row.sourceRef}>{row.sourceLabel}</span>
           <span className="sr-only">: {row.sourceRef}</span>
         </ExternalLink>
       </TableCell>
