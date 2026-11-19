@@ -19,6 +19,30 @@ export function nightCounts(colleges: readonly CollegeInfo[]): Record<Weekday, n
   >
 }
 
+/**
+ * Per night: colleges with a formal there every week, and colleges whose
+ * formal that night runs only some weeks (fortnightly, first of the month,
+ * some weeks), so "tonight" never counts an occasional dinner as a sure one
+ * (PR #83 review).
+ */
+export function tonightCounts(
+  colleges: readonly CollegeInfo[],
+): Record<Weekday, { weekly: number; occasional: number }> {
+  return Object.fromEntries(
+    WEEK.map((day) => {
+      let weekly = 0
+      let occasional = 0
+      for (const college of colleges) {
+        const nights = college.formal.nights.filter((night) => night.weekday === day)
+        if (nights.length === 0) continue
+        if (nights.some((night) => night.frequency === "weekly")) weekly++
+        else occasional++
+      }
+      return [day, { weekly, occasional }]
+    }),
+  ) as Record<Weekday, { weekly: number; occasional: number }>
+}
+
 /** The colleges that hold a formal on `day`, by short name (A to Z). */
 export function collegesOn(colleges: readonly CollegeInfo[], day: Weekday): CollegeInfo[] {
   return colleges

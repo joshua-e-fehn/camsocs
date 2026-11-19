@@ -66,6 +66,11 @@ export function FormalsWeek({
       setSelected(initial)
     }
     const onHash = () => {
+      if (window.location.hash === "#week") {
+        scrollTo.current = null
+        setSelected("all")
+        return
+      }
       const hashDay = dayFromId(window.location.hash)
       if (!hashDay) return
       scrollTo.current = hashDay

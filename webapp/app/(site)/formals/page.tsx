@@ -25,6 +25,7 @@ import {
   type PriceRow,
   priceRange,
   priceRows,
+  tonightCounts,
 } from "@/lib/formal-facts"
 import { FORMAL_TRACKER_PATH, FORMALS_PATH, formalCollegePath } from "@/lib/formal-paths"
 import { dayId, formalSlots, londonWeekday, WEEK, WEEKDAY_NAMES } from "@/lib/formal-week"
@@ -242,7 +243,7 @@ export default async function FormalsPage() {
             Formal tonight
           </h2>
           <FormalsTonight
-            counts={counts}
+            counts={tonightCounts(COLLEGE_INFO)}
             serverDay={londonWeekday(Date.now())}
             inFullTerm={inFullTerm(clock)}
           />

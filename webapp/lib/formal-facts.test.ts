@@ -9,6 +9,7 @@ import {
   priceRange,
   priceRows,
   regularNightsPerWeek,
+  tonightCounts,
 } from "./formal-facts"
 import { formalCollegePath } from "./formal-paths"
 import { WEEK } from "./formal-week"
@@ -110,5 +111,15 @@ describe("formal facts", () => {
 
   test("a college's formal page path", () => {
     expect(formalCollegePath("peterhouse")).toBe("/formals/peterhouse")
+  })
+})
+
+describe("tonightCounts", () => {
+  test("splits weekly formals from occasional ones", () => {
+    const counts = tonightCounts(COLLEGE_INFO)
+    // Murray Edwards' Friday runs on the first Friday of the month only.
+    const fri = counts.fri
+    expect(fri.weekly + fri.occasional).toBe(nightCounts(COLLEGE_INFO).fri)
+    expect(fri.occasional).toBeGreaterThan(0)
   })
 })

@@ -18,25 +18,30 @@ export function FormalsTonight({
   serverDay,
   inFullTerm,
 }: {
-  counts: Readonly<Record<Weekday, number>>
+  counts: Readonly<Record<Weekday, { weekly: number; occasional: number }>>
   serverDay: Weekday
   /** True in Full Term, false out of it, null when the term dates are unknown. */
   inFullTerm: boolean | null
 }) {
   const [day, setDay] = useState<Weekday>(serverDay)
   useEffect(() => setDay(londonWeekday(Date.now())), [])
-  const count = counts[day]
-  const colleges = `${count} ${count === 1 ? "college holds" : "colleges hold"}`
+  const { weekly, occasional } = counts[day]
+  const more =
+    occasional > 0
+      ? ` (and ${occasional} more ${occasional === 1 ? "holds" : "hold"} one some weeks)`
+      : ""
+  const colleges = `${weekly} ${weekly === 1 ? "college holds" : "colleges hold"}`
   const name = WEEKDAY_NAMES[day]
   return (
     <p className="text-lg text-pretty">
       {inFullTerm === false ? (
         <>
-          Tonight is a {name}. In Full Term, {colleges} formal hall on a {name};{" "}
+          Tonight is a {name}. In Full Term, {colleges} formal hall every {name}
+          {more};{" "}
         </>
       ) : (
         <>
-          Tonight ({name}) {colleges} formal hall;{" "}
+          Tonight ({name}) {colleges} formal hall{more};{" "}
         </>
       )}
       <a href={`#${dayId(day)}`} className="underline underline-offset-4">
