@@ -194,6 +194,15 @@ export default function PrivacyPage() {
           Signing in is optional. If you sign in with a @cam.ac.uk email link, we keep that address
           and a session record. The operator signs in with a Google account.
         </p>
+        <h3>Your formal tracker (only if you use it)</h3>
+        <p>
+          Signed in, you can keep a formal tracker: which colleges’ formal halls you have been to,
+          how many times, a date and your own notes. Only you can see it. If you also choose a
+          display name and switch on “Show me on the leaderboard”, other signed-in members with a
+          verified @cam.ac.uk address see that name, your home college if you give one, and how many
+          colleges and formals you have been to; never your email, notes or dates. The leaderboard
+          is off until you switch it on. We do not collect or show what anyone spends.
+        </p>
         <h3>When you browse (analytics, only if you allow it)</h3>
         <p>
           Only if you choose “Accept analytics” (see <a href="#cookies">Cookies</a>), your browser
@@ -336,6 +345,11 @@ export default function PrivacyPage() {
             events shared on Cambridge mailing lists only to Cambridge members.
           </li>
           <li>
+            <strong>Your formal tracker</strong>: to provide the service you asked for (Article
+            6(1)(b)). <strong>The leaderboard</strong>: your consent (Article 6(1)(a)), given by
+            switching it on and withdrawn by switching it off or erasing your tracker.
+          </li>
+          <li>
             <strong>Site analytics in your browser</strong>, to see in aggregate which pages and
             features are used and where the site fails, so we can improve it: your consent (Article
             6(1)(a)), given with “Accept analytics” and withdrawn at any time under “Cookie
@@ -452,6 +466,10 @@ export default function PrivacyPage() {
             not added back.
           </li>
           <li>Sign-in accounts: until you ask us to delete them, or after two years unused.</li>
+          <li>
+            Your formal tracker: until you erase it (“Erase my tracker” deletes it at once) or your
+            account is deleted.
+          </li>
           <li>Copies of public web pages read by the harvester: 90 days.</li>
           <li>
             Backups of our database: one a night, kept on our own server for 14 nights and readable

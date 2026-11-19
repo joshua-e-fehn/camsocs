@@ -1222,6 +1222,47 @@ export const signInLinkSendFields = {
   sentAt: v.number(),
 }
 
+/**
+ * One college in a member's formal tracker (/formals/tracker, ENG-272;
+ * convex/formals.ts). Private to the account: never read by a public query,
+ * and no third party's name is stored (unlike the Cambridge Tracker's hosts).
+ * `attended` holds exactly when `visits` ≥ 1.
+ */
+export const formalEntryFields = {
+  /** The Better Auth user id, from the session only. */
+  userId: v.string(),
+  /** A college's organisation key (lib/data/colleges.json `key`). */
+  collegeKey: v.string(),
+  attended: v.boolean(),
+  /** Formals had there, 0–200. */
+  visits: v.number(),
+  /** `YYYY-MM-DD` of the (first) formal there, or null. */
+  visitedOn: v.union(v.string(), v.null()),
+  /** The member's own notes, at most 2,000 characters. */
+  notes: v.string(),
+  updatedAt: v.number(),
+}
+
+/**
+ * A member's tracker profile: the leaderboard opt-in and the counts the
+ * leaderboard sorts by, refreshed on every tracker write (convex/formals.ts).
+ * `displayName` is chosen by the member and checked not to be an address,
+ * URL or CRSid (convex/lib/formals.ts).
+ */
+export const formalProfileFields = {
+  userId: v.string(),
+  displayName: v.union(v.string(), v.null()),
+  onLeaderboard: v.boolean(),
+  homeCollegeKey: v.union(v.string(), v.null()),
+  /** Colleges ticked. */
+  colleges: v.number(),
+  /** Formals across the ticked colleges. */
+  visits: v.number(),
+  /** When `colleges` last changed: the leaderboard's tie-break (earlier first). */
+  reachedAt: v.number(),
+  updatedAt: v.number(),
+}
+
 export default defineSchema({
   // public, pipeline-owned
   organisations: defineTable(organisationFields)
@@ -1382,6 +1423,15 @@ export default defineSchema({
     .index("by_emailHash_sentAt", ["emailHash", "sentAt"])
     .index("by_clientHash_sentAt", ["clientHash", "sentAt"])
     .index("by_sentAt", ["sentAt"]),
+
+  // private to each member: the formal tracker (convex/formals.ts)
+  formalEntries: defineTable(formalEntryFields).index("by_userId_and_collegeKey", [
+    "userId",
+    "collegeKey",
+  ]),
+  formalProfiles: defineTable(formalProfileFields)
+    .index("by_userId", ["userId"])
+    .index("by_onLeaderboard_and_colleges_and_visits", ["onLeaderboard", "colleges", "visits"]),
 
   // private broker CRM
   people: defineTable(personFields)

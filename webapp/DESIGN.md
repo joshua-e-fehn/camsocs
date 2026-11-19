@@ -280,7 +280,7 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
 
 ## Shell & motifs
 
-- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · About with a
+- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · Formals · About with a
   teal underline on the current page, the "Search everything ⌘K" box, the account menu (Sign in
   lives there); a right sheet on phones.
 - **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the

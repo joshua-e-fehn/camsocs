@@ -52,6 +52,7 @@ export const NAV = [
   { href: "/events", label: "Events", hint: "Socials, shows, matches", prefetch: false },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures", prefetch: false },
   { href: "/societies", label: "Societies", hint: "The directory", prefetch: false },
+  { href: "/formals", label: "Formals", hint: "Formal hall, night by night", prefetch: undefined },
   { href: "/about", label: "About", hint: "Sources and method", prefetch: undefined },
 ] as const
 
@@ -61,7 +62,7 @@ function isActive(pathname: string, href: string) {
 
 /**
  * Site header (DESIGN.md "River & ink"): the crest and wordmark, Events ·
- * Talks · Societies · About with a teal mark under the current one, the
+ * Talks · Societies · Formals · About with a teal mark under the current one, the
  * "Search everything ⌘K" box (opens the palette) and the account menu.
  *
  * The account menu holds Sign in when signed out; signed in it shows a
