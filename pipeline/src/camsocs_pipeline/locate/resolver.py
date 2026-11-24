@@ -201,6 +201,9 @@ class Metrics:
     outside: int = 0
     #: Buildings found in the committed gazetteer (no request made).
     gazetteer_hits: int = 0
+    #: Items due only because their row is at a coarse venue: re-resolved
+    #: from the cached reply or the stored venue, never a new model call.
+    revisited: int = 0
     by_method: dict[str, int] = field(default_factory=dict)
     by_precision: dict[str, int] = field(default_factory=dict)
 
@@ -311,6 +314,17 @@ class Locator:
         ask: list[PendingItem] = []
         for item in items:
             plan = deterministic(item, self.index)
+            if plan is None and self._revisit(item, hashes[id(item)]):
+                # Due only because its row sits at a coarse venue: the
+                # cached reply, else the stored venue (set aside by `_row`
+                # for a better building the venue text names, else `area`
+                # or `building`). Never a new model call (the item never
+                # had one: it matched the venue by name before).
+                plan = self._cached(item, hashes[id(item)]) or Plan(
+                    LocateReply(decision="existing", venue_key=item.stored.venue_key),  # type: ignore[union-attr]
+                    "source" if item.stored.venue_key == item.venue_key else "alias",  # type: ignore[union-attr]
+                )
+                self.metrics.revisited += 1
             if plan is not None:
                 plans[id(item)] = plan
             else:
@@ -356,6 +370,24 @@ class Locator:
             self._used.add(row.venue_key)
 
     # -- the model -----------------------------------------------------------------------
+
+    def _revisit(self, item: PendingItem, digest: str) -> bool:
+        """Whether `item` is due only because its stored row is at a coarse
+        venue still known (`classified_coarse`): the row was made from this
+        very input (its hash is `digest`, with or without a version)."""
+        stored = item.stored
+        if stored is None or not self.classified_coarse(stored.venue_key):
+            return False
+        if self.index.get(stored.venue_key) is None:
+            return False
+        return _VERSION_SUFFIX.sub("", stored.input_hash) == digest
+
+    def _cached(self, item: PendingItem, digest: str) -> Plan | None:
+        cached = self.memo.get(PROMPT_NAME, digest, LocateReply)
+        if cached is None:
+            return None
+        self.metrics.llm_cache_hits += 1
+        return Plan(cached[0], "llm", cached[1])
 
     def _ask(self, items: Sequence[PendingItem], hashes: dict[int, str]) -> list[Plan | None]:
         """A plan per item from the memo or the model, in order; None when the
@@ -996,6 +1028,10 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
         # The source's own venue, still without coordinates: look it up.
         return Plan(LocateReply(decision="existing", venue_key=own.key), "source")
     return None
+
+
+#: The resolver version a row's input hash may end with (`row_input_hash`).
+_VERSION_SUFFIX = re.compile(r":r\d+$")
 
 
 def row_input_hash(digest: str, precision: str, *, coarse: bool = False) -> str:

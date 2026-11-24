@@ -168,6 +168,10 @@ longer exists).
   `osmUrl` (2026-11-24, optional) is the `sourceUrl` of the venue's `lat`
   (else `name`) when it is an OpenStreetMap object's page: the stage
   classifies the venue by that object (§2 step 4, "Coarse venues").
+  Deploy this Convex change (prod) before or with the pipeline that reads
+  it: until `osmUrl` is served no venue is classified, so rows at coarse
+  venues stay as they are (a clean no-op, tested), while the r3 bump
+  re-runs the `unknown` rows from cache.
 - `ingestionRoute("locations/batch")`: `{locations: ItemLocationInput[]}` (max 500).
   - Upsert by (kind, itemKey).
   - Validates the `ven-` key format, that the venue exists (unless precision is
@@ -239,8 +243,12 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
    (`<hash>:r3`, `resolver.RESOLVER_VERSION`), and one without the current
    version is due again: a new resolver (the gazetteer, r2; coarse venues,
    r3, 2026-11-24) looks those items up again from the cached reply,
-   asking no model. Rows at a place to go keep their plain hash and are
-   left alone.
+   asking no model. An item due only because its row is at a coarse venue
+   (same input) never asks the model: without a cached reply (it matched
+   the venue by name before r3) it is re-resolved at its stored venue,
+   which step 4 sets aside for a building the venue text names, else
+   gives `area` or `building` (metric `revisitedRows`). Rows at a place to
+   go keep their plain hash and are left alone.
 2. **Deterministic first:**
    - an online-only talk, or an event with an online venue (Zoom/Teams/link),
      and no physical place → `online`;
@@ -358,11 +366,16 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
      it holds the object, else Nominatim `/lookup` (`osm_ids=W1,N2,R3`, ≤ 50
      a request, one a second, our User-Agent, ≤ 20 requests a run), kept in
      stage state `venueClass` (`{key: {osm, class, type, name, checkedAt}}`)
-     and asked again after 90 days; an unanswered lookup leaves the venue
-     trusted for that run. `place` / `boundary` is an **area** (not
-     `place=square`); `highway`, a station or a stop is a **street**
-     (`nominatim.level_of`); a venue with no OSM object (Camdram's, a
-     society's) is trusted. A venue whose name is the object's *is* the
+     and asked again after 90 days; an unanswered (or capped) lookup
+     leaves a never-classified venue trusted for that run, and one whose
+     answer is past 90 days judged by that old answer until a new one
+     comes (metric `venueClassStale`). `place=*` (not a square, a house, a
+     farm or an island) and an administrative, political, postal or
+     ceremonial `boundary` are an **area**; `highway=*` (not a stop) is a
+     **street** (`venue_class.coarse_level`, not the geocoding hits'
+     `nominatim.level_of`); a station, an airport, a protected area or
+     any other object is a place to go; a venue with no OSM object
+     (Camdram's, a society's) is trusted. A venue whose name is the object's *is* the
      town or street: it is reached by key only, never by name, alias or
      overlap and never in the model's shortlist (a building mention such as
      "Trinity Hall" wins over "Cambridge"). Before an item falls back on a
@@ -377,7 +390,9 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
      segments naming the venue itself (its name, its initials such as
      "CMS"), an address (a street, "4-5 Peas Hill", a postcode even cut
      short as "CB2 3P", the town) are dropped: "Bridgetower Room, Trinity
-     Hall Cambridge, Trinity Ln" at Trinity Hall is "Bridgetower Room".
+     Hall Cambridge, Trinity Ln" at Trinity Hall is "Bridgetower Room". A
+     segment that is the venue's name plus any other word, generic or not,
+     is a room and kept ("Trinity College Chapel" at Trinity College).
    - Post the claims (name, address, lat, lng): OpenStreetMap's own values,
      or postcodes.io's coordinates. A source name that reads as a person's
      makes no venue. Where the source names no object, the model's building
@@ -405,6 +420,7 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
 6. Report metrics: `resolved`, `unknown`, `llmCalls`, `nominatimCalls`,
    `photonCalls`, `postcodesCalls`, `postcodePoints`, `gazetteerHits`,
    `placesCalls`, `newVenues`, `coarseVenues`, `venueClassLookups`,
+   `venueClassStale`, `revisitedRows`,
    `modelNamedVenues`, `outsideCambridge` and `unresolvedShare`. Add a note
    when the share is above 2%.
    - Budgets: 1,200 LLM items, 500 Nominatim, 200 Photon, 300 postcodes.io

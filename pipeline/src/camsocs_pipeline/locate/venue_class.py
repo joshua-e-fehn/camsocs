@@ -17,10 +17,12 @@ object is:
   User-Agent). Answers are kept in stage state (`venueClass`: venue key →
   ``{osm, class, type, name, checkedAt}``) and asked again after
   `RECHECK_DAYS`;
-- `place` / `boundary` (a settlement, a district, a county) is an **area**;
-  a `highway`, a station or a stop (`nominatim.level_of`) is a **street**;
-  a square (`place=square`) is a place one can go to, and so is everything
-  else (a building, an amenity, a park);
+- `place` (a settlement, a district; not a square, a house, a farm or an
+  island) and an administrative, political, postal or ceremonial
+  `boundary` are an **area**; a `highway` (not a stop) is a **street**
+  (`coarse_level`, a rule for known venues, not `nominatim.level_of`'s for
+  geocoding hits); everything else (a building, an amenity, a square, a
+  station, a park, a protected area) is a place one can go to;
 - a venue without an OSM object (Camdram's, a society's own, a postcode's
   point) is trusted as it is.
 
@@ -31,15 +33,16 @@ named that was only placed at a street's point keeps its name for matching;
 either way an area gives an item `area` precision and a street at most
 `building` (`resolver.Locator`).
 
-Only a real answer is kept: an outage or a refusal leaves the venues
-unclassified for this run (trusted, with a note), and the next run asks
-again.
+Only a real answer is kept: an outage, a refusal or the request cap
+leaves a venue never classified before trusted for this run (with a
+note), and one whose cached answer is past `RECHECK_DAYS` judged by that
+answer; the next run asks again.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
@@ -53,7 +56,6 @@ from camsocs_pipeline.locate.nominatim import (
     Nominatim,
     NominatimBlocked,
     NominatimUnavailable,
-    level_of,
 )
 from camsocs_pipeline.locate.venue_name import venue_display_name
 
@@ -84,22 +86,45 @@ class Classification:
     #: Venues classified from the gazetteer, the cache and `/lookup` this run.
     from_gazetteer: int = 0
     from_cache: int = 0
+    #: Venues past `RECHECK_DAYS` judged by their old answer (no new one).
+    from_stale: int = 0
     looked_up: int = 0
     #: `/lookup` requests made.
     calls: int = 0
     notes: list[str] = field(default_factory=list)
 
 
+#: `place=*` values that are somewhere to go, not a settlement or district.
+_PLACE_TO_GO = frozenset(
+    {"square", "house", "houses", "farm", "island", "islet", "plot", "isolated_dwelling"}
+)
+#: `boundary=*` values that are a town, a district or a county. Others (a
+#: protected area, a national park) are places one can go to.
+_AREA_BOUNDARIES = frozenset({"administrative", "political", "postal_code", "ceremonial"})
+#: `highway=*` values that are a stop, not the road: a place to go.
+_HIGHWAY_STOPS = frozenset({"bus_stop", "platform", "stop"})
+
+
 def coarse_level(
     category: str | None, kind: str | None, addresstype: str | None = None
 ) -> CoarseLevel | None:
-    """How coarse an OSM object of this key / value is: "area" for a
-    settlement or boundary, "street" for a road, station or stop, None for
-    a place one can go to (a building, an amenity, a square)."""
-    if (category or "").lower() == "place" and (kind or "").lower() == "square":
-        return None
-    level = level_of(category, kind, addresstype)
-    return None if level == "feature" else level
+    """How coarse a *known venue's* OSM object of this key / value is (not
+    `nominatim.level_of`, which grades geocoding hits): "area" for a
+    settlement or district (`place=*` but a square, a house, a farm or an
+    island; an administrative, political, postal or ceremonial boundary),
+    "street" for a road (`highway=*` but a stop), None for a place one can
+    go to (a building, an amenity, a square, a station, a park).
+    `addresstype` is accepted for the cache's shape and not read."""
+    del addresstype
+    category = (category or "").lower()
+    kind = (kind or "").lower()
+    if category == "place":
+        return None if kind in _PLACE_TO_GO else "area"
+    if category == "boundary":
+        return "area" if kind in _AREA_BOUNDARIES else None
+    if category == "highway":
+        return None if kind in _HIGHWAY_STOPS else "street"
+    return None
 
 
 def is_itself(venue: VenueRow, osm_name: str | None) -> bool:
@@ -131,6 +156,9 @@ def classify_venues(
     out = Classification()
     recheck_before = (now - timedelta(days=RECHECK_DAYS)).date()
     todo: dict[str, list[VenueRow]] = {}
+    #: Venue key → its cached answer past `RECHECK_DAYS`.
+    stale: dict[str, dict[str, Any]] = {}
+    answered: set[str] = set()
     for venue in venues:
         ident = venue.osm_ident
         if ident is None or is_area_key(venue.key):
@@ -142,25 +170,19 @@ def classify_venues(
             out.from_gazetteer += 1
             continue
         cached = state.get(venue.key)
-        if (
-            isinstance(cached, dict)
-            and cached.get("osm") == ident
-            and _fresh(cached.get("checkedAt"), recheck_before)
-        ):
-            _judge(
-                out,
-                venue,
-                cached.get("class"),
-                cached.get("type"),
-                cached.get("addresstype"),
-                cached.get("name"),
-            )
-            out.from_cache += 1
-            continue
+        if isinstance(cached, dict) and cached.get("osm") == ident:
+            if _fresh(cached.get("checkedAt"), recheck_before):
+                _judge_cached(out, venue, cached)
+                out.from_cache += 1
+                continue
+            # Due to be asked again: until a real answer comes, the old
+            # one stands (an outage or the cap never un-classifies a venue).
+            stale[venue.key] = cached
         todo.setdefault(ident, []).append(venue)
     if not todo or nominatim is None:
         if todo:
             out.notes.append(f"{len(todo)} venues not classified (no lookups in this run)")
+        _keep_stale(out, todo, stale, answered=set())
         return out
     idents = list(todo)
     batches = [idents[i : i + LOOKUP_BATCH] for i in range(0, len(idents), LOOKUP_BATCH)]
@@ -181,6 +203,7 @@ def classify_venues(
             break
         out.calls += 1
         stamp = now.date().isoformat()
+        answered.update(batch)
         for ident in batch:
             osm = found.get(ident)
             for venue in todo[ident]:
@@ -199,7 +222,36 @@ def classify_venues(
                     _judge(out, venue, osm.category, osm.kind, osm.addresstype, osm.name)
     if left:
         out.notes.append(f"{left} venue objects wait for the next run's lookup")
+    _keep_stale(out, todo, stale, answered)
     return out
+
+
+def _keep_stale(
+    out: Classification,
+    todo: Mapping[str, list[VenueRow]],
+    stale: Mapping[str, Mapping[str, Any]],
+    answered: set[str],
+) -> None:
+    """Judge the venues whose recheck got no answer by their old one."""
+    for ident, rows in todo.items():
+        if ident in answered:
+            continue
+        for venue in rows:
+            cached = stale.get(venue.key)
+            if cached is not None:
+                _judge_cached(out, venue, cached)
+                out.from_stale += 1
+
+
+def _judge_cached(out: Classification, venue: VenueRow, cached: Mapping[str, Any]) -> None:
+    _judge(
+        out,
+        venue,
+        cached.get("class"),
+        cached.get("type"),
+        cached.get("addresstype"),
+        cached.get("name"),
+    )
 
 
 def _judge(

@@ -225,6 +225,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             "gazetteerHits": metrics.gazetteer_hits,
             "coarseVenues": len(classes.coarse),
             "venueClassLookups": classes.calls,
+            "venueClassStale": classes.from_stale,
+            "revisitedRows": metrics.revisited,
             "placesCalls": places.calls if places else 0,
             "newVenues": metrics.new_venues,
             "modelNamedVenues": metrics.model_named_venues,

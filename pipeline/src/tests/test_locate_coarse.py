@@ -213,8 +213,19 @@ def test_lookup_without_an_answer_raises(net: respx.MockRouter, status: int, err
         ("place", "town", None, "area"),
         ("highway", "residential", "road", "street"),
         ("highway", "pedestrian", None, "street"),
-        ("railway", "station", None, "street"),
         ("place", "square", None, None),
+        # A venue's object, not a geocoding hit: stations, stops, house
+        # nodes and parks are places to go; a county is an area.
+        ("railway", "station", None, None),
+        ("public_transport", "station", None, None),
+        ("aeroway", "aerodrome", None, None),
+        ("amenity", "bus_station", None, None),
+        ("highway", "bus_stop", None, None),
+        ("place", "house", None, None),
+        ("boundary", "protected_area", None, None),
+        ("boundary", "national_park", None, None),
+        ("boundary", "ceremonial", None, "area"),
+        ("boundary", "postal_code", None, "area"),
         ("building", "university", None, None),
         ("amenity", "pub", None, None),
         ("leisure", "park", None, None),
@@ -286,6 +297,44 @@ def test_an_unanswered_lookup_leaves_the_venues_trusted_and_uncached(
     # A dry run (no Nominatim): the cache only, never a request.
     dry = classify_venues([CAMBRIDGE], state=state, now=NOW, nominatim=None)
     assert dry.coarse == {} and "not classified" in dry.notes[0]
+
+
+STALE_CAMBRIDGE = {
+    "osm": "relation/295355",
+    "class": "boundary",
+    "type": "administrative",
+    "addresstype": None,
+    "name": "Cambridge",
+    "checkedAt": "2026-01-02",
+}
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_a_stale_class_stands_when_its_recheck_gets_no_answer(
+    net: respx.MockRouter, status: int
+) -> None:
+    net.get(f"{NOMINATIM}/lookup").respond(status)
+    state: dict[str, Any] = {CAMBRIDGE.key: dict(STALE_CAMBRIDGE)}
+    out = classify_venues([CAMBRIDGE], state=state, now=NOW, nominatim=nominatim())
+    assert out.coarse == {CAMBRIDGE.key: Coarse("area", itself=True)}
+    assert out.from_stale == 1
+    assert state[CAMBRIDGE.key] == STALE_CAMBRIDGE, "only a real answer refreshes it"
+    # A dry run (no Nominatim) judges it by the old answer too.
+    dry = classify_venues([CAMBRIDGE], state=state, now=NOW, nominatim=None)
+    assert dry.coarse == {CAMBRIDGE.key: Coarse("area", itself=True)}
+
+
+def test_a_stale_class_stands_when_the_request_cap_is_reached(net: respx.MockRouter) -> None:
+    route = mock_lookup(net)
+    state: dict[str, Any] = {CAMBRIDGE.key: dict(STALE_CAMBRIDGE)}
+    out = classify_venues([CAMBRIDGE], state=state, now=NOW, nominatim=nominatim(), max_calls=0)
+    assert route.call_count == 0
+    assert out.coarse == {CAMBRIDGE.key: Coarse("area", itself=True)} and out.from_stale == 1
+    assert any("wait for the next run" in note for note in out.notes)
+    # With a request left it is asked again and the answer replaces it.
+    again = classify_venues([CAMBRIDGE], state=state, now=NOW, nominatim=nominatim())
+    assert route.call_count == 1 and again.from_stale == 0
+    assert state[CAMBRIDGE.key]["checkedAt"] == "2026-11-24"
 
 
 # --- the resolver: the production rows ---------------------------------------------------------
@@ -521,6 +570,99 @@ def test_a_row_that_stays_at_an_area_is_not_due_again(tmp_path, net: respx.MockR
     assert stage.due([posted], CLASSES) == ([], 1)
 
 
+def test_a_row_alias_matched_to_the_city_is_revisited_without_the_model(
+    tmp_path, net: respx.MockRouter
+) -> None:
+    # Before r3 "Cambridge" matched ven-cambridge by name (method alias), so
+    # no reply was ever cached. Now the city is hidden from matching by name;
+    # re-resolving its row must not ask the model.
+    item = event(venueText="Cambridge")
+    digest = input_hash(item, PROMPT_NAME)
+    old = stored(item, inputHash=digest, precision="exact", venueKey="ven-cambridge")
+    assert stage.due([old], CLASSES) == ([old], 0)
+    fake = FakeLLM(reply(precision="exact", venue_key="ven-adc-theatre"))
+    run = run_with(tmp_path, net, fake)
+    [row] = run.resolve([old])
+    assert fake.calls == [], "no model call for a revisited row"
+    assert (row.precision, row.venue_key, row.method) == ("area", "ven-cambridge", "alias")
+    assert row.area_label == "Cambridge (exact place not known)"
+    assert run.metrics.revisited == 1 and run.metrics.llm_calls == 0
+    posted = stored(item, inputHash=row.input_hash, precision="area", venueKey="ven-cambridge")
+    assert stage.due([posted], CLASSES) == ([], 1)
+
+
+def test_a_revisited_row_without_a_reply_finds_the_building_its_text_names(
+    tmp_path, net: respx.MockRouter
+) -> None:
+    item = event(venueText="Bridgetower Room, Trinity Hall Cambridge, Trinity Ln")
+    old = stored(
+        item, inputHash=input_hash(item, PROMPT_NAME), precision="exact", venueKey="ven-cambridge"
+    )
+    fake = FakeLLM(reply(precision="exact", venue_key="ven-adc-theatre"))
+    [row] = run_with(tmp_path, net, fake).resolve([old])
+    assert fake.calls == []
+    assert row.venue_key == "ven-trinity-hall" and row.precision != "area"
+
+
+def test_a_new_item_naming_only_the_city_is_still_read_by_the_model(
+    tmp_path, net: respx.MockRouter
+) -> None:
+    # Changed input (or no row yet) is not a revisit: the model reads it.
+    item = event(venueText="Cambridge")
+    changed = stored(item, inputHash="locate-v1:other", precision="exact", venueKey="ven-cambridge")
+    fake = FakeLLM(reply(precision="area", area_label="Central Cambridge"))
+    [row] = run_with(tmp_path, net, fake).resolve([changed])
+    assert len(fake.calls) == 1 and row.method == "llm"
+
+
+def test_without_osm_urls_the_stage_classifies_nothing_and_reposts_nothing(
+    make_settings, tmp_path, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A Convex deployment older than `osmUrl` (prod before its deploy): no
+    # venue is classified, no lookup is made, and a row at a known venue,
+    # even the city, is left as it is.
+    fake = FakeLLM(reply(precision="unknown"))
+    monkeypatch.setattr(stage, "LLMClient", lambda _settings: fake)
+    monkeypatch.setattr(type(make_settings()), "require_llm", lambda _self: None)
+    settings = make_settings(nominatim_url=NOMINATIM)
+    city = event(venueText="Cambridge, UK")
+    adc = event("evt-adc", venueText="ADC Theatre")
+    items = [
+        {
+            **wire(item),
+            "stored": {
+                "inputHash": input_hash(item, PROMPT_NAME),
+                "precision": "exact",
+                "venueKey": key,
+                "startsAt": STARTS,
+            },
+        }
+        for item, key in ((city, "ven-cambridge"), (adc, "ven-adc-theatre"))
+    ]
+    venues = [
+        v.model_dump(by_alias=True, exclude_none=True, exclude={"osm_url"})
+        for v in [*KNOWN, *COARSE_VENUES]
+    ]
+    routes = convex(net, items, venues)
+    lookup = mock_lookup(net)
+    mock_nominatim(net, {})
+    report = RunReport(run_key="20261124T090000Z-abcdef", command="sync", dry_run=False)
+    ctx = StageContext(
+        settings=settings,
+        report=report.stage("locate"),
+        run=report,
+        loader=ConvexLoader(SITE, "test-key", dry_run=False),
+        state=SyncState(),
+        staging=StagingStore(tmp_path / "staging"),
+        dry_run=False,
+        limit=None,
+    )
+    stage.run(ctx, now=NOW)
+    assert lookup.call_count == 0 and routes["batch"].call_count == 0
+    assert fake.calls == []
+    assert ctx.report.metrics["coarseVenues"] == 0 and ctx.report.unchanged == 2
+
+
 def test_the_stage_classifies_venues_and_fixes_their_rows(
     make_settings, tmp_path, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -597,6 +739,16 @@ def test_the_stage_classifies_venues_and_fixes_their_rows(
         ("1st Floor Seminar Room", "Quokka Building", "1st Floor Seminar Room"),
         ("ADC", "ADC Theatre", None),
         ("Cambridge, UK", "Quokka Building", None),
+        # The venue's name and a room word is the venue's room, kept.
+        ("Trinity College Chapel", "Trinity College", "Trinity College Chapel"),
+        (
+            "Wolfson College Lecture Theatre",
+            "Wolfson College",
+            "Wolfson College Lecture Theatre",
+        ),
+        ("Jesus College Chapel, Jesus Lane", "Jesus College", "Jesus College Chapel"),
+        ("Trinity Hall, Cambridge", "Trinity Hall", None),
+        ("The Drive", "Quokka Building", "The Drive"),
     ],
 )
 def test_a_room_is_never_the_building_an_address_or_a_postcode(

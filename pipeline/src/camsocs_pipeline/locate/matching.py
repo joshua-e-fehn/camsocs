@@ -260,6 +260,11 @@ _NUMBERED_STREET_END = _STREET_END | {
 _HOUSE_NUMBER = re.compile(r"^\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?\s+[a-z]", re.IGNORECASE)
 #: A segment that is only the town or the country.
 _TOWNS = frozenset({"cambridge", "cambridgeshire", "uk", "united kingdom", "england", "gb"})
+#: Words a venue's name may carry beside it in a room's text and still be
+#: only the venue ("Trinity Hall Cambridge", "University of X").
+_VENUE_FILLER = frozenset(
+    {"cambridge", "cambridgeshire", "uk", "england", "university", "of", "the"}
+)
 
 
 def _address_segment(segment: str) -> bool:
@@ -273,7 +278,8 @@ def _address_segment(segment: str) -> bool:
         return True
     if _ANY_POSTCODE.search(segment) or _CB_POSTCODE.search(segment):
         return True
-    if words[-1] in _STREET_END and len(words) >= 2:
+    if words[-1] in _STREET_END and len([word for word in words if word != "the"]) >= 2:
+        # "Wilberforce Road", "Trinity Ln"; never "The Drive" (a room's name).
         return True
     return bool(_HOUSE_NUMBER.match(segment.strip())) and words[-1] in _NUMBERED_STREET_END
 
@@ -282,7 +288,8 @@ def _names_the_venue(segment: str, venue_name: str) -> bool:
     """Whether a segment of a room's text is the venue itself ("Trinity
     Hall Cambridge" at Trinity Hall, "BrewBoard" at BrewBoard): every word
     the venue's name has, and nothing more than generic words, or its
-    initials ("CMS")."""
+    initials ("CMS"). A generic word more ("Chapel", "Lecture Theatre")
+    makes it a room of the venue, kept."""
     own = tokens(venue_name)
     words = tokens(segment)
     bare = segment.strip()
@@ -298,7 +305,12 @@ def _names_the_venue(segment: str, venue_name: str) -> bool:
         return normalise(segment) == normalise(venue_name)
     if normalise(segment) == normalise(venue_name):
         return True
-    return own <= words and not (distinctive(segment) - distinctive(venue_name))
+    # Every word of the venue's name and nothing but the town around it
+    # ("Trinity Hall Cambridge"). Any other word, generic or not, is the
+    # room's ("Trinity College Chapel", "Wolfson College Lecture Theatre").
+    said = set(normalise(segment).split())
+    name = set(normalise(venue_name).split()) - _VENUE_FILLER
+    return bool(name) and name <= said and said - name <= _VENUE_FILLER
 
 
 def clean_room(room: str | None, venue_name: str) -> str | None:
