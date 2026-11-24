@@ -31,12 +31,20 @@
     {
       "osm": "way/136330930",
       "building": "Department of Land Economy",
-      "names": ["Department of Land Economy", "Land Economy", "Land Economy Department"]
+      "names": [
+        "Department of Land Economy",
+        "Land Economy",
+        "Land Economy Department"
+      ]
     },
     {
       "osm": "way/132558230",
       "building": "11 West Road",
-      "names": ["Faculty of Music", "Music Faculty", "Cambridge Faculty of Music"]
+      "names": [
+        "Faculty of Music",
+        "Music Faculty",
+        "Cambridge Faculty of Music"
+      ]
     },
     {
       "osm": "way/28364543",
@@ -58,12 +66,22 @@
     {
       "osm": "relation/17935287",
       "building": "Ray Dolby Centre (Cavendish Laboratory)",
-      "names": ["Ray Dolby Centre", "RDC", "Cavendish III", "Ray Dolby Centre, Cavendish Laboratory"]
+      "names": [
+        "Ray Dolby Centre",
+        "RDC",
+        "Cavendish III",
+        "Ray Dolby Centre, Cavendish Laboratory"
+      ]
     },
     {
       "osm": "way/164365618",
       "building": "Cavendish Laboratory",
-      "names": ["Cavendish Laboratory", "Cavendish Lab", "Department of Physics", "Physics Department"]
+      "names": [
+        "Cavendish Laboratory",
+        "Cavendish Lab",
+        "Department of Physics",
+        "Physics Department"
+      ]
     },
     {
       "osm": "way/4195915",
@@ -82,17 +100,29 @@
     {
       "osm": "way/12861842",
       "building": "Isaac Newton Institute for Mathematical Sciences",
-      "names": ["Isaac Newton Institute", "Newton Institute", "INI"]
+      "names": [
+        "Isaac Newton Institute",
+        "Newton Institute",
+        "INI"
+      ]
     },
     {
       "osm": "way/39640956",
       "building": "Cambridge Judge Business School",
-      "names": ["Judge Business School", "Cambridge Judge", "JBS"]
+      "names": [
+        "Judge Business School",
+        "Cambridge Judge",
+        "JBS"
+      ]
     },
     {
       "osm": "way/136225903",
       "building": "Department of Engineering (University of Cambridge)",
-      "names": ["Department of Engineering", "Engineering Department", "CUED"]
+      "names": [
+        "Department of Engineering",
+        "Engineering Department",
+        "CUED"
+      ]
     },
     {
       "osm": "way/127718988",
@@ -106,22 +136,46 @@
     {
       "osm": "way/131662340",
       "building": "Zoology Building",
-      "names": ["Department of Zoology", "Zoology Department"]
+      "names": [
+        "Department of Zoology",
+        "Zoology Department"
+      ]
     },
     {
       "osm": "way/23439371",
       "building": "Observatory Building and Library",
-      "names": ["Institute of Astronomy", "IoA"]
+      "names": [
+        "Institute of Astronomy",
+        "IoA"
+      ]
     },
     {
       "osm": "way/38006429",
       "building": "History Building",
-      "names": ["Faculty of History", "Seeley Historical Library"]
+      "names": [
+        "Faculty of History",
+        "Seeley Historical Library"
+      ]
     },
     {
       "osm": "way/27411570",
       "building": "University Centre (Grad Pad)",
-      "names": ["University Centre", "Grad Pad"]
+      "names": [
+        "University Centre",
+        "Grad Pad"
+      ]
+    },
+    {
+      "osm": "way/4195927",
+      "building": "Electrical Engineering Division Building",
+      "names": [
+        "Cambridge Graphene Centre",
+        "Graphene Centre",
+        "Electrical Engineering Division",
+        "9 JJ Thomson Avenue",
+        "9 J J Thomson Avenue",
+        "CAPE Building"
+      ]
     }
   ]
 }

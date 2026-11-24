@@ -52,6 +52,7 @@ RAY_DOLBY = "relation/17935287"
 AUSTIN_ROBINSON = "way/26378137"
 CMS = "way/4195915"
 WILLIAM_GATES = "relation/8388"
+ELECTRICAL_ENGINEERING = "way/4195927"
 ROBINSON = "way/3997908"
 PEMBROKE = "way/31773719"
 DARWIN = "way/29202801"
@@ -224,6 +225,8 @@ def test_an_alias_to_a_missing_place_is_refused() -> None:
         (["William Gates Building"], WILLIAM_GATES),
         (["Lecture Theatre 1, Computer Laboratory"], WILLIAM_GATES),
         (["Department of Computer Science and Technology"], WILLIAM_GATES),
+        (["Cambridge Graphene Centre Seminar Room"], ELECTRICAL_ENGINEERING),
+        (["Cambridge Graphene Centre"], ELECTRICAL_ENGINEERING),
         # The first text that names a place wins.
         ([None, "", "Somewhere", "Keynes Room"], AUSTIN_ROBINSON),
     ],

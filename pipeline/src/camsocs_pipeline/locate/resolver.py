@@ -115,7 +115,8 @@ PROMPT_NAME = "locate_v2"
 #: r3 (2026-11-24): coarse venues (a town, a district, a street: by their
 #: OSM class, `venue_class.py`) are never `exact`; rows at one carry the
 #: version too, so a later resolver may still find their building.
-RESOLVER_VERSION = "r3"
+#: r4 (2026-11-24): the Cambridge Graphene Centre alias.
+RESOLVER_VERSION = "r4"
 PROMPT_PATH = Path(__file__).parent.parent / "extract" / "prompts" / f"{PROMPT_NAME}.md"
 
 #: Budgets (§2 step 6): items asked of the model (cached replies are free),
