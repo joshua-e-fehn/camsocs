@@ -91,6 +91,7 @@ from camsocs_pipeline.locate.nominatim import Nominatim
 from camsocs_pipeline.locate.photon import Photon
 from camsocs_pipeline.locate.places import Places, PlacesBlocked, PlacesUnavailable, place_url
 from camsocs_pipeline.locate.postcodes import Postcodes, find_postcode
+from camsocs_pipeline.locate.venue_name import venue_display_name
 from camsocs_pipeline.models.observation import FieldObs
 from camsocs_pipeline.models.wire import ClaimInput
 
@@ -574,6 +575,10 @@ class Locator:
             known = self._known(key, name)
             if known is not None:
                 return known
+        # Posted without OpenStreetMap's "(University of Cambridge)" /
+        # ", Cambridge" suffix (venue_name.py); the key stays minted from the
+        # source's own name, so the same hit finds this venue again.
+        name = venue_display_name(name)
         address = single_line(hit.address, VENUE_ADDRESS_MAX)
         model_address = None
         if address is None and model_name is not None:

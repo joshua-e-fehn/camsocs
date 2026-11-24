@@ -30,6 +30,14 @@ describe("placeLineModel", () => {
     expect(model.onMap).toBe(true)
   })
 
+  test("a venue name from OpenStreetMap is printed without its university suffix", () => {
+    const model = placeLineModel({
+      ...EXACT,
+      venue: { ...VENUE, name: "Invented Hall (University of Cambridge)" },
+    })
+    expect(model.label).toBe("Seminar Room 1, Invented Hall")
+  })
+
   test("building: says it is inferred", () => {
     const model = placeLineModel({ precision: "building", venue: VENUE })
     expect(model.label).toBe("Invented Hall")

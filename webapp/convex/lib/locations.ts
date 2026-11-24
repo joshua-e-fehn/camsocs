@@ -1,4 +1,5 @@
 import { v } from "convex/values"
+import { venueDisplayName } from "../../lib/venue-name"
 import type { ItemLocationKind, ItemLocationPrecision } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
@@ -80,7 +81,8 @@ export function venueCache(ctx: QueryCtx) {
  * What to print for an item's place: "Seminar Room 1, Isaac Newton
  * Institute" (room, venue name); for an `area` row its area label; else the
  * source's own venue text; else "". Online items without any text read
- * "Online".
+ * "Online". The venue's name is printed without its "(University of
+ * Cambridge)"-style suffix (lib/venue-name.ts).
  */
 export function placeLabel(
   row: Pick<Doc<"itemLocations">, "precision" | "room" | "areaLabel"> | null,
@@ -91,7 +93,8 @@ export function placeLabel(
   if (!row || row.precision === "unknown") return raw
   if (row.precision === "online") return raw || "Online"
   if (row.precision === "area" && row.areaLabel) return row.areaLabel
-  if (venueName) return row.room ? `${row.room}, ${venueName}` : venueName
+  const name = venueName ? venueDisplayName(venueName) : undefined
+  if (name) return row.room ? `${row.room}, ${name}` : name
   return row.areaLabel ?? raw
 }
 

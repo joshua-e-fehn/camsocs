@@ -418,6 +418,29 @@ def test_a_new_venue_is_found_on_osm_and_posted_with_osm_values_only(
     assert "ven-trinity-college: Trinity College" in fake.calls[0]["text"]
 
 
+def test_a_new_venue_is_posted_without_the_university_suffix(
+    tmp_path, net: respx.MockRouter
+) -> None:
+    mock_nominatim(
+        net,
+        {"Burrow Hall, Cambridge": [osm("Burrow Hall (University of Cambridge)")]},
+    )
+    fake = FakeLLM(
+        reply(
+            decision="new",
+            new_venue={"name": "Burrow Hall", "osm_query": "Burrow Hall, Cambridge"},
+            precision="exact",
+        )
+    )
+    run = locator(tmp_path, fake)
+    [row] = run.resolve([event(venueText="Burrow Hall")])
+    # The key is still minted from OpenStreetMap's own name, so the same hit
+    # finds the venue again; the name is posted without the suffix.
+    assert row.venue_key == "ven-burrow-hall-university-of-cambridge"
+    claims = {c.field: c for c in run.venue_claims()}
+    assert claims["name"].value == "Burrow Hall"
+
+
 def test_an_osm_place_with_a_persons_name_is_no_venue(tmp_path, net: respx.MockRouter) -> None:
     mock_nominatim(net, {"Dr Quokka's rooms, Cambridge": [osm("Dr Quokka's rooms")]})
     fake = FakeLLM(reply(decision="new", new_venue={"name": "Dr Quokka's rooms"}))

@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { dayWindow, isIsoDate } from "../lib/calendar"
 import { deploymentProfile } from "../lib/campus/deployment"
 import { eventPath } from "../lib/talks-boundary"
+import { venueDisplayName } from "../lib/venue-name"
 import {
   EVENT_TYPES,
   EVENT_VISIBILITIES,
@@ -50,6 +51,7 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
  * Venues are read by key, only those the day's rows reference (never
  * `venues.list`); only venues with coordinates are returned, and an item's
  * `venueKey` is set only when its venue is among them (a pin can be drawn).
+ * Venue names are display names (lib/venue-name.ts), keys unchanged.
  */
 
 const MAX_DAY_TALKS = 500
@@ -112,6 +114,11 @@ function joinNames(names: string[]): string | undefined {
   if (names.length === 1) return names[0]
   if (names.length === 2) return `${names[0]} and ${names[1]}`
   return `${names[0]} and ${names.length - 1} others`
+}
+
+/** A pinned venue as the map prints it: its display name, key unchanged. */
+function shownVenue(venue: Doc<"venues">): VenuePublic {
+  return { ...venuePublic(venue), name: venueDisplayName(venue.name) }
 }
 
 type Located = {
@@ -195,7 +202,7 @@ export const day = query({
         contacts,
         names,
       )
-      if (place.pinned) pins.set(place.pinned.key, venuePublic(place.pinned))
+      if (place.pinned) pins.set(place.pinned.key, shownVenue(place.pinned))
       const orgLabel = item.fromUniversity
         ? deploymentProfile().university.name
         : joinNames(item.organisers.filter((o) => o.role !== "sponsor").map((o) => o.name))
@@ -236,7 +243,7 @@ export const day = query({
           contacts,
           names,
         )
-        if (place.pinned) pins.set(place.pinned.key, venuePublic(place.pinned))
+        if (place.pinned) pins.set(place.pinned.key, shownVenue(place.pinned))
         const orgLabel = item.series ?? item.departments[0]?.shortName
         items.push({
           kind: "talk",
