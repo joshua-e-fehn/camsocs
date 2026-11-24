@@ -53,6 +53,7 @@ AUSTIN_ROBINSON = "way/26378137"
 CMS = "way/4195915"
 WILLIAM_GATES = "relation/8388"
 ELECTRICAL_ENGINEERING = "way/4195927"
+KIKI = "node/127059763"
 ROBINSON = "way/3997908"
 PEMBROKE = "way/31773719"
 DARWIN = "way/29202801"
@@ -227,6 +228,8 @@ def test_an_alias_to_a_missing_place_is_refused() -> None:
         (["Department of Computer Science and Technology"], WILLIAM_GATES),
         (["Cambridge Graphene Centre Seminar Room"], ELECTRICAL_ENGINEERING),
         (["Cambridge Graphene Centre"], ELECTRICAL_ENGINEERING),
+        (["Kiki's"], KIKI),
+        (["Kiki’s"], KIKI),
         # The first text that names a place wins.
         ([None, "", "Somewhere", "Keynes Room"], AUSTIN_ROBINSON),
     ],
@@ -239,7 +242,6 @@ def test_the_gazetteer_finds_cambridge_buildings(texts: list[str | None], ident:
 @pytest.mark.parametrize(
     "text",
     [
-        "Kiki's",  # OSM has no Kiki's in Cambridge (a nightclub "KiKi" is another name)
         "De Koelisse",  # Leuven
         "Seminar Room 1",
         "Hall",

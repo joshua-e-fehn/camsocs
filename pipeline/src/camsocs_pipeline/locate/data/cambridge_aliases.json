@@ -176,6 +176,17 @@
         "9 J J Thomson Avenue",
         "CAPE Building"
       ]
+    },
+    {
+      "osm": "node/127059763",
+      "building": "KiKi",
+      "names": [
+        "Kiki's",
+        "Kiki’s",
+        "Kikis",
+        "Kiki's Cambridge",
+        "KiKi nightclub"
+      ]
     }
   ]
 }
