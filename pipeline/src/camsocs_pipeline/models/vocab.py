@@ -635,6 +635,9 @@ ITEM_LOCATION_PRECISIONS: tuple[str, ...] = (
     "area",
     "online",
     "unknown",
+    # A film listing with no screening venue (a short film, a shoot: Camdram
+    # lists them as shows "On Location"); counted as placed, never pinned.
+    "film",
 )
 
 ITEM_LOCATION_METHODS: tuple[str, ...] = ("source", "alias", "llm")

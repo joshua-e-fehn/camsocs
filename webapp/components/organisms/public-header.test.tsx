@@ -83,16 +83,20 @@ describe("the header's account menu", () => {
 })
 
 describe("the header's sections", () => {
-  test("Events · Talks · Societies · Formals · Guides · About, each with a hint", async () => {
+  test("Events · Talks · Map · Societies · Formals · Guides, each with a hint", async () => {
     const { NAV } = await import("@/components/organisms/public-header")
     expect(NAV.map((item) => item.label)).toEqual([
       "Events",
       "Talks",
+      "Map",
       "Societies",
       "Formals",
       "Guides",
-      "About",
     ])
+    // About left the header for the Map (2026-11-24); the footer links it.
+    expect(NAV.map((item) => item.href as string)).not.toContain("/about")
+    const { COLUMNS } = await import("@/components/organisms/site-footer")
+    expect(COLUMNS.flatMap((column) => column.links.map((link) => link.href))).toContain("/about")
     for (const item of NAV) expect(item.hint.length).toBeGreaterThan(0)
   })
 

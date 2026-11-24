@@ -101,6 +101,8 @@ export const mapDayValidator = v.object({
     talks: v.number(),
     online: v.number(),
     unknown: v.number(),
+    /** Films with no screening venue (no pin). */
+    films: v.number(),
   }),
 })
 
@@ -133,7 +135,10 @@ async function locate(
   key: string,
 ): Promise<Located> {
   const row = await itemLocationOf(ctx, kind, key)
-  const venue = row?.venueKey && row.precision !== "online" ? await venues(row.venueKey) : null
+  const venue =
+    row?.venueKey && row.precision !== "online" && row.precision !== "film"
+      ? await venues(row.venueKey)
+      : null
   return { row, venue }
 }
 
@@ -277,6 +282,7 @@ export const day = query({
         talks: items.filter((item) => item.kind === "talk").length,
         online: items.filter((item) => item.precision === "online").length,
         unknown: items.filter((item) => item.precision === "unknown").length,
+        films: items.filter((item) => item.precision === "film").length,
       },
     }
   },

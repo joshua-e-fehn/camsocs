@@ -28,7 +28,7 @@ ItemKindStr = Vocab(ITEM_LOCATION_KINDS)
 PrecisionStr = Vocab(ITEM_LOCATION_PRECISIONS)
 MethodStr = Vocab(ITEM_LOCATION_METHODS)
 
-Precision = Literal["exact", "building", "area", "online", "unknown"]
+Precision = Literal["exact", "building", "area", "online", "unknown", "film"]
 
 #: Text limits of an `itemLocations` row (convex/lib/locations.ts `LOCATION_LIMITS`).
 LIMITS = {"room": 120, "areaLabel": 120, "note": 200, "model": 100, "promptVersion": 40}
@@ -197,6 +197,7 @@ _PRECISION_WORDS: dict[str, Precision] = {
     "online": "online",
     "virtual": "online",
     "remote": "online",
+    "film": "film",
     "unknown": "unknown",
     "none": "unknown",
     "tbc": "unknown",
@@ -326,9 +327,10 @@ class LocateReply(BaseModel):
         return value if value is None or isinstance(value, str) else None
 
     @property
-    def decision(self) -> Literal["existing", "new", "online", "unknown"]:
-        """What the reply amounts to: online, unknown, a known venue's key, or a building."""
-        if self.precision in ("online", "unknown"):
+    def decision(self) -> Literal["existing", "new", "online", "unknown", "film"]:
+        """What the reply amounts to: online, unknown, a film with no
+        screening venue, a known venue's key, or a building."""
+        if self.precision in ("online", "unknown", "film"):
             return self.precision  # type: ignore[return-value]
         if self.venue_key:
             return "existing"

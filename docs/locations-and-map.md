@@ -69,8 +69,13 @@ Owner decisions were made in a grilling session on 2026-11-24 (PLAN.md D13).
      names through the same rule (`locate/venue_name.py`); both are held to
      `webapp/lib/venue-name.fixtures.json`.
    - Each row links to its page and has a Directions link.
-   - Online items go in an "Online" section and get no pin. Unresolved items
+   - Online items go in an "Online" section and get no pin. Films with no
+     screening venue (precision `film`) go in a "Films" section with the film
+     icon, no pin, and the counts line says how many. Unresolved items
      go under "Location TBC".
+   - Each event type and talk kind has an icon (`lib/item-icons.ts`): beside
+     the type's word on every row, and in white inside a lone item's pin (a
+     pin of several items and a cluster keep their number).
    - Items at a placed venue far from Cambridge (beyond `MAP_PIN_BOUNDS`,
      S 52.05 N 52.35 W −0.10 E 0.35: an away fixture, a tour abroad) get no
      pin, so the camera never fits to them; they are listed under "Away from
@@ -122,8 +127,8 @@ itemLocations: {
   kind: "event" | "talk",
   itemKey: string,             // evt-… / the talk key
   startsAt: number,            // copied from the item (coverage windows, pruning)
-  precision: "exact" | "building" | "area" | "online" | "unknown",
-  venueKey?: string,           // ven-…; required unless precision is online/unknown
+  precision: "exact" | "building" | "area" | "online" | "unknown" | "film",
+  venueKey?: string,           // ven-…; required unless precision is online/unknown/film
   room?: string,               // ≤ 120, e.g. "Seminar Room 1"; never a person's name
   areaLabel?: string,          // ≤ 120, for "area": e.g. "Central Cambridge (exact place sent to attendees)"
   note?: string,               // ≤ 200, internal: why unknown (shown on the dashboard only)
@@ -143,6 +148,11 @@ Precision means:
   (e.g. a college, Parker's Piece, "Central Cambridge" = Market Square).
 - `online`: online only.
 - `unknown`: no location at all, with a note.
+- `film` (2026-11-24, Joshua): a film production with no screening venue (a
+  student short film, a shoot; Camdram lists them as shows with no venue,
+  "Short Film" or "On Location"). No venue, counted as resolved like
+  `online`, never pinned at a made-up place; a film *with* a screening venue
+  is placed like any other event.
 
 `itemLocations` is written only through the new route. A row whose item is gone
 is pruned by a daily cron (startsAt older than 60 days, or an item key that no
@@ -175,7 +185,7 @@ longer exists).
 - `ingestionRoute("locations/batch")`: `{locations: ItemLocationInput[]}` (max 500).
   - Upsert by (kind, itemKey).
   - Validates the `ven-` key format, that the venue exists (unless precision is
-    online/unknown), and the text limits.
+    online/unknown/film, which never carry one), and the text limits.
   - Returns `{inserted, updated, unchanged, rejected: [{itemKey, reason}]}`.
 - `readRoute("locations/summary")`: for the monitor.
   `{upcoming, resolved, unknown, byPrecision: {...}, unresolvedShare}`, over items
@@ -194,7 +204,7 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
   { date, from, to,
     venues: VenuePublic[],                               // only those referenced, with lat/lng
     items: MapItem[],                                    // events + (talks), sorted by start
-    counts: { events, talks, online, unknown } }
+    counts: { events, talks, online, unknown, films } }
   MapItem = { kind: "event"|"talk", key, title, startsAt, endsAt: number|null, allDay,
               href, cancelled, precision, venueKey: string|null, room?: string, areaLabel?: string,
               placeLabel: string,   // what to print: "Seminar Room 1, Isaac Newton Institute"
@@ -242,7 +252,7 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
    4), is posted with the resolver version after its hash
    (`<hash>:r3`, `resolver.RESOLVER_VERSION`), and one without the current
    version is due again: a new resolver (the gazetteer, r2; coarse venues,
-   r3, 2026-11-24) looks those items up again from the cached reply,
+   r3; films, r6, 2026-11-24) looks those items up again from the cached reply,
    asking no model. An item due only because its row is at a coarse venue
    (same input) never asks the model: without a cached reply (it matched
    the venue by name before r3) it is re-resolved at its stored venue,
@@ -252,6 +262,13 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
 2. **Deterministic first:**
    - an online-only talk, or an event with an online venue (Zoom/Teams/link),
      and no physical place → `online`;
+   - an event that is a film production (title, venue text or, on Camdram,
+     description: "short film", "(Short Film)", "16mm", "film shoot",
+     "filming", Camdram's "On Location") with no real venue (none, or a
+     placeholder such as "Short Film" / "On Location") and no screening
+     words → `source`/`film`, no venue (`matching.is_film_without_venue`;
+     r6, 2026-11-24, so the unknown rows of earlier versions are re-run by
+     this rule without asking the model);
    - an event `venueKey` whose venue has lat/lng → `source`/`exact`, with the
      room = what venueText adds;
    - an exact normalised match of the venue text against a venue name or

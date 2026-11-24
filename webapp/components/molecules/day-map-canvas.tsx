@@ -8,6 +8,7 @@ import type { Map as MapLibreMap, Marker } from "maplibre-gl"
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ITEM_ICONS, type ItemIconKey } from "@/lib/item-icons"
 import { clusterLook, clusterPins, type PinCluster, sameSpot } from "@/lib/map-cluster"
 import { CAMBRIDGE_BOUNDS, CITY_CENTRE, CITY_ZOOM, MAP_MAX_BOUNDS, mapStyle } from "@/lib/map-style"
 import { cn } from "@/lib/utils"
@@ -32,6 +33,9 @@ import { cn } from "@/lib/utils"
  * in /map's chunk only and never renders on the server, where the skeleton
  * stands in.
  *
+ * A pin of one item carries its type's icon (decorative: the name and the
+ * list say the type); a pin of several, and a cluster, its number.
+ *
  * Pins are buttons (44 px targets) whose name says the venue, the counts and
  * whether it is on now or over, so the canvas is usable with a keyboard and
  * never colour alone; the page's list is its full text equivalent. Event pins
@@ -50,6 +54,9 @@ export type DayMapPin = {
   status: "past" | "now" | "upcoming"
   /** The pin's accessible name: venue, counts, state. */
   label: string
+  /** A lone item's type icon (lib/item-icons.ts), drawn in white inside the
+   * pin; a pin of several items shows their number instead. */
+  icon?: ItemIconKey
 }
 
 export type DayMapCanvasProps = {
@@ -171,6 +178,9 @@ export const DayMapCanvas = dynamic<DayMapCanvasProps>(
     }: DayMapCanvasProps) {
       const container = useRef<HTMLDivElement>(null)
       const region = useRef<HTMLElement>(null)
+      // The type icons, rendered once and hidden: a marker (plain DOM that
+      // MapLibre owns) takes a copy of its item's.
+      const sprite = useRef<HTMLDivElement>(null)
       const mapRef = useRef<MapLibreMap | null>(null)
       // Each drawn marker, with its cluster's first pin (to find where focus
       // goes when the marker is regrouped away).
@@ -371,7 +381,12 @@ export const DayMapCanvas = dynamic<DayMapCanvasProps>(
           button.dataset.cluster = lone ? "" : String(cluster.members.length)
           const mark = button.firstElementChild as HTMLElement
           mark.className = markClasses(look, raised, isSelected)
-          mark.textContent = look.cluster || look.count > 1 ? String(look.count) : ""
+          const icon = !look.cluster && look.count === 1 ? lone?.icon : undefined
+          const glyph = icon
+            ? sprite.current?.querySelector(`[data-icon="${icon}"]`)?.cloneNode(true)
+            : undefined
+          if (glyph) mark.replaceChildren(glyph)
+          else mark.textContent = look.cluster || look.count > 1 ? String(look.count) : ""
           // Raised markers draw above their neighbours; past ones below.
           entry.marker.getElement().style.zIndex = raised ? "3" : look.status === "past" ? "1" : "2"
         }
@@ -466,6 +481,13 @@ export const DayMapCanvas = dynamic<DayMapCanvasProps>(
             className,
           )}
         >
+          <div ref={sprite} hidden>
+            {(Object.entries(ITEM_ICONS) as [ItemIconKey, (typeof ITEM_ICONS)[ItemIconKey]][]).map(
+              ([key, Icon]) => (
+                <Icon key={key} data-icon={key} aria-hidden strokeWidth={2.5} className="size-3" />
+              ),
+            )}
+          </div>
           {/* Sized, not positioned: MapLibre makes its container `position: relative`. */}
           <div ref={container} className="h-full w-full" />
           <div className="absolute top-3 right-3 flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm">

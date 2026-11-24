@@ -312,6 +312,32 @@ describe("locations/batch", () => {
     ])
   })
 
+  test("a film row has no venue: refused with one, placed on the map's Films list", async () => {
+    const t = newTest()
+    await seed(t)
+    const result = await t.mutation(internal.ingest.locations.batch, {
+      locations: [
+        row({ itemKey: KEYS.zoom, precision: "film" }),
+        row({ itemKey: KEYS.lecture, precision: "film", venueKey: undefined, method: "source" }),
+      ],
+    })
+    expect(result.inserted).toBe(1)
+    expect(result.rejected.map((r) => r.reason)).toEqual([
+      "venueKey: not allowed for precision film",
+    ])
+    expect(await t.query(api.locations.forItem, { kind: "event", itemKey: KEYS.lecture })).toEqual({
+      precision: "film",
+      venue: null,
+    })
+    const day = await t.query(api.map.day, { date: DATE, talks: "exclude" })
+    expect(day.items.find((item) => item.key === KEYS.lecture)).toMatchObject({
+      precision: "film",
+      venueKey: null,
+      placeLabel: "Film",
+    })
+    expect(day.counts.films).toBe(1)
+  })
+
   test("refuses more than 500 rows", async () => {
     const t = newTest()
     const locations = Array.from({ length: 501 }, (_, i) => row({ itemKey: `evt-${i}` }))
@@ -598,7 +624,7 @@ describe("map.day", () => {
     })
     expect(zoom).toMatchObject({ precision: "online", venueKey: null, placeLabel: "Zoom" })
     expect(day.venues.map((venue) => venue.key)).toEqual([VENUES.ini, VENUES.market])
-    expect(day.counts).toEqual({ events: 4, talks: 0, online: 1, unknown: 1 })
+    expect(day.counts).toEqual({ events: 4, talks: 0, online: 1, unknown: 1, films: 0 })
     expect(JSON.stringify(day)).not.toContain("talks.cam")
   })
 
@@ -627,7 +653,7 @@ describe("map.day", () => {
       talkKind: "seminar",
     })
     expect(day.venues).toEqual([])
-    expect(day.counts).toEqual({ events: 4, talks: 1, online: 0, unknown: 5 })
+    expect(day.counts).toEqual({ events: 4, talks: 1, online: 0, unknown: 5, films: 0 })
   })
 
   test("talksCam `only` returns the talks.cam talk and talks.cam-derived event, under /talks", async () => {
@@ -728,7 +754,7 @@ describe("coverage and pruning", () => {
       upcoming: 7,
       resolved: 6,
       unknown: 1,
-      byPrecision: { exact: 3, building: 1, area: 1, online: 1, unknown: 0, missing: 1 },
+      byPrecision: { exact: 3, building: 1, area: 1, online: 1, unknown: 0, film: 0, missing: 1 },
       truncated: false,
     })
     expect(summary.unresolvedShare).toBeCloseTo(1 / 7, 3)

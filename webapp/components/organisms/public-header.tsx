@@ -41,12 +41,15 @@ const memberDomain = campus.facts.memberEmail.domains[0]
  * The main sections, in the order a student looks for them.
  *
  * `prefetch`: whether the header, on every page, prefetches the section as
- * it comes into view. Not the three that read their URL's filters: they are
- * rendered per request (docs/webapp.md "Caching"), so each prefetch would be
- * a server render on every page view, three per view, for a payload Next
- * then cuts at the page anyway (SEO audit 2026-11-02,
- * extra-invocations-per-view). Formals, Guides and About are cached pages:
- * their prefetch is an edge hit.
+ * it comes into view. Not the four that read their URL's parameters (the
+ * Map its `?d=` day): they are rendered per request (docs/webapp.md
+ * "Caching"), so each prefetch would be a server render on every page view,
+ * four per view, for a payload Next then cuts at the page anyway (SEO audit
+ * 2026-11-02, extra-invocations-per-view). Formals and Guides are cached
+ * pages: their prefetch is an edge hit.
+ *
+ * About is not a section (2026-11-24, Joshua: the Map took its place); the
+ * footer's CAMsocs column links it.
  *
  * Width (768–1023px, `md`): six sections, the wordmark, the account menu
  * and the search as an icon fit in 768px; the "Search everything" box comes
@@ -55,10 +58,10 @@ const memberDomain = campus.facts.memberEmail.domains[0]
 export const NAV = [
   { href: "/events", label: "Events", hint: "Socials, shows, matches", prefetch: false },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures", prefetch: false },
+  { href: "/map", label: "Map", hint: "What's on where today", prefetch: false },
   { href: "/societies", label: "Societies", hint: "The directory", prefetch: false },
   { href: "/formals", label: "Formals", hint: "Formal hall, night by night", prefetch: undefined },
   { href: "/guides", label: "Guides", hint: "How Cambridge works", prefetch: undefined },
-  { href: "/about", label: "About", hint: "Sources and method", prefetch: undefined },
 ] as const
 
 function isActive(pathname: string, href: string) {
@@ -67,7 +70,7 @@ function isActive(pathname: string, href: string) {
 
 /**
  * Site header (DESIGN.md "River & ink"): the crest and wordmark, Events ·
- * Talks · Societies · Formals · Guides · About with a teal mark under the current one, the
+ * Talks · Map · Societies · Formals · Guides with a teal mark under the current one, the
  * "Search everything ⌘K" box (opens the palette) and the account menu.
  *
  * The account menu holds Sign in when signed out; signed in it shows a

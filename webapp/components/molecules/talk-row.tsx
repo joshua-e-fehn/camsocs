@@ -1,4 +1,5 @@
 import { BanIcon, MapPinIcon, VideoIcon } from "lucide-react"
+import { TALK_KIND_ICONS } from "@/lib/item-icons"
 import {
   physicalVenue,
   SCHOOL_TONE,
@@ -40,6 +41,7 @@ export function TalkRow({
   const { start, end } = talkTimes(talk)
   const department = talk.departments[0]
   const tone = department ? SCHOOL_TONE[department.school] : SCHOOL_TONE.other
+  const KindIcon = TALK_KIND_ICONS[talk.kind]
   const speakers = speakerLine(talk.speakers)
   const timing = talkTiming(talk, now)
   const Heading = `h${headingLevel}` as const
@@ -118,7 +120,8 @@ export function TalkRow({
             </li>
           )}
           {talk.kind !== "seminar" && talk.kind !== "other" && (
-            <li className="font-mono text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
+            <li className="inline-flex items-center gap-1 font-mono text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
+              <KindIcon aria-hidden className="size-3 shrink-0" />
               {TALK_KIND_LABELS[talk.kind]}
             </li>
           )}

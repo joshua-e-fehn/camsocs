@@ -82,6 +82,14 @@ describe("placeLineModel", () => {
     expect(town.onMap).toBe(false)
   })
 
+  test("film: says there is no screening venue, with no maps link and no pin", () => {
+    expect(placeLineModel({ precision: "film", venue: null }, "On Location")).toEqual({
+      label: "Film — no screening venue listed",
+      details: [],
+      onMap: false,
+    })
+  })
+
   test("online and unknown", () => {
     expect(placeLineModel({ precision: "online", venue: null }).label).toBe("Online")
     expect(placeLineModel({ precision: "online", venue: null }, "Zoom").label).toBe("Zoom")

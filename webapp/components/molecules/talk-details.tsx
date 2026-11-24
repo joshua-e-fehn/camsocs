@@ -9,6 +9,7 @@ import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { formatInstantDate, londonIsoDate } from "@/lib/calendar"
 import { linkProps } from "@/lib/crawl-traps"
+import { TALK_KIND_ICONS } from "@/lib/item-icons"
 import type { ItemLocation } from "@/lib/public-api"
 import { displayHost } from "@/lib/source-line"
 import {
@@ -59,6 +60,7 @@ export function talkCalendarLinks(talk: TalkPublic, pageUrl: string): CalendarLi
  * Colloquium · Lecture". */
 export function TalkEyebrow({ talk, className }: { talk: TalkPublic; className?: string }) {
   const kind = talk.kind === "other" ? undefined : TALK_KIND_LABELS[talk.kind]
+  const KindIcon = TALK_KIND_ICONS[talk.kind]
   return (
     <p
       className={cn(
@@ -72,7 +74,10 @@ export function TalkEyebrow({ talk, className }: { talk: TalkPublic; className?:
           <span aria-hidden className="opacity-50">
             ·
           </span>
-          <span>{kind}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <KindIcon aria-hidden className="size-3.5 shrink-0" />
+            {kind}
+          </span>
         </>
       )}
     </p>

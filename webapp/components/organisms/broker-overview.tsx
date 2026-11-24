@@ -400,6 +400,7 @@ const PRECISION_ROWS = [
   { key: "building", label: "Building", hint: "best inference, e.g. the society's college" },
   { key: "area", label: "Area", hint: "only an area, e.g. sent to attendees" },
   { key: "online", label: "Online", hint: "online only" },
+  { key: "film", label: "Film", hint: "a film with no screening venue" },
   { key: "unknown", label: "Unknown", hint: "the resolver found nothing" },
   { key: "missing", label: "Not resolved yet", hint: "no location row" },
 ] as const

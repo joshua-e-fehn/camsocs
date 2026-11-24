@@ -2,7 +2,8 @@ import { ArrowUpRightIcon, LocateFixedIcon, MapPinIcon, VideoIcon } from "lucide
 import Link from "next/link"
 import { formatDayShort, formatEventTime, londonIsoDate } from "@/lib/calendar"
 import { linkProps } from "@/lib/crawl-traps"
-import { type MapStatus, STATUS_LABELS } from "@/lib/map-day"
+import { FILM_ICON, ITEM_ICONS, itemIconKey } from "@/lib/item-icons"
+import { FILM_PLACE, type MapStatus, STATUS_LABELS } from "@/lib/map-day"
 import type { MapItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
 import { EVENT_TYPE_LABELS, TALK_KIND_LABELS } from "@/lib/vocab"
@@ -76,12 +77,16 @@ export function MapItemRow({
   const place =
     item.precision === "online"
       ? item.placeLabel || "Online"
-      : item.precision === "unknown" && !item.venueKey
-        ? item.placeLabel
-          ? `${item.placeLabel} (to be confirmed)`
-          : "Location to be confirmed"
-        : item.placeLabel || "Location to be confirmed"
-  const PlaceIcon = item.precision === "online" ? VideoIcon : MapPinIcon
+      : item.precision === "film"
+        ? FILM_PLACE
+        : item.precision === "unknown" && !item.venueKey
+          ? item.placeLabel
+            ? `${item.placeLabel} (to be confirmed)`
+            : "Location to be confirmed"
+          : item.placeLabel || "Location to be confirmed"
+  const PlaceIcon =
+    item.precision === "online" ? VideoIcon : item.precision === "film" ? FILM_ICON : MapPinIcon
+  const TypeIcon = ITEM_ICONS[itemIconKey({ ...item, precision: undefined })]
 
   return (
     <article
@@ -115,6 +120,7 @@ export function MapItemRow({
                 status === "past" && "bg-input",
               )}
             />
+            <TypeIcon aria-hidden className="mr-1 inline-block size-3 align-[-2px]" />
             {kindLabel}
           </span>
           {statusLabel && (

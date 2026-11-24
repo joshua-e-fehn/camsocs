@@ -283,7 +283,7 @@ only, as the place of an item the viewer may see.
 | kind | `event \| talk` |
 | itemKey | string (`evt-…` / `talk-…`) |
 | startsAt | number — copied from the item (the coverage window, the prune) |
-| precision | vocab `ITEM_LOCATION_PRECISIONS`: `exact` (the building is stated or certain), `building` (inferred: an organiser's usual place, a street or postcode point), `area` (only a town, district or anchor is known), `online`, `unknown` |
+| precision | vocab `ITEM_LOCATION_PRECISIONS`: `exact` (the building is stated or certain), `building` (inferred: an organiser's usual place, a street or postcode point), `area` (only a town, district or anchor is known), `online`, `unknown`, `film` (a film production with no screening venue: a short film, a shoot; no venue, counted as resolved, never pinned) |
 | venueKey | string? — `ven-…`, required for exact / building / area, absent otherwise |
 | room | string? ≤ 120, one line, never a person's name |
 | areaLabel | string? ≤ 120, required for `area` ("Newnham College (exact room not given)") |

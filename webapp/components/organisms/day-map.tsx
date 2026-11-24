@@ -13,6 +13,7 @@ import { mergeMapDays, useMapDay, useMapDayTalksSide, useMapWeekCounts } from "@
 import { track } from "@/lib/analytics"
 import type { MapDayDirection } from "@/lib/analytics-events"
 import { addDays, dayWindow, formatDayShort, startOfWeek } from "@/lib/calendar"
+import { FILM_ICON, itemIconKey } from "@/lib/item-icons"
 import {
   countPhrase,
   farAway,
@@ -52,6 +53,9 @@ import { relativeDay } from "@/lib/week-strip"
  *    get no pin, so the camera never fits the county or the continent; their
  *    items are listed under "Away from Cambridge" with their place, address
  *    and Directions.
+ *  - Films with no screening venue (precision `film`: a short film, a
+ *    shoot) get no pin either; they are listed under "Films" with the film
+ *    icon, and the counts line says how many.
  *
  * The talks boundary (G1): the server preloads the day's events only; the
  * talks and talks.cam-derived events join here once hydrated
@@ -178,6 +182,7 @@ export function DayMap({
         kind: pin.kind,
         status: pin.status,
         label: pin.label,
+        ...(pin.items.length === 1 && pin.items[0] ? { icon: itemIconKey(pin.items[0]) } : {}),
       })),
     [pins],
   )
@@ -330,12 +335,16 @@ export function DayMap({
       : state.show === "talks"
         ? ["talk", "talks"]
         : ["event or talk", "events and talks"]
+  const films = sections.films.length
+  // Films with no screening venue have no pin: the line says so.
+  const filmPhrase =
+    films === 0 ? "" : `, ${films === 1 ? "one film" : `${films} films`} with no screening venue`
   const summary =
     day === undefined
       ? "Loading…"
       : items.length === 0
         ? `Nothing listed${past ? "" : " yet"}.`
-        : `${countPhrase(items)}${pins.length > 0 ? ` at ${pins.length} ${pins.length === 1 ? "place" : "places"}` : ""}${past ? ", all ended" : ""}.`
+        : `${countPhrase(items)}${pins.length > 0 ? ` at ${pins.length} ${pins.length === 1 ? "place" : "places"}` : ""}${filmPhrase}${past ? ", all ended" : ""}.`
   const toggleValue = state.show === "all" ? ["events", "talks"] : [state.show]
 
   const statusOf = (item: MapItem): MapStatus => itemStatus(item, now, bounds)
@@ -603,6 +612,18 @@ export function DayMap({
                 Online · {sections.online.length}
               </h2>
               <ul className="flex flex-col divide-y divide-dashed">{sections.online.map(row)}</ul>
+            </section>
+          )}
+          {sections.films.length > 0 && (
+            <section aria-labelledby="map-films" className="pt-4">
+              <h2
+                id="map-films"
+                className="mx-4 flex items-center gap-1.5 border-t-2 border-foreground pt-2 pb-1 font-mono text-[0.6875rem] font-medium tracking-[0.14em] uppercase sm:mx-5"
+              >
+                <FILM_ICON aria-hidden className="size-3.5" />
+                Films · {sections.films.length}
+              </h2>
+              <ul className="flex flex-col divide-y divide-dashed">{sections.films.map(row)}</ul>
             </section>
           )}
           {sections.tbc.length > 0 && (

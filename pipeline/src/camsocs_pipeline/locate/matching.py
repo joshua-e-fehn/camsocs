@@ -212,6 +212,48 @@ def is_online_only(text: str) -> bool:
     return not re.sub(r"[^A-Za-z0-9]+", "", rest)
 
 
+#: A venue text that names no screening place: Camdram's placeholders for a
+#: film production ("Short Film", "On Location"), or nothing at all.
+_FILM_PLACEHOLDER = re.compile(
+    r"^(?:|short film|(?:student )?film|film shoot(?:ing)?|filming|on location|"
+    r"location tbc|various locations?|tbc|tba|n/?a)$",
+    re.IGNORECASE,
+)
+#: Words that mark an item as a film production: a short film, a shoot.
+_FILM = re.compile(
+    r"\bshort[- ]film\b|\bstudent film\b|\bfilm shoot(?:ing)?\b|\bfilming\b|"
+    r"\b(?:8|16|35)\s?mm\b|\(film\)|\bthe film\b\s*$|^the film\b|\bon location\b",
+    re.IGNORECASE,
+)
+#: Words that mark a screening, which has a place even when none is listed.
+_SCREENING = re.compile(r"\bscreening|\bcinema\b|\bpremiere\b|\bfilm night\b", re.IGNORECASE)
+
+
+def is_film_without_venue(
+    *, title: str, description: str | None, place_text: str, source_type: str
+) -> bool:
+    """Whether an event is a film production listed with no screening venue
+    (a Camdram "show" that is a short film or a shoot: "Lost and Found
+    (Short Film)", venue "Short Film" or "On Location"). A screening (which
+    has a place even when none is listed) is not; neither is a film with a
+    real venue text, which is placed like any other event."""
+    place = re.sub(r"\s+", " ", place_text).strip(" .,-")
+    if not _FILM_PLACEHOLDER.fullmatch(place):
+        return False
+    said = " ".join([title, place, description or ""])
+    if _SCREENING.search(title) or _SCREENING.search(place):
+        return False
+    if _FILM.search(title) or re.search(r"\bfilm\b", place, re.IGNORECASE):
+        return True
+    if source_type != "camdram":
+        return False
+    # Camdram lists productions: "On Location" is its word for a film's, and
+    # a show with no venue whose description calls it a short film is one.
+    if place.lower() == "on location":
+        return True
+    return bool(_FILM.search(description or "")) and not _SCREENING.search(said)
+
+
 def single_line(text: str | None, limit: int) -> str | None:
     """One line of at most `limit` characters, or None when nothing is left."""
     if text is None:
@@ -516,6 +558,7 @@ __all__ = [
     "distinctive",
     "input_hash",
     "is_area_key",
+    "is_film_without_venue",
     "is_online_only",
     "normalise",
     "single_line",

@@ -95,6 +95,16 @@ describe("pins and sections", () => {
     expect(tbc.map((x) => x.key)).toEqual(["f"])
   })
 
+  test("films with no screening venue get no pin and their own section", () => {
+    const film = item({ key: "g", precision: "film", venueKey: null, placeLabel: "Film" })
+    const { placed, films, tbc } = mapSections([...items, film], VENUES)
+    expect(films.map((x) => x.key)).toEqual(["g"])
+    expect(placed.map((x) => x.key)).not.toContain("g")
+    expect(tbc.map((x) => x.key)).toEqual(["f"])
+    const pinned = mapPins([film], VENUES, at(12), DAY)
+    expect(pinned).toEqual([])
+  })
+
   test("the toggles keep one kind", () => {
     expect(shownItems(items, "talks").map((x) => x.key)).toEqual(["b", "c"])
     expect(shownItems(items, "events")).toHaveLength(4)

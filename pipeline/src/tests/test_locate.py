@@ -257,6 +257,52 @@ def test_the_rules_place_online_own_venues_and_aliases() -> None:
     assert deterministic(event(venueText="The Burrow"), index) is None
 
 
+@pytest.mark.parametrize(
+    ("title", "venue_text", "description", "source_type", "film"),
+    [
+        ("2026 Short Film: You're Never Alone Here", None, None, "camdram", True),
+        ("Ten in Hand (Short Film)", "Short Film", None, "camdram", True),
+        ("Lost and Found (Short Film)", None, None, "camdram", True),
+        ("MAGPIE: 16mm short film", None, None, "camdram", True),
+        ("SWEETFANTASY THE FILM SHOOTING", None, None, "camdram", True),
+        ("Bedlam", "On Location", None, "camdram", True),
+        ("Ghosts", None, "A short film shot around Cambridge.", "camdram", True),
+        # A screening has a place even when none is listed.
+        ("Short film screening night", None, None, "ics", False),
+        # A real venue text: placed like any other event.
+        ("Lost and Found (Short Film)", "Corpus Playroom", None, "camdram", False),
+        # Not a film production at all.
+        ("Hamlet", None, "Based on the play.", "camdram", False),
+        ("Pub quiz", None, "We'll watch a short film after.", "ics", False),
+    ],
+)
+def test_a_film_without_a_screening_venue_is_film(
+    title: str, venue_text: str | None, description: str | None, source_type: str, film: bool
+) -> None:
+    index = VenueIndex.of(VENUES)
+    item = event(title=title, venueText=venue_text, description=description, sourceType=source_type)
+    plan = deterministic(item, index)
+    assert (plan is not None and plan.reply.decision == "film") is film
+    if film:
+        assert plan is not None and plan.method == "source"
+
+
+def test_a_film_at_its_own_venue_is_pinned_there() -> None:
+    index = VenueIndex.of(VENUES)
+    plan = deterministic(event(title="Lost and Found (Short Film)", venueKey=ADC.key), index)
+    assert plan is not None and plan.reply.decision == "existing"
+    assert plan.reply.venue_key == ADC.key
+
+
+def test_a_film_row_has_no_venue_and_counts_as_resolved(tmp_path) -> None:
+    item = event(title="Ten in Hand (Short Film)", venueText="Short Film", sourceType="camdram")
+    found = locator(tmp_path).resolve([item])
+    assert len(found) == 1
+    row = found[0]
+    assert row.precision == "film" and row.venue_key is None and row.method == "source"
+    assert row.input_hash == input_hash(item, PROMPT_NAME)
+
+
 # --- Nominatim ------------------------------------------------------------------------------------
 
 
