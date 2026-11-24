@@ -28,6 +28,8 @@ client's `before_send` (`sanitizeEvent` in `lib/analytics-client.ts`) both read 
 | `listing_request_submitted` | The request form, after the server accepted it (not the honeypot's fake success; `organisms/request-form.tsx`) | `kind` (`claim` \| `correct` \| `remove` \| `object` \| `add`) | How often each kind of request is used. **Never the listing, email or message** |
 | `sign_in_completed` | The page a Cambridge sign-in link lands on, once a session is confirmed (`providers/sign-in-tracker.tsx`, marker `?signed_in=cam` set in `organisms/login-form.tsx`) | `method` (`cam`) | How many readers unlock Cambridge-only events. **Never identified**; the admin's Google sign-in lands on `/dashboard` and is never tracked |
 | `finder_completed` | A Finder quiz shows its results (`organisms/society-finder.tsx`, `event-finder.tsx`, `talk-finder.tsx`; once per finished quiz) | `finder` (`societies` \| `events` \| `talks`), `resultCount` (0–15) | How many people finish a Finder, and whether it finds enough (ENG-133); never the answers |
+| `map_day_changed` | The map changes its day (`organisms/day-map.tsx`): ‹ › arrows, the week strip, the date picker, ←/→ keys, a swipe on mobile | `direction` (`prev` \| `next` \| `strip` \| `picker` \| `key` \| `swipe`) | Which ways of moving through days are used (ENG-277). **Never the date** |
+| `map_item_opened` | A map row's link to its event or talk page (`organisms/day-map.tsx`) | `kind` (`event` \| `talk`) | Whether the map leads people to items. **Never the key, title or place** |
 
 `?` marks an optional property.
 

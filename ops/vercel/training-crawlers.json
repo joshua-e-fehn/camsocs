@@ -21,7 +21,7 @@
 					{
 						"type": "path",
 						"op": "re",
-						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
+						"value": "^/((events|map|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
 					}
 				]
 			},
@@ -78,7 +78,7 @@
 					{
 						"type": "path",
 						"op": "re",
-						"value": "^/((events|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
+						"value": "^/((events|map|societies|request|sign-in)(\\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image"
 					}
 				]
 			},

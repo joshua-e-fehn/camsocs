@@ -69,6 +69,7 @@ from camsocs_pipeline.monitor import (
     PostHogQueryClient,
     assess,
     check_indexing,
+    check_location_coverage,
     check_sites,
     checks_for,
     count_requests,
@@ -270,6 +271,8 @@ def status(ctx: click.Context) -> None:
         ("PostHog host", f"{settings.posthog_host or '(unset)'} ({settings.posthog_env})"),
         ("PostHog personal key", secret(settings.posthog_personal_api_key) + " (monitor)"),
         ("PostHog project", settings.posthog_project_id or "(unset)"),
+        ("Places key", secret(settings.google_places_api_key) + " (locate: place ids only)"),
+        ("Nominatim", f"{settings.nominatim_url} ({settings.nominatim_interval:g}s apart)"),
         ("User-Agent", _user_agent(settings)),
         ("Host interval", f"{settings.min_host_interval}s (robots Crawl-delay may raise it)"),
         ("Cache dir", str(settings.cache_dir)),
@@ -644,7 +647,8 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
         with site_client(branding.about_url) as site:
             results += check_sites(site, branding.monitor_urls)
         # Google indexing (webapp/convex/indexing.ts), where Convex is configured.
-        if settings.convex_http_url and settings.pipeline_api_key.get_secret_value():
+        convex = bool(settings.convex_http_url and settings.pipeline_api_key.get_secret_value())
+        if convex:
             with _loader(settings) as loader:
                 results.append(check_indexing(lambda: loader.post("indexing/summary", {}), now=now))
         verdict = assess(
@@ -652,7 +656,12 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
         )
         # Written before the shadow checks run: nothing they do reaches it.
         _write_summary(status_json, verdict.status_payload(invocation))
-        verdict = verdict.with_shadow(run_shadow_checks(client, shadow_checks_for(profile)))
+        shadow = run_shadow_checks(client, shadow_checks_for(profile))
+        # Location coverage (docs/locations-and-map.md §2), in shadow (D9).
+        if convex:
+            with _loader(settings) as loader:
+                shadow.append(check_location_coverage(lambda: loader.post("locations/summary", {})))
+        verdict = verdict.with_shadow(shadow)
     if as_json:
         click.echo(json.dumps(verdict.json_payload(invocation), indent=1, ensure_ascii=False))
     else:

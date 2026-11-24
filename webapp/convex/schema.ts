@@ -24,6 +24,9 @@ import {
   INBOUND_EXTRACTION_STATUSES,
   INTERACTION_CHANNELS,
   INTRODUCTION_STATUSES,
+  ITEM_LOCATION_KINDS,
+  ITEM_LOCATION_METHODS,
+  ITEM_LOCATION_PRECISIONS,
   LISTING_REQUEST_KINDS,
   LISTING_REQUEST_STATUSES,
   MISSING_REASONS,
@@ -391,6 +394,9 @@ export const venueFields = {
   collegeKey: v.optional(v.string()),
   lat: v.optional(v.number()),
   lng: v.optional(v.number()),
+  /** A Google place id from Places Text Search (`google_places` claims,
+   * docs/locations-and-map.md §1a): kept indefinitely, used only for links. */
+  googlePlaceId: v.optional(v.string()),
   meta: metaValidator,
   ...stamps,
 }
@@ -535,6 +541,36 @@ export const talkFields = {
   /** Derived, lower case: title, speakers and affiliations, series, venue and
    * department short names. */
   searchText: v.string(),
+}
+
+/**
+ * The resolved place of one event or talk (docs/locations-and-map.md §1b).
+ * Not a claims entity: the pipeline's `locate` stage writes each row whole
+ * over `locations/batch` (convex/ingest/locations.ts), keyed by (kind,
+ * itemKey). Rows whose item is gone, or that started over 60 days ago, are
+ * pruned daily (`locations-prune-daily`).
+ */
+export const itemLocationFields = {
+  kind: literalUnion(ITEM_LOCATION_KINDS),
+  /** `evt-…` or the talk key. */
+  itemKey: v.string(),
+  /** Copied from the item, for coverage windows and pruning. */
+  startsAt: v.number(),
+  precision: literalUnion(ITEM_LOCATION_PRECISIONS),
+  /** `ven-…`; present unless `precision` is online or unknown. */
+  venueKey: v.optional(v.string()),
+  /** ≤ 120, e.g. "Seminar Room 1"; never a person's name. */
+  room: v.optional(v.string()),
+  /** ≤ 120, for `area`: e.g. "Central Cambridge (exact place sent to attendees)". */
+  areaLabel: v.optional(v.string()),
+  /** ≤ 200, internal: why a row is unknown (shown on the dashboard only). */
+  note: v.optional(v.string()),
+  method: literalUnion(ITEM_LOCATION_METHODS),
+  model: v.optional(v.string()),
+  promptVersion: v.optional(v.string()),
+  /** The pipeline's hash of what it read; it re-resolves when this changes. */
+  inputHash: v.string(),
+  resolvedAt: v.number(),
 }
 
 export const talkDetailFields = {
@@ -1391,6 +1427,11 @@ export default defineSchema({
       filterFields: ["listing", "school", "primaryDepartmentKey"],
     }),
   talkDetails: defineTable(talkDetailFields).index("by_talkKey", ["talkKey"]),
+  // public read (projected), pipeline-owned: where each event and talk is
+  itemLocations: defineTable(itemLocationFields)
+    .index("by_kind_item", ["kind", "itemKey"])
+    .index("by_startsAt", ["startsAt"])
+    .index("by_venue", ["venueKey"]),
   talkRuns: defineTable(talkRunFields)
     .index("by_runId", ["runId"])
     .index("by_finishedAt", ["finishedAt"]),

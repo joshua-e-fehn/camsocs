@@ -88,6 +88,11 @@ READ_ROUTES: frozenset[str] = frozenset(
         # The websites the broker confirmed on listing requests (ENG-158,
         # `websites.seeds.confirmed_websites`).
         "requests/websites",
+        # The `locate` stage and the monitor's location check
+        # (docs/locations-and-map.md §1c).
+        "locations/pending",
+        "venues/all",
+        "locations/summary",
     }
 )
 

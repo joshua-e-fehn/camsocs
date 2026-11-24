@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { checkAndCapture, expect, test } from "./fixtures"
+import { mapIdle, stubMapTiles } from "./map-tiles"
 
 /**
  * Smoke over every public page at desktop (1440×900) and phone (390×844)
@@ -47,6 +48,9 @@ const PAGES: { name: string; path: string; dark?: boolean }[] = [
   { name: "talks", path: "/talks", dark: true },
   { name: "talks-week", path: "/talks?preset=week" },
   { name: "talks-departments", path: "/talks/departments" },
+  // The map: today, and a past day (every pin grey); tiles stubbed (map-tiles.ts).
+  { name: "map", path: "/map", dark: true },
+  { name: "map-day", path: "/map?d=2026-11-02" },
   { name: "about", path: "/about" },
   { name: "privacy", path: "/privacy" },
   { name: "terms", path: "/terms" },
@@ -57,9 +61,11 @@ const PAGES: { name: string; path: string; dark?: boolean }[] = [
 
 for (const { name, path, dark } of PAGES) {
   test(`${name}${dark ? " @dark" : ""}`, async ({ page }, testInfo) => {
+    if (path.startsWith("/map")) await stubMapTiles(page)
     const response = await page.goto(path)
     expect(response?.status(), `${path} status`).toBe(200)
     await expect(page.locator("main, [data-slot=card]").first()).toBeVisible()
+    if (path.startsWith("/map")) await mapIdle(page)
     await checkAndCapture(page, testInfo, name)
   })
 }

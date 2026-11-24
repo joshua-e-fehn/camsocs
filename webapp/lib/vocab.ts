@@ -121,6 +121,9 @@ export const SOURCE_TYPES = [
   "termcard",
   "wayback",
   "manual",
+  // Location resolution (docs/locations-and-map.md §1a, source-research §23).
+  "osm_nominatim",
+  "google_places",
 ] as const
 export type SourceType = (typeof SOURCE_TYPES)[number]
 
@@ -644,8 +647,35 @@ export const SESSION_FIELDS = [
 ] as const
 export type SessionField = (typeof SESSION_FIELDS)[number]
 
-export const VENUE_FIELDS = ["name", "aliases", "address", "collegeKey", "lat", "lng"] as const
+export const VENUE_FIELDS = [
+  "name",
+  "aliases",
+  "address",
+  "collegeKey",
+  "lat",
+  "lng",
+  "googlePlaceId",
+] as const
 export type VenueField = (typeof VENUE_FIELDS)[number]
+
+// --- item locations (docs/locations-and-map.md §1b) --------------------------------------
+//
+// `itemLocations` is not a claims table: one row per event or talk, written
+// whole by the pipeline's `locate` stage over `/api/pipeline/locations/batch`.
+
+/** What an `itemLocations` row places. */
+export const ITEM_LOCATION_KINDS = ["event", "talk"] as const
+export type ItemLocationKind = (typeof ITEM_LOCATION_KINDS)[number]
+
+/** How exactly a row places its item: `exact` (the building, and the room if
+ * given), `building` (a best inference, e.g. a college society's college),
+ * `area` (only an area, its anchor venue), `online`, `unknown`. */
+export const ITEM_LOCATION_PRECISIONS = ["exact", "building", "area", "online", "unknown"] as const
+export type ItemLocationPrecision = (typeof ITEM_LOCATION_PRECISIONS)[number]
+
+/** How the row was resolved: the source's own venue key, an alias match, or the model. */
+export const ITEM_LOCATION_METHODS = ["source", "alias", "llm"] as const
+export type ItemLocationMethod = (typeof ITEM_LOCATION_METHODS)[number]
 
 // --- display labels (public site) ------------------------------------------------------
 //

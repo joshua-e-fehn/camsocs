@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import respx
 from click.testing import CliRunner
 
@@ -111,9 +112,19 @@ def invoke(make_settings, *args: str, env: str = "prod"):
     return CliRunner().invoke(cli, list(args), obj=obj)
 
 
+class _FrozenClock(datetime):
+    """`datetime` with `now()` pinned to NOW, so the command judges EVENTS on
+    the same day the fixtures were written for (it reads the real clock)."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW if tz is None else NOW.astimezone(tz)
+
+
 def test_the_command_lists_without_apply_and_removes_only_on_prod(
-    make_settings, net: respx.MockRouter
+    make_settings, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr("camsocs_pipeline.cli.datetime", _FrozenClock)
     page = {
         "page": [event.model_dump(by_alias=True, exclude_none=True) for event in EVENTS],
         "isDone": True,

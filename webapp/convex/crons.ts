@@ -18,6 +18,9 @@ import { internal } from "./_generated/api"
  *  - `talks-stats-daily` (00:10): the talks counts (this London week, next 28
  *    days, per department), which move with the day even when no run came
  *    (`refreshStats`; a finished sweep refreshes them too).
+ *  - `locations-prune-daily` (04:35): item locations that started over 60
+ *    days ago or whose event or talk is gone (convex/ingest/locations.ts
+ *    `prune`, docs/locations-and-map.md §1b), after the retention walks.
  *  - `traffic-hourly` (:20): the broker overview's website traffic from
  *    PostHog and Search Console (convex/traffic.ts); a no-op read where their
  *    env vars are unset.
@@ -46,6 +49,12 @@ crons.daily(
   "talks-stats-daily",
   { hourUTC: 0, minuteUTC: 10 },
   internal.ingest.talks.refreshStatsDaily,
+  {},
+)
+crons.daily(
+  "locations-prune-daily",
+  { hourUTC: 4, minuteUTC: 35 },
+  internal.ingest.locations.prune,
   {},
 )
 

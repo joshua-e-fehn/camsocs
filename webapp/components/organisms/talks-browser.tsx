@@ -5,6 +5,7 @@ import {
   ArrowRightIcon,
   CalendarSyncIcon,
   LibraryIcon,
+  MapIcon,
   SlidersHorizontalIcon,
   VideoIcon,
   XIcon,
@@ -583,6 +584,13 @@ export function TalksBrowser({
               >
                 <LibraryIcon aria-hidden className="size-4" />
                 Departments A–Z
+              </Link>
+              <Link
+                {...linkProps("/map")}
+                className="inline-flex h-11 items-center gap-2 rounded-full border bg-card px-4 text-sm font-medium transition-colors duration-150 hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
+              >
+                <MapIcon aria-hidden className="size-4" />
+                Map
               </Link>
             </div>
           </div>

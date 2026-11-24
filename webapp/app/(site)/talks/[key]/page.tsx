@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { londonIsoDate } from "@/lib/calendar"
 import { linkProps } from "@/lib/crawl-traps"
+import { locatedVenue } from "@/lib/event-page"
 import { pageMetadata } from "@/lib/page-metadata"
 import { publicQuery } from "@/lib/public-data"
 import { SITE_URL } from "@/lib/site"
@@ -19,6 +20,7 @@ import { fetchTermDates } from "@/lib/term-dates"
 import type { TermDatesRow } from "@/lib/term-week"
 import { cn } from "@/lib/utils"
 import { termWeekTag } from "@/lib/week-strip"
+import { loadTalkLocation } from "../talk-location"
 
 type Props = { params: Promise<{ key: string }> }
 
@@ -66,7 +68,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function TalkPage({ params }: Props) {
   const talk = await loadTalk((await params).key)
   if (!talk) notFound()
-  const terms = await loadTerms()
+  // Its resolved place, read here under /talks only (G1; docs/locations-and-map.md §3).
+  const [terms, location] = await Promise.all([loadTerms(), loadTalkLocation(talk.key)])
   const pageUrl = `${SITE_URL}/talks/${talk.key}`
   const department = talk.departments[0]
   const termWeek = termWeekTag(londonIsoDate(talk.startsAt), terms)
@@ -77,7 +80,9 @@ export default async function TalkPage({ params }: Props) {
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD; `<` is escaped (jsonLdScript)
-        dangerouslySetInnerHTML={{ __html: jsonLdScript(talkStructuredData(talk)) }}
+        dangerouslySetInnerHTML={{
+          __html: jsonLdScript(talkStructuredData(talk, locatedVenue(location))),
+        }}
       />
       <div className="border-b bg-card/40">
         <nav
@@ -113,6 +118,7 @@ export default async function TalkPage({ params }: Props) {
           />
           <TalkDetails
             talk={talk}
+            location={location}
             pageUrl={pageUrl}
             termWeek={termWeek}
             showTitle

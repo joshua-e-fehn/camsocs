@@ -104,6 +104,8 @@ DEFAULT_REPORTS_DIR = REPO_ROOT / "var" / "reports"
 #: Graph API version for Instagram Business Discovery (source-research §17;
 #: v25.0 was the latest on 2026-10-07). Override with META_GRAPH_VERSION.
 DEFAULT_META_GRAPH_VERSION = "v25.0"
+#: OpenStreetMap's public Nominatim (stage `locate`, source-research §23).
+DEFAULT_NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 
 #: PostHog EU Cloud ingestion (run telemetry, `telemetry.py`). The project
 #: lives in the EU region; the SDK's own default is the US host.
@@ -215,6 +217,20 @@ class Settings(BaseSettings):
     #: deployment's data is what the site shows.
     indexnow_site_url: str = Field(default="", validation_alias="INDEXNOW_SITE_URL")
 
+    #: Optional. Google Places Text Search for place ids only (stage
+    #: `locate`, source-research §23, decision D13): GCP project
+    #: camsocs-515220, restricted to places.googleapis.com. Unset → the stage
+    #: skips place ids with a note; coordinates never come from Google.
+    google_places_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias="GOOGLE_PLACES_API_KEY"
+    )
+    #: OpenStreetMap Nominatim (stage `locate`, §23): the public instance by
+    #: default, at most one request a second (its usage policy).
+    nominatim_url: str = Field(default=DEFAULT_NOMINATIM_URL, validation_alias="NOMINATIM_URL")
+    nominatim_interval: float = Field(
+        default=1.0, ge=1.0, validation_alias="NOMINATIM_MIN_INTERVAL"
+    )
+
     @model_validator(mode="before")
     @classmethod
     def _blank_campus_is_unset(cls, data: Any) -> Any:
@@ -265,7 +281,12 @@ class Settings(BaseSettings):
         return campuses.get_profile(self.campus)
 
     @field_validator(
-        "convex_url", "convex_http_url", "llm_base_url", "posthog_host", "posthog_app_host"
+        "convex_url",
+        "convex_http_url",
+        "llm_base_url",
+        "posthog_host",
+        "posthog_app_host",
+        "nominatim_url",
     )
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
@@ -353,6 +374,13 @@ class Settings(BaseSettings):
     def meta_configured(self) -> bool:
         """Whether Instagram Business Discovery can run (both values set)."""
         return bool(self.meta_ig_user_id and self.meta_access_token.get_secret_value())
+
+    # -- locations (stage `locate`) ----------------------------------------------
+
+    @property
+    def places_configured(self) -> bool:
+        """Whether `locate` may ask Google Places for place ids (a key is set)."""
+        return bool(self.google_places_api_key.get_secret_value().strip())
 
     # -- PostHog ---------------------------------------------------------------
 

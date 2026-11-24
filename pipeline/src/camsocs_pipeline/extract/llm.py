@@ -105,9 +105,12 @@ class NoLLMHost(ValueError):
     """Content from a host that keeps AI out was about to reach the model."""
 
 
-#: Hosts whose content never reaches a language model, whatever the stage:
-#: their robots.txt blocks AI agents by name (source-research "Global rules",
-#: §6), and no fetch purpose overrides that (`sources.policy`, D3). A stage
+#: Hosts whose fetched content never reaches a language model, whatever the
+#: stage: their robots.txt blocks AI agents by name (source-research "Global
+#: rules", §6), and no fetch purpose overrides that (`sources.policy`, D3).
+#: (Stage `locate` gives stored talk text, read back from Convex, to the model
+#: to work out the venue: decision D13, source-research §23. It sends no
+#: fetched page and calls none of these guards.) A stage
 #: checks each page's own host with `PoliteClient.ai_input_allowed` as well;
 #: this list holds even when that check is missed.
 NO_LLM_HOSTS = NEVER_OVERRIDE_HOSTS

@@ -6,6 +6,7 @@ import { londonIsoDate } from "@/lib/calendar"
 import {
   eventMetadata,
   loadEvent,
+  loadEventLocation,
   loadRepeatsThatDay,
   loadTerms,
   loadVenue,
@@ -63,11 +64,16 @@ export default async function TalksEventRoute({ params }: Props) {
       </RestrictedEvent>
     )
   }
-  const [terms, venue] = await Promise.all([loadTerms(), loadVenue(event.venueKey)])
+  const [terms, venue, location] = await Promise.all([
+    loadTerms(),
+    loadVenue(event.venueKey),
+    loadEventLocation(event.key),
+  ])
   return (
     <EventPage
       event={event}
       venueName={venueNameOf(event, venue)}
+      location={location}
       termWeek={termWeekTag(londonIsoDate(event.startsAt), terms)}
       now={Date.now()}
     />

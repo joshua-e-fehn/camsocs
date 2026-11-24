@@ -81,6 +81,7 @@ const PAGES = [
   { href: "/societies", label: "Societies and clubs", hint: "The directory" },
   { href: "/events", label: "Events", hint: "This term's calendar" },
   { href: "/talks", label: "Talks", hint: "Seminars and lectures" },
+  { href: "/map", label: "Map", hint: "Today's events and talks, on a map" },
   { href: "/guides", label: "Guides", hint: "How Cambridge works" },
   { href: "/about", label: "About CAMsocs", hint: "Sources and method" },
   { href: "/request?kind=add", label: "Add a missing society", hint: "Request" },

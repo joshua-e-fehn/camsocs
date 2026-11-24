@@ -1,5 +1,6 @@
 "use client"
 
+import type { FunctionReturnType } from "convex/server"
 import { RefreshCwIcon } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
@@ -19,10 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import type { api } from "@/convex/_generated/api"
 import {
   runWithToast,
   useBrokerSummary,
   useFinderFeeds,
+  useLocationCoverage,
   useRefreshCoverage,
 } from "@/hooks/convex/broker"
 import { COVERAGE_FIELDS } from "@/lib/broker/coverage"
@@ -295,6 +298,8 @@ export function BrokerOverview() {
 
       <FinderFeedsCard />
 
+      <LocationsCard />
+
       <BrokerIndexing />
 
       <Card>
@@ -381,6 +386,130 @@ function FinderFeedsCard() {
           </>
         ) : (
           [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+type LocationCoverage = FunctionReturnType<typeof api.broker.overview.locationCoverage>
+
+/** The precisions in the order of the bars, with what each means. */
+const PRECISION_ROWS = [
+  { key: "exact", label: "Exact", hint: "building known, and the room if given" },
+  { key: "building", label: "Building", hint: "best inference, e.g. the society's college" },
+  { key: "area", label: "Area", hint: "only an area, e.g. sent to attendees" },
+  { key: "online", label: "Online", hint: "online only" },
+  { key: "unknown", label: "Unknown", hint: "the resolver found nothing" },
+  { key: "missing", label: "Not resolved yet", hint: "no location row" },
+] as const
+
+/** Where an unknown item's page is (an event under /talks is redirected there). */
+function itemHref(item: { kind: "event" | "talk"; key: string }): string {
+  return item.kind === "event" ? `/events/${item.key}` : `/talks/${item.key}`
+}
+
+/** The Locations card (docs/locations-and-map.md §3): upcoming events and
+ * talks by location precision, the unresolved share against the target and
+ * the items still unknown. */
+function LocationsCard() {
+  return <LocationsView coverage={useLocationCoverage()} />
+}
+
+/** The Locations card's body, for a coverage read (undefined while loading). */
+export function LocationsView({ coverage }: { coverage: LocationCoverage | undefined }) {
+  const over = coverage ? coverage.unresolvedShare > coverage.target : false
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Locations</CardTitle>
+        <CardDescription>
+          Where the next 14 days of events and talks are, as the <code>locate</code> stage resolved
+          them. The target is at most {percent(coverage?.target ?? 0.02)} unresolved.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {coverage === undefined ? (
+          <Skeleton className="h-40" />
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <StatTile
+                  emphasis
+                  label="Unresolved"
+                  value={percent(coverage.unresolvedShare)}
+                  hint={
+                    <span className="inline-flex items-center gap-1.5">
+                      {coverage.unknown.toLocaleString("en-GB")} of{" "}
+                      {coverage.upcoming.toLocaleString("en-GB")}
+                      <Badge variant={over ? "destructive" : "secondary"}>
+                        {over ? "above target" : "on target"}
+                      </Badge>
+                    </span>
+                  }
+                />
+                <StatTile
+                  label="Resolved"
+                  value={coverage.resolved.toLocaleString("en-GB")}
+                  hint={coverage.truncated ? "lower bound: a read hit its cap" : "upcoming items"}
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                {PRECISION_ROWS.map((row) => {
+                  const count = coverage.byPrecision[row.key]
+                  return (
+                    <div key={row.key} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span title={row.hint}>{row.label}</span>
+                        <span className="font-mono tabular-nums text-muted-foreground">
+                          {count.toLocaleString("en-GB")}
+                        </span>
+                      </div>
+                      <Meter
+                        share={coverage.upcoming ? count / coverage.upcoming : 0}
+                        label={row.label}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <p className="text-sm font-medium">Still unknown</p>
+              {coverage.unknownItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Every upcoming item has a place.</p>
+              ) : (
+                <ul className="flex flex-col divide-y text-sm">
+                  {coverage.unknownItems.map((item) => (
+                    <li key={`${item.kind}-${item.key}`} className="flex flex-col gap-0.5 py-2">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Badge variant="outline" className="shrink-0 font-mono">
+                          {item.kind}
+                        </Badge>
+                        <Link
+                          href={itemHref(item)}
+                          prefetch={false}
+                          className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          {item.title}
+                        </Link>
+                      </span>
+                      {item.note && (
+                        <span className="text-xs text-muted-foreground">{item.note}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {coverage.unknown > coverage.unknownItems.length && (
+                <p className="text-xs text-muted-foreground">
+                  The first {coverage.unknownItems.length} of{" "}
+                  {coverage.unknown.toLocaleString("en-GB")}.
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

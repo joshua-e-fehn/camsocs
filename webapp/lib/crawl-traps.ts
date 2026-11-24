@@ -34,6 +34,7 @@ export const TRAP_DISALLOWS: readonly string[] = [
   "/events?",
   "/events?org=*&",
   "/events/*/ics",
+  "/map?",
   "/societies?",
   "/societies?page=*&",
   "/request?",
@@ -58,7 +59,7 @@ export const TRAP_ALLOWS: readonly string[] = [
  * training-crawlers.json). So robots.txt tells a compliant GPTBot what the
  * firewall enforces, rather than allowing `/events` and then answering 403:
  * the private paths, the talks pillar (G1), the pages rendered per request
- * bare (`/events`, `/societies`, `/request`; their parameter views are
+ * bare (`/events`, `/map`, `/societies`, `/request`; their parameter views are
  * caught by any query), any URL with a query string, every `.ics` feed and
  * the generated share images. No Allow lines, so a first-match parser
  * reads this group as a longest-match one does.
@@ -68,6 +69,8 @@ export const TRAINING_DISALLOWS: readonly string[] = [
   "/talks",
   "/events$",
   "/events.rsc$",
+  "/map$",
+  "/map.rsc$",
   "/societies$",
   "/societies.rsc$",
   "/request$",
@@ -134,6 +137,7 @@ export function crawlerTrapRel(href: string): "nofollow" | undefined {
  * hints on edge-cached profiles and event pages (bot policy 2026-11-03). */
 const DYNAMIC_PAGES: readonly string[] = [
   "/events",
+  "/map",
   "/societies",
   "/talks",
   "/talks/departments",

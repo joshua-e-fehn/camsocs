@@ -195,6 +195,9 @@ export function securityHeaders(
   ]
 }
 
+/** OpenFreeMap's tile host, which /map's MapLibre canvas reads (lib/map-style.ts). */
+export const MAP_TILES = "https://tiles.openfreemap.org"
+
 /** A Convex origin from `url` (`https://name.convex.cloud`), or `fallback`
  * when it is unset or not one (`next dev` before `.env.local`, tests). */
 function convexOrigin(url: string | undefined, fallback: string): string {
@@ -212,6 +215,9 @@ function convexOrigin(url: string | undefined, fallback: string): string {
  *  - **the Convex deployment**: the client's WebSocket and HTTP calls
  *    (`NEXT_PUBLIC_CONVEX_URL`), the site URL beside it, and stored images on
  *    `*.convex.cloud` (the same hosts `images.remotePatterns` allows);
+ *  - **OpenFreeMap** (`MAP_TILES`): /map's style, vector tiles, glyphs and
+ *    sprites (lib/map-style.ts; MapLibre fetches them, and paints sprite
+ *    images, docs/locations-and-map.md §4);
  *  - **Vercel's toolbar** (`vercel.live`), on preview deployments only.
  *
  * Google sign-in and the map and calendar links are navigations, which a CSP
@@ -239,6 +245,7 @@ export function contentSecurityPolicy(
       "data:",
       "blob:",
       "https://*.convex.cloud",
+      MAP_TILES,
       ...(preview ? ["https://vercel.live", "https://vercel.com"] : []),
     ],
     "font-src": [
@@ -250,6 +257,7 @@ export function contentSecurityPolicy(
       cloud,
       socket,
       site,
+      MAP_TILES,
       ...(preview ? ["https://vercel.live", "wss://ws-us3.pusher.com"] : []),
     ],
     "frame-src": preview ? ["https://vercel.live"] : ["'none'"],

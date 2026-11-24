@@ -167,7 +167,7 @@ export function probesAndScrapersDeny(): RuleBody {
 }
 
 /** The pages rendered per request, and every other path a training crawler
- * may not cost compute on: the calendar, directory, request form and sign-in
+ * may not cost compute on: the calendar, map, directory, request form and sign-in
  * pages (and their `.rsc` payloads), the whole talks pillar, the auth API,
  * the broker dashboard, every `.ics` feed (`/events.ics`,
  * `/events/<key>/ics`) and the generated share images
@@ -180,7 +180,7 @@ export function probesAndScrapersDeny(): RuleBody {
  * `TRAINING_DISALLOWS`) disallows at least all of this; a parity test in
  * lib/firewall-rules.test.ts holds the two together (bot policy
  * 2026-11-03). */
-export const UNCACHED_PATHS = String.raw`^/((events|societies|request|sign-in)(\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image`
+export const UNCACHED_PATHS = String.raw`^/((events|map|societies|request|sign-in)(\.rsc)?$|talks|api/|dashboard)|[/.]ics$|opengraph-image`
 
 /** T3 (step 2): training crawlers on edge-cached public pages only. The
  * existing GPTBot/ClaudeBot rule (site-wide since the 1 Nov CPU incident,

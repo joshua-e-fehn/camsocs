@@ -66,6 +66,12 @@ export function useFinderFeeds() {
   return useQuery(api.broker.overview.finderFeeds)
 }
 
+/** Location coverage of the next 14 days (the "Locations" card,
+ * docs/locations-and-map.md §3). */
+export function useLocationCoverage() {
+  return useQuery(api.broker.overview.locationCoverage)
+}
+
 export function useBrokerPeople() {
   return useQuery(api.broker.people.list)
 }

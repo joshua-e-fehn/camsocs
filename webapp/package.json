@@ -33,6 +33,7 @@
     "convex": "^1.44.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.31.0",
+    "maplibre-gl": "6.17.0",
     "next": "16.2.12",
     "posthog-js": "1.444.0",
     "posthog-node": "5.61.1",
@@ -78,6 +79,9 @@
     "d3-selection": "3.0.0",
     "d3-timer": "3.0.1",
     "d3-transition": "3.0.1",
-    "d3-zoom": "3.0.0"
+    "d3-zoom": "3.0.0",
+    "@maplibre/geojson-vt": "6.3.0",
+    "@maplibre/maplibre-gl-style-spec": "26.6.0",
+    "pbf": "5.1.2"
   }
 }

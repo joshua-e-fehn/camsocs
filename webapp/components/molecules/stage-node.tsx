@@ -13,6 +13,7 @@ import {
   InboxIcon,
   LoaderIcon,
   type LucideIcon,
+  MapPinIcon,
   MicIcon,
   SparklesIcon,
   SproutIcon,
@@ -56,6 +57,7 @@ export const PHASE_ICONS: Record<Phase, LucideIcon> = {
   inbox: InboxIcon,
   load: UploadIcon,
   talks: MicIcon,
+  locate: MapPinIcon,
   report: FileTextIcon,
 }
 

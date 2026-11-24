@@ -169,6 +169,18 @@ describe("the allow-list", () => {
     })
     expect(allowed("finder_completed", { finder: "music, beginner", resultCount: 3 })).toBeNull()
   })
+
+  test("the map events carry how the day changed and what kind of item opened, nothing else", () => {
+    expect(allowed("map_day_changed", { direction: "swipe", date: "2026-11-24" })).toEqual({
+      direction: "swipe",
+    })
+    expect(allowed("map_day_changed", { direction: "2026-11-24" })).toBeNull()
+    expect(allowed("map_day_changed", {})).toBeNull()
+    expect(
+      allowed("map_item_opened", { kind: "talk", title: "Single-cell atlases", key: "talk-x" }),
+    ).toEqual({ kind: "talk" })
+    expect(allowed("map_item_opened", { kind: "Seminar Room 1" })).toBeNull()
+  })
 })
 
 describe("track", () => {

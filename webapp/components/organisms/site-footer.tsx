@@ -13,6 +13,7 @@ export const COLUMNS = [
     links: [
       { href: "/events", label: "Events" },
       { href: "/talks", label: "Talks" },
+      { href: "/map", label: "Map" },
       { href: "/societies", label: "Societies and clubs" },
       { href: "/talks/departments", label: "Departments" },
       { href: "/term-dates", label: "Term dates" },

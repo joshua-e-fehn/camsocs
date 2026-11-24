@@ -92,6 +92,14 @@ export const CALENDAR_FEEDS = ["talks", "event", "talk", "events", "personal"] a
 /** Which Finder quiz was finished (ENG-133). */
 export const FINDERS = ["societies", "events", "talks"] as const
 
+/** How the map's day was changed (/map, docs/locations-and-map.md §4): the
+ * ‹ › arrows, the week strip, the date picker, ←/→ keys or a swipe. */
+export const MAP_DAY_DIRECTIONS = ["prev", "next", "strip", "picker", "key", "swipe"] as const
+export type MapDayDirection = (typeof MAP_DAY_DIRECTIONS)[number]
+
+/** What a map row opened: an event's page or a talk's. */
+export const MAP_ITEM_KINDS = ["event", "talk"] as const
+
 /** What kind of page a link off the site goes to (never its address). */
 export const OUTBOUND_KINDS = ["website", "social", "source", "other"] as const
 export type OutboundKind = (typeof OUTBOUND_KINDS)[number]
@@ -145,6 +153,12 @@ export const ANALYTICS_EVENTS = {
   finder_completed: {
     finder: oneOf(FINDERS),
     resultCount: count(15),
+  },
+  map_day_changed: {
+    direction: oneOf(MAP_DAY_DIRECTIONS),
+  },
+  map_item_opened: {
+    kind: oneOf(MAP_ITEM_KINDS),
   },
 } as const satisfies EventRules
 

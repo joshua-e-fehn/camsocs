@@ -117,6 +117,11 @@ ANNOTATIONS: dict[str, tuple] = {
         ("talks/departments", "talks/batch", "talks/sweep", "talks/runs"), True, False,
         ("talks-redesign-spec",),
     ),
+    "locate": (
+        "locate", "shared", "cam", (), (),
+        ("locations/pending", "venues/all", "claims", "locations/batch", "locations/summary"),
+        True, True, ("§23",),
+    ),
     "report": (
         "report", "shared", None, (), (), ("coverage", "coverage/events"), False, False, ()
     ),
@@ -172,6 +177,7 @@ def test_phases_are_monotonic_in_the_registry() -> None:
         "inbox",
         "load",
         "talks",
+        "locate",
         "report",
     )
     order = [PHASES.index(stage.phase) for stage in STAGES]

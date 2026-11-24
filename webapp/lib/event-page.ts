@@ -15,7 +15,7 @@ import {
 } from "./events"
 import { type NextEvent, nextEvents } from "./next-events"
 import { pageMetadata } from "./page-metadata"
-import type { EventPublic } from "./public-api"
+import type { EventPublic, ItemLocation } from "./public-api"
 import { publicQuery } from "./public-data"
 import { eventIcsPath, eventPath } from "./talks-boundary"
 import { fetchTermDates } from "./term-dates"
@@ -50,6 +50,47 @@ export const loadVenue = cache(async (venueKey: string | undefined) => {
     return undefined
   }
 })
+
+/** An event's resolved place (`locations.forItem`, docs/locations-and-map.md
+ * §3), for its "Where" row and its JSON-LD geo: one anonymous, cached read.
+ * Events only: a talk's place is read by `loadTalkLocation`, which lives
+ * under app/(site)/talks/ (G1; app/talks-boundary.test.tsx holds every
+ * server module outside /talks to a literal `kind: "event"`). Decoration: a
+ * failed read is null, and the row shows the source's words as before. */
+export const loadEventLocation = cache(async (itemKey: string): Promise<ItemLocation> => {
+  try {
+    return await publicQuery(api.locations.forItem, { kind: "event", itemKey })
+  } catch (error) {
+    unstable_rethrow(error)
+    return null
+  }
+})
+
+/** The resolved venue that may stand as an item's JSON-LD Place: a known
+ * building (`exact` or `building`) with coordinates. Never an area's anchor
+ * (an "exact place sent to attendees" event is not at Market Square). */
+export function locatedVenue(location: ItemLocation): EventVenue | undefined {
+  if (!location || (location.precision !== "exact" && location.precision !== "building"))
+    return undefined
+  const venue = location.venue
+  if (!venue || venue.lat === undefined || venue.lng === undefined) return undefined
+  return {
+    name: venue.name,
+    address: venue.address,
+    collegeKey: venue.collegeKey,
+    lat: venue.lat,
+    lng: venue.lng,
+  }
+}
+
+/** The venue an event's JSON-LD Place is built from: the resolved building
+ * when there is one (with its coordinates), else the venue its key names. */
+export function structuredVenue(
+  venue: EventVenue | undefined,
+  location: ItemLocation,
+): EventVenue | undefined {
+  return locatedVenue(location) ?? venue
+}
 
 /** Whether the event's title needs its start time (`repeatsThatDay`): one
  * anonymous, cached `events.list` read of its London day, by the title's

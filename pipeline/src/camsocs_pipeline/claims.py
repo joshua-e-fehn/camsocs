@@ -34,9 +34,14 @@ from camsocs_pipeline.models.observation import EventObservation, FieldObs, Obse
 from camsocs_pipeline.models.wire import ClaimInput
 from camsocs_pipeline.talks.model import SOURCE_TYPES as TALK_SOURCE_TYPES
 
-#: Sources whose text never reaches an LLM: talks.cam lists (robots.txt blocks
-#: AI agents; §6), and every source of the talks pillar, which is parser-only
-#: by decision D7 (`talks.model.SOURCE_TYPES`: talks.cam and department sites).
+#: Sources whose text never reaches an LLM on a claim path: talks.cam lists
+#: (robots.txt blocks AI agents; §6), and every source of the talks pillar,
+#: which is parser-only by decision D7 (`talks.model.SOURCE_TYPES`: talks.cam
+#: and department sites). Location resolution (stage `locate`, D13) reads the
+#: stored text back from Convex and asks the model where the item is; the
+#: venue claims it then posts (`osm_nominatim`, `google_places`) carry
+#: OpenStreetMap's and Google's own values, never the text or the model's
+#: wording (locate/resolver.py).
 NO_LLM_SOURCE_TYPES = frozenset({"talks_list", *TALK_SOURCE_TYPES})
 
 

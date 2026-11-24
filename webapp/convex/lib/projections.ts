@@ -433,7 +433,10 @@ export const venuePublicValidator = v.object({
   collegeKey: v.optional(v.string()),
   lat: v.optional(v.number()),
   lng: v.optional(v.number()),
+  /** For an exact "Open in Google Maps" link only (lib/maps-link.ts). */
+  googlePlaceId: v.optional(v.string()),
 })
+export type VenuePublic = Infer<typeof venuePublicValidator>
 
 export function venuePublic(venue: Doc<"venues">): Infer<typeof venuePublicValidator> {
   return {
@@ -444,6 +447,7 @@ export function venuePublic(venue: Doc<"venues">): Infer<typeof venuePublicValid
     collegeKey: venue.collegeKey,
     lat: venue.lat,
     lng: venue.lng,
+    googlePlaceId: venue.googlePlaceId,
   }
 }
 

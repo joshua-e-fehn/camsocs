@@ -29,7 +29,7 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 - **Never decoded:** obfuscated emails (Cloudflare email protection, script-hidden addresses).
 - **Never fetched:** Raven-gated, members-only or 403 pages.
 - **Instagram, Facebook, LinkedIn:** store the link only. They are fetched only through the official Meta Business Discovery API (§17).
-- **talks.cam and tbc.xyz:** their robots.txt blocks AI agents by name. talks.cam's content is therefore parsed deterministically and **never passed to the LLM**, and no fetch purpose overrides either host. tbc.xyz is not used.
+- **talks.cam and tbc.xyz:** their robots.txt blocks AI agents by name. No AI agent fetches their pages, talks.cam's content is parsed deterministically, and no fetch purpose overrides either host. tbc.xyz is not used. talks.cam text reaches a model in one place only: the `locate` stage, which reads the stored text back from Convex to work out the venue (decision D13, §23).
 - **Names in public text (decision D1):** personal names of private individuals in public free text — descriptions and notes, event and session titles, venues, price notes — are replaced by roles before publishing (`pipeline/.../extract/redact.py`, prompt `redact_names_v2`). The original stays internal (`fieldClaims.valueRaw`). Published speakers of talks and workshops stay named. Titles are read in context (review 2026-10-10): a Camdram show's or a talks.cam talk's title is a work's name and is never redacted, a talk's title on a society's own programme names its speaker, and other titles and venues reach the model with what they are (data-model §3). talks.cam text is redacted by the deterministic rule only. A calendar entry that books a room is not an event (`events/checks.py` `is_booking`), and feed text keeps only the organisation's own addresses (`events/common.py` `withhold_personal_contacts`).
 - **Raw caches** go under `var/cache/` and are never committed.
 
@@ -244,8 +244,9 @@ Code cites the sections here as `§N`. All facts below were checked on **2026-10
 **robots.txt:** `Disallow: /` for ClaudeBot, GPTBot, CCBot and others, and `Crawl-delay: 10` for everyone else.
 
 **Rules for us**
-- Parse deterministically only. The LLM is never used on this content.
-- Wait 10 s between requests.
+- Parse deterministically only. No fetch or claim path passes this content to the LLM.
+- Location resolution is the one exception (decision D13, 2026-11-24: Joshua obtained permission as a University of Cambridge student): the `locate` stage gives the stored talk text to the model to work out the venue (§23). It fetches nothing from talks.cam.
+- No AI agent fetches its pages (its robots.txt), and wait 10 s between requests.
 
 **Traps**
 - List IDs change.
@@ -628,3 +629,29 @@ The 31 colleges are matched by `registered_charity_number` (`pipeline/src/camsoc
 **Cadence:** colleges file their annual return and accounts between November and May; the statutory deadline is ten months after the year end (30 April for a June year end, 31 May for July). Observed for 2024-25: the first college on 13 Nov 2025, the median on 30 Mar 2026, the last (Hughes Hall) on 29 May 2026. The stage runs in the weekly `full` group (no timer of its own); a new financial year reaches the ranking only once all 31 colleges have an accepted row for it (`collegeFinances.latestCompleteYear`), expected each year by early June.
 
 **Use:** stage `college_finances` → `POST /api/pipeline/collegeFinances` → `collegeFinances` (docs/data-model.md), read by `/colleges/wealth` (`webapp/lib/college-finances.ts`). A failed download, a renamed column or a college missing from the extract (a renumbered or removed charity; the others are still posted, and the stage fails on every run until `college_charities.json` and the wealth JSON are updated) fails the stage, which the runner reports to the operator. An extract, college list and override file identical to the last posted ones are not posted again. Student numbers and the University's own endowment are not in this source.
+
+## §23 Location resolution: OSM Nominatim + Google Places
+
+Stage `locate` (`pipeline/src/camsocs_pipeline/stages/locate.py`, `locate/`), the build contract `docs/locations-and-map.md` §2, decision D13. Researched **2026-11-24**. It fetches no listing: it reads events and talks back from Convex (`locations/pending`, `venues/all`), places each one, and posts venues as claims and one `itemLocations` row per item (`locations/batch`).
+
+**What it reads.** Events with their D1-redacted `venueText`, description, organisers and own `venueKey`; talks with their `venue`, `online` flag, abstract, departments and series. Window: a day ago to 120 days ahead. An item whose stored row carries the same input hash (prompt version, kind, title, description, venue text, venue key, online flag, organisers) is not read again.
+
+**The model (D13).** Rules first (online only; the event's own venue with coordinates; the venue text naming a known venue or alias exactly, with the room it adds). The rest go to the bulk model (`gpt-6-luna`, the strong model as fallback) with prompt `extract/prompts/locate_v1.md`, shown the item and up to 60 known venues (best word overlap, the colleges and the main University sites). Replies are cached by input hash (`var/cache/llm/locate_v1/`). **talks.cam text may be given to the model here**: Joshua obtained permission as a University of Cambridge student (D13). The permission covers location resolution only. Fetching talks.cam is unchanged (§6: Crawl-delay 10, no AI agent fetches its pages), the G1 render boundary is unchanged, and the fetch and claim paths keep refusing talks text (`claims.NO_LLM_SOURCE_TYPES`, `extract/llm.py` `assert_llm_source_allowed`). Nothing the model writes becomes a public claim except a venue's canonical name; a room or area label is checked to be one short line and never a link, an address or an honorific.
+
+**OpenStreetMap Nominatim (coordinates).**
+- Endpoint: `https://nominatim.openstreetmap.org/search?q=…&format=jsonv2&addressdetails=1&limit=3&viewbox=0.03,52.26,0.22,52.15&bounded=1&countrycodes=gb`.
+- Usage policy (operations.osmfoundation.org/policies/nominatim, read 2026-11-24): an absolute maximum of 1 request per second, an identifying User-Agent (ours, `CAMSOCS_USER_AGENT`), results cached on our side; periodic requests count as bulk geocoding and are acceptable only for a small, cached workload. We send at most 300 requests a run, one at a time, and a found venue is stored, so it is never looked up again. A 403 or 429 stops the run's lookups.
+- Licence: ODbL. The map credits "© OpenStreetMap contributors" (webapp `/map`, docs/locations-and-map.md §0.7).
+- A result outside `CAMBRIDGE_BOUNDS` (S 52.15, N 52.26, W 0.03, E 0.22) is refused whatever its name. Queries in order: the model's `osm_query`, "<name>, Cambridge", the address. A miss falls back to the enclosing building the model named (`building` precision), else the item is `unknown` with a note.
+- Claims: source type `osm_nominatim`, method `parser`, evidence `secondary`, `sourceUrl` `https://www.openstreetmap.org/<type>/<id>`. Fields `name` (OSM's own `name`), `address` (from OSM's address parts), `lat`, `lng`: every value OpenStreetMap's, never the item's text or the model's wording, which only form the query. A result with no OSM name, or a name that reads as a person's, makes no venue. No `aliases`. A transport error, a non-200 status other than 403/429 or an unreadable body is no answer: the item is deferred to the next run, never recorded as not found.
+
+**Google Places (place ids only).**
+- Endpoint: `POST https://places.googleapis.com/v1/places:searchText`, headers `X-Goog-Api-Key` and `X-Goog-FieldMask: places.id` (the IDs-only SKU), body `{textQuery, pageSize: 1, locationRestriction: {rectangle: Cambridge}}`.
+- Terms (Google Maps Platform Service Specific Terms §14 "Places API (Legacy and New)", read 2026-11-24): Places content must not be used in conjunction with a non-Google map (§14.2), and latitude/longitude may be cached for at most 30 consecutive calendar days (§14.3). Place ids are exempt from the caching limit and may be stored indefinitely (the owner decision, docs/locations-and-map.md §0.3). The id is never drawn on our map: it only goes into a link that opens Google Maps. So **no coordinate ever comes from Google**: the id builds only the "Open in Google Maps" link (`&query_place_id=`).
+- Key: `GOOGLE_PLACES_API_KEY` (pipeline env; GCP project camsocs-515220, restricted to places.googleapis.com, £20 budget alert; vault item "CAMsocs Google Places API key (camsocs-515220)"). Unset → place ids are skipped with a note.
+- At most 100 requests a run: new venues and known venues without an id, those used by the run's rows first; a venue Places answered with no place is asked again after 30 days; one Places gave no answer for (a transport error, another error status, an unreadable body) is not stamped and is asked again next run. A 401, 403 or 429 stops the run's requests.
+- Claims: source type `google_places`, field `googlePlaceId`, method `parser`, evidence `secondary`, `sourceUrl` `https://www.google.com/maps/place/?q=place_id:<id>`.
+
+**Budgets.** 900 items asked of the model (cached replies are free), 300 Nominatim and 100 Places requests, 25 minutes. An item a budget, an outage or a model error leaves unfinished gets no row and is tried again on the next run; a dry run reads nothing from Convex and makes no request.
+
+**Monitoring.** The run reports `resolved`, `unknown`, `llmCalls`, `nominatimCalls`, `placesCalls` and the next 14 days' `unresolvedShare` (`locations/summary`), with a note above the 2% target. `monitor.py`'s shadow check `location_unresolved_share` (threshold 0.02, decision D9) reads the same summary.

@@ -2,12 +2,14 @@ import { ArrowUpRightIcon, InfoIcon, MapPinIcon, VideoIcon } from "lucide-react"
 import Link from "next/link"
 import { AddToCalendar, type CalendarLinks } from "@/components/molecules/add-to-calendar"
 import { ClampedText } from "@/components/molecules/clamped-text"
+import { PlaceLine } from "@/components/molecules/place-line"
 import { ShareAction } from "@/components/molecules/share-action"
 import { SourcedChip } from "@/components/molecules/sourced-chip"
 import { TermDateBlock } from "@/components/molecules/term-date-block"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { formatInstantDate, londonIsoDate } from "@/lib/calendar"
 import { linkProps } from "@/lib/crawl-traps"
+import type { ItemLocation } from "@/lib/public-api"
 import { displayHost } from "@/lib/source-line"
 import {
   googleCalendarUrl,
@@ -120,6 +122,7 @@ function initials(name: string): string {
  */
 export function TalkDetails({
   talk,
+  location,
   pageUrl,
   termWeek,
   showTitle = false,
@@ -127,6 +130,9 @@ export function TalkDetails({
   className,
 }: {
   talk: TalkPublic
+  /** The resolved place (`locations.forItem({kind: "talk"})`, read only
+   * under /talks, G1); null or absent: none yet, the venue as listed. */
+  location?: ItemLocation
   /** Absolute URL of the talk's page here, for calendar entries. */
   pageUrl: string
   /** "Mich · Wk 5", when the day is in term. */
@@ -147,6 +153,9 @@ export function TalkDetails({
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${room}, Cambridge`)}`
     : undefined
   const path = new URL(pageUrl).pathname
+  // An online-only talk keeps the Online row alone; any other resolved place
+  // is the "Where" row (docs/locations-and-map.md §3).
+  const placed = location && location.precision !== "online" ? location : undefined
 
   return (
     <div className={cn("flex flex-col gap-7", className)}>
@@ -195,22 +204,28 @@ export function TalkDetails({
       </div>
 
       <div className="flex flex-col gap-4 text-[0.9375rem]">
-        {talk.venue && (
+        {placed ? (
           <Row icon={MapPinIcon} label="Where">
-            <span className="font-medium">{talk.venue}</span>
-            {mapsUrl && (
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="inline-flex min-h-11 items-center gap-1 self-start text-sm text-muted-foreground sm:min-h-8 underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                Open in Maps
-                <ArrowUpRightIcon aria-hidden className="size-3.5" />
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            )}
+            <PlaceLine location={placed} sourceText={room ?? undefined} day={day} />
           </Row>
+        ) : (
+          talk.venue && (
+            <Row icon={MapPinIcon} label="Where">
+              <span className="font-medium">{talk.venue}</span>
+              {mapsUrl && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="inline-flex min-h-11 items-center gap-1 self-start text-sm text-muted-foreground sm:min-h-8 underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  Open in Maps
+                  <ArrowUpRightIcon aria-hidden className="size-3.5" />
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              )}
+            </Row>
+          )
         )}
         {talk.online && (
           <Row icon={VideoIcon} label="Online">

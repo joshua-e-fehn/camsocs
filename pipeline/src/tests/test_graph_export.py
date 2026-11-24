@@ -122,6 +122,7 @@ def test_lanes_are_campus_by_pillar_and_never_merge_pillars(graph: dict) -> None
         "cam/societies",
         "cam/events",
         "cam/talks",
+        "cam/shared",
         "engine/societies",
         "engine/events",
         "engine/shared",

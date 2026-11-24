@@ -361,6 +361,9 @@ export function talkMetaDescription(talk: TalkListItem): string {
   return lead ? `${lead}: ${text}` : text
 }
 
+/** The resolved venue of a talk, for its JSON-LD Place. */
+export type TalkPlace = { address?: string; lat?: number; lng?: number }
+
 /**
  * schema.org `Event` for a talk's page, as a node of the site's graph (owner
  * decision G8: talk markup stays; only its errors are fixed, SEO audit
@@ -368,9 +371,15 @@ export function talkMetaDescription(talk: TalkListItem): string {
  * page and ours. An online talk's VirtualLocation stays the source listing,
  * where the joining link is (a page of ours is not where anyone attends; G8
  * keeps that as it was, review of 2026-11-02); the organizer is the
- * department by its full name.
+ * department by its full name. The Place keeps the venue as listed and takes
+ * its street address and coordinates from the resolved venue (`resolved`,
+ * docs/locations-and-map.md §3), when there is one.
  */
-export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, unknown> {
+export function talkJsonLd(
+  talk: TalkPublic,
+  pageUrl: string,
+  resolved?: TalkPlace,
+): Record<string, unknown> {
   const room = physicalVenue(talk.venue)
   const mode = talk.online
     ? room
@@ -381,7 +390,15 @@ export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, un
     ? {
         "@type": "Place",
         name: room,
-        address: { "@type": "PostalAddress", addressLocality: "Cambridge", addressCountry: "GB" },
+        address: {
+          "@type": "PostalAddress",
+          ...(resolved?.address ? { streetAddress: resolved.address } : {}),
+          addressLocality: "Cambridge",
+          addressCountry: "GB",
+        },
+        ...(resolved?.lat !== undefined && resolved.lng !== undefined
+          ? { geo: { "@type": "GeoCoordinates", latitude: resolved.lat, longitude: resolved.lng } }
+          : {}),
       }
     : null
   const virtual = talk.online ? { "@type": "VirtualLocation", url: talk.url } : null
@@ -439,7 +456,10 @@ export function talkJsonLd(talk: TalkPublic, pageUrl: string): Record<string, un
  * talk's Event, and the BreadcrumbList of the visible trail (Talks › the
  * department › the talk).
  */
-export function talkStructuredData(talk: TalkPublic): Record<string, unknown> {
+export function talkStructuredData(
+  talk: TalkPublic,
+  resolved?: TalkPlace,
+): Record<string, unknown> {
   const path = `/talks/${talk.key}`
   const pageUrl = pageId(path)
   const department = talk.departments[0]
@@ -455,7 +475,7 @@ export function talkStructuredData(talk: TalkPublic): Record<string, unknown> {
         mainEntity: { "@id": talkId(talk.key) },
         breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
       },
-      talkJsonLd(talk, pageUrl),
+      talkJsonLd(talk, pageUrl, resolved),
       breadcrumbList(path, [
         { name: "Talks", path: "/talks" },
         ...(department

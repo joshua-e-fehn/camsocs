@@ -45,8 +45,12 @@
       "order": 8
     },
     {
-      "key": "report",
+      "key": "locate",
       "order": 9
+    },
+    {
+      "key": "report",
+      "order": 10
     }
   ],
   "lanes": [
@@ -64,6 +68,11 @@
       "id": "cam/talks",
       "campus": "cam",
       "pillar": "talks"
+    },
+    {
+      "id": "cam/shared",
+      "campus": "cam",
+      "pillar": "shared"
     },
     {
       "id": "engine/societies",
@@ -84,7 +93,7 @@
   "groups": [
     {
       "key": "events",
-      "description": "daily: every events source, then load and the coverage report",
+      "description": "daily: every events source, then load, talks, locate and the coverage report",
       "stages": [
         "term_dates",
         "camdram_events",
@@ -100,6 +109,7 @@
         "termcards",
         "load",
         "talks",
+        "locate",
         "report"
       ],
       "needs": ["_resolved", "society_website", "su_profile"],
@@ -136,6 +146,7 @@
         "termcards",
         "load",
         "talks",
+        "locate",
         "report"
       ],
       "needs": [],
@@ -747,10 +758,34 @@
       ]
     },
     {
+      "id": "stage:cam:locate",
+      "kind": "stage",
+      "name": "locate",
+      "order": 25,
+      "phase": "locate",
+      "pillar": "shared",
+      "campus": "cam",
+      "lane": "cam/shared",
+      "description": "events + talks → venues (OSM coordinates, place ids) and item locations",
+      "requires": [],
+      "groups": ["events", "full"],
+      "network": true,
+      "llm": true,
+      "fetchesInDryRun": false,
+      "label": null,
+      "docs": [
+        {
+          "doc": "docs/source-research.md",
+          "section": "23",
+          "anchor": "23-location-resolution-osm-nominatim--google-places"
+        }
+      ]
+    },
+    {
       "id": "stage:cam:report",
       "kind": "stage",
       "name": "report",
-      "order": 25,
+      "order": 26,
       "phase": "report",
       "pillar": "shared",
       "campus": null,
@@ -1094,6 +1129,30 @@
       "kind": "sink",
       "name": "talks/runs",
       "route": "/api/pipeline/talks/runs"
+    },
+    {
+      "id": "sink:cam:locations/pending",
+      "kind": "sink",
+      "name": "locations/pending",
+      "route": "/api/pipeline/locations/pending"
+    },
+    {
+      "id": "sink:cam:venues/all",
+      "kind": "sink",
+      "name": "venues/all",
+      "route": "/api/pipeline/venues/all"
+    },
+    {
+      "id": "sink:cam:locations/batch",
+      "kind": "sink",
+      "name": "locations/batch",
+      "route": "/api/pipeline/locations/batch"
+    },
+    {
+      "id": "sink:cam:locations/summary",
+      "kind": "sink",
+      "name": "locations/summary",
+      "route": "/api/pipeline/locations/summary"
     },
     {
       "id": "sink:cam:coverage",
@@ -1563,6 +1622,31 @@
       "from": "stage:cam:talks",
       "to": "sink:cam:talks/runs",
       "kind": "posts"
+    },
+    {
+      "from": "sink:cam:locations/pending",
+      "to": "stage:cam:locate",
+      "kind": "reads"
+    },
+    {
+      "from": "sink:cam:venues/all",
+      "to": "stage:cam:locate",
+      "kind": "reads"
+    },
+    {
+      "from": "stage:cam:locate",
+      "to": "sink:cam:claims",
+      "kind": "posts"
+    },
+    {
+      "from": "stage:cam:locate",
+      "to": "sink:cam:locations/batch",
+      "kind": "posts"
+    },
+    {
+      "from": "sink:cam:locations/summary",
+      "to": "stage:cam:locate",
+      "kind": "reads"
     },
     {
       "from": "sink:cam:coverage",
