@@ -38,19 +38,21 @@ event (`resolver.model_names_allowed`): venues are public site-wide.
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 
 from camsocs_pipeline.config import ConfigError
 from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.locate.gazetteer import Gazetteer
-from camsocs_pipeline.locate.matching import input_hash
+from camsocs_pipeline.locate.matching import input_hash, is_area_key
 from camsocs_pipeline.locate.model import PendingItem
 from camsocs_pipeline.locate.nominatim import Nominatim
 from camsocs_pipeline.locate.photon import Photon
 from camsocs_pipeline.locate.places import Places
 from camsocs_pipeline.locate.postcodes import Postcodes
 from camsocs_pipeline.locate.resolver import PROMPT_NAME, Locator, row_input_hash
+from camsocs_pipeline.locate.venue_class import classify_venues
 from camsocs_pipeline.pipeline.context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -64,19 +66,29 @@ UNRESOLVED_TARGET = 0.02
 MAX_REJECTIONS_NOTED = 5
 
 
-def due(items: list[PendingItem]) -> tuple[list[PendingItem], int]:
+def due(items: list[PendingItem], coarse: Collection[str] = ()) -> tuple[list[PendingItem], int]:
     """The items whose stored row is missing, was made from other input, is
-    `unknown` from an earlier resolver version (`resolver.RESOLVER_VERSION`:
-    looked up again with the new lookups, from the cached reply), or
-    carries another start (a rescheduled item: the row's `startsAt` drives
-    the 14-day coverage and the prune; the reply cache is keyed by input
-    hash, so re-posting it asks no model), and how many are unchanged."""
+    `unknown` or at a coarse venue (`coarse`: a town, a district or a
+    street by its OSM class, or an area venue) from an earlier resolver
+    version (`resolver.RESOLVER_VERSION`: looked up again with the new
+    lookups, from the cached reply, asking no model), or carries another
+    start (a rescheduled item: the row's `startsAt` drives the 14-day
+    coverage and the prune; the reply cache is keyed by input hash, so
+    re-posting it asks no model), and how many are unchanged."""
+
+    def at_coarse(key: str | None) -> bool:
+        return bool(key) and (is_area_key(key) or key in coarse)
+
     todo = [
         item
         for item in items
         if item.stored is None
         or item.stored.input_hash
-        != row_input_hash(input_hash(item, PROMPT_NAME), item.stored.precision)
+        != row_input_hash(
+            input_hash(item, PROMPT_NAME),
+            item.stored.precision,
+            coarse=at_coarse(item.stored.venue_key),
+        )
         or (item.stored.starts_at is not None and item.stored.starts_at != item.starts_at)
     ]
     return todo, len(items) - len(todo)
@@ -95,9 +107,13 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     )
     items = ctx.loader.location_pending(*window)
     venues = ctx.loader.venues_all()
-    todo, unchanged = due(items)
-    if ctx.limit is not None:
-        todo = todo[: ctx.limit]
+    state = ctx.state.data("locate")
+
+    gazetteer: Gazetteer | None = None
+    try:
+        gazetteer = Gazetteer.default()
+    except (OSError, ValueError, KeyError) as error:
+        ctx.report.notes.append(f"gazetteer not read ({type(error).__name__}): Nominatim only")
 
     memo = LLMMemo(settings.cache_dir / "llm")
     llm: LLMClient | None = None
@@ -105,48 +121,65 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     photon: Photon | None = None
     postcodes: Postcodes | None = None
     places: Places | None = None
-    if not ctx.dry_run and todo:
-        try:
-            llm = LLMClient(settings.require_llm())
-        except ConfigError as error:
-            ctx.report.notes.append(f"no model ({error}): cached replies only")
-        user_agent = settings.require_user_agent()
+    user_agent = settings.require_user_agent() if not ctx.dry_run and venues else None
+    if user_agent is not None:
         nominatim = Nominatim(
             user_agent=user_agent,
             base_url=settings.nominatim_url,
             interval=settings.nominatim_interval,
         )
-        photon = Photon(user_agent=user_agent)
-        postcodes = Postcodes(user_agent=user_agent)
-        if settings.places_configured:
-            places = Places(
-                api_key=settings.google_places_api_key.get_secret_value(),
-                user_agent=user_agent,
-            )
-        else:
-            ctx.report.notes.append("place ids skipped: GOOGLE_PLACES_API_KEY is not set")
+    try:
+        # Which known venues are a town, a district or a street (their OSM
+        # class): never an exact place, and their rows are looked at again.
+        classes = classify_venues(
+            venues,
+            state=state.setdefault("venueClass", {}),
+            now=now,
+            nominatim=nominatim,
+            gazetteer=gazetteer,
+        )
+        ctx.report.notes.extend(classes.notes)
+        todo, unchanged = due(items, classes.coarse)
+        if ctx.limit is not None:
+            todo = todo[: ctx.limit]
 
-    gazetteer: Gazetteer | None = None
-    try:
-        gazetteer = Gazetteer.default()
-    except (OSError, ValueError, KeyError) as error:
-        ctx.report.notes.append(f"gazetteer not read ({type(error).__name__}): Nominatim only")
-    state = ctx.state.data("locate")
-    locator = Locator(
-        venues,
-        memo=memo,
-        llm=llm,
-        nominatim=nominatim,
-        photon=photon,
-        postcodes=postcodes,
-        places=places,
-        now=now,
-        places_tried=state.setdefault("placesTried", {}),
-        coarse_venues=state.setdefault("coarseVenues", {}),
-        workers=settings.llm_concurrency,
-        gazetteer=gazetteer,
-    )
-    try:
+        if not ctx.dry_run and todo:
+            try:
+                llm = LLMClient(settings.require_llm())
+            except ConfigError as error:
+                ctx.report.notes.append(f"no model ({error}): cached replies only")
+            user_agent = user_agent or settings.require_user_agent()
+            if nominatim is None:
+                nominatim = Nominatim(
+                    user_agent=user_agent,
+                    base_url=settings.nominatim_url,
+                    interval=settings.nominatim_interval,
+                )
+            photon = Photon(user_agent=user_agent)
+            postcodes = Postcodes(user_agent=user_agent)
+            if settings.places_configured:
+                places = Places(
+                    api_key=settings.google_places_api_key.get_secret_value(),
+                    user_agent=user_agent,
+                )
+            else:
+                ctx.report.notes.append("place ids skipped: GOOGLE_PLACES_API_KEY is not set")
+
+        locator = Locator(
+            venues,
+            memo=memo,
+            llm=llm,
+            nominatim=nominatim if todo else None,
+            photon=photon,
+            postcodes=postcodes,
+            places=places,
+            now=now,
+            places_tried=state.setdefault("placesTried", {}),
+            coarse_venues=state.setdefault("coarseVenues", {}),
+            workers=settings.llm_concurrency,
+            gazetteer=gazetteer,
+            venue_classes=classes.coarse,
+        )
         rows = locator.resolve(todo)
         locator.place_ids()
     finally:
@@ -190,6 +223,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             "postcodesCalls": postcodes.calls if postcodes else 0,
             "postcodePoints": locator.geocoder.postcode_points if locator.geocoder else 0,
             "gazetteerHits": metrics.gazetteer_hits,
+            "coarseVenues": len(classes.coarse),
+            "venueClassLookups": classes.calls,
             "placesCalls": places.calls if places else 0,
             "newVenues": metrics.new_venues,
             "modelNamedVenues": metrics.model_named_venues,

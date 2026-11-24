@@ -56,7 +56,7 @@ import logging
 import re
 import threading
 import time
-from collections.abc import Callable, Iterable, MutableMapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -99,6 +99,7 @@ from camsocs_pipeline.locate.nominatim import Nominatim
 from camsocs_pipeline.locate.photon import Photon
 from camsocs_pipeline.locate.places import Places, PlacesBlocked, PlacesUnavailable, place_url
 from camsocs_pipeline.locate.postcodes import Postcodes, find_postcode
+from camsocs_pipeline.locate.venue_class import Coarse
 from camsocs_pipeline.locate.venue_name import venue_display_name
 from camsocs_pipeline.models.observation import FieldObs
 from camsocs_pipeline.models.wire import ClaimInput
@@ -111,7 +112,10 @@ PROMPT_NAME = "locate_v2"
 #: (`row_input_hash`), so a new version looks those items up again from the
 #: cached replies, without asking the model again (`stages/locate.due`).
 #: r2 (2026-11-24): the Cambridge gazetteer, the postcode cross-check.
-RESOLVER_VERSION = "r2"
+#: r3 (2026-11-24): coarse venues (a town, a district, a street: by their
+#: OSM class, `venue_class.py`) are never `exact`; rows at one carry the
+#: version too, so a later resolver may still find their building.
+RESOLVER_VERSION = "r3"
 PROMPT_PATH = Path(__file__).parent.parent / "extract" / "prompts" / f"{PROMPT_NAME}.md"
 
 #: Budgets (§2 step 6): items asked of the model (cached replies are free),
@@ -236,8 +240,15 @@ class Locator:
         workers: int = 4,
         clock: Callable[[], float] = time.monotonic,
         gazetteer: Gazetteer | None = None,
+        venue_classes: Mapping[str, Coarse] | None = None,
     ) -> None:
-        self.index = VenueIndex.of(venues)
+        #: Venue key → how a known venue is a town, a district or a street,
+        #: by its OSM class (`venue_class.classify_venues`). One that *is*
+        #: the town or street is reached by key only (`VenueIndex.hidden`).
+        self.venue_classes: dict[str, Coarse] = dict(venue_classes or {})
+        self.index = VenueIndex.of(
+            venues, hidden=(key for key, found in self.venue_classes.items() if found.itself)
+        )
         #: Cambridge's OSM buildings, looked up before Nominatim (None: skipped).
         self.gazetteer = gazetteer
         self.memo = memo
@@ -318,9 +329,15 @@ class Locator:
             except Deferred:
                 self.metrics.deferred += 1
                 continue
-            if row.precision == "unknown":
+            if row.precision == "unknown" or self.classified_coarse(row.venue_key):
                 row = row.model_copy(
-                    update={"input_hash": row_input_hash(hashes[id(item)], "unknown")}
+                    update={
+                        "input_hash": row_input_hash(
+                            hashes[id(item)],
+                            row.precision,
+                            coarse=self.classified_coarse(row.venue_key),
+                        )
+                    }
                 )
             rows.append(row)
             self._count(row)
@@ -468,26 +485,47 @@ class Locator:
             spec, parent = parent, None
         if venue is None and spec is None and parent is None and precision == "area":
             spec = CENTRAL
-        # 2. The building by name or alias, 3. geocoded.
         level: str | None = None
+        #: A town, a district or a street the item may be put at when no
+        #: building is found (never `exact`): set aside while the reply's
+        #: buildings and the venue text are tried.
+        fallback: tuple[VenueRow, str] | None = None
+        venue, level, fallback = self._set_aside(venue, None, fallback)
+        # 2. The building by name or alias, 3. geocoded.
         if venue is None and spec is not None:
-            venue, level = self._venue_for(
+            found, found_level = self._venue_for(
                 spec, item, plan, outside=outside, area=precision == "area"
             )
+            venue, level, fallback = self._set_aside(found, found_level, fallback)
         room = reply.room
         if venue is None and parent is not None:
-            venue, level = self._venue_for(
+            found, found_level = self._venue_for(
                 parent, item, plan, outside=outside, area=precision == "area"
             )
-            if venue is not None:
+            found, found_level, fallback = self._set_aside(found, found_level, fallback)
+            if found is not None:
+                venue, level = found, found_level
                 precision = "area" if precision == "area" else "building"
                 room = room or (spec.name if spec else None)
-        if venue is None and not outside and precision != "area" and item.place_text:
-            # Neither building was found: a Cambridge building the listing's
-            # own venue text names, as the building the item is in.
-            venue = self._from_gazetteer([item.place_text])
-            if venue is not None:
-                precision = "building"
+        if (
+            venue is None
+            and not outside
+            and item.place_text
+            and (precision != "area" or fallback is not None)
+        ):
+            # Neither building was found (or only a town or a street was): a
+            # Cambridge building the listing's own venue text names. As the
+            # building the item is in when the model named another one; at
+            # the reply's precision when it named only a town or a street
+            # ("Bridgetower Room, Trinity Hall Cambridge, Trinity Ln").
+            found = self._from_gazetteer([item.place_text])
+            found, _found_level, fallback = self._set_aside(found, None, fallback)
+            if found is not None:
+                venue = found
+                if fallback is None:
+                    precision = "building"
+        if venue is None and fallback is not None:
+            venue, level = fallback
         if venue is None:
             named = spec.name if spec and spec.name else (parent.name if parent else None)
             note = single_line(
@@ -500,8 +538,8 @@ class Locator:
         venue = self._ensure_placed(venue, item, plan, outside=outside)
         if level is None:
             # Reached by key or name: how much its own lookup pinned down,
-            # in this run or an earlier one.
-            level = "area" if is_area_key(venue.key) else self.coarse_venues.get(venue.key)
+            # in this run or an earlier one, or what its OSM object is.
+            level = self._coarse(venue.key)
         if venue.placed and not CAMBRIDGE_REGION.contains(venue.lat, venue.lng):  # type: ignore[arg-type]
             with self._lock:
                 self.metrics.outside += 1
@@ -527,6 +565,43 @@ class Locator:
             **base,
         )
 
+    def _coarse(self, key: str | None) -> str | None:
+        """How little a known venue pins down: "area" (a town or district:
+        an area venue, or one whose OSM object is a place or boundary),
+        "street" (a road, a station: its OSM object, or a street's point
+        this stage placed it by) or "postcode"; None for a place to go."""
+        if not key:
+            return None
+        if is_area_key(key):
+            return "area"
+        found = self.venue_classes.get(key)
+        if found is not None:
+            return found.level
+        return self.coarse_venues.get(key)
+
+    def classified_coarse(self, key: str | None) -> bool:
+        """Whether a row at this venue carries the resolver version
+        (`row_input_hash`): an area venue, or one whose OSM object is a
+        town or a street. The same test as `stages/locate.due`."""
+        return bool(key) and (is_area_key(key) or key in self.venue_classes)  # type: ignore[arg-type]
+
+    def _set_aside(
+        self,
+        venue: VenueRow | None,
+        level: str | None,
+        fallback: tuple[VenueRow, str] | None,
+    ) -> tuple[VenueRow | None, str | None, tuple[VenueRow, str] | None]:
+        """`venue` when it is a place to go; else (None, None) and it becomes
+        the fallback (the first one found stays): a town or district, or a
+        venue that is a street itself. A building only placed at a street's
+        or postcode's point is kept (`building` at most)."""
+        if venue is None:
+            return None, None, fallback
+        coarse = level or self._coarse(venue.key)
+        if coarse == "area" or (coarse is not None and not self.index.nameable(venue.key)):
+            return None, None, fallback or (venue, coarse)
+        return venue, level, fallback
+
     # -- venues --------------------------------------------------------------------------
 
     def _venue_for(
@@ -545,26 +620,32 @@ class Locator:
         except ValueError:
             return None, None
         known = self._known(key, name)
-        if known is not None:
+        if known is not None and self._coarse(known.key) is None:
             return known, None
         if not outside:
             found = self._from_gazetteer([spec.name, spec.osm_query])
-            if found is not None:
+            if found is not None and self._coarse(found.key) is None:
                 return found, None
+        if known is not None and not _says_more(spec, known):
+            # A town or a street by its own name ("Cambridge", "Downing
+            # Street"): looking it up again finds it again.
+            return known, None
         lookup = (key, outside, area)
         if lookup in self._looked_up:
-            found = self._looked_up[lookup]
-            return (found[0], found[1]) if found else (None, None)
+            found_before = self._looked_up[lookup]
+            if found_before:
+                return found_before[0], found_before[1]
+            return known, None
         hit = self._geocode(spec, outside=outside, area=area)
         row = self._hit_venue(hit, spec, item, plan) if hit is not None else None
         self._looked_up[lookup] = (row, hit.level) if row is not None and hit is not None else None
-        return (row, hit.level if hit else None) if row is not None else (None, None)
+        if row is None:
+            return known, None
+        return row, hit.level if hit else None
 
     def _known(self, key: str, name: str) -> VenueRow | None:
         return (
-            self.index.get(key)
-            or self.index.by_name(name)
-            or by_overlap(list(self.index.venues.values()), name)
+            self.index.get(key) or self.index.by_name(name) or by_overlap(self.index.named(), name)
         )
 
     def _hit_venue(
@@ -627,6 +708,10 @@ class Locator:
         self.index.add(row)
         if hit.level in ("street", "postcode"):
             self.coarse_venues[key] = hit.level
+            if model_name is None:
+                # Named after the road itself ("Wilberforce Road"): a street,
+                # never a name another item's building may match.
+                self.index.hide(key)
         with self._lock:
             self.metrics.new_venues += 1
             if model_name is not None:
@@ -747,6 +832,7 @@ class Locator:
         self.index.add(placed)
         self._placing.add(venue.key)
         self.coarse_venues.pop(venue.key, None)
+        self.venue_classes.pop(venue.key, None)
         with self._lock:
             self.metrics.placed_venues += 1
         claims = [
@@ -846,6 +932,7 @@ class Locator:
             # (an away ground) would get a Cambridge place's id, and a town
             # has no place to give.
             and not is_area_key(row.key)
+            and self._coarse(row.key) != "area"
             and not (row.placed and not CAMBRIDGE_REGION.contains(row.lat, row.lng))  # type: ignore[arg-type]
         ]
         due.sort(key=lambda row: (row.key not in self._used, row.key not in self._claims, row.key))
@@ -911,11 +998,13 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     return None
 
 
-def row_input_hash(digest: str, precision: str) -> str:
+def row_input_hash(digest: str, precision: str, *, coarse: bool = False) -> str:
     """The input hash a row is posted with: the item's (`input_hash`, also
-    the reply cache's key), and for an `unknown` row the resolver version
-    after it, so a later version tries that item again (`stages/locate.due`)."""
-    return f"{digest}:{RESOLVER_VERSION}" if precision == "unknown" else digest
+    the reply cache's key), and for an `unknown` row or one at a coarse
+    venue (`Locator.classified_coarse`: a town, a district, a street) the
+    resolver version after it, so a later version tries that item again
+    (`stages/locate.due`), from the cached reply."""
+    return f"{digest}:{RESOLVER_VERSION}" if precision == "unknown" or coarse else digest
 
 
 #: A qualifier OSM names carry that says nothing about the building.
@@ -959,6 +1048,15 @@ def _unrelated(venue: VenueRow, item: PendingItem, named: Sequence[Building | No
         | distinctive(" ".join([*item.organisers, *item.organiser_places]))
     )
     return not (names & said)
+
+
+def _says_more(spec: Building, known: VenueRow) -> bool:
+    """Whether the model's building says more than a coarse venue's own
+    name (a building's name in its OSM query: "McDonald Institute, Downing
+    Street" for "Downing Street"), so looking it up may find the building."""
+    own = distinctive(" ".join([known.name, spec.address or ""]))
+    said = distinctive(" ".join([spec.name or "", spec.osm_query or ""]))
+    return bool(said - own)
 
 
 def _distinct(text: str) -> set[str]:

@@ -7,6 +7,7 @@ import {
   type ItemLocationInput,
   LOCATION_RETENTION_MS,
   MAX_ORGANISERS_EXPANDED,
+  venueOsmUrl,
 } from "./ingest/locations"
 import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
 import { placeLabel } from "./lib/locations"
@@ -491,7 +492,21 @@ describe("locations/pending and venues/all", () => {
       name: "Isaac Newton Institute",
       lat: 52.2101,
       googlePlaceId: "ChIJinvented_place-id",
+      osmUrl: "https://www.openstreetmap.org/way/1",
     })
+  })
+
+  test("venueOsmUrl reads the OSM object a venue's point or name was cited to", () => {
+    const osm = "https://www.openstreetmap.org/relation/42"
+    expect(venueOsmUrl({ lat: { sourceUrl: osm } })).toBe(osm)
+    expect(venueOsmUrl({ name: { sourceUrl: osm } })).toBe(osm)
+    expect(
+      venueOsmUrl({ lat: { sourceUrl: "https://api.postcodes.io/postcodes/CB23NJ" } }),
+    ).toBeUndefined()
+    expect(
+      venueOsmUrl({ lat: { sourceUrl: "https://www.camdram.net/venues/adc" } }),
+    ).toBeUndefined()
+    expect(venueOsmUrl({})).toBeUndefined()
   })
 })
 

@@ -31,6 +31,9 @@ TIMEOUT = 20.0
 #: Results asked for per query; the first inside the bounds wins.
 RESULTS = 3
 _OSM_TYPES = {"node", "way", "relation"}
+#: Objects one `/lookup` request asks for at most (Nominatim's limit).
+LOOKUP_BATCH = 50
+_TYPE_LETTERS = {"node": "N", "way": "W", "relation": "R"}
 
 #: How much a result pins down: a named feature (a building, a club, a
 #: hall), a street or a postcode (coordinates near the building, no name of
@@ -264,6 +267,50 @@ class Nominatim:
         self._cache[cache_key] = found
         return found
 
+    def lookup(self, idents: Iterable[str]) -> dict[str, OsmClass]:
+        """What OSM objects are (`/lookup`, at most `LOOKUP_BATCH` a request,
+        paced like a search), by ``<type>/<id>`` ("way/42"). An object
+        Nominatim does not return (deleted, not indexed) is left out. Raises
+        `NominatimBlocked` / `NominatimUnavailable` like `search`: an
+        unanswered request is no answer for its objects."""
+        wanted = [ident for ident in dict.fromkeys(idents) if _lookup_id(ident)]
+        out: dict[str, OsmClass] = {}
+        for start in range(0, len(wanted), LOOKUP_BATCH):
+            chunk = wanted[start : start + LOOKUP_BATCH]
+            if self.blocked:
+                raise NominatimBlocked("Nominatim refused an earlier request this run")
+            self._pace()
+            self.calls += 1
+            params = {
+                "osm_ids": ",".join(_lookup_id(ident) for ident in chunk),  # type: ignore[misc]
+                "format": "jsonv2",
+                "addressdetails": "0",
+            }
+            try:
+                response = self._client.get(
+                    f"{self.base_url}/lookup", params=params, headers=self._headers
+                )
+            except httpx.HTTPError as error:
+                self.errors += 1
+                logger.warning("Nominatim lookup: %s", type(error).__name__)
+                raise NominatimUnavailable(type(error).__name__) from error
+            if response.status_code in (403, 429):
+                self.blocked = True
+                raise NominatimBlocked(f"Nominatim answered {response.status_code}")
+            if response.status_code != 200:
+                self.errors += 1
+                raise NominatimUnavailable(f"HTTP {response.status_code}")
+            try:
+                results = response.json()
+            except ValueError as error:
+                self.errors += 1
+                raise NominatimUnavailable("a body that is not JSON") from error
+            for result in results if isinstance(results, list) else []:
+                found = parse_class(result)
+                if found is not None:
+                    out[found.ident] = found
+        return out
+
     def find(self, queries: Iterable[str | None]) -> OsmPlace | None:
         """The first query (in order, each once) that finds a place."""
         seen: set[str] = set()
@@ -317,6 +364,52 @@ def parse_result(result: Any) -> OsmPlace | None:
     )
 
 
+@dataclass(frozen=True)
+class OsmClass:
+    """What one OSM object is, as `/lookup` says: its key (`category`, e.g.
+    "boundary"), value (`type`, "administrative"), `addresstype` and name."""
+
+    osm_type: str
+    osm_id: int
+    category: str | None
+    kind: str | None
+    addresstype: str | None = None
+    name: str | None = None
+
+    @property
+    def ident(self) -> str:
+        return f"{self.osm_type}/{self.osm_id}"
+
+
+def _lookup_id(ident: str) -> str | None:
+    """ "way/42" → "W42" (None when it is not an OSM object's id)."""
+    osm_type, _, number = ident.partition("/")
+    letter = _TYPE_LETTERS.get(osm_type)
+    return f"{letter}{number}" if letter and number.isdigit() else None
+
+
+def parse_class(result: Any) -> OsmClass | None:
+    """An `OsmClass` from one jsonv2 `/lookup` result, or None when malformed."""
+    if not isinstance(result, dict):
+        return None
+    try:
+        osm_type = str(result["osm_type"])
+        osm_id = int(result["osm_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if osm_type not in _OSM_TYPES:
+        return None
+    name = result.get("name")
+    return OsmClass(
+        osm_type=osm_type,
+        osm_id=osm_id,
+        category=_text(result.get("category")),
+        kind=_text(result.get("type")),
+        addresstype=_text(result.get("addresstype")),
+        name=name.strip() if isinstance(name, str) and name.strip() else None,
+    )
+
+
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) else None
 
@@ -354,12 +447,15 @@ def _address(parts: Any) -> str | None:
 
 __all__ = [
     "DEFAULT_URL",
+    "LOOKUP_BATCH",
     "Level",
     "Nominatim",
     "NominatimBlocked",
     "NominatimUnavailable",
+    "OsmClass",
     "OsmPlace",
     "address_line",
     "level_of",
+    "parse_class",
     "parse_result",
 ]
