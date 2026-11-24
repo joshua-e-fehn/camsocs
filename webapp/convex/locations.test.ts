@@ -9,6 +9,7 @@ import {
   MAX_ORGANISERS_EXPANDED,
 } from "./ingest/locations"
 import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
+import { placeLabel } from "./lib/locations"
 import { talkKey } from "./lib/talks"
 
 /**
@@ -491,6 +492,22 @@ describe("locations/pending and venues/all", () => {
       lat: 52.2101,
       googlePlaceId: "ChIJinvented_place-id",
     })
+  })
+})
+
+describe("placeLabel", () => {
+  test("prints the venue's display name, without its university suffix", () => {
+    const row = { precision: "exact" as const, room: "Room 2" }
+    expect(placeLabel(row, "Invented Hall (University of Cambridge)", null)).toBe(
+      "Room 2, Invented Hall",
+    )
+    expect(
+      placeLabel({ precision: "building" }, "Invented Hall, University of Cambridge", null),
+    ).toBe("Invented Hall")
+    // A name that is only the suffix stays whole.
+    expect(placeLabel({ precision: "building" }, "University of Cambridge", null)).toBe(
+      "University of Cambridge",
+    )
   })
 })
 

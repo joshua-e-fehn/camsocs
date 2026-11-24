@@ -268,6 +268,11 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
   talk-only venues ink rounded squares, numbered from two items, grey when over (`--input` /
   `--faint`), an apricot `--today` ring when on now. Each says its venue, counts and state in
   words; the list beside the map is the text equivalent and says "Now" / "Ended" too.
+- Pins within 36 px of each other merge into a cluster (`lib/map-cluster.ts`): a larger mark
+  with the items' total and a soft halo in its own colour, same colour, Now-ring and grey rules.
+  Its name says the items, the places and what it does ("7 items at 4 places, zoom in").
+  Markers tab in list order; when a cluster regroups away under keyboard focus, focus moves to
+  the marker that now holds its first pin, and a marker removed under the pointer clears the hover.
 - `prefers-reduced-motion`: the camera jumps instead of easing; the sheet does not animate.
 
 ---

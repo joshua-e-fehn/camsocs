@@ -50,6 +50,24 @@ Owner decisions were made in a grilling session on 2026-11-24 (PLAN.md D13).
    - Mobile: a full-screen map with a draggable bottom sheet holding the same
      list.
    - Items at one venue share one numbered pin.
+   - Pins drawn within 36 px of each other at the current zoom merge into one
+     cluster bubble with the items' total (`lib/map-cluster.ts`, greedy over a
+     grid, regrouped when a move or zoom ends; 2026-11-24). It keeps the pin
+     rules: ink when all talks, else teal; the Now ring if any item is on now;
+     grey when all are over. Activating it zooms to its members (a jump with
+     `prefers-reduced-motion`); at the closest zoom, or when they share one
+     spot, it opens all their rows in the list. Its name says "7 items at 4
+     places, zoom in". A hovered row raises its pin or the cluster holding it.
+   - The first view fits the day's pins inside the city box
+     (`CAMBRIDGE_BOUNDS`) with padding, no closer than zoom 15, so a day all in
+     the centre opens on the centre; only when no pin is in the city are the
+     others fitted.
+   - Venue names are printed without OpenStreetMap's "(University of
+     Cambridge)", ", University of Cambridge", " - University of Cambridge",
+     ", Cambridge" suffixes (`lib/venue-name.ts`; a name that is only the
+     suffix stays whole). Keys are unchanged. `locate` posts new venues'
+     names through the same rule (`locate/venue_name.py`); both are held to
+     `webapp/lib/venue-name.fixtures.json`.
    - Each row links to its page and has a Directions link.
    - Online items go in an "Online" section and get no pin. Unresolved items
      go under "Location TBC".

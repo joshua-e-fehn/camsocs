@@ -7,6 +7,7 @@ import { linkProps } from "@/lib/crawl-traps"
 import { pinnable } from "@/lib/map-day"
 import { mapsLinks, preferredMapsHref } from "@/lib/maps-link"
 import type { ItemLocation } from "@/lib/public-api"
+import { venueDisplayName } from "@/lib/venue-name"
 
 export type PlacedLocation = NonNullable<ItemLocation>
 
@@ -54,14 +55,15 @@ export function placeLineModel(location: PlacedLocation, sourceText?: string): P
     case "exact":
     case "building": {
       if (!venue) return { label: text, details: [], onMap: false }
-      const label = location.room ? `${location.room}, ${venue.name}` : venue.name
+      const name = venueDisplayName(venue.name)
+      const label = location.room ? `${location.room}, ${name}` : name
       const details = [
         ...(venue.address ? [venue.address] : []),
         ...(location.precision === "building" ? ["Building inferred from the listing"] : []),
       ]
       const maps = hasCoordinates(venue)
         ? mapsLinks({
-            name: venue.name,
+            name,
             address: venue.address,
             lat: venue.lat,
             lng: venue.lng,
@@ -75,12 +77,12 @@ export function placeLineModel(location: PlacedLocation, sourceText?: string): P
       // maps link is the way to it instead.
       const far = hasCoordinates(venue) && !pinnable(venue)
       return {
-        label: location.areaLabel ?? venue?.name ?? text,
+        label: location.areaLabel ?? (venue ? venueDisplayName(venue.name) : undefined) ?? text,
         details: [],
         ...(far
           ? {
               maps: mapsLinks({
-                name: venue.name,
+                name: venueDisplayName(venue.name),
                 address: venue.address,
                 lat: venue.lat,
                 lng: venue.lng,

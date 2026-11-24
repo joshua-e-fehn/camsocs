@@ -35,7 +35,10 @@ import { relativeDay } from "@/lib/week-strip"
  * talks on a map of Cambridge, and the same items as a time-ordered list.
  *
  *  - Desktop: the map on the left, the list on the right. Hovering a row
- *    raises its pin; clicking a pin opens and scrolls to its rows.
+ *    raises its pin (or the cluster holding it); clicking a pin opens and
+ *    scrolls to its rows. Pins close together at the current zoom merge into
+ *    a cluster (lib/map-cluster.ts): clicking it zooms in, or, when zooming
+ *    cannot part them, opens all their rows.
  *  - Mobile: the map fills the screen under a bottom sheet holding the list,
  *    dragged by its header between peek, half and full; a sideways swipe on
  *    the header changes the day.
@@ -181,8 +184,8 @@ export function DayMap({
 
   // --- pins and rows ---------------------------------------------------------------------------
   const [pointedVenue, setPointedVenue] = useState<string | null>(null)
-  const [hoveredPin, setHoveredPin] = useState<string | null>(null)
-  const [openVenue, setOpenVenue] = useState<string | null>(null)
+  const [hoveredPins, setHoveredPins] = useState<string[] | null>(null)
+  const [openVenues, setOpenVenues] = useState<string[]>([])
   const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -191,9 +194,9 @@ export function DayMap({
   const [seenView, setSeenView] = useState(viewKey)
   if (seenView !== viewKey) {
     setSeenView(viewKey)
-    setOpenVenue(null)
+    setOpenVenues([])
     setPointedVenue(null)
-    setHoveredPin(null)
+    setHoveredPins(null)
   }
 
   // --- the mobile sheet ------------------------------------------------------------------------
@@ -282,10 +285,13 @@ export function DayMap({
   }
 
   // --- actions ---------------------------------------------------------------------------------
-  const openPin = (venueKey: string) => {
-    setOpenVenue(venueKey)
+  /** Open the rows of one pin, or of every pin in a cluster zooming cannot
+   * part, and scroll to the first of them in the list. */
+  const openPins = (venueKeys: string[]) => {
+    setOpenVenues(venueKeys)
     if (!desktop && snap === "peek") setSnap("half")
-    const first = pinByVenue.get(venueKey)?.items[0]
+    const keys = new Set(venueKeys)
+    const first = sections.placed.find((item) => item.venueKey && keys.has(item.venueKey))
     if (!first) return
     // After the sheet has moved and the row has opened.
     window.requestAnimationFrame(() => {
@@ -296,7 +302,7 @@ export function DayMap({
   }
   const showOnMap = (item: MapItem) => {
     if (!item.venueKey) return
-    setOpenVenue(item.venueKey)
+    setOpenVenues([item.venueKey])
     setFocus((last) => ({ id: item.venueKey as string, seq: (last?.seq ?? 0) + 1 }))
     if (!desktop) setSnap("peek")
   }
@@ -361,8 +367,8 @@ export function DayMap({
           item={item}
           day={date}
           status={statusOf(item)}
-          open={pin !== undefined && openVenue === pin.venueKey}
-          pointed={pin !== undefined && hoveredPin === pin.venueKey}
+          open={pin !== undefined && openVenues.includes(pin.venueKey)}
+          pointed={pin !== undefined && (hoveredPins?.includes(pin.venueKey) ?? false)}
           address={venue?.address}
           showAddress={away}
           directions={directions}
@@ -387,10 +393,10 @@ export function DayMap({
       <div className="absolute inset-0 lg:static lg:h-full">
         <DayMapCanvas
           pins={canvasPins}
-          active={pointedVenue ?? hoveredPin}
-          selected={openVenue}
-          onSelect={openPin}
-          onHover={setHoveredPin}
+          active={pointedVenue ?? hoveredPins?.[0] ?? null}
+          selected={openVenues}
+          onSelect={openPins}
+          onHover={setHoveredPins}
           focus={focus}
           fitKey={viewKey}
           padding={

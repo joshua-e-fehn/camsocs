@@ -1,4 +1,5 @@
 import { v } from "convex/values"
+import { venueDisplayName } from "../lib/venue-name"
 import { ITEM_LOCATION_KINDS, ITEM_LOCATION_PRECISIONS } from "../lib/vocab"
 import { query } from "./_generated/server"
 import { shownEvent } from "./lib/eventWindow"
@@ -14,7 +15,9 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
  * yet, or when the viewer may not see the item (the event gate of
  * `events.get`; a talk must be listed). The talk variant is called only from
  * `/talks/...` pages (G1). `venue` is null for `online` and `unknown` rows,
- * and for a venue that no longer exists.
+ * and for a venue that no longer exists. The venue's name is its display
+ * name (lib/venue-name.ts: no "(University of Cambridge)" suffix); its key
+ * is unchanged.
  */
 export const forItem = query({
   args: { kind: literalUnion(ITEM_LOCATION_KINDS), itemKey: v.string() },
@@ -51,7 +54,7 @@ export const forItem = query({
       precision: row.precision,
       ...(shown.room ? { room: shown.room } : {}),
       ...(shown.areaLabel ? { areaLabel: shown.areaLabel } : {}),
-      venue: venue ? venuePublic(venue) : null,
+      venue: venue ? { ...venuePublic(venue), name: venueDisplayName(venue.name) } : null,
     }
   },
 })

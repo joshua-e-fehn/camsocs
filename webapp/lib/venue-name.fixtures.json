@@ -1,0 +1,45 @@
+{
+  "_comment": "Venue display names: asserted by webapp/lib/venue-name.test.ts and pipeline/src/tests/test_venue_name.py, so the two helpers cannot drift.",
+  "cases": [
+    { "input": "Trinity Hall (University of Cambridge)", "output": "Trinity Hall" },
+    {
+      "input": "Department of Engineering, University of Cambridge",
+      "output": "Department of Engineering"
+    },
+    {
+      "input": "Judge Business School - University of Cambridge",
+      "output": "Judge Business School"
+    },
+    { "input": "Cambridge Union – University of Cambridge", "output": "Cambridge Union" },
+    { "input": "Fitzwilliam Museum — University of Cambridge", "output": "Fitzwilliam Museum" },
+    { "input": "Mill Lane Lecture Rooms (Cambridge)", "output": "Mill Lane Lecture Rooms" },
+    { "input": "Corn Exchange, Cambridge", "output": "Corn Exchange" },
+    { "input": "Churchill College (Cambridge University)", "output": "Churchill College" },
+    { "input": "Sidgwick Site, Cambridge University", "output": "Sidgwick Site" },
+    { "input": "Hughes Hall(University of Cambridge)", "output": "Hughes Hall" },
+    { "input": "Old Schools (the University of Cambridge)", "output": "Old Schools" },
+    { "input": "Clare College (University of Cambridge), Cambridge", "output": "Clare College" },
+    { "input": "  Pembroke College , university of cambridge  ", "output": "Pembroke College" },
+    { "input": "University of Cambridge", "output": "University of Cambridge" },
+    { "input": "(University of Cambridge)", "output": "(University of Cambridge)" },
+    { "input": "Cambridge", "output": "Cambridge" },
+    { "input": "Cambridge University", "output": "Cambridge University" },
+    {
+      "input": "University of Cambridge Botanic Garden",
+      "output": "University of Cambridge Botanic Garden"
+    },
+    { "input": "Anglia Ruskin University", "output": "Anglia Ruskin University" },
+    { "input": "New Cambridge", "output": "New Cambridge" },
+    { "input": "Cambridge Arts Theatre", "output": "Cambridge Arts Theatre" },
+    {
+      "input": "Great St Mary's, Cambridge's University Church",
+      "output": "Great St Mary's, Cambridge's University Church"
+    },
+    { "input": "Trumpington-Cambridge", "output": "Trumpington-Cambridge" },
+    { "input": "", "output": "" },
+    { "input": "\ufeffSt John's College, Cambridge", "output": "St John's College" },
+    { "input": "Darwin College\u001f, Cambridge", "output": "Darwin College\u001f" },
+    { "input": "Kettle's Yard\u0085, Cambridge", "output": "Kettle's Yard\u0085" },
+    { "input": "Queens' College\u00a0(University of Cambridge)\u3000", "output": "Queens' College" }
+  ]
+}
