@@ -651,16 +651,19 @@ def monitor(ctx: click.Context, status_json: Path | None, as_json: bool) -> None
         if convex:
             with _loader(settings) as loader:
                 results.append(check_indexing(lambda: loader.post("indexing/summary", {}), now=now))
+                # Location coverage (docs/locations-and-map.md §2): pages since 2026-11-24.
+                location = check_location_coverage(lambda: loader.post("locations/summary", {}))
+        if convex and not location.shadow:
+            results.append(location)
         verdict = assess(
             results, previous, now=now, requests=requests, campus=profile.id, site=branding.site_url
         )
         # Written before the shadow checks run: nothing they do reaches it.
         _write_summary(status_json, verdict.status_payload(invocation))
         shadow = run_shadow_checks(client, shadow_checks_for(profile))
-        # Location coverage (docs/locations-and-map.md §2), in shadow (D9).
-        if convex:
-            with _loader(settings) as loader:
-                shadow.append(check_location_coverage(lambda: loader.post("locations/summary", {})))
+        # Location coverage stays in shadow only while CONVEX_SHADOW_CHECKS names it.
+        if convex and location.shadow:
+            shadow.append(location)
         verdict = verdict.with_shadow(shadow)
     if as_json:
         click.echo(json.dumps(verdict.json_payload(invocation), indent=1, ensure_ascii=False))

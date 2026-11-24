@@ -47,8 +47,9 @@ Without `CONVEX_HTTP_URL` and `PIPELINE_API_KEY` it is not run.
 **Location coverage (docs/locations-and-map.md §2).** `location_unresolved_share`
 reads `POST /api/pipeline/locations/summary` (the pipeline key) and fails when
 more than 2% of the events and talks starting in the next 14 days have no
-place. It is a shadow check (decision D9, `CONVEX_SHADOW_CHECKS`): printed,
-never written to the status file, never paged. Counts only. Without
+place. It pages like the other checks: Joshua promoted it on 2026-11-24
+without the D9 baseline (fail fast: a coverage drop must reach Slack, not
+a log). Counts only. Without
 `CONVEX_HTTP_URL` and `PIPELINE_API_KEY` it is not run.
 
 **New listing requests (ENG-33).** Not a check: each run counts the
@@ -1152,7 +1153,7 @@ def check_indexing(read: Callable[[], Mapping[str, Any]], *, now: datetime) -> C
     )
 
 
-# --- location coverage (docs/locations-and-map.md §2, D9 shadow) -------------------------
+# --- location coverage (docs/locations-and-map.md §2) -----------------------------------
 
 #: The check's name: the share of the next 14 days' events and talks with no
 #: place (webapp/convex/lib/locations.ts `locationCoverage`).
@@ -1162,10 +1163,10 @@ LOCATION_MAX_SHARE = 0.02
 #: The window Convex counts over: the next 14 days.
 LOCATION_WINDOW_HOURS = 14 * 24
 #: Checks read from Convex rather than PostHog that run in shadow (D9): the
-#: CLI marks them `shadow` and adds them to the shadow results, so they never
-#: reach the status file. Promotion deletes a name here and wires the check
-#: with the paging ones.
-CONVEX_SHADOW_CHECKS: tuple[str, ...] = (LOCATION_NAME,)
+#: CLI adds them to the shadow results, so they never reach the status file.
+#: Empty since 2026-11-24, when Joshua promoted `location_unresolved_share`
+#: to paging straight away.
+CONVEX_SHADOW_CHECKS: tuple[str, ...] = ()
 
 
 def check_location_coverage(read: Callable[[], Mapping[str, Any]]) -> CheckResult:
@@ -1173,7 +1174,7 @@ def check_location_coverage(read: Callable[[], Mapping[str, Any]]) -> CheckResul
     failed when more than `LOCATION_MAX_SHARE` of the items starting in the
     next 14 days have no place (an `unknown` row or none yet). Counts only:
     the dashboard's "Locations" card names the items. `unknown` when Convex
-    does not answer. A shadow check (decision D9): printed, never paged."""
+    does not answer (an outage never pages). It pages when failed."""
     try:
         answer = read()
         share = float(_number(answer.get("unresolvedShare")))
@@ -1192,7 +1193,7 @@ def check_location_coverage(read: Callable[[], Mapping[str, Any]]) -> CheckResul
             LOCATION_WINDOW_HOURS,
             {},
             type(error).__name__,
-            shadow=True,
+            shadow=LOCATION_NAME in CONVEX_SHADOW_CHECKS,
         )
     return CheckResult(
         LOCATION_NAME,
@@ -1202,7 +1203,7 @@ def check_location_coverage(read: Callable[[], Mapping[str, Any]]) -> CheckResul
         "gt",
         LOCATION_WINDOW_HOURS,
         detail,
-        shadow=True,
+        shadow=LOCATION_NAME in CONVEX_SHADOW_CHECKS,
     )
 
 

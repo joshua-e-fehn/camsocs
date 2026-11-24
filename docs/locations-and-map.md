@@ -464,8 +464,9 @@ organisers' usual places address each of those; what may stay unknown is
 an item with nothing to go on (a film shoot with no location, "tba" and no
 organiser place).
 
-Plus a `monitor.py` shadow check, `location_unresolved_share` (threshold 0.02,
-read from `locations/summary`), per D9: shadow mode first.
+Plus a `monitor.py` check, `location_unresolved_share` (threshold 0.02, read
+from `locations/summary`). It pages on Slack like the other checks: Joshua
+promoted it on 2026-11-24 without the D9 shadow baseline (fail fast).
 
 ## 3. Item pages
 - **Event page** (`/events/[key]` and the side sheet):
