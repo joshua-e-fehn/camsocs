@@ -187,6 +187,9 @@ class Plan:
     reply: LocateReply
     method: str
     model: str | None = None
+    #: A film with no screening venue (`matching.is_film_without_venue`):
+    #: only this rule makes a `film` row, never the model.
+    film: bool = False
 
 
 @dataclass
@@ -349,7 +352,7 @@ class Locator:
             except Deferred:
                 self.metrics.deferred += 1
                 continue
-            if row.precision == "unknown" or self.classified_coarse(row.venue_key):
+            if row.precision in VERSIONED or self.classified_coarse(row.venue_key):
                 row = row.model_copy(
                     update={
                         "input_hash": row_input_hash(
@@ -493,11 +496,11 @@ class Locator:
         if plan.method == "llm":
             base["model"] = single_line(plan.model, LIMITS["model"])
             base["prompt_version"] = PROMPT_NAME
+        if plan.film:
+            return ItemLocationInput(precision="film", **base)
         decision = reply.decision
         if decision == "online":
             return ItemLocationInput(precision="online", **base)
-        if decision == "film":
-            return ItemLocationInput(precision="film", **base)
         if decision == "unknown":
             note = single_line(reply.note, LIMITS["note"]) or "nothing about the place is known"
             return ItemLocationInput(precision="unknown", note=note, **base)
@@ -1026,7 +1029,7 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     own = index.get(item.venue_key)
     if (
         item.kind == "event"
-        and (own is None or not own.placed)
+        and not item.venue_key
         and is_film_without_venue(
             title=item.title,
             description=item.description,
@@ -1036,7 +1039,7 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     ):
         # A short film or a shoot with no screening venue: listed as a film,
         # never pinned at a guessed place.
-        return Plan(LocateReply(precision="film"), "source")
+        return Plan(LocateReply(), "source", film=True)
     if own is not None and own.placed:
         room = index.room_beyond(own, text) if text else None
         return Plan(LocateReply(decision="existing", venue_key=own.key, room=room), "source")
@@ -1051,17 +1054,22 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     return None
 
 
+#: The precisions whose rows carry the resolver version (`row_input_hash`):
+#: a later resolver looks them up again. `film` is a rule's verdict, so a
+#: fixed rule must reach the rows it made.
+VERSIONED = frozenset({"unknown", "film"})
+
 #: The resolver version a row's input hash may end with (`row_input_hash`).
 _VERSION_SUFFIX = re.compile(r":r\d+$")
 
 
 def row_input_hash(digest: str, precision: str, *, coarse: bool = False) -> str:
     """The input hash a row is posted with: the item's (`input_hash`, also
-    the reply cache's key), and for an `unknown` row or one at a coarse
-    venue (`Locator.classified_coarse`: a town, a district, a street) the
-    resolver version after it, so a later version tries that item again
-    (`stages/locate.due`), from the cached reply."""
-    return f"{digest}:{RESOLVER_VERSION}" if precision == "unknown" or coarse else digest
+    the reply cache's key), and for an `unknown` or `film` row (`VERSIONED`)
+    or one at a coarse venue (`Locator.classified_coarse`: a town, a
+    district, a street) the resolver version after it, so a later version
+    tries that item again (`stages/locate.due`), from the cached reply."""
+    return f"{digest}:{RESOLVER_VERSION}" if precision in VERSIONED or coarse else digest
 
 
 #: A qualifier OSM names carry that says nothing about the building.
@@ -1221,6 +1229,7 @@ __all__ = [
     "PROMPT_NAME",
     "RESOLVER_VERSION",
     "TIME_BUDGET_S",
+    "VERSIONED",
     "Budget",
     "Deferred",
     "Locator",

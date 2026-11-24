@@ -1,6 +1,7 @@
 import { addDays, londonIsoDate, londonMidnight } from "./calendar"
 import { MAP_PIN_BOUNDS } from "./map-style"
 import type { MapDay, MapItem } from "./public-api"
+import { EVENT_TYPE_LABELS, TALK_KIND_LABELS } from "./vocab"
 
 /**
  * The map's day, worked out without the map (docs/locations-and-map.md §0.5,
@@ -80,7 +81,8 @@ export type MapPin = {
   kind: "event" | "talk"
   /** Now if any item is on now; past once all are over; else upcoming. */
   status: MapStatus
-  /** "Isaac Newton Institute: 2 events, 1 talk, one on now". */
+  /** "Isaac Newton Institute: 2 events, 1 talk, one on now"; for one item,
+   * its type too: "ADC Theatre: 1 event (Performance), on now". */
   label: string
 }
 
@@ -98,6 +100,24 @@ export function countPhrase(items: readonly Pick<MapItem, "kind">[]): string {
   ]
     .filter(Boolean)
     .join(", ")
+}
+
+/** An item's type in words: "Performance", "Seminar"; "Event" or "Talk"
+ * when the source gave none. The map's rows show it beside the type icon. */
+export function itemTypeLabel(item: Pick<MapItem, "kind" | "eventType" | "talkKind">): string {
+  if (item.kind === "talk") return item.talkKind ? TALK_KIND_LABELS[item.talkKind] : "Talk"
+  return item.eventType ? EVENT_TYPE_LABELS[item.eventType] : "Event"
+}
+
+/** A pin's count in words. A pin of one item shows that item's type icon,
+ * so its name says the type too ("1 event (Performance)"): the icon is never
+ * the only carrier of the type (DESIGN.md "Iconography"). */
+function pinCount(pinned: readonly MapItem[]): string {
+  const count = countPhrase(pinned)
+  if (pinned.length !== 1) return count
+  const only = pinned[0]
+  const typed = only.kind === "talk" ? only.talkKind : only.eventType
+  return typed ? `${count} (${itemTypeLabel(only)})` : count
 }
 
 /** The day's pins, one per venue with coordinates inside the pin region, in
@@ -142,7 +162,7 @@ export function mapPins(
       items: pinned,
       kind: pinned.every((item) => item.kind === "talk") ? "talk" : "event",
       status,
-      label: `${venue.name}: ${countPhrase(pinned)}${state}`,
+      label: `${venue.name}: ${pinCount(pinned)}${state}`,
     }
   })
 }

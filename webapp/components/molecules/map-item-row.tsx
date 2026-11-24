@@ -3,10 +3,9 @@ import Link from "next/link"
 import { formatDayShort, formatEventTime, londonIsoDate } from "@/lib/calendar"
 import { linkProps } from "@/lib/crawl-traps"
 import { FILM_ICON, ITEM_ICONS, itemIconKey } from "@/lib/item-icons"
-import { FILM_PLACE, type MapStatus, STATUS_LABELS } from "@/lib/map-day"
+import { FILM_PLACE, itemTypeLabel, type MapStatus, STATUS_LABELS } from "@/lib/map-day"
 import type { MapItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
-import { EVENT_TYPE_LABELS, TALK_KIND_LABELS } from "@/lib/vocab"
 
 /**
  * One row of the map's list (docs/locations-and-map.md §0.6): when, what
@@ -65,14 +64,7 @@ export function MapItemRow({
           endsAt: item.endsAt ?? undefined,
           allDay: false,
         }).replace(/ – .*$/, "")
-  const kindLabel =
-    item.kind === "talk"
-      ? item.talkKind
-        ? TALK_KIND_LABELS[item.talkKind]
-        : "Talk"
-      : item.eventType
-        ? EVENT_TYPE_LABELS[item.eventType]
-        : "Event"
+  const kindLabel = itemTypeLabel(item)
   const statusLabel = item.cancelled ? "Cancelled" : STATUS_LABELS[status]
   const place =
     item.precision === "online"

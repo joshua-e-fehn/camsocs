@@ -87,6 +87,17 @@ describe("pins and sections", () => {
     expect(mapPins(items, VENUES, at(16), DAY)[1].label).toBe("Venue B: 1 talk, ended")
   })
 
+  test("a pin of one item says its type in words, beside the icon", () => {
+    const show = item({ key: "s", eventType: "performance", startsAt: at(11), endsAt: at(13) })
+    expect(mapPins([show], VENUES, at(12), DAY)[0].label).toBe(
+      "Venue A: 1 event (Performance), one on now",
+    )
+    const seminar = item({ key: "t", kind: "talk", talkKind: "seminar", href: "/talks/t" })
+    expect(mapPins([seminar], VENUES, at(8), DAY)[0].label).toBe("Venue A: 1 talk (Seminar)")
+    // Several items keep their counts: the pin shows a number, not an icon.
+    expect(mapPins([show, seminar], VENUES, at(8), DAY)[0].label).toBe("Venue A: 1 event, 1 talk")
+  })
+
   test("online items and those with no place go in their own sections", () => {
     const { placed, away, online, tbc } = mapSections(items, VENUES)
     expect(placed.map((x) => x.key)).toEqual(["a", "b", "c", "d"])

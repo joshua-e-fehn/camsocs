@@ -248,7 +248,8 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
    no venue and no venueKey, the one case the hint decides). Skip an item whose stored hash is equal, unless its
    stored `startsAt` differs (a rescheduled item is posted again, from the
    reply cache, so coverage and pruning use its new start). An `unknown`
-   row, and a row at a coarse venue (a town, a district or a street, step
+   or `film` row (`resolver.VERSIONED`: a film row is a rule's verdict, so a
+   fixed rule reaches it), and a row at a coarse venue (a town, a district or a street, step
    4), is posted with the resolver version after its hash
    (`<hash>:r3`, `resolver.RESOLVER_VERSION`), and one without the current
    version is due again: a new resolver (the gazetteer, r2; coarse venues,
@@ -262,13 +263,19 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
 2. **Deterministic first:**
    - an online-only talk, or an event with an online venue (Zoom/Teams/link),
      and no physical place → `online`;
-   - an event that is a film production (title, venue text or, on Camdram,
-     description: "short film", "(Short Film)", "16mm", "film shoot",
-     "filming", Camdram's "On Location") with no real venue (none, or a
-     placeholder such as "Short Film" / "On Location") and no screening
-     words → `source`/`film`, no venue (`matching.is_film_without_venue`;
-     r6, 2026-11-24, so the unknown rows of earlier versions are re-run by
-     this rule without asking the model);
+   - a Camdram event (only Camdram lists film productions as shows) with no
+     `venueKey` of its own, no real venue text (none, or a placeholder such
+     as "Short Film" / "On Location" / "TBC") and that is a film production
+     (title or description: "short film", "(Short Film)", "student film",
+     "film shoot"; venue text "Short Film" or "On Location"), with no
+     screening or showing words in its title, venue text or description
+     ("screening", "cinema", "Picturehouse", "premiere", "showcase",
+     "festival", "night", "watch") → `source`/`film`, no venue
+     (`matching.is_film_without_venue`; r6, 2026-11-24, so the unknown rows
+     of earlier versions are re-run by this rule without asking the model).
+     Anything else film-ish (a film society AGM, a talk about film, a
+     filming workshop) goes to the model. Only this rule makes a `film`
+     row: a model reply saying `film` is read as `unknown`;
    - an event `venueKey` whose venue has lat/lng → `source`/`exact`, with the
      room = what venueText adds;
    - an exact normalised match of the venue text against a venue name or
