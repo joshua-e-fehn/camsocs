@@ -10,7 +10,12 @@ For a place in Cambridge (the model did not flag it as outside):
    Shelford, Hinxton, Madingley), for the `osm_query`;
 3. Photon (OSM data, a forgiving index) inside the region, for the name;
 4. Nominatim's structured search for the street and postcode;
-5. postcodes.io for the postcode.
+5. postcodes.io for the postcode: when the structured search found
+   nothing, and as a check of a road it found (a road's point further than
+   `POSTCODE_AGREE_M` from the postcode's gives way to the postcode's).
+
+(The committed gazetteer of Cambridge's OSM buildings, `gazetteer.py`, is
+asked before all of these, by the resolver.)
 
 For a place outside Cambridge (an away fixture, a tour venue, a
 conference): the same services without a box, narrowed to the model's
@@ -27,6 +32,7 @@ remembered as "not found".
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Literal
@@ -46,6 +52,10 @@ from camsocs_pipeline.locate.postcodes import (
     PostcodesUnavailable,
     find_postcode,
 )
+
+#: A street found by the structured search further than this from the
+#: postcode's point is not where the building is: the postcode's point is.
+POSTCODE_AGREE_M = 250.0
 
 #: How much a hit pins down (`nominatim.Level`, plus a postcode's centroid).
 HitLevel = Literal["feature", "street", "postcode", "area"]
@@ -181,6 +191,8 @@ class Geocoder:
     budget: GeoBudget = field(default_factory=GeoBudget)
     #: Whether the run's wall-clock budget is spent.
     out_of_time: Callable[[], bool] = lambda: False
+    #: Answers that are a postcode's point (the metric `postcodePoints`).
+    postcode_points: int = 0
 
     @property
     def calls(self) -> dict[str, int]:
@@ -271,9 +283,29 @@ class Geocoder:
             )
             keep(found, by_address=True)
             if best is not None and best.level != "area":
+                if postcode and best.level == "street" and best.name:
+                    # Nominatim's structured search nearly always answers
+                    # with the road, so the postcode was never asked
+                    # (postcodesCalls 0 in the 2026-11-24 run). A road's
+                    # point is its middle, and the search may match a road
+                    # of that name elsewhere: the postcode's point (a dozen
+                    # addresses) is the better guess when the two lie far
+                    # apart. A building found at the house number stands.
+                    # When postcodes.io gives no answer (refused, out of
+                    # budget, down), the road stands: never a deferral.
+                    try:
+                        point = self._postcode(postcode, outside)
+                    except GeocodeDeferred:
+                        return best
+                    if point is not None and metres(best, point) > POSTCODE_AGREE_M:
+                        self.postcode_points += 1
+                        return point
                 return best
         if postcode and code in (None, "gb"):
-            keep(self._postcode(postcode, outside))
+            point = self._postcode(postcode, outside)
+            keep(point)
+            if point is not None and best is point:
+                self.postcode_points += 1
         return best
 
     # -- the services -------------------------------------------------------------------
@@ -357,6 +389,15 @@ class Geocoder:
         return bool(asked & said)
 
 
+def metres(a: GeoHit, b: GeoHit) -> float:
+    """The distance between two hits, in metres (equirectangular: fine at a
+    city's scale)."""
+    lat = math.radians((a.lat + b.lat) / 2)
+    dy = (a.lat - b.lat) * 111_320.0
+    dx = (a.lng - b.lng) * 111_320.0 * math.cos(lat)
+    return math.hypot(dx, dy)
+
+
 def names_match(found: str | None, spec: Building, *, without_address: bool = True) -> bool:
     """Whether a source's name for a hit shares a distinctive word
     (`matching.distinctive`) with the name or query asked for, not counting
@@ -431,11 +472,13 @@ def _roadish(text: str) -> bool:
 
 
 __all__ = [
+    "POSTCODE_AGREE_M",
     "GeoBudget",
     "GeoHit",
     "GeocodeDeferred",
     "Geocoder",
     "HitLevel",
     "country_code",
+    "metres",
     "names_match",
 ]

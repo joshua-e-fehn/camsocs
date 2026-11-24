@@ -14,12 +14,19 @@ pending items in, venue claims and `itemLocations` rows out.
    venue's key: the venue is the key's when the key is known and fits the
    item, else the known venue of that name, else the geocoded building (an
    invalid key never loses the item).
-4. **New venues** are geocoded (`geocode.py`): Nominatim inside Cambridge,
-   then the Cambridge region, Photon, Nominatim's structured address search
-   and postcodes.io; a place the model flags as outside Cambridge (an away
-   fixture, a tour) is searched for worldwide in its country. A miss falls
-   back to the enclosing building it named (`building` precision), else the
-   item is `unknown` with a note. A street or postcode point makes the item
+4. **New venues** are looked up first in the committed gazetteer of
+   Cambridge's OSM buildings (`gazetteer.py`: the building's name and OSM
+   query, curated aliases such as "Faculty of Music" → "11 West Road"; a
+   hit posts OSM's own values, so talks may use it), then geocoded
+   (`geocode.py`): Nominatim inside Cambridge, then the Cambridge region,
+   Photon, Nominatim's structured address search and postcodes.io (also as
+   a check of a road it found); a place the model flags as outside
+   Cambridge (an away fixture, a tour) is searched for worldwide in its
+   country. A miss falls back to the enclosing building it named
+   (`building` precision), else to a gazetteer building the venue text
+   names (`building`), else the item is `unknown` with a note (its row's
+   input hash carries `RESOLVER_VERSION`, so a later resolver looks it up
+   again from the cached reply). A street or postcode point makes the item
    `building`, a town or district `area`: a town is posted as an area venue
    (`ven-area--<town>`, never reused as a building), and a venue made from
    a street or postcode point is remembered across runs (`coarse_venues`),
@@ -61,6 +68,7 @@ from camsocs_pipeline.extract.events import redact_contacts
 from camsocs_pipeline.extract.llm import LLMClient, LLMValidationError
 from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.keys import venue_key
+from camsocs_pipeline.locate.gazetteer import Gazetteer, GazetteerPlace
 from camsocs_pipeline.locate.geocode import GeoBudget, GeocodeDeferred, Geocoder, GeoHit
 from camsocs_pipeline.locate.matching import (
     PERSONISH,
@@ -97,6 +105,12 @@ from camsocs_pipeline.models.wire import ClaimInput
 logger = logging.getLogger(__name__)
 
 PROMPT_NAME = "locate_v2"
+#: The version of the lookups after the model (the gazetteer, the geocoding
+#: chain). An `unknown` row records it in its input hash
+#: (`row_input_hash`), so a new version looks those items up again from the
+#: cached replies, without asking the model again (`stages/locate.due`).
+#: r2 (2026-11-24): the Cambridge gazetteer, the postcode cross-check.
+RESOLVER_VERSION = "r2"
 PROMPT_PATH = Path(__file__).parent.parent / "extract" / "prompts" / f"{PROMPT_NAME}.md"
 
 #: Budgets (§2 step 6): items asked of the model (cached replies are free),
@@ -180,6 +194,8 @@ class Metrics:
     model_named_venues: int = 0
     #: Rows whose venue lies outside the Cambridge region (away fixtures, tours).
     outside: int = 0
+    #: Buildings found in the committed gazetteer (no request made).
+    gazetteer_hits: int = 0
     by_method: dict[str, int] = field(default_factory=dict)
     by_precision: dict[str, int] = field(default_factory=dict)
 
@@ -218,8 +234,11 @@ class Locator:
         budget: Budget | None = None,
         workers: int = 4,
         clock: Callable[[], float] = time.monotonic,
+        gazetteer: Gazetteer | None = None,
     ) -> None:
         self.index = VenueIndex.of(venues)
+        #: Cambridge's OSM buildings, looked up before Nominatim (None: skipped).
+        self.gazetteer = gazetteer
         self.memo = memo
         self.llm = llm
         self.nominatim = nominatim
@@ -298,6 +317,10 @@ class Locator:
             except Deferred:
                 self.metrics.deferred += 1
                 continue
+            if row.precision == "unknown":
+                row = row.model_copy(
+                    update={"input_hash": row_input_hash(hashes[id(item)], "unknown")}
+                )
             rows.append(row)
             self._count(row)
         return rows
@@ -458,6 +481,12 @@ class Locator:
             if venue is not None:
                 precision = "area" if precision == "area" else "building"
                 room = room or (spec.name if spec else None)
+        if venue is None and not outside and precision != "area" and item.place_text:
+            # Neither building was found: a Cambridge building the listing's
+            # own venue text names, as the building the item is in.
+            venue = self._from_gazetteer([item.place_text])
+            if venue is not None:
+                precision = "building"
         if venue is None:
             named = spec.name if spec and spec.name else (parent.name if parent else None)
             note = single_line(
@@ -517,6 +546,10 @@ class Locator:
         known = self._known(key, name)
         if known is not None:
             return known, None
+        if not outside:
+            found = self._from_gazetteer([spec.name, spec.osm_query])
+            if found is not None:
+                return found, None
         lookup = (key, outside, area)
         if lookup in self._looked_up:
             found = self._looked_up[lookup]
@@ -617,7 +650,15 @@ class Locator:
         `Deferred` when the lookup got no answer (an outage, a budget
         spent): the item gets no row, so the next run, which retries it,
         looks the venue up again."""
-        if venue.placed or venue.key in self._placing or self.geocoder is None:
+        if venue.placed or venue.key in self._placing:
+            return venue
+        if not outside and self.gazetteer is not None:
+            found = self.gazetteer.find([venue.name, *venue.aliases])
+            if found is not None:
+                with self._lock:
+                    self.metrics.gazetteer_hits += 1
+                return self._place_from(venue, found.place)
+        if self.geocoder is None:
             return venue
         hit = self._geocode(
             Building(name=venue.name, address=venue.address, osm_query=None), outside=outside
@@ -641,6 +682,89 @@ class Locator:
             claims.append(self._hit_claim(venue.key, "address", hit.address, hit))
         self._claims.setdefault(venue.key, []).extend(claims)
         return placed
+
+    # -- the gazetteer -------------------------------------------------------------------
+
+    def _from_gazetteer(self, texts: Sequence[str | None]) -> VenueRow | None:
+        """The venue of the Cambridge building one of `texts` names in the
+        committed gazetteer (`locate/gazetteer.py`): a known venue of its
+        name (placed by it when it has no point yet), else a new venue
+        posted from OSM's own name, address and point. None when no text
+        names one (or the gazetteer is off)."""
+        if self.gazetteer is None:
+            return None
+        hit = self.gazetteer.find(texts)
+        if hit is None:
+            return None
+        venue = self._gazetteer_venue(hit.place)
+        if venue is not None:
+            with self._lock:
+                self.metrics.gazetteer_hits += 1
+        return venue
+
+    def _gazetteer_venue(self, place: GazetteerPlace) -> VenueRow | None:
+        name = single_line(gazetteer_name(place.name), VENUE_NAME_MAX)
+        if not name or PERSONISH.search(name):
+            return None
+        try:
+            key = venue_key(name)
+        except ValueError:
+            return None
+        known = self._known(key, name)
+        if known is None and normalise(place.name) != normalise(name):
+            try:
+                known = self._known(venue_key(place.name), place.name)
+            except ValueError:
+                known = None
+        if known is not None:
+            return known if known.placed else self._place_from(known, place)
+        address = _gazetteer_address(place)
+        row = VenueRow(
+            key=key, name=name, aliases=[], address=address, lat=place.lat, lng=place.lng
+        )
+        self.index.add(row)
+        with self._lock:
+            self.metrics.new_venues += 1
+        claims = [self._place_claim(key, "name", name, place)]
+        if address:
+            claims.append(self._place_claim(key, "address", address, place))
+        claims += [
+            self._place_claim(key, "lat", place.lat, place),
+            self._place_claim(key, "lng", place.lng, place),
+        ]
+        self._claims.setdefault(key, []).extend(claims)
+        return row
+
+    def _place_from(self, venue: VenueRow, place: GazetteerPlace) -> VenueRow:
+        """A known venue without a point, placed at the gazetteer's building."""
+        address = venue.address or _gazetteer_address(place)
+        placed = venue.model_copy(update={"lat": place.lat, "lng": place.lng, "address": address})
+        self.index.add(placed)
+        self._placing.add(venue.key)
+        self.coarse_venues.pop(venue.key, None)
+        with self._lock:
+            self.metrics.placed_venues += 1
+        claims = [
+            self._place_claim(venue.key, "lat", place.lat, place),
+            self._place_claim(venue.key, "lng", place.lng, place),
+        ]
+        if not venue.address and address:
+            claims.append(self._place_claim(venue.key, "address", address, place))
+        self._claims.setdefault(venue.key, []).extend(claims)
+        return placed
+
+    def _place_claim(self, key: str, name: str, value: object, place: GazetteerPlace) -> ClaimInput:
+        """A value of the OSM object the gazetteer read (OSM's own), cited to
+        its OSM page and dated when it was read from OpenStreetMap."""
+        assert self.gazetteer is not None
+        return build_claim(
+            parser_field(name, value, extractor=f"locate.gazetteer.{name}", evidence="secondary"),
+            entity_type="venue",
+            entity_key=key,
+            source_url=place.url,
+            source_type="osm_nominatim",
+            retrieved_at=self.gazetteer.retrieved_at,
+        )
 
     def _geocode(self, spec: Building, *, outside: bool, area: bool = False) -> GeoHit | None:
         if self.geocoder is None:
@@ -782,6 +906,32 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     return None
 
 
+def row_input_hash(digest: str, precision: str) -> str:
+    """The input hash a row is posted with: the item's (`input_hash`, also
+    the reply cache's key), and for an `unknown` row the resolver version
+    after it, so a later version tries that item again (`stages/locate.due`)."""
+    return f"{digest}:{RESOLVER_VERSION}" if precision == "unknown" else digest
+
+
+#: A qualifier OSM names carry that says nothing about the building.
+_UNIVERSITY_SUFFIX = re.compile(r"\s*\(University of Cambridge\)\s*$", re.IGNORECASE)
+
+
+def gazetteer_name(name: str) -> str:
+    """A gazetteer place's name as a venue's: OSM's, without a trailing
+    "(University of Cambridge)" ("Centre for Mathematical Sciences (University
+    of Cambridge)" → "Centre for Mathematical Sciences")."""
+    return _UNIVERSITY_SUFFIX.sub("", name).strip() or name
+
+
+def _gazetteer_address(place: GazetteerPlace) -> str | None:
+    """OSM's address of a place, when it says more than the town."""
+    address = single_line(place.address, VENUE_ADDRESS_MAX)
+    if address and ("," in address or find_postcode(address)):
+        return address
+    return None
+
+
 def _unrelated(venue: VenueRow, item: PendingItem, named: Sequence[Building | None]) -> bool:
     """Whether a chosen known venue has no word in common with the item's
     place text, the buildings the model named, its organisers or their usual
@@ -909,6 +1059,7 @@ __all__ = [
     "MAX_POSTCODES_CALLS",
     "PLACES_RETRY_DAYS",
     "PROMPT_NAME",
+    "RESOLVER_VERSION",
     "TIME_BUDGET_S",
     "Budget",
     "Deferred",
@@ -916,7 +1067,9 @@ __all__ = [
     "Metrics",
     "Plan",
     "deterministic",
+    "gazetteer_name",
     "model_building_address",
     "model_building_name",
     "model_names_allowed",
+    "row_input_hash",
 ]

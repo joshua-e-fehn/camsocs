@@ -212,7 +212,11 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
    online + organisers, + the sorted organiserPlaces only when the item names
    no venue and no venueKey, the one case the hint decides). Skip an item whose stored hash is equal, unless its
    stored `startsAt` differs (a rescheduled item is posted again, from the
-   reply cache, so coverage and pruning use its new start).
+   reply cache, so coverage and pruning use its new start). An `unknown`
+   row is posted with the resolver version after its hash
+   (`<hash>:r2`, `resolver.RESOLVER_VERSION`), and one without the current
+   version is due again: a new resolver (the gazetteer, 2026-11-24) looks
+   those items up again from the cached reply, asking no model.
 2. **Deterministic first:**
    - an online-only talk, or an event with an online venue (Zoom/Teams/link),
      and no physical place → `online`;
@@ -254,13 +258,48 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
      - "location sent on acceptance" → `area` with the stated area;
      - say `unknown` only when nothing at all is inferable.
    - talks.cam text is allowed (D13).
-4. **New venues** (`locate/geocode.py`):
-   - Cambridge places, in order: Nominatim inside the Cambridge box
+4. **New venues** (`locate/gazetteer.py`, `locate/geocode.py`):
+   - **The gazetteer first** (2026-11-24, ENG-276): a Cambridge place (not
+     `outsideCambridge`) is looked up in the committed gazetteer
+     `pipeline/src/camsocs_pipeline/locate/data/cambridge_places.json`
+     (about 2,400 OSM features: the University's, colleges' and
+     departments' buildings, nameless University buildings by their
+     `occupier` department, institutes, halls, theatres, churches,
+     libraries, sports grounds, named pubs, bars, cafés and restaurants;
+     rebuilt by hand with `pixi run locate-gazetteer`, one Overpass query)
+     plus curated aliases (`locate/data/cambridge_aliases.json`: "Faculty
+     of Music" → "11 West Road", "Hodgkin-Huxley Seminar Room" → Physiology
+     Building, "RDC" → Ray Dolby Centre, "CMS", "Keynes Room" → Austin
+     Robinson Building, each pointing at one OSM id, checked by a test).
+     The building's name, then its OSM query, are matched: the whole text
+     or a segment that is an alias or a name, else the longest alias or
+     name the text contains as whole words once its address parts are
+     gone (two distinctive words, unless an alias or a college's name),
+     else a name with exactly the text's distinctive words (two, or one
+     college's short name). A room's name ("Chapel", "The Bar") counts
+     only with its college; OSM placeholders ("TBA"), the University
+     itself and names under four letters never count; a pub's or café's
+     name only as the whole text or a segment of two words or more; a
+     name that reads as an address only as the whole text. A hit is an
+     OSM object: the venue is a known one of its name (placed by it when it
+     has no point), else a new one posted from OSM's own name (without a
+     trailing "(University of Cambridge)"), address and point, source type
+     `osm_nominatim`, extractor `locate.gazetteer.<field>`, `sourceUrl` the
+     object's OSM page, `retrievedAt` the gazetteer's read date. It is no
+     model wording, so a talk may use it (G1). A known venue without a
+     point is placed from the gazetteer too, before any request. When both
+     buildings the model named are missed everywhere, a gazetteer building
+     the venue text names is the item's (`building`).
+   - Cambridge places, then, in order: Nominatim inside the Cambridge box
      (`osmQuery`, then "name, Cambridge"); Nominatim inside the Cambridge
      region (S 52.05 N 52.35 W −0.10 E 0.35: the villages); Photon
      (`https://photon.komoot.io/api`, OSM data, bbox the region); Nominatim's
      structured search (street + postcode); postcodes.io (the postcode,
-     inside the region). Nominatim and Photon at 1 request per second each,
+     inside the region). The structured search nearly always answers with
+     the road, so until 2026-11-24 postcodes.io was never asked
+     (`postcodesCalls` 0 in the second production run); now a road it finds
+     is checked against the postcode's point, and further than 250 m apart
+     the postcode's point is used (`postcodePoints`). Nominatim and Photon at 1 request per second each,
      postcodes.io paced, all with our `CAMSOCS_USER_AGENT`, direct
      `httpx.Client`s.
    - `outsideCambridge` places: Nominatim without a box, narrowed to the
@@ -312,7 +351,8 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
      "not found".
 5. Post `locations/batch`.
 6. Report metrics: `resolved`, `unknown`, `llmCalls`, `nominatimCalls`,
-   `photonCalls`, `postcodesCalls`, `placesCalls`, `newVenues`,
+   `photonCalls`, `postcodesCalls`, `postcodePoints`, `gazetteerHits`,
+   `placesCalls`, `newVenues`,
    `modelNamedVenues`, `outsideCambridge` and `unresolvedShare`. Add a note
    when the share is above 2%.
    - Budgets: 1,200 LLM items, 500 Nominatim, 200 Photon, 300 postcodes.io

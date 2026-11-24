@@ -83,6 +83,18 @@ cwd = "pipeline"
 # files; tests/test_graph_export.py fails while they are stale.
 description = "Regenerate webapp/lib/generated/pipeline-graph.cam.json and docs/pipeline-map.md."
 
+[tasks.locate-gazetteer]
+cmd = "python -m camsocs_pipeline.locate.gazetteer_build"
+cwd = "pipeline"
+# One Overpass API query (OSM, ODbL) for Cambridge's named University,
+# college and department buildings and common venues; writes
+# pipeline/src/camsocs_pipeline/locate/data/cambridge_places.json, which the
+# `locate` stage reads before Nominatim (source-research §23). Rebuild by
+# hand now and then and commit the file; check that every entry of
+# locate/data/cambridge_aliases.json still points at a place in it
+# (tests/test_locate_gazetteer.py does).
+description = "Rebuild the committed Cambridge gazetteer from OpenStreetMap (Overpass)."
+
 [tasks.posthog-dashboards]
 cmd = "python ops/posthog/dashboards.py"
 # The five PostHog dashboards as code (ENG-10): `-- --dry-run` prints the

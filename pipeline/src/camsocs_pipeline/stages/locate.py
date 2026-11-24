@@ -9,9 +9,10 @@ Places are `locate/resolver.py`'s; this module wires them to the run:
 
 - the model through the run's `LLMClient` (bulk, strong fallback) and the
   reply cache; without a configured model, cached replies only;
-- the geocoding chain (`locate/geocode.py`): Nominatim and Photon at one
-  request a second each, postcodes.io paced, all with the crawler's
-  User-Agent;
+- the committed gazetteer of Cambridge's OSM buildings
+  (`locate/gazetteer.py`, read before any request), then the geocoding
+  chain (`locate/geocode.py`): Nominatim and Photon at one request a second
+  each, postcodes.io paced, all with the crawler's User-Agent;
 - Places only with `GOOGLE_PLACES_API_KEY` (a note otherwise), for place ids;
 - venue claims first (`claims`), then the rows (`locations/batch`), then the
   14-day coverage (`locations/summary`) for the run report.
@@ -42,13 +43,14 @@ from datetime import UTC, datetime, timedelta
 from camsocs_pipeline.config import ConfigError
 from camsocs_pipeline.extract.llm import LLMClient
 from camsocs_pipeline.extract.memo import LLMMemo
+from camsocs_pipeline.locate.gazetteer import Gazetteer
 from camsocs_pipeline.locate.matching import input_hash
 from camsocs_pipeline.locate.model import PendingItem
 from camsocs_pipeline.locate.nominatim import Nominatim
 from camsocs_pipeline.locate.photon import Photon
 from camsocs_pipeline.locate.places import Places
 from camsocs_pipeline.locate.postcodes import Postcodes
-from camsocs_pipeline.locate.resolver import PROMPT_NAME, Locator
+from camsocs_pipeline.locate.resolver import PROMPT_NAME, Locator, row_input_hash
 from camsocs_pipeline.pipeline.context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -63,7 +65,9 @@ MAX_REJECTIONS_NOTED = 5
 
 
 def due(items: list[PendingItem]) -> tuple[list[PendingItem], int]:
-    """The items whose stored row is missing, was made from other input, or
+    """The items whose stored row is missing, was made from other input, is
+    `unknown` from an earlier resolver version (`resolver.RESOLVER_VERSION`:
+    looked up again with the new lookups, from the cached reply), or
     carries another start (a rescheduled item: the row's `startsAt` drives
     the 14-day coverage and the prune; the reply cache is keyed by input
     hash, so re-posting it asks no model), and how many are unchanged."""
@@ -71,7 +75,8 @@ def due(items: list[PendingItem]) -> tuple[list[PendingItem], int]:
         item
         for item in items
         if item.stored is None
-        or item.stored.input_hash != input_hash(item, PROMPT_NAME)
+        or item.stored.input_hash
+        != row_input_hash(input_hash(item, PROMPT_NAME), item.stored.precision)
         or (item.stored.starts_at is not None and item.stored.starts_at != item.starts_at)
     ]
     return todo, len(items) - len(todo)
@@ -121,6 +126,11 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         else:
             ctx.report.notes.append("place ids skipped: GOOGLE_PLACES_API_KEY is not set")
 
+    gazetteer: Gazetteer | None = None
+    try:
+        gazetteer = Gazetteer.default()
+    except (OSError, ValueError, KeyError) as error:
+        ctx.report.notes.append(f"gazetteer not read ({type(error).__name__}): Nominatim only")
     state = ctx.state.data("locate")
     locator = Locator(
         venues,
@@ -134,6 +144,7 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         places_tried=state.setdefault("placesTried", {}),
         coarse_venues=state.setdefault("coarseVenues", {}),
         workers=settings.llm_concurrency,
+        gazetteer=gazetteer,
     )
     try:
         rows = locator.resolve(todo)
@@ -177,6 +188,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             "nominatimCalls": nominatim.calls if nominatim else 0,
             "photonCalls": photon.calls if photon else 0,
             "postcodesCalls": postcodes.calls if postcodes else 0,
+            "postcodePoints": locator.geocoder.postcode_points if locator.geocoder else 0,
+            "gazetteerHits": metrics.gazetteer_hits,
             "placesCalls": places.calls if places else 0,
             "newVenues": metrics.new_venues,
             "modelNamedVenues": metrics.model_named_venues,
