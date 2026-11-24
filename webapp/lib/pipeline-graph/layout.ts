@@ -161,6 +161,7 @@ const PHASE_LABELS: Record<string, string> = {
   inbox: "Inbox",
   load: "Load",
   talks: "Talks",
+  locate: "Locate",
   report: "Report",
 }
 

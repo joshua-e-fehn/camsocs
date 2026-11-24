@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
   ListIcon,
   LockIcon,
+  MapIcon,
   SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react"
@@ -53,6 +54,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { api } from "@/convex/_generated/api"
 import { useEvent, useSignInOptions, useVenues } from "@/hooks/convex"
 import { useEventWindow, useRestrictedCount, useTalksSideEvents } from "@/hooks/convex/events"
+import { useItemLocation } from "@/hooks/convex/map"
 import { useTrackSearch, useTrackView } from "@/hooks/use-analytics"
 import {
   addDays,
@@ -494,6 +496,8 @@ export function EventsCalendar({
   const openData = useEvent(openKey)
   const venues = useVenues(Boolean(openData?.venueKey && !openData.venueText))
   const openVenue = venues?.find((venue) => venue.key === openData?.venueKey)?.name
+  // The resolved place for the sheet's "Where" row (§3), read in the browser.
+  const openLocation = useItemLocation("event", openData?.key)
   const openPlaceholder = all.find((event) => event.key === openKey)
   useTrackView(
     "event_viewed",
@@ -1137,7 +1141,16 @@ export function EventsCalendar({
                   </span>
                 </div>
               )}
-              {viewSwitch}
+              <div className="flex shrink-0 items-center gap-2">
+                <Link
+                  {...linkProps("/map")}
+                  className="inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border bg-card px-3 text-[13px] transition-colors duration-150 hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-9"
+                >
+                  <MapIcon aria-hidden className="size-4" />
+                  Map
+                </Link>
+                {viewSwitch}
+              </div>
             </div>
 
             {showsTalks && (
@@ -1425,6 +1438,7 @@ export function EventsCalendar({
                 <EventDetails
                   event={openData}
                   venueName={openVenue}
+                  location={openLocation ?? undefined}
                   pageUrl={`${SITE_URL}${eventPath(openData)}`}
                   termWeek={termWeekTag(londonIsoDate(openData.startsAt), terms)}
                 />

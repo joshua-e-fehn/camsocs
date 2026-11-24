@@ -111,6 +111,9 @@ SOURCE_TYPES: tuple[str, ...] = (
     "termcard",
     "wayback",
     "manual",
+    # Location resolution (docs/locations-and-map.md §1a, source-research §23).
+    "osm_nominatim",
+    "google_places",
 )
 
 INTERNAL_SOURCE_TYPES: tuple[str, ...] = (
@@ -619,7 +622,21 @@ VENUE_FIELDS: tuple[str, ...] = (
     "collegeKey",
     "lat",
     "lng",
+    "googlePlaceId",
 )
+
+# Item locations (docs/locations-and-map.md §1b): not claims, one row per item.
+ITEM_LOCATION_KINDS: tuple[str, ...] = ("event", "talk")
+
+ITEM_LOCATION_PRECISIONS: tuple[str, ...] = (
+    "exact",
+    "building",
+    "area",
+    "online",
+    "unknown",
+)
+
+ITEM_LOCATION_METHODS: tuple[str, ...] = ("source", "alias", "llm")
 
 
 def one_of(values: tuple[str, ...]) -> Callable[[str], str]:

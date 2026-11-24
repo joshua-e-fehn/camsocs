@@ -6,10 +6,12 @@ import { londonIsoDate } from "@/lib/calendar"
 import {
   eventMetadata,
   loadEvent,
+  loadEventLocation,
   loadNextEvents,
   loadRepeatsThatDay,
   loadTerms,
   loadVenue,
+  structuredVenue,
   UNAVAILABLE_METADATA,
   venueNameOf,
 } from "@/lib/event-page"
@@ -76,12 +78,15 @@ export default async function EventRoute({ params }: Props) {
   if (away) permanentRedirect(away)
 
   const now = Date.now()
-  const [terms, venue, next] = await Promise.all([
+  const [terms, venue, next, location] = await Promise.all([
     loadTerms(),
     loadVenue(event.venueKey),
     loadNextEvents(event, now),
+    loadEventLocation(event.key),
   ])
-  const structured = eventStructuredData(event, venue)
+  // The JSON-LD Place takes its coordinates from the resolved building
+  // (docs/locations-and-map.md §3).
+  const structured = eventStructuredData(event, structuredVenue(venue, location))
 
   return (
     <>
@@ -95,6 +100,7 @@ export default async function EventRoute({ params }: Props) {
       <EventPage
         event={event}
         venueName={venueNameOf(event, venue)}
+        location={location}
         termWeek={termWeekTag(londonIsoDate(event.startsAt), terms)}
         now={now}
         nextEvents={next}

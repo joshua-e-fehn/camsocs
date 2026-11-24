@@ -3,12 +3,19 @@ import {
   EVENT_SOURCES,
   EVENT_VISIBILITIES,
   INTRODUCTION_STATUSES,
+  ITEM_LOCATION_KINDS,
   LISTING_REQUEST_KINDS,
 } from "../../lib/vocab"
 import { internal } from "../_generated/api"
 import { mutation, query } from "../_generated/server"
 import { requireBrokerUser } from "../lib/auth"
 import { DAY_MS, londonIsoDate } from "../lib/derived"
+import {
+  locationCoverage as computeLocationCoverage,
+  locationSummaryValidator,
+  UNRESOLVED_TARGET,
+} from "../lib/locations"
+import { literalUnion } from "../lib/validators"
 import { coverageStatsValidator, harvestRunFields, trafficSnapshotFields } from "../schema"
 
 /**
@@ -234,5 +241,32 @@ export const finderFeeds = query({
           : Math.round((feeds.reduce((sum, f) => sum + f.orgKeys.length, 0) / feeds.length) * 10) /
             10,
     }
+  },
+})
+
+/**
+ * Location coverage (docs/locations-and-map.md §1d, §3, the dashboard's
+ * "Locations" card): the next 14 days' events and talks by precision, the
+ * unresolved share against the 2% target, and up to 20 unresolved items.
+ * Bounded reads (convex/lib/locations.ts `locationCoverage`).
+ */
+export const locationCoverage = query({
+  args: {},
+  returns: v.object({
+    ...locationSummaryValidator.fields,
+    target: v.number(),
+    unknownItems: v.array(
+      v.object({
+        kind: literalUnion(ITEM_LOCATION_KINDS),
+        key: v.string(),
+        title: v.string(),
+        note: v.optional(v.string()),
+      }),
+    ),
+  }),
+  handler: async (ctx) => {
+    await requireBrokerUser(ctx)
+    const { summary, unknownItems } = await computeLocationCoverage(ctx, Date.now())
+    return { ...summary, target: UNRESOLVED_TARGET, unknownItems }
   },
 })

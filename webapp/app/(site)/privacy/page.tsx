@@ -151,11 +151,14 @@ export default function PrivacyPage() {
         <p>
           The Talks pages list public academic talks with their speakers’ names and affiliations, as
           the organiser published them on talks.cam or on a department’s own website. They are read
-          by fixed parser code only: no AI model reads these listings or the names in them. A talk
-          links to the page it was read from, disappears when that page no longer lists it, and is
-          deleted 30 days after it took place. If you are named on a talk and want your name
-          corrected or removed, write to us (see <a href="#rights">Your rights</a>) with the talk’s
-          link; we will also point you to the organiser, whose listing we follow.
+          by fixed parser code. Once a talk is stored, its text (title, abstract, venue and
+          organisers, which can include speakers’ names) is given to the AI model below only to work
+          out where the talk takes place; the model answers with a place, never a name, and nothing
+          else it writes about a talk is kept or published. A talk links to the page it was read
+          from, disappears when that page no longer lists it, and is deleted 30 days after it took
+          place. If you are named on a talk and want your name corrected or removed, write to us
+          (see <a href="#rights">Your rights</a>) with the talk’s link; we will also point you to
+          the organiser, whose listing we follow.
         </p>
         <h3>Committee members (private, never published)</h3>
         <p>
@@ -239,6 +242,12 @@ export default function PrivacyPage() {
           <li>
             finishing a Finder quiz (<InlineCode>finder_completed</InlineCode>): which Finder
             (societies, events or talks) and how many results it showed, never your answers;
+          </li>
+          <li>
+            using the map (<InlineCode>map_day_changed</InlineCode> and{" "}
+            <InlineCode>map_item_opened</InlineCode>): how you changed the day (arrows, the week
+            strip, the date picker, keys or a swipe) and whether you opened an event or a talk,
+            never which day, item or place;
           </li>
           <li>
             following a link off the site (<InlineCode>outbound_link_clicked</InlineCode>): its kind
@@ -407,25 +416,26 @@ export default function PrivacyPage() {
         <p>
           The AI model that extracts facts from public pages, the University of Cambridge’s public
           events programme (with its permission) and mailing-list messages, replaces names in
-          descriptions with roles, and drafts the operator&apos;s answer to a request sent through
-          the request form, is one of OpenAI’s. We do not use OpenAI’s API service for it: the
-          operator reaches the models through his own ChatGPT subscription, by way of a relay
-          (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI under the
-          subscription’s own terms. We have no data processing agreement with OpenAI, so it is not a
-          provider acting only on our instructions like those above. Under OpenAI’s terms for
-          Europe, a subscription held by someone living in the UK is with OpenAI OpCo, LLC in the
-          United States, and one held by someone living in the European Economic Area with OpenAI
-          Ireland Ltd; we have not yet confirmed which of the two holds the operator’s subscription,
-          and will say so here once we have. Either way OpenAI processes the text outside the UK,
-          including in the United States. OpenAI’s privacy policy says it relies on adequacy
-          decisions and on the standard contractual clauses with the UK’s addendum for those
-          transfers, but that is OpenAI’s own arrangement: the subscription’s terms give us no
-          safeguard of our own for sending the text to OpenAI, and OpenAI is not certified under the
-          UK Extension to the EU–US Data Privacy Framework. The account setting that lets OpenAI use
-          what it is sent to train its models is switched off (since 3 November 2026), and we send
-          it as little as we can: talk listings from talks.cam and departments never, and
-          mailing-list messages only after quoted replies, signatures, addresses and phone numbers
-          are cut out, and requests only with their email addresses and phone numbers replaced.
+          descriptions with roles, works out where events and talks take place, and drafts the
+          operator&apos;s answer to a request sent through the request form, is one of OpenAI’s. We
+          do not use OpenAI’s API service for it: the operator reaches the models through his own
+          ChatGPT subscription, by way of a relay (cliproxy) on our server at Hostinger. The text is
+          therefore sent to OpenAI under the subscription’s own terms. We have no data processing
+          agreement with OpenAI, so it is not a provider acting only on our instructions like those
+          above. Under OpenAI’s terms for Europe, a subscription held by someone living in the UK is
+          with OpenAI OpCo, LLC in the United States, and one held by someone living in the European
+          Economic Area with OpenAI Ireland Ltd; we have not yet confirmed which of the two holds
+          the operator’s subscription, and will say so here once we have. Either way OpenAI
+          processes the text outside the UK, including in the United States. OpenAI’s privacy policy
+          says it relies on adequacy decisions and on the standard contractual clauses with the UK’s
+          addendum for those transfers, but that is OpenAI’s own arrangement: the subscription’s
+          terms give us no safeguard of our own for sending the text to OpenAI, and OpenAI is not
+          certified under the UK Extension to the EU–US Data Privacy Framework. The account setting
+          that lets OpenAI use what it is sent to train its models is switched off (since 3 November
+          2026), and we send it as little as we can: talk listings from talks.cam and departments
+          only to work out a talk’s venue, and mailing-list messages only after quoted replies,
+          signatures, addresses and phone numbers are cut out, and requests only with their email
+          addresses and phone numbers replaced.
         </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.

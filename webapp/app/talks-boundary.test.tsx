@@ -17,10 +17,11 @@ import { eventKey } from "@/lib/keys"
  * to the AI agents its robots.txt — and ours, for /talks — keep out.
  *
  *  - No server module outside the /talks routes (app/, components/, lib/)
- *    reads a talk's text (`talks.list`, `talks.get`, `talks.search`) or asks
- *    for talks.cam-derived events (`talksCam` other than "exclude"). Client
- *    components and hooks may: they read after hydration, which no crawler's
- *    HTML holds.
+ *    reads a talk's text (`talks.list`, `talks.get`, `talks.search`, a
+ *    `map.day` without `talks: "exclude"`, a `locations.forItem` whose kind
+ *    is not the literal "event") or asks for talks.cam-derived events
+ *    (`talksCam` other than "exclude"). Client components and hooks may:
+ *    they read after hydration, which no crawler's HTML holds.
  *  - A society profile, rendered on the server from `orgs.getBySlug`, lists
  *    none of them — however the event is talks-derived, including by fields a
  *    list item does not carry — and links no talks.cam page.
@@ -65,6 +66,13 @@ function code(source: string): string {
 const READS_TALK_TEXT = /(?<!typeof\s+)api\.talks\.(?:list|get|search)\b/
 /** Any `talksCam` but the default's own value. */
 const ASKS_FOR_TALKS_EVENTS = /\btalksCam\b(?!\s*:\s*["']exclude["'])/
+/** A `map.day` call whose arguments do not say `talks: "exclude"` (talk
+ * titles and rooms). The arguments end at the call's closing parenthesis. */
+const MAP_DAY_WITH_TALKS = /(?<!typeof\s+)api\.map\.day\b(?![^)]*\btalks\s*:\s*["']exclude["'])/
+/** A `locations.forItem` call whose kind is not the literal "event" (a
+ * talk's room can be talks.cam's venue text). */
+const READS_TALK_PLACE =
+  /(?<!typeof\s+)api\.locations\.forItem\b(?!\s*,\s*\{\s*kind\s*:\s*["']event["'])/
 
 describe("server modules outside /talks", () => {
   const files = [...sourceFiles("app"), ...sourceFiles("components"), ...sourceFiles("lib")].filter(
@@ -77,6 +85,7 @@ describe("server modules outside /talks", () => {
     expect(files).toContain(path.join("app", "(site)", "events", "[key]", "page.tsx"))
     expect(files).toContain(path.join("lib", "public-data.ts"))
     expect(files).toContain(path.join("lib", "event-page.ts"))
+    expect(files).toContain(path.join("app", "(site)", "map", "page.tsx"))
   })
 
   test("the patterns catch what they guard against, and nothing else", () => {
@@ -85,6 +94,22 @@ describe("server modules outside /talks", () => {
     expect(ASKS_FOR_TALKS_EVENTS.test('{ talksCam: "only" }')).toBe(true)
     expect(ASKS_FOR_TALKS_EVENTS.test("{ ...args, talksCam }")).toBe(true)
     expect(ASKS_FOR_TALKS_EVENTS.test('{ talksCam: "exclude" }')).toBe(false)
+    expect(MAP_DAY_WITH_TALKS.test("publicPreload(api.map.day, { date })")).toBe(true)
+    expect(MAP_DAY_WITH_TALKS.test('fetchQuery(api.map.day, { date, talks: "include" })')).toBe(
+      true,
+    )
+    expect(
+      MAP_DAY_WITH_TALKS.test('publicPreload(api.map.day, { date, talks: "exclude", talksCam })'),
+    ).toBe(false)
+    expect(MAP_DAY_WITH_TALKS.test("Preloaded<typeof api.map.day>")).toBe(false)
+    expect(READS_TALK_PLACE.test("publicQuery(api.locations.forItem, { kind, itemKey })")).toBe(
+      true,
+    )
+    expect(READS_TALK_PLACE.test('publicQuery(api.locations.forItem, { kind: "talk" })')).toBe(true)
+    expect(
+      READS_TALK_PLACE.test('publicQuery(api.locations.forItem, { kind: "event", itemKey })'),
+    ).toBe(false)
+    expect(READS_TALK_PLACE.test("FunctionReturnType<typeof api.locations.forItem>")).toBe(false)
   })
 
   for (const file of files) {
@@ -93,6 +118,8 @@ describe("server modules outside /talks", () => {
     test(`${file} reads no talk text and no talks.cam-derived events`, () => {
       expect(code(source)).not.toMatch(READS_TALK_TEXT)
       expect(code(source)).not.toMatch(ASKS_FOR_TALKS_EVENTS)
+      expect(code(source)).not.toMatch(MAP_DAY_WITH_TALKS)
+      expect(code(source)).not.toMatch(READS_TALK_PLACE)
     })
   }
 })

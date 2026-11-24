@@ -13,6 +13,7 @@ import { ClampedText } from "@/components/molecules/clamped-text"
 import { EventFlags, EventTitle, EventTypeChip } from "@/components/molecules/event-item"
 import { ExternalLink } from "@/components/molecules/external-link"
 import { OrgMonogram } from "@/components/molecules/org-monogram"
+import { PlaceLine } from "@/components/molecules/place-line"
 import { RichText } from "@/components/molecules/rich-text"
 import { ShareAction } from "@/components/molecules/share-action"
 import { SourcedChip, type SourcedFact } from "@/components/molecules/sourced-chip"
@@ -26,7 +27,7 @@ import {
   UNIVERSITY_NAME,
 } from "@/lib/events"
 import { formatEventPrice } from "@/lib/format"
-import type { EventPublic } from "@/lib/public-api"
+import type { EventPublic, ItemLocation } from "@/lib/public-api"
 import { displayHost, hasValue, sourceLine } from "@/lib/source-line"
 import { eventIcsPath } from "@/lib/talks-boundary"
 import { cn } from "@/lib/utils"
@@ -232,10 +233,17 @@ function People({ event }: { event: EventPublic }) {
  * ▾, Book, the event's own page, Share) and the listing's provenance as one
  * compact "Sourced" chip. A mailing-list event names no source URL: the
  * inbox is private.
+ *
+ * With its resolved `location` (`locations.forItem`, docs/locations-and-map.md
+ * §3) the "Where" row names the room and building with the address, opens
+ * the visitor's maps app and links the day on /map (molecules/place-line.tsx);
+ * without one (none resolved yet, or still loading in the calendar's sheet)
+ * it is the source's words with a Google Maps search.
  */
 export function EventDetails({
   event,
   venueName,
+  location,
   pageUrl,
   termWeek,
   showTitle = false,
@@ -244,6 +252,8 @@ export function EventDetails({
 }: {
   event: EventPublic
   venueName?: string
+  /** The resolved place (`locations.forItem`); null or absent: none yet. */
+  location?: ItemLocation
   /** Absolute URL of the event's page here, for calendar entries. */
   pageUrl: string
   /** "Mich · Wk 5", when the day is in term. */
@@ -352,7 +362,9 @@ export function EventDetails({
 
       <div className="flex flex-col gap-4 text-[0.9375rem]">
         <Row icon={MapPinIcon} label="Where">
-          {where ? (
+          {location ? (
+            <PlaceLine location={location} sourceText={where} day={day} />
+          ) : where ? (
             <>
               <span className="font-medium">{where}</span>
               {mapsUrl && (

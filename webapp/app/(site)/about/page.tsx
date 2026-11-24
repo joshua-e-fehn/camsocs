@@ -41,11 +41,11 @@ const SOURCES = [
   ["Public calendar feeds (Google Calendar, Luma, iCal)", "events societies publish"],
   [
     "talks.cam, through its public API",
-    "academic talks, read by a parser only, never by an AI model",
+    "academic talks, read by a parser only; a language model reads the stored text only to work out the venue",
   ],
   [
     "Department and institute websites (their calendar feeds and event pages)",
-    "academic talks, read by parsers where robots.txt allows, never by an AI model",
+    "academic talks, read by parsers where robots.txt allows; a language model reads the stored text only to work out the venue",
   ],
   ["Playwaze and SU What's On", "leagues and events"],
   [
@@ -157,8 +157,9 @@ export default async function AboutPage() {
               join, and the University’s public events listings (with the permission above) to keep
               private individuals’ names and notices out of them. A fact counts as <em>found</em>{" "}
               only when the model quotes the source word for word and the quote is checked;
-              otherwise it is labelled <em>inferred</em>. Content from talks.cam, departments’ talk
-              listings and tbc.xyz is never given to an AI model.
+              otherwise it is labelled <em>inferred</em>. Content from tbc.xyz is never given to an
+              AI model. Talk listings from talks.cam and departments are given to it only to work
+              out where a talk takes place (see <Link href="#talks">Talks</Link>).
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown
@@ -197,10 +198,13 @@ export default async function AboutPage() {
               the society exception above never applies to them. Nothing behind a login is read.
             </li>
             <li>
-              <strong>Parsers only, no AI.</strong> Every talk is read by fixed code that picks out
-              the title, speakers, time and place. No language model reads talks.cam or a
-              department’s pages, and none writes or rewrites a talk. Our robots.txt asks AI
-              crawlers to keep off the talk pages and calendar feeds, as talks.cam’s own does.
+              <strong>Parsers, and a model only for the place.</strong> Every talk is read by fixed
+              code that picks out the title, speakers, time and place. No AI agent fetches talks.cam
+              or a department’s pages, and no language model writes or rewrites a talk. Once a talk
+              is stored, a language model is given its text only to work out the venue (the building
+              and room), so the talk can be placed on a map; this use of talks.cam text is with
+              permission. Our robots.txt asks AI crawlers to keep off the talk pages and calendar
+              feeds, as talks.cam’s own does.
             </li>
             <li>
               <strong>Speakers as published.</strong> A talk’s speakers and their affiliations are

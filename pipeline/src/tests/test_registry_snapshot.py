@@ -41,6 +41,7 @@ STAGE_SNAPSHOT: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     ("termcards", (), False),
     ("load", ("resolve",), False),
     ("talks", (), True),
+    ("locate", (), False),
     ("report", (), False),
 )
 
@@ -62,6 +63,7 @@ GROUP_SNAPSHOT: dict[str, dict[str, object]] = {
             "termcards",
             "load",
             "talks",
+            "locate",
             "report",
         ),
         "needs": ("_resolved", "society_website", "su_profile"),
@@ -75,7 +77,7 @@ GROUP_SNAPSHOT: dict[str, dict[str, object]] = {
 
 def test_the_ordered_stage_names_are_frozen() -> None:
     names = [name for name, _requires, _fetches in STAGE_SNAPSHOT]
-    assert len(names) == 26
+    assert len(names) == 27
     assert stage_names() == names
     assert list(STAGE_ORDER) == names
 
@@ -113,6 +115,7 @@ STAGE_TARGETS: dict[str, str] = {
     "termcards": "camsocs_pipeline.stages.termcards:run",
     "load": "camsocs_pipeline.stages.load:run",
     "talks": "camsocs_pipeline.talks.stage:run",
+    "locate": "camsocs_pipeline.stages.locate:run",
     "report": "camsocs_pipeline.stages.report:run",
 }
 

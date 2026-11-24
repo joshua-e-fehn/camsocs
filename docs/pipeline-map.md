@@ -37,6 +37,10 @@ flowchart LR
     direction TB
     stage_talks["talks · talks"]
   end
+  subgraph lane_cam_shared["Shared · Cambridge"]
+    direction TB
+    stage_locate["locate · locate"]
+  end
   subgraph lane_engine_societies["Societies · engine"]
     direction TB
     stage_resolve["resolve · resolve"]
@@ -108,6 +112,10 @@ flowchart LR
     sink_talks_batch[/"talks/batch"/]
     sink_talks_sweep[/"talks/sweep"/]
     sink_talks_runs[/"talks/runs"/]
+    sink_locations_pending[/"locations/pending"/]
+    sink_venues_all[/"venues/all"/]
+    sink_locations_batch[/"locations/batch"/]
+    sink_locations_summary[/"locations/summary"/]
     sink_coverage[/"coverage"/]
     sink_coverage_events[/"coverage/events"/]
   end
@@ -202,6 +210,11 @@ flowchart LR
   stage_talks ==> sink_talks_batch
   stage_talks ==> sink_talks_sweep
   stage_talks ==> sink_talks_runs
+  sink_locations_pending -.-> stage_locate
+  sink_venues_all -.-> stage_locate
+  stage_locate ==> sink_claims
+  stage_locate ==> sink_locations_batch
+  sink_locations_summary -.-> stage_locate
   sink_coverage -.-> stage_report
   sink_coverage_events -.-> stage_report
 ```
@@ -235,14 +248,15 @@ flowchart LR
 | 22 | `termcards` | inbox | events | engine/events | events, full | yes | yes | [§21](source-research.md#21-termcards) |
 | 23 | `load` | load | shared | engine/shared | events, full | no | no | – |
 | 24 | `talks` | talks | talks | cam/talks | events, full, talks | yes | no | [talks-redesign-spec](talks-redesign-spec.md) |
-| 25 | `report` | report | shared | engine/shared | events, full | no | no | – |
+| 25 | `locate` | locate | shared | cam/shared | events, full | yes | yes | [§23](source-research.md#23-location-resolution-osm-nominatim--google-places) |
+| 26 | `report` | report | shared | engine/shared | events, full | no | no | – |
 
 ## Groups
 
 | Group | Schedule | Stages | Needs | Stale after |
 |---|---|---|---|---|
-| `events` | daily 04:30 Europe/London | 15 | `_resolved`, `society_website`, `su_profile` | 8 days |
-| `full` | weekly Sun 02:00 Europe/London | 26 | – | – |
+| `events` | daily 04:30 Europe/London | 16 | `_resolved`, `society_website`, `su_profile` | 8 days |
+| `full` | weekly Sun 02:00 Europe/London | 27 | – | – |
 | `talks` | by hand | 1 | – | – |
 
 ## Sources

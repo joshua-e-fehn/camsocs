@@ -26,7 +26,17 @@ if TYPE_CHECKING:
 #: The registry's phases, in run order (`stages/__init__.py`). Every stage
 #: names its phase; the registry lists them in this order.
 Phase = Literal[
-    "seed", "harvest", "resolve", "enrich", "classify", "events", "inbox", "load", "talks", "report"
+    "seed",
+    "harvest",
+    "resolve",
+    "enrich",
+    "classify",
+    "events",
+    "inbox",
+    "load",
+    "talks",
+    "locate",
+    "report",
 ]
 PHASES: tuple[str, ...] = get_args(Phase)
 

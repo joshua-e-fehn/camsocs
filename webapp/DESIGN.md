@@ -247,6 +247,29 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
 - Layout is our own deterministic arithmetic (`lib/pipeline-graph/layout.ts`): no elkjs, no
   dagre. `/dashboard/graph` keeps `lib/broker/force-layout.ts`.
 
+### Map canvas (MapLibre GL exception, ENG-277)
+
+`maplibre-gl` is the second UI library outside shadcn/ui + Radix, and only for the `/map` canvas
+(`components/molecules/day-map-canvas.tsx`; docs/locations-and-map.md §4):
+
+- Pinned exactly (`bun add --exact`) to a release at least two weeks old (6.17.0, published
+  2026-11-07); `package.json` `overrides` hold `pbf` (5.1.2), `@maplibre/geojson-vt` (6.3.0) and
+  `@maplibre/maplibre-gl-style-spec` (26.6.0) at releases that had aged two weeks too. Upgrade
+  only to releases that have.
+- Loaded only through `next/dynamic` with `ssr: false` from `day-map-canvas.tsx`, so it ships in
+  /map's chunk alone and never renders on the server (a skeleton stands in). No other file
+  imports it at runtime. Its worker is the package's own file, emitted by the bundler
+  (`setWorkerUrl(new URL(…, import.meta.url))`).
+- Imports only `maplibre-gl/dist/maplibre-gl.css` (structure). The style is our own
+  (`lib/map-style.ts`): OpenFreeMap's vector tiles recoloured to the tokens (water `--sky-line`,
+  parks `--sky`, land `--muted`, roads white, labels `--muted-foreground`), light only, no
+  sprite. The OpenStreetMap / OpenFreeMap attribution stays visible (top left, restyled).
+- Pins are our own buttons (44 px targets) styled with tokens: events teal circles (`--brand`),
+  talk-only venues ink rounded squares, numbered from two items, grey when over (`--input` /
+  `--faint`), an apricot `--today` ring when on now. Each says its venue, counts and state in
+  words; the list beside the map is the text equivalent and says "Now" / "Ended" too.
+- `prefers-reduced-motion`: the camera jumps instead of easing; the sheet does not animate.
+
 ---
 
 ## Motion & Animation Patterns
@@ -315,7 +338,7 @@ fake numbers: a pillar without real data renders nothing.
 ## Do NOT
 
 - Use arbitrary color values (`bg-[#1a1a2e]`) in components — always use tokens
-- Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only (the one exception is React Flow on the pipeline canvas, D10 above)
+- Add external UI libraries (Material UI, Chakra, Ant, Mantine) — shadcn/ui + Radix only (the exceptions are React Flow on the pipeline canvas, D10, and MapLibre GL on /map, both above)
 - Create components outside the Atomic Design structure (`ui/` → `molecules/` → `organisms/`)
 - Add a dark theme or a theme toggle back without a new decision
 - Use University marks, shields or the University's brand colours and fonts (see Branding)

@@ -14,7 +14,7 @@ import { analyticsAttrs } from "@/lib/analytics-events"
 import { linkProps } from "@/lib/crawl-traps"
 import { eventHasEnded, eventTrail } from "@/lib/events"
 import type { NextEvent } from "@/lib/next-events"
-import type { EventPublic } from "@/lib/public-api"
+import type { EventPublic, ItemLocation } from "@/lib/public-api"
 import { camSignInHref, SITE_URL } from "@/lib/site"
 import { eventPath } from "@/lib/talks-boundary"
 import { EMPTY_EVENTS, eventsHref, eventsIndexing } from "@/lib/url-state"
@@ -33,12 +33,15 @@ import { EMPTY_EVENTS, eventsHref, eventsIndexing } from "@/lib/url-state"
 export function EventPage({
   event,
   venueName,
+  location,
   termWeek,
   now,
   nextEvents = [],
 }: {
   event: EventPublic
   venueName?: string
+  /** Its resolved place (`locations.forItem`), for the "Where" row. */
+  location?: ItemLocation
   termWeek?: string
   /** The request's time, for "this event has ended". */
   now: number
@@ -117,6 +120,7 @@ export function EventPage({
           <EventDetails
             event={event}
             venueName={venueName}
+            location={location}
             pageUrl={pageUrl}
             termWeek={termWeek}
             showTitle

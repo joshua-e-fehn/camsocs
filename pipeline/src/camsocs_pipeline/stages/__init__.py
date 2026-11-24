@@ -1,9 +1,10 @@
 """The ordered stage registry — the one list `sync` runs.
 
-    seed → harvest → resolve → enrich → classify → events → inbox → load → talks → report
+    seed → harvest → resolve → enrich → classify → events → inbox → load → talks
+    → locate → report
 
 (`PHASES` in `pipeline/context.py`; the talks pillar's `talks` stage runs after
-`load`, which posts the other two pillars.)
+`load`, which posts the other two pillars; `locate` places what both posted.)
 
 Each entry also says what it is (decision D8): its `phase`, its `pillar`
 (societies / events / talks, or shared), its `campus` (``"cam"`` for a
@@ -96,6 +97,10 @@ still holds):
     `stage.DEPARTMENT_BUDGET` (20 minutes) plus the source in flight — about an
     hour in the worst case, inside the 2-hour limit.
   - load: the latest file of every staging directory.
+  - locate: nothing in staging; it reads back from Convex what load and
+    talks posted (docs/locations-and-map.md §2). Its run time is bounded by
+    `locate.resolver.TIME_BUDGET_S` (25 minutes) and its model, Nominatim
+    and Places budgets.
 
   So it ``needs`` ``_resolved``, ``society_website`` and ``su_profile``: a
   host where they were never staged stops before any request, with "run the
@@ -494,6 +499,31 @@ STAGES: list[Stage] = [
         docs=("talks-redesign-spec",),
     ),
     #
+    # ── locate: where every event and talk takes place (D13) ─────────────────────
+    # Reads Convex (locations/pending, venues/all), never staging: after load
+    # and talks, so the day's new items are there. Rules, then the bulk model
+    # (talks.cam text allowed for this, D13), OpenStreetMap Nominatim for
+    # coordinates and Google Places for place ids only (source-research§23,
+    # docs/locations-and-map.md §2). Campus `cam`: its prompt and bounds are
+    # Cambridge's.
+    Stage(
+        "locate",
+        description="events + talks → venues (OSM coordinates, place ids) and item locations",
+        phase="locate",
+        pillar="shared",
+        campus="cam",
+        sinks=(
+            "locations/pending",
+            "venues/all",
+            "claims",
+            "locations/batch",
+            "locations/summary",
+        ),
+        network=True,
+        llm=True,
+        docs=("source-research§23",),
+    ),
+    #
     # ── report (T14): coverage report ───────────────────────────────────────────
     # Reads the directory back from Convex → var/reports/coverage-<date>.md.
     Stage(
@@ -528,11 +558,12 @@ GROUPS: dict[str, StageGroup] = {
             "termcards",
             "load",
             "talks",
+            "locate",
             "report",
         ),
         needs=(RESOLVED, "society_website", "su_profile"),
         stale_after=timedelta(days=8),
-        description="daily: every events source, then load and the coverage report",
+        description="daily: every events source, then load, talks, locate and the coverage report",
     ),
     "full": StageGroup(
         "full",

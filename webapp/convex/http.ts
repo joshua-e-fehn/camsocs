@@ -227,6 +227,14 @@ ingestionRoute("events/remove", internal.ingest.cleanup.removeEvents)
 // Event keys a higher-ranked source took over (ENG-47, convex/ingest/superseded.ts).
 ingestionRoute("events/superseded", internal.ingest.superseded.supersede)
 
+// Location resolution (docs/locations-and-map.md §1c, the pipeline's `locate`
+// stage, convex/ingest/locations.ts): the items to place, every venue, the
+// resolved rows, and the coverage summary the VPS monitor reads.
+readRoute("locations/pending", internal.ingest.locations.pending)
+readRoute("venues/all", internal.ingest.locations.venuesAll)
+ingestionRoute("locations/batch", internal.ingest.locations.batch)
+readRoute("locations/summary", internal.ingest.locations.summary)
+
 // The talks pillar (D7, convex/ingest/talks.ts): the department registry, talk
 // batches and the run summary; `talks/sweep` is below.
 ingestionRoute("talks/departments", internal.ingest.talks.departmentsUpsert)

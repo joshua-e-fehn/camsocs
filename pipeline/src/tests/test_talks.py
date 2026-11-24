@@ -1054,8 +1054,9 @@ class TestStage:
         monkeypatch: pytest.MonkeyPatch,
         llm_tripwire: list[str],
     ) -> None:
-        """Hard rule (AGENTS.md, source-research §6): talks.cam content never
-        reaches a model. The whole stage runs, not as a dry run — talks.cam,
+        """Hard rule (AGENTS.md, source-research §6): the talks stage never
+        passes talks.cam content to a model (only `locate` may, for the venue,
+        reading Convex: D13). The whole stage runs, not as a dry run — talks.cam,
         every department parser (one source of each kind, each answering with
         a listing it reads), dedupe, staging, the push — with every way to a
         model wired to fail the test (`llm_tripwire`), on invented data only."""

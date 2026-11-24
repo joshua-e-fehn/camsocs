@@ -170,6 +170,11 @@ const checks = {
     typeof value === "number" && value >= -90 && value <= 90 ? null : "latitude out of range",
   longitude: (value: unknown) =>
     typeof value === "number" && value >= -180 && value <= 180 ? null : "longitude out of range",
+  /** A Google place id (docs/locations-and-map.md §1a): URL-safe, ≤ 300. */
+  googlePlaceId: (value: unknown) =>
+    typeof value === "string" && /^[A-Za-z0-9_-]{10,300}$/.test(value)
+      ? null
+      : "not a Google place id",
 } satisfies Record<string, Check>
 
 function maxLength(limit: number): Check {
@@ -483,6 +488,7 @@ export const VENUE_SPECS: Record<(typeof VENUE_FIELDS)[number], FieldSpec> = {
   collegeKey: scalar(v.string(), { check: checks.orgKey }),
   lat: scalar(v.number(), { check: checks.latitude }),
   lng: scalar(v.number(), { check: checks.longitude }),
+  googlePlaceId: scalar(v.string(), { check: checks.googlePlaceId }),
 }
 
 export const FIELD_SPECS: Record<EntityType, Record<string, FieldSpec>> = {

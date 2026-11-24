@@ -24,6 +24,7 @@ export const PHASES = [
   "inbox",
   "load",
   "talks",
+  "locate",
   "report",
 ] as const
 export type Phase = (typeof PHASES)[number]

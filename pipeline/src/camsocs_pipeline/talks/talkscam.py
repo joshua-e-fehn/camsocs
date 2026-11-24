@@ -1,10 +1,13 @@
 """talks.cam.ac.uk's public API → `TalkRecord`s (docs/talks-redesign-spec.md
 §2–§3, decision D7; stage `talks`).
 
-**Parser only — this content never reaches a model**, nor an AI agent. Its
-robots.txt disallows AI crawlers by name and asks everyone else for
-``Crawl-delay: 10``. The source type ``talks_cam`` is in
+**Parser only — this stage never passes the content to a model**, nor lets an
+AI agent fetch it. Its robots.txt disallows AI crawlers by name and asks
+everyone else for ``Crawl-delay: 10``. The source type ``talks_cam`` is in
 `claims.NO_LLM_SOURCE_TYPES`, and the host is in `extract.llm.NO_LLM_HOSTS`.
+(Location resolution is the one later exception: stage `locate` gives the
+stored text, read back from Convex, to the model to work out the venue;
+decision D13, source-research §23.)
 Anything printed about a read is a count, an id or a status code.
 
 **The read.** ``GET /api/v1alpha1/talks/?start_time__gte=…&start_time__lt=…

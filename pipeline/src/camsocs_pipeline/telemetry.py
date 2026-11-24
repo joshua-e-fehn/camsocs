@@ -146,6 +146,7 @@ _PHASES = frozenset(
         "inbox",
         "load",
         "talks",
+        "locate",
         "report",
     }
 )

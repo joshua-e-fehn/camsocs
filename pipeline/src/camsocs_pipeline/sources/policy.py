@@ -154,8 +154,9 @@ NEVER_FETCH_HOSTS: tuple[tuple[str, str], ...] = (
     ("lnkd.in", "a social network: links only"),
 )
 
-#: Whose robots.txt and AI opt-outs are always honoured, and whose content
-#: never reaches the LLM (source-research §6).
+#: Whose robots.txt and AI opt-outs are always honoured, and whose fetched
+#: content never reaches the LLM (source-research §6; stage `locate`'s use of
+#: stored talk text for the venue is decision D13, §23).
 NEVER_OVERRIDE_HOSTS = ("talks.cam.ac.uk", "tbc.xyz")
 
 #: Hosts that are never a society's own page, so no society purpose can

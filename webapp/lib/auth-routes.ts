@@ -28,6 +28,7 @@ export const PUBLIC_PATHS = [
   "/societies",
   "/categories",
   "/events",
+  "/map",
   "/talks",
   "/request",
   "/about",

@@ -136,8 +136,11 @@ describe("the security headers", () => {
       "https://cheerful-bandicoot-511.convex.cloud",
       "wss://cheerful-bandicoot-511.convex.cloud",
       "https://cheerful-bandicoot-511.convex.site",
+      "https://tiles.openfreemap.org",
     ])
     expect(csp["img-src"]).toContain("https://*.convex.cloud")
+    // /map's MapLibre canvas: style, tiles, glyphs and sprites.
+    expect(csp["img-src"]).toContain("https://tiles.openfreemap.org")
     expect(csp["frame-ancestors"]).toEqual(["'none'"])
     expect(csp["object-src"]).toEqual(["'none'"])
     expect(csp["form-action"]).toEqual(["'self'"])
@@ -154,6 +157,7 @@ describe("the security headers", () => {
       "https://*.convex.cloud",
       "wss://*.convex.cloud",
       "https://*.convex.site",
+      "https://tiles.openfreemap.org",
     ])
     const dev = directives(contentSecurityPolicy({ ...PROD, NODE_ENV: "development" }))
     expect(dev["script-src"]).toContain("'unsafe-eval'")

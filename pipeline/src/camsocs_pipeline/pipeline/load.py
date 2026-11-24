@@ -83,6 +83,13 @@ from camsocs_pipeline.events.duplicates import identity as event_identity
 from camsocs_pipeline.extract.event_noise import NoiseClassifier, NoiseStats, sift_events
 from camsocs_pipeline.extract.redact import RedactionStats, Redactor, private_names, redact_claims
 from camsocs_pipeline.keys import canonical_json, event_key, person_key, source_key
+from camsocs_pipeline.locate.model import (
+    ItemLocationInput,
+    PendingItem,
+    PendingPage,
+    VenueRow,
+    VenuesPage,
+)
 from camsocs_pipeline.models.observation import (
     EventObservation,
     FetchInfo,
@@ -704,6 +711,59 @@ class ConvexLoader:
                 return events
             cursor = page.continue_cursor
         raise ConvexError(f"events/scan did not finish in {max_pages} pages")
+
+    # -- locations (stage `locate`, docs/locations-and-map.md §1c) ---------------------
+
+    def location_pending(
+        self, from_ms: int, to_ms: int, *, page_size: int = 100, max_pages: int = 1_000
+    ) -> list[PendingItem]:
+        """Every event and talk to place in [from, to) with what the stage
+        reads of it and its stored row's hash (`locations/pending`, events
+        then talks). Empty in a dry run."""
+        if self.dry_run:
+            return []
+        items: list[PendingItem] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body: dict[str, Any] = {"from": from_ms, "to": to_ms, "limit": page_size}
+            if cursor is not None:
+                body["cursor"] = cursor
+            page = PendingPage.model_validate(self.post("locations/pending", body))
+            items.extend(page.page)
+            if page.is_done:
+                return items
+            cursor = page.continue_cursor
+        raise ConvexError(f"locations/pending did not finish in {max_pages} pages")
+
+    def venues_all(self, *, page_size: int = 500, max_pages: int = 200) -> list[VenueRow]:
+        """Every venue with its names and coordinates (`venues/all`). Empty
+        in a dry run."""
+        if self.dry_run:
+            return []
+        rows: list[VenueRow] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            body: dict[str, Any] = {"limit": page_size}
+            if cursor is not None:
+                body["cursor"] = cursor
+            page = VenuesPage.model_validate(self.post("venues/all", body))
+            rows.extend(page.page)
+            if page.is_done:
+                return rows
+            cursor = page.continue_cursor
+        raise ConvexError(f"venues/all did not finish in {max_pages} pages")
+
+    def post_locations(self, rows: Sequence[ItemLocationInput]) -> BatchResult:
+        """`locations/batch`: rows upserted by (kind, itemKey); `rejected`
+        lists `{itemKey, reason}`."""
+        return self.post_batches("locations/batch", "locations", rows, unit="item locations")
+
+    def location_summary(self) -> dict[str, Any]:
+        """Coverage of the next 14 days (`locations/summary`): counts and
+        `unresolvedShare`. Empty in a dry run."""
+        if self.dry_run:
+            return {}
+        return self.post("locations/summary", {})
 
     def remove_events(self, keys: Sequence[str], *, size: int = 25) -> dict[str, list[str]]:
         """Deletes events by key (`events/remove`, confirmed; at most 25 a

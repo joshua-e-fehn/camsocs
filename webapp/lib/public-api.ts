@@ -26,3 +26,11 @@ export type OrgBusy = FunctionReturnType<typeof api.orgs.busy>
 export type OrgRelated = FunctionReturnType<typeof api.orgs.related>
 /** A talk in a list, agenda or search (`talks.list`, `talks.search`). */
 export type TalkListItem = FunctionReturnType<typeof api.talks.search>[number]
+/** One London day of the map (`map.day`). */
+export type MapDay = FunctionReturnType<typeof api.map.day>
+/** An event or talk on the map, with its place (`map.day` items). */
+export type MapItem = MapDay["items"][number]
+/** One day of the map's strip (`map.weekCounts`). */
+export type MapDayCount = FunctionReturnType<typeof api.map.weekCounts>[number]
+/** One item's resolved place (`locations.forItem`), null when it has none. */
+export type ItemLocation = FunctionReturnType<typeof api.locations.forItem>

@@ -256,3 +256,32 @@ describe("the agenda's title", () => {
     expect(documentTitle({ title: "X", absolute: true })).toBe("X")
   })
 })
+
+describe("JSON-LD with a resolved venue (docs/locations-and-map.md §3)", () => {
+  test("the Place keeps the listed venue and gains the street address and geo", () => {
+    const resolved = { address: "1 Invented Street, Cambridge CB2 3EQ", lat: 52.2, lng: 0.12 }
+    const data = talkJsonLd({ ...talk, online: false }, PAGE, resolved)
+    expect(data.location).toEqual({
+      "@type": "Place",
+      name: "Tilley Lecture Theatre",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "1 Invented Street, Cambridge CB2 3EQ",
+        addressLocality: "Cambridge",
+        addressCountry: "GB",
+      },
+      geo: { "@type": "GeoCoordinates", latitude: 52.2, longitude: 0.12 },
+    })
+    const graph = talkStructuredData({ ...talk, online: false }, resolved)["@graph"] as Record<
+      string,
+      unknown
+    >[]
+    expect(JSON.stringify(graph)).toContain("GeoCoordinates")
+  })
+
+  test("no geo without a resolved venue, and none for an online-only talk", () => {
+    expect(JSON.stringify(talkJsonLd(talk, PAGE))).not.toContain("GeoCoordinates")
+    const online = talkJsonLd({ ...talk, venue: null }, PAGE, { lat: 52.2, lng: 0.12 })
+    expect(JSON.stringify(online)).not.toContain("GeoCoordinates")
+  })
+})

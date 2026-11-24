@@ -1,5 +1,6 @@
 import type { Page, TestInfo } from "@playwright/test"
 import { axeViolations, expect, settle, test } from "./fixtures"
+import { mapIdle, stubMapTiles } from "./map-tiles"
 
 /**
  * The accessibility gate (ENG-37): axe-core over the main public pages and the
@@ -35,10 +36,13 @@ async function expectAccessible(page: Page, testInfo: TestInfo, state: string) {
 
 /** Loads `path`, waits for it to render and settle, then checks it. */
 async function check(page: Page, testInfo: TestInfo, path: string) {
+  // The map's tiles never leave the test (map-tiles.ts).
+  if (path.startsWith("/map")) await stubMapTiles(page)
   const response = await page.goto(path)
   expect(response?.status(), `${path} status`).toBeLessThan(500)
   await expect(page.locator("main").first()).toBeVisible()
   await settle(page)
+  await mapIdle(page)
   await expectAccessible(page, testInfo, path)
 }
 
@@ -59,6 +63,7 @@ test.describe("accessibility @a11y", () => {
     "/events?view=week",
     "/events?view=month",
     "/talks",
+    "/map",
     "/about",
     "/privacy",
     "/terms",

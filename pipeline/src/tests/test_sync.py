@@ -324,7 +324,8 @@ def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_loa
     assert GROUPS["talks"].stages == ("talks",) and not GROUPS["talks"].needs
     assert "talks" in GROUPS["events"].stages
     events = [stage.name for stage in resolve_stages(GROUPS["events"].stages)]
-    assert events[0] == "term_dates" and events[-3:] == ["load", "talks", "report"]
+    # `locate` places what load and talks posted (D13), before the report.
+    assert events[0] == "term_dates" and events[-4:] == ["load", "talks", "locate", "report"]
     # Every events source runs daily, the University's programme included
     # (read with recorded permission, §10); no harvest, resolve, enrich or
     # classify stage does.
