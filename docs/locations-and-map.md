@@ -11,10 +11,10 @@ Owner decisions were made in a grilling session on 2026-11-24 (PLAN.md D13).
    - At most 1–2% of upcoming items may stay unresolved.
    - "Exact place sent to accepted applicants" items still get the rough area
      they state (`precision: "area"`).
-2. **talks.cam text may be given to the LLM**, for location resolution. Joshua got
-   permission as a University of Cambridge student (D13). The robots.txt rules
-   for *fetching* talks.cam are unchanged: Crawl-delay, and no AI agents fetch
-   its pages. The G1 talks boundary for *rendering* is unchanged too (§4).
+2. **talks.cam text may be given to the LLM**, for location resolution (D13,
+   Joshua's decision: talk text may be given to the model to resolve the
+   venue). The robots.txt rules for *fetching* talks.cam are unchanged:
+   Crawl-delay, and no AI agents fetch its pages. The G1 talks boundary for *rendering* is unchanged too (§4).
 3. **Geocoding.** Joshua chose Google Places.
    - Google's Maps Platform terms forbid showing Places coordinates on a
      non-Google map, and limit caching them to 30 days. A `place_id` may be

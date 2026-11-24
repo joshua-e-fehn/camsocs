@@ -21,7 +21,7 @@ One of four end states, reached by **31 August 2027**:
 | Convex Professional (team `joshua-fehn`, shared with relio and thirtysecond) | Joshua's card, $25 a month | as above; a project can move to another team |
 | VPS runner on `srv1608974` | Mya's host and Slack bot | cannot be handed over: a successor needs its own host or scheduler |
 | LLM (cliproxy → Joshua's ChatGPT subscription) | Joshua personally | cannot be handed over; a successor needs its own model access (or the model stages off, which costs enrichment and makes D1 redaction withhold more text) |
-| University events API (D3a) | permission given to Joshua for camsocs by UIS and the Office of External Affairs and Communications | does not pass to a successor: ask again, or stop reading it (docs/ops-vps.md "Revoking the University events permission") |
+| University events API (D3a) | a policy exception decided by Joshua for camsocs | the successor decides whether to keep reading it (docs/ops-vps.md "Withdrawing the University events exception") |
 | camsocs.uk | IONOS, registrant Joshua; expires **31 Oct 2027** | transfer (Nominet registrant change), keep or let lapse |
 | Admin sign-in | Google Workspace admin@joshua-fehn.de (Internal OAuth app) | a successor needs its own OAuth client and `BROKER_EMAILS` |
 | Contact addresses `privacy@`, `security@`, `hello@`, `requests@camsocs.uk` | CAMsocs' own Google Workspace (camsocs.uk, Business Starter, Joshua's card; admin joshua@camsocs.uk) | stays reachable whatever happens, until the data is gone; the whole Workspace can be handed to a successor. The old `camsocs@joshua-fehn.de` forwards there until at least November 2027 |
@@ -49,7 +49,7 @@ These stay Joshua's under every option until a successor has formally taken over
 
 - Moves: the public directory (organisations, events, their claims and sources), **the suppression list and open listing requests** (they protect people who asked to be removed; a successor that drops them re-publishes what was taken down), the code, optionally the domain.
 - Does **not** move: the private broker CRM (`people`, interactions, introductions, needs and offers). It exists for Joshua's own brokering purpose, holds named officers including special category data under Art 9(2)(e) (DPIA-lite §5), and a successor has no basis for it. Delete it before the transfer (Convex: the broker tables; retention.md R5–R6), unless the successor documents its own purpose and assessment first.
-- Does not move: PostHog data, the VPS runner, the LLM access, the University events permission, Joshua's accounts and keys (rotate every key the successor will hold, docs/key-rotation.md, so Joshua's copies stop working).
+- Does not move: PostHog data, the VPS runner, the LLM access, the University events exception (D3a), Joshua's accounts and keys (rotate every key the successor will hold, docs/key-rotation.md, so Joshua's copies stop working).
 
 **Mechanics.** GitHub → Settings → Transfer (or the successor forks); Vercel → project Settings → Transfer to the successor's team; Convex → project Settings → move the project to the successor's team (or a fresh deployment and `convex export` / `import` of the public tables plus `suppressions` and `listingRequests` only); domain: a registrant transfer to the successor through IONOS (check IONOS's process and any fee) or a 308 redirect to their domain until 31 Oct 2027; scheduler: the successor's own host following docs/ops-vps.md, or a GitHub Actions schedule (public repository: secrets in Actions secrets).
 
@@ -78,7 +78,7 @@ In this order (each step is reversible until step 4):
    - The laptop: the repository's `var/` (cache, staging, reports, screenshots), `.camsocs-state*.json`, `pipeline/.env*`, `webapp/.env.local`.
    - 1Password: the camsocs items in the Mya vault (after the keys are revoked).
    - Keys: Convex deploy keys, the Google OAuth client, PostHog keys, the Vercel "Mya token" if it was only for camsocs.
-5. **Tell** UIS and the Office of External Affairs and Communications that the events programme is no longer read (their permission, D3a).
+5. **Stop** reading the University events programme: withdraw the D3a exception (docs/ops-vps.md "Withdrawing the University events exception").
 6. **Close**: archive the GitHub repository (Settings → Archive; the code holds no personal data and stays a portfolio piece), delete the Vercel project after the domain's last day, let camsocs.uk lapse on 31 Oct 2027 or renew it once if a lookalike would be a risk (a lapsed .uk name can be registered by anyone and made to look like camsocs).
 7. **Record** the deletion: date, what was deleted where, by whom; no personal data in it. Keep it with the breach log (outside Git), as evidence of accountability (UK GDPR Art 5(2)).
 
@@ -111,7 +111,7 @@ Try **A** in Lent term 2027 with one or two concrete successors, because the dir
 
 Joshua's current expectation (2026-11-04). Everything in "What the site depends on" stays with him, so the work is to make it run without the University:
 
-1. **Data that depends on being a student.** The University events API permission (D3a) was given for camsocs, not for a student: ask UIS and the Office of External Affairs and Communications to confirm it continues after the course. The `@cam.ac.uk` list-mail inbox (J4) cannot continue once his University account closes.
+1. **Data that depends on being a student.** Decide whether the University events exception (D3a) continues after the course. The `@cam.ac.uk` list-mail inbox (J4) cannot continue once his University account closes.
 2. **Costs.** About $45 a month (Vercel Pro, Convex Professional) plus the LLM subscription, on his card: keep the spend caps in `docs/platform-limits.md`.
 3. **Freshness.** The harvest keeps running on the VPS. The yearly turnover of committees (R5 deletes people 30 days after 30 June) and the October rush of new events need the July annual review and a check in early October.
 4. **Contact.** `privacy@camsocs.uk` and `/request` stay the route for rights requests; the privacy notice needs no change unless the controller's contact details change.

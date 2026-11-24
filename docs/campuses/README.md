@@ -56,7 +56,7 @@ Every pipeline or Convex-coupled merge follows the runbook rule in `docs/ops-vps
 A new campus is added only after the launch blockers below are cleared. Then, in order:
 
 1. **Decide the id.** Two to eight lowercase letters (`^[a-z]{2,8}$`, the shape PostHog and the alert script accept). Not `zz`.
-2. **Research its sources** in `docs/campuses/<id>.md`, in the format of `docs/source-research.md`: robots.txt verdict quoted with date, terms, rate limits, fields, traps, and any recorded permission. Every source the campus reads gets a `§N`.
+2. **Research its sources** in `docs/campuses/<id>.md`, in the format of `docs/source-research.md`: robots.txt verdict quoted with date, terms, rate limits, fields, traps, and any policy exception. Every source the campus reads gets a `§N`.
 3. **Add its facts** to `webapp/lib/campus/campuses.fixtures.json` (terms, member-email rule with `strictForeignAcademic: true`, university domains, official event sources) and email cases that exercise them.
 4. **Build its profiles**: the pipeline `CampusProfile` (term calendar and dates, member ids, name rules, branding, its own stages and groups) and the webapp profile (brand, place, member tier, terms, pillars).
 5. **Widen vocabularies append-only** (source types, terms, event sources) in `webapp/lib/vocab.ts` and the pipeline mirror, only for sources actually built.

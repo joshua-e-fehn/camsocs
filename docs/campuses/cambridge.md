@@ -15,7 +15,7 @@ The live campus, and the default everywhere: with `CAMSOCS_CAMPUS` / `NEXT_PUBLI
 
 ## Sources
 
-Cambridge's source research is **`docs/source-research.md`**. It stays at that path, not in this folder, because code and docs cite its sections as `§N` (about 127 citations); its header names it as this campus's file. Per-source rules, robots.txt verdicts, the D3 society override, the D3a recorded permission (the University's events programme, §10) and the talks.cam rules (§6, never passed to a model, G1) all live there.
+Cambridge's source research is **`docs/source-research.md`**. It stays at that path, not in this folder, because code and docs cite its sections as `§N` (about 127 citations); its header names it as this campus's file. Per-source rules, robots.txt verdicts, the D3 society override, the D3a policy exception (the University's events programme, §10) and the talks.cam rules (§6, never passed to a model, G1) all live there.
 
 ## Byte-identical
 

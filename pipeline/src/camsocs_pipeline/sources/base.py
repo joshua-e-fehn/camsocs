@@ -50,8 +50,8 @@ Properties enforced here rather than left to each caller's discipline:
    may override a robots.txt *disallow*, and an AI opt-out in
    `ai_input_allowed`, for the D3 URL classes only: society websites,
    Linktree, Google Calendar ICS feeds, SU ``/asset/`` files, and college
-   society lists. Paths a publisher gave us recorded permission to read
-   (`policy.RECORDED_PERMISSIONS`, decision D3a: the University's events API
+   society lists. Paths listed as policy exceptions
+   (`policy.POLICY_EXCEPTIONS`, decision D3a: the University's events API
    and its event images) may be read whatever the purpose. Neither happens
    on talks.cam or tbc.xyz, or when robots.txt could not be reached. Some
    hosts are never fetched at all (`policy.never_fetched`), not even by
@@ -172,7 +172,7 @@ class FetchResult:
     from_cache: bool = False
     detail: str | None = None
     #: Set when robots.txt disallowed the URL and the fetch went ahead under
-    #: the D3 society override or a recorded permission
+    #: the D3 society override or a policy exception
     #: (`policy.robots_override_note`).
     override: str | None = None
     #: The response's ``Last-Modified`` header, as sent (a termcard's age).
@@ -493,7 +493,7 @@ class PoliteClient:
         for); they never replace the User-Agent. `purpose`: the fetch policy
         scope (`sources/policy.py`); only a ``society`` purpose may override
         a robots.txt disallow, and only for the D3 URL classes, unless a
-        recorded permission covers the URL. `store=False`: the body is never
+        policy exception covers the URL. `store=False`: the body is never
         written to (or read from) the raw cache — for a response that carries
         data we must not keep (the University's programme list names staff
         contacts, source-research §10).
@@ -619,7 +619,7 @@ class PoliteClient:
         this run has not yet; an unreadable robots.txt answers False.
 
         A society `purpose` overrides the opt-out for the D3 URL classes,
-        and a recorded permission for its paths (`policy.ai_optout_override`);
+        and a policy exception for its paths (`policy.ai_optout_override`);
         talks.cam and tbc.xyz are never overridden and always answer False,
         and nor does a never-fetched host (its robots.txt is not read)."""
         _require_http(url)
@@ -949,7 +949,7 @@ class PoliteClient:
     def _usable_cache(self, url: str, purpose: FetchPurpose) -> tuple[dict, bytes | None] | None:
         """The cached copy of `url`, unless it was fetched under an override
         that `purpose` may not use: the cache never launders a society's
-        robots.txt override into a general fetch (a recorded permission is
+        robots.txt override into a general fetch (a policy exception is
         keyed by URL, so its copies serve every purpose)."""
         cached = self._read_cache(url)
         if cached is not None and cached[0].get("override") and not robots_override(url, purpose):

@@ -562,7 +562,7 @@
         {
           "doc": "docs/source-research.md",
           "section": "10",
-          "anchor": "10-university-events-programme-read-with-permission"
+          "anchor": "10-university-events-programme-policy-exception"
         }
       ]
     },
@@ -1848,7 +1848,7 @@
       "sourceTypes": ["uni_events_api"],
       "eventSources": ["uni_events_api"],
       "section": "10",
-      "anchor": "10-university-events-programme-read-with-permission",
+      "anchor": "10-university-events-programme-policy-exception",
       "permission": "D3a"
     },
     {

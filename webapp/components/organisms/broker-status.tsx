@@ -61,7 +61,7 @@ const FETCH_GAP_WORDS: Record<FetchGap, string> = {
 const PERMISSION_LABELS: Record<string, string> = {
   robots: "robots.txt",
   D3: "D3 society override",
-  D3a: "D3a recorded permission",
+  D3a: "D3a exception",
 }
 
 export function BrokerStatus() {

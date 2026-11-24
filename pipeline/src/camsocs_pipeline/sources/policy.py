@@ -1,8 +1,8 @@
 """The fetch policy: which robots.txt and AI opt-out signals a request
 honours. This is Joshua's decision D3 (PLAN.md decisions log, 2026-10-08):
 society pages and feeds may be read even where robots.txt disallows, but no
-other page may — except the paths a publisher has given us recorded
-permission to read (decision D3a, PLAN.md, 2026-11-02; `RECORDED_PERMISSIONS`).
+other page may — except the paths listed as explicit policy exceptions
+(decision D3a, PLAN.md, 2026-11-02; `POLICY_EXCEPTIONS`).
 
 Every fetch carries a `FetchPurpose`. Its scope is ``general`` (the default)
 or ``society``; a society fetch may also declare the class of URL it is
@@ -43,19 +43,18 @@ apply in this order:
      Cambridge branch links (`NATIONAL_DOMAINS`, general hosts: the national
      Christian Medical Fellowship's cmf.org.uk, seen in the 2026-10-09
      harvest, and the like).
-3b. **Recorded permission** (`RECORDED_PERMISSIONS`, decision D3a): a
-   publisher told us in writing that we may read some of its paths although
-   its robots.txt disallows them, and for what (``fetch``: a robots.txt
-   disallow; ``ai_input``: an AI opt-out, so the text may reach the model).
-   A permission is keyed by URL — the exact host and a path prefix — not by
+3b. **Policy exception** (`POLICY_EXCEPTIONS`, decision D3a): a decision
+   names some paths of a host that are read although its robots.txt
+   disallows them, and for what (``fetch``: a robots.txt disallow;
+   ``ai_input``: an AI opt-out, so the text may reach the model). An
+   exception is keyed by URL — the exact host and a path prefix — not by
    purpose, so every fetch of those paths may override (a general one, the
    load's image copy), and every other path on the host keeps its
-   robots.txt. The one permission today: University Information Services
-   (which runs webservices.admin.cam.ac.uk) and the Office of External
-   Affairs and Communications (which runs the University's public events
-   programme) allowed the events API (``/events/api/``) and its event
-   images (``/events/uploadedImages/``) to be read, and their text to reach
-   the model, on 2026-11-02 (§10). Never for talks.cam or tbc.xyz.
+   robots.txt. The one exception today (decision D3a, 2026-11-02, §10): the
+   University's public events programme on webservices.admin.cam.ac.uk, its
+   events API (``/events/api/``) and its event images
+   (``/events/uploadedImages/``), whose text may reach the model. Never for
+   talks.cam or tbc.xyz.
 4. **An override never changes** the honest User-Agent, the Crawl-delay and
    minimum interval, or the rule of one request in flight per host. Cookies
    and credentials are still never sent. Login walls, 401/403 and
@@ -67,7 +66,7 @@ apply in this order:
 
 When a fetch went ahead only because of an override, it says so: the note
 `robots_override_note` gives (`ROBOTS_OVERRIDE_NOTE` for a society page,
-`PERMISSION_ROBOTS_NOTE` for a recorded permission) is set on the
+`PERMISSION_ROBOTS_NOTE` for a policy exception) is set on the
 `FetchResult` and on the `sources` row's ``accessNote``, while
 ``robotsVerdict`` stays the honest ``disallowed``. Text that reached the LLM
 only because of an override is marked with `AI_OVERRIDE_NOTE` or
@@ -101,25 +100,24 @@ AI_OVERRIDE_NOTE = "ai_optout_override:society"
 PERMISSION_ROBOTS_NOTE = "robots_override:permission"
 PERMISSION_AI_NOTE = "ai_optout_override:permission"
 
-PermissionUse = Literal["fetch", "ai_input"]
+ExceptionUse = Literal["fetch", "ai_input"]
 
 
 @dataclass(frozen=True)
-class RecordedPermission:
-    """A publisher's written permission to read some of its paths despite its
-    robots.txt (module docstring, rule 3b). The correspondence itself stays
-    outside the repository; this records who granted what, and when."""
+class PolicyException:
+    """Paths of one host read despite its robots.txt (module docstring, rule
+    3b): which decision made the exception, and when."""
 
     host: str
-    #: Paths the permission covers, as prefixes of the URL's path.
+    #: Paths the exception covers, as prefixes of the URL's path.
     path_prefixes: tuple[str, ...]
-    granted_by: str
-    granted_on: str
+    decision: str
+    decided_on: str
     #: ``fetch``: a robots.txt disallow; ``ai_input``: an AI opt-out.
-    scope: frozenset[PermissionUse]
+    scope: frozenset[ExceptionUse]
     reason: str
 
-    def covers(self, url: str, use: PermissionUse) -> bool:
+    def covers(self, url: str, use: ExceptionUse) -> bool:
         if use not in self.scope or host_of(url) != self.host:
             return False
         path = urlsplit(url).path or "/"
@@ -130,14 +128,12 @@ class RecordedPermission:
 
 
 #: Decision D3a (PLAN.md, 2026-11-02; source-research §10).
-RECORDED_PERMISSIONS: tuple[RecordedPermission, ...] = (
-    RecordedPermission(
+POLICY_EXCEPTIONS: tuple[PolicyException, ...] = (
+    PolicyException(
         host="webservices.admin.cam.ac.uk",
         path_prefixes=("/events/api/", "/events/uploadedImages/"),
-        granted_by=(
-            "University Information Services; Office of External Affairs and Communications"
-        ),
-        granted_on="2026-11-02",
+        decision="D3a",
+        decided_on="2026-11-02",
         scope=frozenset({"fetch", "ai_input"}),
         reason="the University's public events programme: its events API and event images",
     ),
@@ -367,19 +363,19 @@ def society_class(url: str, purpose: FetchPurpose) -> SocietyUrlClass | None:
     return None
 
 
-def permission_for(url: str, use: PermissionUse) -> RecordedPermission | None:
-    """The recorded permission that lets `url` be read despite its robots.txt
+def exception_for(url: str, use: ExceptionUse) -> PolicyException | None:
+    """The policy exception that lets `url` be read despite its robots.txt
     (``fetch``) or its AI opt-out (``ai_input``), or None (rule 3b). Never on
     a never-fetched or never-overridden host."""
     if never_fetched(url) or never_overridden(url):
         return None
-    return next((p for p in RECORDED_PERMISSIONS if p.covers(url, use)), None)
+    return next((p for p in POLICY_EXCEPTIONS if p.covers(url, use)), None)
 
 
 def robots_override(url: str, purpose: FetchPurpose) -> bool:
     """Whether a robots.txt disallow of `url` may be overridden: a D3 society
-    page, or a path with a recorded permission."""
-    return society_class(url, purpose) is not None or permission_for(url, "fetch") is not None
+    page, or a path with a policy exception."""
+    return society_class(url, purpose) is not None or exception_for(url, "fetch") is not None
 
 
 def robots_override_note(url: str, purpose: FetchPurpose) -> str | None:
@@ -388,7 +384,7 @@ def robots_override_note(url: str, purpose: FetchPurpose) -> str | None:
     when no override applies."""
     if society_class(url, purpose) is not None:
         return ROBOTS_OVERRIDE_NOTE
-    if permission_for(url, "fetch") is not None:
+    if exception_for(url, "fetch") is not None:
         return PERMISSION_ROBOTS_NOTE
     return None
 
@@ -396,8 +392,8 @@ def robots_override_note(url: str, purpose: FetchPurpose) -> str | None:
 def ai_optout_override(url: str, purpose: FetchPurpose) -> bool:
     """Whether an AI opt-out on `url` (robots.txt or the page) may be
     overridden, so that its text may reach the LLM: a D3 society page, or a
-    path with a recorded permission. Never for talks.cam or tbc.xyz."""
-    return society_class(url, purpose) is not None or permission_for(url, "ai_input") is not None
+    path with a policy exception. Never for talks.cam or tbc.xyz."""
+    return society_class(url, purpose) is not None or exception_for(url, "ai_input") is not None
 
 
 __all__ = [
@@ -412,23 +408,23 @@ __all__ = [
     "NEVER_OVERRIDE_HOSTS",
     "PERMISSION_AI_NOTE",
     "PERMISSION_ROBOTS_NOTE",
-    "RECORDED_PERMISSIONS",
+    "POLICY_EXCEPTIONS",
     "ROBOTS_OVERRIDE_NOTE",
     "SOCIETY",
     "SOCIETY_URL_CLASSES",
     "SOCIETY_WEBSITE",
+    "ExceptionUse",
     "FetchPurpose",
-    "PermissionUse",
-    "RecordedPermission",
+    "PolicyException",
     "Scope",
     "SocietyUrlClass",
     "ai_optout_override",
+    "exception_for",
     "host_of",
     "is_cam_main_site",
     "is_general_host",
     "never_fetched",
     "never_overridden",
-    "permission_for",
     "registrable_domain",
     "robots_override",
     "robots_override_note",

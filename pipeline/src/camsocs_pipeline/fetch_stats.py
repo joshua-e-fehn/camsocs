@@ -33,7 +33,7 @@ counter, so it stays out of `CLASS_COUNTERS` and `StageReport.metrics`.
    (`policy.is_cam_main_site`).
 5. ``registry``: the University's register and admin hosts, that is a
    general host on cam.ac.uk that is not a main site (webservices.admin…),
-   or a host with a recorded permission (`policy.permission_for`).
+   or a host with a policy exception (`policy.exception_for`).
 6. ``other``: everything else, including the other general hosts (search
    engines, social and video sites, link shorteners, gov.uk and the
    national organisations) and the event sources outside a register phase.
@@ -138,7 +138,7 @@ def host_class(
             return "registry"
         if policy.is_cam_main_site(url):
             return "university_main_site"
-        if policy.permission_for(url, "fetch") is not None or (
+        if policy.exception_for(url, "fetch") is not None or (
             _on_cam(url) and policy.is_general_host(url)
         ):
             return "registry"

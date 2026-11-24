@@ -816,7 +816,7 @@ class TestUniEvents:
             entity_key="org-cu-quokka-orchestra",
         )
         ctx.staging.write("_resolved", "20261007T000000Z-aaaaaa", [society])
-        # robots.txt shuts everyone out; the recorded permission (D3a) lets
+        # robots.txt shuts everyone out; the policy exception (D3a) lets
         # the events API and its images be read, nothing else.
         allow(net, UNI_HOST, "User-agent: *\nDisallow: /\n")
         listing = net.get(f"{UNI_API}/programmes.json").respond(200, json=UNI_PROGRAMMES)
@@ -1198,7 +1198,7 @@ class TestCalendarFeeds:
     def test_the_university_programme_is_never_read_as_a_society_feed(
         self, ctx: StageContext, net: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # The recorded permission (D3a) is the uni_events stage's: a society
+        # The policy exception (D3a) is the uni_events stage's: a society
         # website or SU profile that links What's On's subscribe link, in
         # either form, does not make it that society's feed.
         monkeypatch.setattr(calendar_feeds, "FEED_SEEDS", ())

@@ -13,8 +13,8 @@ reach the model only later, so they are checked here, by source:
   Google Calendar feed it links; `policy.society_class`) may be read: D3
   overrides an AI opt-out there, and the stage that fetched it recorded the
   override on its `sources` row;
-- a path a publisher gave us recorded permission to read
-  (`policy.RECORDED_PERMISSIONS`, decision D3a: the University's events
+- a path listed as a policy exception
+  (`policy.POLICY_EXCEPTIONS`, decision D3a: the University's events
   programme) may be read too, whatever the purpose; the `uni_events` stage
   records ``ai_optout_override:permission`` on each reading;
 - anything else is general and honours every AI opt-out: an AI crawler

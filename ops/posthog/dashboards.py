@@ -577,7 +577,7 @@ SCRAPER_HEALTH = Dashboard(
         Insight(
             "Robots blocks and overrides per week",
             "Per week and campus: fetches robots.txt blocked, recorded overrides (a society's "
-            "own pages, D3; a publisher's recorded permission, D3a) and hosts whose robots.txt "
+            "own pages, D3; a policy exception, D3a) and hosts whose robots.txt "
             "could not be read, last 13 weeks. The monitor's robots_block_jump watches blocks.",
             sql(
                 f"SELECT toStartOfWeek(timestamp, 1) AS week, {CAMPUS} AS campus, "
