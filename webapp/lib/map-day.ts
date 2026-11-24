@@ -1,11 +1,12 @@
 import { addDays, londonIsoDate, londonMidnight } from "./calendar"
+import { MAP_PIN_BOUNDS } from "./map-style"
 import type { MapDay, MapItem } from "./public-api"
 
 /**
  * The map's day, worked out without the map (docs/locations-and-map.md §0.5,
  * §0.6): which items are over or on now, which share a pin, and which go in
- * the "Online" and "Location TBC" sections. Pure, so the page organism, the
- * canvas and the tests share it.
+ * the "Away from Cambridge", "Online" and "Location TBC" sections. Pure, so
+ * the page organism, the canvas and the tests share it.
  */
 
 const HOUR_MS = 60 * 60 * 1000
@@ -48,6 +49,19 @@ export const STATUS_LABELS: Record<MapStatus, string | undefined> = {
   upcoming: undefined,
 }
 
+/** Whether a venue is placed inside the region pins are drawn in
+ * (`MAP_PIN_BOUNDS`). A venue without coordinates is not. */
+export function pinnable(venue: Pick<MapVenue, "lat" | "lng"> | undefined): boolean {
+  if (!venue || venue.lat === undefined || venue.lng === undefined) return false
+  const [west, south, east, north] = MAP_PIN_BOUNDS
+  return venue.lat >= south && venue.lat <= north && venue.lng >= west && venue.lng <= east
+}
+
+/** Whether a venue is placed, but beyond the pin region (an away fixture). */
+export function farAway(venue: Pick<MapVenue, "lat" | "lng"> | undefined): boolean {
+  return venue?.lat !== undefined && venue.lng !== undefined && !pinnable(venue)
+}
+
 /** The items a toggle leaves on the map. */
 export function shownItems(items: readonly MapItem[], show: MapShowKinds): MapItem[] {
   if (show === "all") return [...items]
@@ -86,8 +100,9 @@ export function countPhrase(items: readonly Pick<MapItem, "kind">[]): string {
     .join(", ")
 }
 
-/** The day's pins, one per venue with coordinates, in the order of each
- * venue's first item. Items whose `venueKey` is not among `venues` get none. */
+/** The day's pins, one per venue with coordinates inside the pin region, in
+ * the order of each venue's first item. Items whose `venueKey` is not among
+ * `venues`, or whose venue is far from Cambridge, get none. */
 export function mapPins(
   items: readonly MapItem[],
   venues: readonly MapVenue[],
@@ -99,7 +114,7 @@ export function mapPins(
   for (const item of items) {
     if (!item.venueKey || item.precision === "online") continue
     const venue = byKey.get(item.venueKey)
-    if (!venue || venue.lat === undefined || venue.lng === undefined) continue
+    if (!pinnable(venue)) continue
     const list = grouped.get(item.venueKey) ?? []
     list.push(item)
     grouped.set(item.venueKey, list)
@@ -132,22 +147,31 @@ export function mapPins(
   })
 }
 
-/** The list's three sections: what has a place (pinned or not), what is
- * online, and what has no place yet ("Location TBC"). Each keeps start order. */
-export function mapSections(items: readonly MapItem[]): {
+/** The list's sections: what has a place in or near Cambridge (pinned or
+ * not), what is far from it ("Away from Cambridge": a placed venue beyond the
+ * pin region, listed with its place and directions, no pin), what is online,
+ * and what has no place yet ("Location TBC"). Each keeps start order. */
+export function mapSections(
+  items: readonly MapItem[],
+  venues: readonly MapVenue[] = [],
+): {
   placed: MapItem[]
+  away: MapItem[]
   online: MapItem[]
   tbc: MapItem[]
 } {
+  const byKey = new Map(venues.map((venue) => [venue.key, venue]))
   const placed: MapItem[] = []
+  const away: MapItem[] = []
   const online: MapItem[] = []
   const tbc: MapItem[] = []
   for (const item of items) {
     if (item.precision === "online") online.push(item)
     else if (item.precision === "unknown" && !item.venueKey) tbc.push(item)
+    else if (item.venueKey && farAway(byKey.get(item.venueKey))) away.push(item)
     else placed.push(item)
   }
-  return { placed, online, tbc }
+  return { placed, away, online, tbc }
 }
 
 /** An item's identity across kinds (events and talks may share nothing else). */

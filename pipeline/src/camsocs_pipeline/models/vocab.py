@@ -114,6 +114,7 @@ SOURCE_TYPES: tuple[str, ...] = (
     # Location resolution (docs/locations-and-map.md §1a, source-research §23).
     "osm_nominatim",
     "google_places",
+    "postcodes_io",
 )
 
 INTERNAL_SOURCE_TYPES: tuple[str, ...] = (

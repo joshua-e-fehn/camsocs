@@ -437,6 +437,16 @@ export default function PrivacyPage() {
           signatures, addresses and phone numbers are cut out, and requests only with their email
           addresses and phone numbers replaced.
         </p>
+        <h3>Map services</h3>
+        <p>
+          To put events and talks on the map, the harvester looks up the buildings they take place
+          in. It sends these services a building’s name, address or postcode only, never who
+          organises or attends an event and nothing about you: OpenStreetMap’s Nominatim and
+          komoot’s Photon (place searches over OpenStreetMap data), postcodes.io (the coordinates of
+          a UK postcode, from the ONS Postcode Directory) and Google Places (only an identifier for
+          an “Open in Google Maps” link). The map itself loads its tiles from OpenFreeMap in your
+          browser, which therefore sees your IP address, as any website you load does.
+        </p>
         <p>
           Some of these providers process data outside the UK, in particular in the United States.
           Where they do, we rely on the safeguards in each provider’s data processing agreement,

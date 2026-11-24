@@ -99,8 +99,8 @@ still holds):
   - load: the latest file of every staging directory.
   - locate: nothing in staging; it reads back from Convex what load and
     talks posted (docs/locations-and-map.md §2). Its run time is bounded by
-    `locate.resolver.TIME_BUDGET_S` (25 minutes) and its model, Nominatim
-    and Places budgets.
+    `locate.resolver.TIME_BUDGET_S` (30 minutes) and its model, Nominatim,
+    Photon, postcodes.io and Places budgets.
 
   So it ``needs`` ``_resolved``, ``society_website`` and ``su_profile``: a
   host where they were never staged stops before any request, with "run the
@@ -502,8 +502,9 @@ STAGES: list[Stage] = [
     # ── locate: where every event and talk takes place (D13) ─────────────────────
     # Reads Convex (locations/pending, venues/all), never staging: after load
     # and talks, so the day's new items are there. Rules, then the bulk model
-    # (talks.cam text allowed for this, D13), OpenStreetMap Nominatim for
-    # coordinates and Google Places for place ids only (source-research§23,
+    # (talks.cam text allowed for this, D13), OpenStreetMap (Nominatim,
+    # Photon) and postcodes.io for coordinates and Google Places for place
+    # ids only (source-research§23,
     # docs/locations-and-map.md §2). Campus `cam`: its prompt and bounds are
     # Cambridge's.
     Stage(

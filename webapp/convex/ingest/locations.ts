@@ -58,6 +58,24 @@ export const MAX_PENDING_WINDOW_MS = 186 * DAY_MS
 export const LOCATION_RETENTION_MS = 60 * DAY_MS
 /** Rows one prune call reads (the cron reschedules itself until done). */
 export const PRUNE_PAGE = 200
+/** The organisers' usual places a pending item carries at most, and their length. */
+export const MAX_ORGANISER_PLACES = 6
+export const ORGANISER_PLACE_LIMIT = 200
+/** Regular sessions read per organiser for its usual places. */
+export const SESSIONS_PER_ORG = 5
+/** The organiser's latest events read for the venues it uses most. */
+export const EVENTS_PER_ORG = 8
+/**
+ * Distinct organisers whose usual places one `pending` call works out.
+ * Each costs at most about 2 + collegeKeys + 2 queries, SESSIONS_PER_ORG
+ * + EVENTS_PER_ORG venue reads and EVENTS_PER_ORG event reads (≈ 30); 40
+ * of them stay near 1,200 reads, well inside a query's 4,096 next to the
+ * page's own reads (the spanning phase's 400 events at a few reads each).
+ * Past it the hint is left out (it is optional and only a hint).
+ */
+export const MAX_ORGANISERS_EXPANDED = 40
+/** A venue text that names no physical place ("Zoom", "TBA"). */
+const NO_PLACE = /^(?:tba|tbc|tbd|online|zoom|teams|virtual|webinar|n\/?a|-+)$/i
 
 const storedValidator = v.object({
   inputHash: v.string(),
@@ -86,6 +104,13 @@ export const pendingItemValidator = v.object({
   online: v.optional(v.boolean()),
   /** Organisation names (events), or the departments' names and the series (talks). */
   organisers: v.array(v.string()),
+  /**
+   * The places the organisers are known to use (≤ 6, each ≤ 200
+   * characters): an organiser's college, its regular sessions' venues, a
+   * talk's departments. Optional (widen-only): the stage reads it as a hint
+   * for an item that names no venue.
+   */
+  organiserPlaces: v.optional(v.array(v.string())),
   /** An event's `source` (EVENT_SOURCES), a talk's `sourceType` (TALK_SOURCE_TYPES). */
   sourceType: v.string(),
   sourceUrl: v.optional(v.string()),
@@ -132,12 +157,85 @@ function clip(text: string | undefined | null, limit: number): string | undefine
   return trimmed ? trimmed.slice(0, limit) : undefined
 }
 
-async function orgName(ctx: QueryCtx, key: string): Promise<string | null> {
-  const org = await ctx.db
+async function orgDoc(ctx: QueryCtx, key: string): Promise<Doc<"organisations"> | null> {
+  return await ctx.db
     .query("organisations")
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique()
-  return org?.name ?? null
+}
+
+/** Adds `text` to `places` once (by lower case), clipped, while there is room. */
+function addPlace(places: string[], text: string | undefined | null): void {
+  const value = clip(text?.replace(/\s+/g, " "), ORGANISER_PLACE_LIMIT)
+  if (!value || places.length >= MAX_ORGANISER_PLACES) return
+  if (places.some((place) => place.toLowerCase() === value.toLowerCase())) return
+  places.push(value)
+}
+
+/**
+ * The places an event's organisers are known to use: a college organiser
+ * itself, the colleges an organiser belongs to, the venues of its regular
+ * sessions (venue name, else the session's venue text) and the venues its
+ * own latest events name, most used first. Memoised per organiser for one
+ * page, and worked out for at most MAX_ORGANISERS_EXPANDED organisers.
+ */
+function organiserPlaceCache(ctx: QueryCtx) {
+  const cache = new Map<string, Promise<string[]>>()
+  const venues = venueCache(ctx)
+  return (org: Doc<"organisations">): Promise<string[]> => {
+    let hit = cache.get(org.key)
+    if (!hit) {
+      if (cache.size >= MAX_ORGANISERS_EXPANDED) return Promise.resolve([])
+      hit = (async () => {
+        const places: string[] = []
+        if (org.orgType === "college") addPlace(places, org.name)
+        for (const key of org.collegeKeys) {
+          if (key === org.key) continue
+          addPlace(places, (await orgDoc(ctx, key))?.name)
+        }
+        const sessions = await ctx.db
+          .query("sessions")
+          .withIndex("by_orgKey", (q) => q.eq("orgKey", org.key))
+          .take(SESSIONS_PER_ORG)
+        for (const session of sessions) {
+          const venue = session.venueKey ? await venues(session.venueKey) : null
+          addPlace(places, venue?.name ?? session.venueText)
+        }
+        // The places its own recent events name, most used first (only
+        // events it organises; a venue named once still counts).
+        const links = await ctx.db
+          .query("eventOrganisers")
+          .withIndex("by_org_startsAt", (q) => q.eq("orgKey", org.key))
+          .order("desc")
+          .take(EVENTS_PER_ORG)
+        const counts = new Map<string, number>()
+        for (const link of links) {
+          if (link.role !== "organiser") continue
+          const event = await ctx.db
+            .query("events")
+            .withIndex("by_key", (q) => q.eq("key", link.eventKey))
+            .unique()
+          if (!event || event.hosting === "takes_part" || event.visibility === "members_only") {
+            continue
+          }
+          const venue = event.venueKey ? await venues(event.venueKey) : null
+          const text = (venue?.name ?? event.venueText)?.replace(/\s+/g, " ").trim()
+          if (!text || NO_PLACE.test(text)) continue
+          counts.set(text, (counts.get(text) ?? 0) + 1)
+        }
+        // Most used first, ties by name: a new event that changes no count
+        // leaves the list as it was (the stage hashes it).
+        for (const [text] of [...counts.entries()].sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+        )) {
+          addPlace(places, text)
+        }
+        return places
+      })()
+      cache.set(org.key, hit)
+    }
+    return hit
+  }
 }
 
 export const pending = internalQuery({
@@ -163,15 +261,19 @@ export const pending = internalQuery({
     const at = parseCursor(args.cursor)
     const page: PendingItem[] = []
 
+    const placesOf = organiserPlaceCache(ctx)
     const pushEvents = async (events: Doc<"events">[]) => {
       const suppressed = await loadSuppressedEvents(ctx)
       for (const event of events) {
         if (event.visibility === "members_only" || event.cancelled) continue
         if (event.supersededBy !== undefined || suppressed.has(event.key)) continue
         const organisers: string[] = []
+        const organiserPlaces: string[] = []
         for (const key of [...event.organiserKeys, ...event.coHostKeys]) {
-          const name = await orgName(ctx, key)
-          if (name && !organisers.includes(name)) organisers.push(name)
+          const org = await orgDoc(ctx, key)
+          if (!org) continue
+          if (!organisers.includes(org.name)) organisers.push(org.name)
+          for (const place of await placesOf(org)) addPlace(organiserPlaces, place)
         }
         page.push({
           kind: "event",
@@ -186,6 +288,7 @@ export const pending = internalQuery({
           ...(event.venueText ? { venueText: event.venueText } : {}),
           ...(event.venueKey ? { venueKey: event.venueKey } : {}),
           organisers,
+          ...(organiserPlaces.length > 0 ? { organiserPlaces } : {}),
           sourceType: event.source,
           sourceUrl: event.sourceUrl,
           stored: stored(await itemLocationOf(ctx, "event", event.key)),
@@ -233,12 +336,14 @@ export const pending = internalQuery({
     for (const talk of result.page) {
       if (talk.cancelled) continue
       const organisers: string[] = []
+      const organiserPlaces: string[] = []
       for (const key of talk.departmentKeys) {
         const department = await ctx.db
           .query("departments")
           .withIndex("by_key", (q) => q.eq("key", key))
           .unique()
         if (department && !organisers.includes(department.name)) organisers.push(department.name)
+        if (department) addPlace(organiserPlaces, department.name)
       }
       if (talk.series && !organisers.includes(talk.series)) organisers.push(talk.series)
       const details = await ctx.db
@@ -257,6 +362,7 @@ export const pending = internalQuery({
         ...(talk.venue ? { venue: talk.venue } : {}),
         online: talk.online,
         organisers,
+        ...(organiserPlaces.length > 0 ? { organiserPlaces } : {}),
         sourceType: talk.sourceType,
         sourceUrl: talk.url,
         stored: stored(await itemLocationOf(ctx, "talk", talk.key)),

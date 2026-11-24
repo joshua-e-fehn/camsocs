@@ -260,8 +260,40 @@ An event row is created by its first claims, which must include `title`, `starts
 | aliases | string[] |
 | address | string? |
 | collegeKey | string? |
-| lat / lng | number? |
+| lat / lng | number? — anywhere in the world (only range-checked): an away fixture's ground or a tour venue abroad is a venue too; `/map` pins only those near Cambridge |
+| googlePlaceId | string? — a Google place id (`google_places` claims, Places Text Search with the IDs-only field mask). Public, kept indefinitely (Google's terms allow storing ids), used only to build an "Open in Google Maps" link; coordinates never come from Google (docs/locations-and-map.md §0.3) |
 | meta | `Record<string, FieldMeta>` |
+
+Venue claims come from the `locate` stage (source-research §23): `osm_nominatim` (OpenStreetMap's
+own name, address and coordinates, read through Nominatim or Photon), `postcodes_io` (a UK
+postcode's centroid, ONS Postcode Directory, OGL v3.0) and `google_places` (the place id). When
+the source names no object (a street, a postcode, a nameless building), the venue's `name` (and
+`address`) is the model's building name, posted as an `inferred` `llm` claim cited to that
+source, and only when it reads as a building's name.
+
+### itemLocations (not claims)
+
+One row per event or talk: where it takes place (docs/locations-and-map.md §1b). Written only by
+`locations/batch` (stage `locate`), upserted by (kind, itemKey), pruned daily (a row whose item
+started over 60 days ago or no longer exists). Public through `locations.forItem` and `map.day`
+only, as the place of an item the viewer may see.
+
+| Field | Type |
+|---|---|
+| kind | `event \| talk` |
+| itemKey | string (`evt-…` / `talk-…`) |
+| startsAt | number — copied from the item (the coverage window, the prune) |
+| precision | vocab `ITEM_LOCATION_PRECISIONS`: `exact` (the building is stated or certain), `building` (inferred: an organiser's usual place, a street or postcode point), `area` (only a town, district or anchor is known), `online`, `unknown` |
+| venueKey | string? — `ven-…`, required for exact / building / area, absent otherwise |
+| room | string? ≤ 120, one line, never a person's name |
+| areaLabel | string? ≤ 120, required for `area` ("Newnham College (exact room not given)") |
+| note | string? ≤ 200 — why `unknown` (the broker's coverage card only) |
+| method | vocab `ITEM_LOCATION_METHODS`: `source` (the item's own venue), `alias` (its venue text names a known venue), `llm` |
+| model, promptVersion | string? (`llm` rows) |
+| inputHash | string ≤ 128, `[A-Za-z0-9:_-]` — `<prompt>:<sha256>` of what the stage read; an equal hash is not resolved again |
+| resolvedAt | number |
+
+Indexes: `by_kind_item` [kind, itemKey], `by_startsAt` [startsAt], `by_venue` [venueKey].
 
 ### relationships
 

@@ -248,7 +248,7 @@ flowchart LR
 | 22 | `termcards` | inbox | events | engine/events | events, full | yes | yes | [§21](source-research.md#21-termcards) |
 | 23 | `load` | load | shared | engine/shared | events, full | no | no | – |
 | 24 | `talks` | talks | talks | cam/talks | events, full, talks | yes | no | [talks-redesign-spec](talks-redesign-spec.md) |
-| 25 | `locate` | locate | shared | cam/shared | events, full | yes | yes | [§23](source-research.md#23-location-resolution-osm-nominatim--google-places) |
+| 25 | `locate` | locate | shared | cam/shared | events, full | yes | yes | [§23](source-research.md#23-location-resolution-osm-nominatim-photon-postcodesio--google-places) |
 | 26 | `report` | report | shared | engine/shared | events, full | no | no | – |
 
 ## Groups

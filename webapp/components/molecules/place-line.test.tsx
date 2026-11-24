@@ -57,6 +57,23 @@ describe("placeLineModel", () => {
     expect(model.onMap).toBe(true)
   })
 
+  test("a venue far from Cambridge: maps links, but no See on the map (it has no pin)", () => {
+    const far = {
+      ...VENUE,
+      name: "Invented Golf Club",
+      address: "Pond Road, Woking",
+      lat: 51.305,
+      lng: -0.585,
+    }
+    const exact = placeLineModel({ precision: "exact", venue: far })
+    expect(exact.maps?.google).toContain("query_place_id=ChIJinventedPlace01")
+    expect(exact.onMap).toBe(false)
+    const town = placeLineModel({ precision: "area", areaLabel: "Invented Town", venue: far })
+    expect(town.label).toBe("Invented Town")
+    expect(town.maps?.apple).toContain("maps.apple.com")
+    expect(town.onMap).toBe(false)
+  })
+
   test("online and unknown", () => {
     expect(placeLineModel({ precision: "online", venue: null }).label).toBe("Online")
     expect(placeLineModel({ precision: "online", venue: null }, "Zoom").label).toBe("Zoom")

@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { dayWindow, londonMidnight } from "./calendar"
-import { countPhrase, itemEnd, itemStatus, mapPins, mapSections, shownItems } from "./map-day"
+import {
+  countPhrase,
+  farAway,
+  itemEnd,
+  itemStatus,
+  mapPins,
+  mapSections,
+  pinnable,
+  shownItems,
+} from "./map-day"
 import type { MapItem } from "./public-api"
 
 const HOUR = 60 * 60 * 1000
@@ -79,8 +88,9 @@ describe("pins and sections", () => {
   })
 
   test("online items and those with no place go in their own sections", () => {
-    const { placed, online, tbc } = mapSections(items)
+    const { placed, away, online, tbc } = mapSections(items, VENUES)
     expect(placed.map((x) => x.key)).toEqual(["a", "b", "c", "d"])
+    expect(away).toEqual([])
     expect(online.map((x) => x.key)).toEqual(["e"])
     expect(tbc.map((x) => x.key)).toEqual(["f"])
   })
@@ -91,5 +101,41 @@ describe("pins and sections", () => {
     expect(shownItems(items, "all")).toHaveLength(6)
     expect(countPhrase(items)).toBe("4 events, 2 talks")
     expect(countPhrase([])).toBe("")
+  })
+})
+
+describe("away from Cambridge", () => {
+  const FAR = [
+    ...VENUES,
+    // An away golf fixture in Surrey, a tour venue in Bern, and a village hall
+    // just south of the city (still pinned).
+    { key: "ven-golf", name: "Invented Golf Club", aliases: [], lat: 51.305, lng: -0.585 },
+    { key: "ven-bern", name: "Invented Gymnasium", aliases: [], lat: 46.95, lng: 7.44 },
+    { key: "ven-shelford", name: "Invented Memorial Hall", aliases: [], lat: 52.149, lng: 0.137 },
+  ]
+  const items = [
+    item({ key: "a", startsAt: at(9) }),
+    item({ key: "golf", venueKey: "ven-golf", startsAt: at(10), placeLabel: "Invented Golf Club" }),
+    item({ key: "bern", venueKey: "ven-bern", precision: "area", startsAt: at(11) }),
+    item({ key: "shelford", venueKey: "ven-shelford", startsAt: at(12) }),
+  ]
+
+  test("a far venue gets no pin, so the map never fits to it", () => {
+    const pins = mapPins(items, FAR, at(8), DAY)
+    expect(pins.map((pin) => pin.venueKey)).toEqual(["ven-a", "ven-shelford"])
+  })
+
+  test("its items are listed under Away from Cambridge, in start order", () => {
+    const { placed, away } = mapSections(items, FAR)
+    expect(placed.map((x) => x.key)).toEqual(["a", "shelford"])
+    expect(away.map((x) => x.key)).toEqual(["golf", "bern"])
+  })
+
+  test("pinnable and farAway read the venue's coordinates", () => {
+    expect(pinnable(FAR[0])).toBe(true)
+    expect(pinnable(FAR[2])).toBe(false)
+    expect(farAway(FAR[2])).toBe(false)
+    expect(farAway(FAR[3])).toBe(true)
+    expect(farAway(undefined)).toBe(false)
   })
 })

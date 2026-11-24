@@ -20,11 +20,16 @@ Owner decisions were made in a grilling session on 2026-11-24 (PLAN.md D13).
      non-Google map, and limit caching them to 30 days. A `place_id` may be
      stored indefinitely.
    - So: **coordinates come from OpenStreetMap (Nominatim, ODbL, attribution on
-     the map)**. **Google Places Text Search (IDs only, free SKU) supplies a
+     the map)**, with Photon (OSM data) and postcodes.io (ONS Postcode
+     Directory, OGL v3.0) as fallbacks since 2026-11-24 (§2 step 4).
+     **Google Places Text Search (IDs only, free SKU) supplies a
      `googlePlaceId`** for an exact "Open in Google Maps" link.
    - Places key: Convex env and pipeline env `GOOGLE_PLACES_API_KEY` (GCP project
      camsocs-515220, restricted to places.googleapis.com, £20 budget alert).
-     Vault item "CAMsocs Google Places API key (camsocs-515220)".
+     Vault item "CAMsocs Google Places API key (camsocs-515220)". Set on Convex
+     dev and production and in `/opt/camsocs/pipeline/.env.prod` on the host
+     (2026-11-24); only the pipeline uses it (docs/deploy.md §3–§4; rotation:
+     docs/key-rotation.md).
 4. **`/map`**:
    - one page, events and talks together, with Events/Talks toggles and a
      different pin style for each;
@@ -48,6 +53,10 @@ Owner decisions were made in a grilling session on 2026-11-24 (PLAN.md D13).
    - Each row links to its page and has a Directions link.
    - Online items go in an "Online" section and get no pin. Unresolved items
      go under "Location TBC".
+   - Items at a placed venue far from Cambridge (beyond `MAP_PIN_BOUNDS`,
+     S 52.05 N 52.35 W −0.10 E 0.35: an away fixture, a tour abroad) get no
+     pin, so the camera never fits to them; they are listed under "Away from
+     Cambridge" with their place, address and a Directions link (2026-11-24).
 7. **MapLibre GL + OpenFreeMap vector tiles** (`https://tiles.openfreemap.org`),
    restyled in River & ink (light only, DESIGN.md tokens), with a visible
    OSM/OpenFreeMap attribution.
@@ -72,6 +81,17 @@ New `SOURCE_TYPES` entries, on both sides:
 - `google_places`: venue `googlePlaceId`.
   - `sourceUrl` is `https://www.google.com/maps/place/?q=place_id:<id>`.
   - Method `parser`, evidence `secondary`.
+- `postcodes_io` (2026-11-24): venue `lat`, `lng` from a UK postcode's centroid.
+  - `sourceUrl` is `https://api.postcodes.io/postcodes/<postcode>`.
+  - Method `parser`, evidence `secondary`. The item is `building` precision.
+- Photon results are OSM objects: `osm_nominatim` claims with extractor
+  `locate.photon.<field>`.
+- When the source names no object (a street, a nameless building, a postcode),
+  the venue's `name` (and `address`) is the model's building name, posted
+  `llm` / `inferred` and cited to that source, only when it reads as a
+  building's name (§2 step 4).
+- Coordinates are only range-checked: a venue anywhere in the world (an away
+  fixture's course, a tour venue abroad) is accepted.
 
 Venues are created through the existing `claims` route. `name` is required in the
 same request as a new venue key.
@@ -119,7 +139,12 @@ longer exists).
   - Each item: `{kind, itemKey, startsAt, endsAt?, allDay?, title, description?
     (≤1500), venueText? (events) | venue? (talks), venueKey? (events), online?
     (talks), organisers: string[] (org names, or talk department names +
-    series), sourceType, sourceUrl?, stored?: {inputHash, precision, venueKey?, startsAt}}`.
+    series), organiserPlaces?: string[] (≤ 6, 2026-11-24, optional: the
+    organisers' college, their regular sessions' venue names or texts, the
+    venues their latest own events name, most used first and ties by name, a
+    talk's departments; worked out for at most 40 distinct organisers per
+    call, from 5 sessions and 8 events each, to stay inside a query's read
+    limit), sourceType, sourceUrl?, stored?: {inputHash, precision, venueKey?, startsAt}}`.
   - Events carry their (redacted) `venueText`. Talks carry `venue`.
 - `readRoute("venues/all")`: every venue `{key, name, aliases, address?, lat?, lng?, collegeKey?, googlePlaceId?}`, paginated.
 - `ingestionRoute("locations/batch")`: `{locations: ItemLocationInput[]}` (max 500).
@@ -156,6 +181,9 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
   - Multi-day events show on every day they cover (the events.list two-range
     read).
   - It never reads `venues.list`: it reads only the referenced venues, by key.
+  - `venues` holds every referenced venue with coordinates, wherever it is;
+    the page pins only those inside `MAP_PIN_BOUNDS` (lib/map-day.ts
+    `pinnable`) and lists the rest under "Away from Cambridge".
 - `map.weekCounts({from: date, days: 7})` → `[{date, events, talks}]`.
   - It contains no talks.cam text: numbers only, so it is G1-safe.
 - `broker.overview.locationCoverage` (`requireBrokerUser`): byPrecision counts and
@@ -181,7 +209,8 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
 
 1. Read the pending items and `venues/all`. Compute each item's `inputHash`
    (prompt version + kind + title + description[:1500] + venue text + venueKey +
-   online + organisers). Skip an item whose stored hash is equal, unless its
+   online + organisers, + the sorted organiserPlaces only when the item names
+   no venue and no venueKey, the one case the hint decides). Skip an item whose stored hash is equal, unless its
    stored `startsAt` differs (a rescheduled item is posted again, from the
    reply cache, so coverage and pruning use its new start).
 2. **Deterministic first:**
@@ -191,49 +220,117 @@ All new routes go in `READ_ROUTES` (`pipeline/.../graph.py`) as needed.
      room = what venueText adds;
    - an exact normalised match of the venue text against a venue name or
      alias → `alias`/`exact`.
-3. **LLM** (`gpt-6-luna` bulk, fallback `gpt-6.1-sol` via LLMClient,
-   `LLMMemo`-cached by inputHash, prompt `extract/prompts/locate_v1.md`).
-   - Input: the item plus a shortlist of up to 60 known venues by token overlap
-     (always including the colleges and the main University sites).
-   - Output (pydantic):
-     `{decision: "existing"|"new"|"online"|"unknown", venueKey?, newVenue?: {name, address, osmQuery}, room?, precision, areaLabel?, note?}`.
+3. **LLM** (`gpt-6-luna` bulk, fallback `gpt-6.1-sol` via LLMClient, and
+   once more on the strong tier when a reply still fails validation;
+   `LLMMemo`-cached by inputHash, prompt `extract/prompts/locate_v2.md`
+   since 2026-11-24, which re-resolved every item).
+   - Input: the item, the organisers' usual places, and a shortlist of up to
+     60 known venues by token overlap (always including the colleges and the
+     main University sites).
+   - Output (pydantic, lenient: blank fields, camelCase keys, a bare string
+     for a building and unknown precision words are read, not refused):
+     `{precision: exact|building|area|online|unknown, building?: {name,
+     address (with postcode), osmQuery, country}, venueKey?, parent?, room?,
+     areaLabel?, outsideCambridge?, note?}`. `building` is always given
+     unless online or unknown, also when `venueKey` names a known venue.
+   - Resolution: the key's venue when the key is known and fits the item
+     (shares a word with the place text or the named building), else the
+     known venue of the building's name or alias, else the geocoded
+     building. An invalid key never drops the item (the first prod run lost
+     ~25 talks that way: "no venue named").
    - The prompt rules:
-     - use your knowledge of Cambridge, e.g. "Keynes Room" is at the Faculty
-       of Economics;
-     - give exact building names, and an address with a postcode where known;
+     - use your knowledge of Cambridge, e.g. "Keynes Room" and "Meade Room"
+       are in the Faculty of Economics (Austin Robinson Building);
+     - give the building's map name ("William Gates Building" for Computer
+       Science), an address with a postcode, an OSM query and the country;
+     - use the organisers: a department's or series' talk with no venue is
+       in its building, a clinical series on the Cambridge Biomedical
+       Campus, a college society's event at its college, a society's event
+       at its usual place (`building`, or `area` "<College> (exact room not
+       given)");
+     - an away fixture is at the opponent's ground or course (the title
+       often names it), `outsideCambridge`; a tour venue abroad likewise;
      - a room is never a person's name;
-     - prefer `building` over `unknown`;
      - "location sent on acceptance" → `area` with the stated area;
      - say `unknown` only when nothing at all is inferable.
    - talks.cam text is allowed (D13).
-4. **New venues:**
-   - Nominatim search (`https://nominatim.openstreetmap.org/search`,
-     `format=jsonv2`, `viewbox=0.03,52.26,0.22,52.15`, `bounded=1`, 1 request
-     per second, our `CAMSOCS_USER_AGENT`, a direct `httpx.Client`).
-   - Try `osmQuery`, then `name, Cambridge`, then `address`.
-   - Reject a result outside `CAMBRIDGE_BOUNDS`.
+4. **New venues** (`locate/geocode.py`):
+   - Cambridge places, in order: Nominatim inside the Cambridge box
+     (`osmQuery`, then "name, Cambridge"); Nominatim inside the Cambridge
+     region (S 52.05 N 52.35 W −0.10 E 0.35: the villages); Photon
+     (`https://photon.komoot.io/api`, OSM data, bbox the region); Nominatim's
+     structured search (street + postcode); postcodes.io (the postcode,
+     inside the region). Nominatim and Photon at 1 request per second each,
+     postcodes.io paced, all with our `CAMSOCS_USER_AGENT`, direct
+     `httpx.Client`s.
+   - `outsideCambridge` places: Nominatim without a box, narrowed to the
+     model's country; Photon without a box; the structured search and
+     postcodes.io for a UK address. A worldwide hit must share a word with
+     what was asked and lie in that country. A one-word place with no
+     address ("Barnes", "Marlborough") is only ever the town (`area`).
+   - Every named feature found by name must share a distinctive word with
+     the name or query asked for (`geocode.names_match`: generic words such
+     as college, hall, room, seminar, centre and the address's own street
+     and town words left out); otherwise it is another place ("Seminar Room
+     1" → "Lee Room & Seminar Room") and is refused. One found by the
+     structured address search keeps its point under no name (`building`).
+     A town or district is refused unless the building is named after it
+     (the city itself for "Kiki's, Cambridge") or an area was asked for.
+     Stations and stops are a point near a place, never a venue.
+   - A named OSM feature ends the search. A street, a nameless building or
+     a postcode point makes the item `building`; a town or district makes it
+     `area` with "<town> (exact place not known)".
    - The key is `venue_key(name)`. If that key or an equivalent name already
-     exists, reuse it.
-   - Post the claims (name, address, lat, lng), every value OpenStreetMap's
-     own: the model's name and address are only the query and the match key
-     (D1). A result without an OSM name, or whose name reads as a person's,
-     makes no venue. No `aliases` are posted. Then post
-     `googlePlaceId` from Google Places Text Search: `places:searchText`,
-     `X-Goog-FieldMask: places.id`, with `locationRestriction` set to the
-     Cambridge rectangle. Do this only when the key is configured.
+     exists, reuse it. A town or district found becomes an **area venue**
+     `ven-area--<town>` (a `--` no `venue_key` makes): reached only by that
+     key, never by name, never in the model's shortlist, and always `area`.
+     Venues created (or placed) from a street or postcode point are kept in
+     stage state (`coarseVenues`), so an item reaching one later by key or
+     name is `building`, never `exact`.
+   - Post the claims (name, address, lat, lng): OpenStreetMap's own values,
+     or postcodes.io's coordinates. A source name that reads as a person's
+     makes no venue. Where the source names no object, the model's building
+     name (and its address, when it carries the placing postcode) is posted
+     `llm` / `inferred`, only when it reads as a building's name (≤ 8 words,
+     ≤ 80 characters, no honorific, link, postcode or long number, not the
+     item's title), every distinctive word of it is in the item's own venue
+     text, title, description, organisers or their places (no invented
+     names), and the item is no talk and no talks.cam-derived event (G1:
+     venues are public site-wide). No `aliases` are posted. Then post `googlePlaceId` from
+     Google Places Text Search: `places:searchText`, `X-Goog-FieldMask:
+     places.id`, with `locationRestriction` set to the Cambridge rectangle.
+     Do this only when the key is configured.
    - Also backfill `googlePlaceId` for existing venues that lack one; at most
-     100 Places calls per run.
-   - When Nominatim finds nothing: retry with the LLM-suggested parent building
+     100 Places calls per run. Never for a venue placed outside the Cambridge
+     region nor an area venue: the Cambridge-restricted search would give a
+     Cambridge place's id.
+   - When nothing is found: retry with the LLM-suggested parent building
      (college or department), giving `building` precision. Otherwise the item is
-     `unknown` with a note. Only a real answer counts: a Nominatim (or Places)
-     outage, error status or unreadable body defers the item (no row; the
-     next run retries) and is never cached or stamped as "not found".
+     `unknown` with a note. Only a real answer counts: an outage, error status
+     or unreadable body from any service of the chain (or Places) defers the
+     item (no row; the next run retries) and is never cached or stamped as
+     "not found".
 5. Post `locations/batch`.
 6. Report metrics: `resolved`, `unknown`, `llmCalls`, `nominatimCalls`,
-   `placesCalls`, and `unresolvedShare`. Add a note when the share is above 2%.
-   - Budgets: 900 LLM items, 300 Nominatim calls, 25 minutes.
+   `photonCalls`, `postcodesCalls`, `placesCalls`, `newVenues`,
+   `modelNamedVenues`, `outsideCambridge` and `unresolvedShare`. Add a note
+   when the share is above 2%.
+   - Budgets: 1,200 LLM items, 500 Nominatim, 200 Photon, 300 postcodes.io
+     calls, 30 minutes.
    - With no `GOOGLE_PLACES_API_KEY`, skip Places with a note. On a dry run,
      read the memo only and make no network calls.
+
+**Coverage, honestly** (`convex/lib/locations.ts` `locationCoverage`): an item
+counts as resolved when its row is `exact`, `building`, `area` (which always
+carries its `areaLabel`, the server refuses one without) or `online`; an
+`unknown` row or no row at all counts as unresolved. The first production run
+of `locate_v1` (2026-11-24, 970 upcoming items) left 135 unknown (12.3 %):
+away fixtures and tours marked "outside Cambridge", talks whose reply named
+a key not in the index, long official names Nominatim missed and society
+events with no venue text. `locate_v2`, the geocoding chain and the
+organisers' usual places address each of those; what may stay unknown is
+an item with nothing to go on (a film shoot with no location, "tba" and no
+organiser place).
 
 Plus a `monitor.py` shadow check, `location_unresolved_share` (threshold 0.02,
 read from `locations/summary`), per D9: shadow mode first.
