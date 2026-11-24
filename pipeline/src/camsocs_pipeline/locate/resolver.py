@@ -2,7 +2,8 @@
 pending items in, venue claims and `itemLocations` rows out.
 
 1. An item whose stored row carries its current input hash is skipped.
-2. **Deterministic first** (`matching`): online only → `online`; an event's
+2. **Deterministic first** (`matching`): online only → `online`; a film
+   production with no screening venue (a short film, a shoot) → `film`; an event's
    own venue key with coordinates → `source`/`exact`; the venue text naming a
    known venue exactly → `alias`/`exact`, with the room it adds.
 3. **The model** (`extract/prompts/locate_v2.md`, bulk tier with the
@@ -79,6 +80,7 @@ from camsocs_pipeline.locate.matching import (
     distinctive,
     input_hash,
     is_area_key,
+    is_film_without_venue,
     is_online_only,
     normalise,
     single_line,
@@ -117,7 +119,9 @@ PROMPT_NAME = "locate_v2"
 #: version too, so a later resolver may still find their building.
 #: r4 (2026-11-24): the Cambridge Graphene Centre alias.
 #: r5 (2026-11-24): "Kiki's" is the KiKi nightclub (Joshua confirmed).
-RESOLVER_VERSION = "r5"
+#: r6 (2026-11-24): a film with no screening venue (a short film, a shoot)
+#: is `film`, by rule before the model (`matching.is_film_without_venue`).
+RESOLVER_VERSION = "r6"
 PROMPT_PATH = Path(__file__).parent.parent / "extract" / "prompts" / f"{PROMPT_NAME}.md"
 
 #: Budgets (§2 step 6): items asked of the model (cached replies are free),
@@ -183,6 +187,9 @@ class Plan:
     reply: LocateReply
     method: str
     model: str | None = None
+    #: A film with no screening venue (`matching.is_film_without_venue`):
+    #: only this rule makes a `film` row, never the model.
+    film: bool = False
 
 
 @dataclass
@@ -345,7 +352,7 @@ class Locator:
             except Deferred:
                 self.metrics.deferred += 1
                 continue
-            if row.precision == "unknown" or self.classified_coarse(row.venue_key):
+            if row.precision in VERSIONED or self.classified_coarse(row.venue_key):
                 row = row.model_copy(
                     update={
                         "input_hash": row_input_hash(
@@ -489,6 +496,8 @@ class Locator:
         if plan.method == "llm":
             base["model"] = single_line(plan.model, LIMITS["model"])
             base["prompt_version"] = PROMPT_NAME
+        if plan.film:
+            return ItemLocationInput(precision="film", **base)
         decision = reply.decision
         if decision == "online":
             return ItemLocationInput(precision="online", **base)
@@ -1018,6 +1027,19 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     elif not item.venue_key and text and is_online_only(text):
         return Plan(LocateReply(decision="online"), "source")
     own = index.get(item.venue_key)
+    if (
+        item.kind == "event"
+        and not item.venue_key
+        and is_film_without_venue(
+            title=item.title,
+            description=item.description,
+            place_text=text,
+            source_type=item.source_type,
+        )
+    ):
+        # A short film or a shoot with no screening venue: listed as a film,
+        # never pinned at a guessed place.
+        return Plan(LocateReply(), "source", film=True)
     if own is not None and own.placed:
         room = index.room_beyond(own, text) if text else None
         return Plan(LocateReply(decision="existing", venue_key=own.key, room=room), "source")
@@ -1032,17 +1054,22 @@ def deterministic(item: PendingItem, index: VenueIndex) -> Plan | None:
     return None
 
 
+#: The precisions whose rows carry the resolver version (`row_input_hash`):
+#: a later resolver looks them up again. `film` is a rule's verdict, so a
+#: fixed rule must reach the rows it made.
+VERSIONED = frozenset({"unknown", "film"})
+
 #: The resolver version a row's input hash may end with (`row_input_hash`).
 _VERSION_SUFFIX = re.compile(r":r\d+$")
 
 
 def row_input_hash(digest: str, precision: str, *, coarse: bool = False) -> str:
     """The input hash a row is posted with: the item's (`input_hash`, also
-    the reply cache's key), and for an `unknown` row or one at a coarse
-    venue (`Locator.classified_coarse`: a town, a district, a street) the
-    resolver version after it, so a later version tries that item again
-    (`stages/locate.due`), from the cached reply."""
-    return f"{digest}:{RESOLVER_VERSION}" if precision == "unknown" or coarse else digest
+    the reply cache's key), and for an `unknown` or `film` row (`VERSIONED`)
+    or one at a coarse venue (`Locator.classified_coarse`: a town, a
+    district, a street) the resolver version after it, so a later version
+    tries that item again (`stages/locate.due`), from the cached reply."""
+    return f"{digest}:{RESOLVER_VERSION}" if precision in VERSIONED or coarse else digest
 
 
 #: A qualifier OSM names carry that says nothing about the building.
@@ -1202,6 +1229,7 @@ __all__ = [
     "PROMPT_NAME",
     "RESOLVER_VERSION",
     "TIME_BUDGET_S",
+    "VERSIONED",
     "Budget",
     "Deferred",
     "Locator",

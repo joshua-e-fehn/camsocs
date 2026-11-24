@@ -48,6 +48,7 @@ export function mergeMapDays(...days: (MapDay | undefined)[]): MapDay | undefine
       talks: merged.filter((item) => item.kind === "talk").length,
       online: merged.filter((item) => item.precision === "online").length,
       unknown: merged.filter((item) => item.precision === "unknown").length,
+      films: merged.filter((item) => item.precision === "film").length,
     },
   }
 }

@@ -197,6 +197,9 @@ _PRECISION_WORDS: dict[str, Precision] = {
     "online": "online",
     "virtual": "online",
     "remote": "online",
+    # Only the deterministic rule makes a film row; the model's "film" keeps
+    # no venue it named, so it reads as unknown.
+    "film": "unknown",
     "unknown": "unknown",
     "none": "unknown",
     "tbc": "unknown",
@@ -327,7 +330,8 @@ class LocateReply(BaseModel):
 
     @property
     def decision(self) -> Literal["existing", "new", "online", "unknown"]:
-        """What the reply amounts to: online, unknown, a known venue's key, or a building."""
+        """What the reply amounts to: online, unknown, a known venue's key,
+        or a building."""
         if self.precision in ("online", "unknown"):
             return self.precision  # type: ignore[return-value]
         if self.venue_key:

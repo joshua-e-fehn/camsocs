@@ -87,12 +87,33 @@ describe("pins and sections", () => {
     expect(mapPins(items, VENUES, at(16), DAY)[1].label).toBe("Venue B: 1 talk, ended")
   })
 
+  test("a pin of one item says its type in words, beside the icon", () => {
+    const show = item({ key: "s", eventType: "performance", startsAt: at(11), endsAt: at(13) })
+    expect(mapPins([show], VENUES, at(12), DAY)[0].label).toBe(
+      "Venue A: 1 event (Performance), one on now",
+    )
+    const seminar = item({ key: "t", kind: "talk", talkKind: "seminar", href: "/talks/t" })
+    expect(mapPins([seminar], VENUES, at(8), DAY)[0].label).toBe("Venue A: 1 talk (Seminar)")
+    // Several items keep their counts: the pin shows a number, not an icon.
+    expect(mapPins([show, seminar], VENUES, at(8), DAY)[0].label).toBe("Venue A: 1 event, 1 talk")
+  })
+
   test("online items and those with no place go in their own sections", () => {
     const { placed, away, online, tbc } = mapSections(items, VENUES)
     expect(placed.map((x) => x.key)).toEqual(["a", "b", "c", "d"])
     expect(away).toEqual([])
     expect(online.map((x) => x.key)).toEqual(["e"])
     expect(tbc.map((x) => x.key)).toEqual(["f"])
+  })
+
+  test("films with no screening venue get no pin and their own section", () => {
+    const film = item({ key: "g", precision: "film", venueKey: null, placeLabel: "Film" })
+    const { placed, films, tbc } = mapSections([...items, film], VENUES)
+    expect(films.map((x) => x.key)).toEqual(["g"])
+    expect(placed.map((x) => x.key)).not.toContain("g")
+    expect(tbc.map((x) => x.key)).toEqual(["f"])
+    const pinned = mapPins([film], VENUES, at(12), DAY)
+    expect(pinned).toEqual([])
   })
 
   test("the toggles keep one kind", () => {

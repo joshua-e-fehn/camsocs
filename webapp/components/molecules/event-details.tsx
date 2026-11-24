@@ -27,6 +27,7 @@ import {
   UNIVERSITY_NAME,
 } from "@/lib/events"
 import { formatEventPrice } from "@/lib/format"
+import { EVENT_TYPE_ICONS, FILM_ICON } from "@/lib/item-icons"
 import type { EventPublic, ItemLocation } from "@/lib/public-api"
 import { displayHost, hasValue, sourceLine } from "@/lib/source-line"
 import { eventIcsPath } from "@/lib/talks-boundary"
@@ -94,6 +95,7 @@ export function EventEyebrow({ event, className }: { event: EventPublic; classNa
   const lead = event.fromUniversity
     ? UNIVERSITY_NAME
     : event.organisers.find((o) => o.role !== "sponsor")?.name
+  const TypeIcon = EVENT_TYPE_ICONS[event.eventType]
   return (
     <p
       className={cn(
@@ -101,7 +103,10 @@ export function EventEyebrow({ event, className }: { event: EventPublic; classNa
         className,
       )}
     >
-      <span>{EVENT_TYPE_LABELS[event.eventType]}</span>
+      <span className="inline-flex items-center gap-1.5">
+        <TypeIcon aria-hidden className="size-3.5 shrink-0" />
+        {EVENT_TYPE_LABELS[event.eventType]}
+      </span>
       {lead && (
         <>
           <span aria-hidden className="opacity-50">
@@ -361,7 +366,7 @@ export function EventDetails({
       </div>
 
       <div className="flex flex-col gap-4 text-[0.9375rem]">
-        <Row icon={MapPinIcon} label="Where">
+        <Row icon={location?.precision === "film" ? FILM_ICON : MapPinIcon} label="Where">
           {location ? (
             <PlaceLine location={location} sourceText={where} day={day} />
           ) : where ? (

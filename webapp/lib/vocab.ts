@@ -670,8 +670,17 @@ export type ItemLocationKind = (typeof ITEM_LOCATION_KINDS)[number]
 
 /** How exactly a row places its item: `exact` (the building, and the room if
  * given), `building` (a best inference, e.g. a college society's college),
- * `area` (only an area, its anchor venue), `online`, `unknown`. */
-export const ITEM_LOCATION_PRECISIONS = ["exact", "building", "area", "online", "unknown"] as const
+ * `area` (only an area, its anchor venue), `online`, `unknown`, `film` (a
+ * film production with no screening venue: a short film, a shoot; counted
+ * as resolved like `online`, never pinned). */
+export const ITEM_LOCATION_PRECISIONS = [
+  "exact",
+  "building",
+  "area",
+  "online",
+  "unknown",
+  "film",
+] as const
 export type ItemLocationPrecision = (typeof ITEM_LOCATION_PRECISIONS)[number]
 
 /** How the row was resolved: the source's own venue key, an alias match, or the model. */

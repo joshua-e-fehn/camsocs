@@ -35,9 +35,10 @@ export function isVenueKey(value: string): boolean {
   return VENUE_KEY.test(value)
 }
 
-/** Whether a precision needs a venue (`exact`, `building`, `area`). */
+/** Whether a precision needs a venue (`exact`, `building`, `area`); `online`,
+ * `unknown` and `film` (a film with no screening venue) never have one. */
 export function precisionNeedsVenue(precision: ItemLocationPrecision): boolean {
-  return precision !== "online" && precision !== "unknown"
+  return precision !== "online" && precision !== "unknown" && precision !== "film"
 }
 
 /** How far ahead coverage looks (the monitor and the dashboard card). */
@@ -92,6 +93,7 @@ export function placeLabel(
   const raw = rawText?.trim() ?? ""
   if (!row || row.precision === "unknown") return raw
   if (row.precision === "online") return raw || "Online"
+  if (row.precision === "film") return "Film"
   if (row.precision === "area" && row.areaLabel) return row.areaLabel
   const name = venueName ? venueDisplayName(venueName) : undefined
   if (name) return row.room ? `${row.room}, ${name}` : name
@@ -104,6 +106,8 @@ export const precisionCountsValidator = v.object({
   area: v.number(),
   online: v.number(),
   unknown: v.number(),
+  /** A film with no screening venue: resolved, like `online`. */
+  film: v.number(),
   /** Upcoming items with no row yet (the pipeline has not reached them). */
   missing: v.number(),
 })
@@ -114,7 +118,7 @@ export const locationSummaryValidator = v.object({
   to: v.number(),
   /** Events (not members-only, not cancelled, not superseded) and listed talks. */
   upcoming: v.number(),
-  /** Upcoming items whose row is not `unknown`. */
+  /** Upcoming items whose row is not `unknown` (`online` and `film` count). */
   resolved: v.number(),
   /** Upcoming items with an `unknown` row or none at all. */
   unknown: v.number(),
@@ -194,6 +198,7 @@ export async function locationCoverage(
     area: 0,
     online: 0,
     unknown: 0,
+    film: 0,
     missing: 0,
   }
   const unknownItems: UnknownItem[] = []

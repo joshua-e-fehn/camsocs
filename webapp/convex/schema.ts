@@ -557,7 +557,7 @@ export const itemLocationFields = {
   /** Copied from the item, for coverage windows and pruning. */
   startsAt: v.number(),
   precision: literalUnion(ITEM_LOCATION_PRECISIONS),
-  /** `ven-…`; present unless `precision` is online or unknown. */
+  /** `ven-…`; present unless `precision` is online, unknown or film. */
   venueKey: v.optional(v.string()),
   /** ≤ 120, e.g. "Seminar Room 1"; never a person's name. */
   room: v.optional(v.string()),

@@ -1,6 +1,7 @@
 import { addDays, londonIsoDate, londonMidnight } from "./calendar"
 import { MAP_PIN_BOUNDS } from "./map-style"
 import type { MapDay, MapItem } from "./public-api"
+import { EVENT_TYPE_LABELS, TALK_KIND_LABELS } from "./vocab"
 
 /**
  * The map's day, worked out without the map (docs/locations-and-map.md §0.5,
@@ -80,7 +81,8 @@ export type MapPin = {
   kind: "event" | "talk"
   /** Now if any item is on now; past once all are over; else upcoming. */
   status: MapStatus
-  /** "Isaac Newton Institute: 2 events, 1 talk, one on now". */
+  /** "Isaac Newton Institute: 2 events, 1 talk, one on now"; for one item,
+   * its type too: "ADC Theatre: 1 event (Performance), on now". */
   label: string
 }
 
@@ -100,6 +102,24 @@ export function countPhrase(items: readonly Pick<MapItem, "kind">[]): string {
     .join(", ")
 }
 
+/** An item's type in words: "Performance", "Seminar"; "Event" or "Talk"
+ * when the source gave none. The map's rows show it beside the type icon. */
+export function itemTypeLabel(item: Pick<MapItem, "kind" | "eventType" | "talkKind">): string {
+  if (item.kind === "talk") return item.talkKind ? TALK_KIND_LABELS[item.talkKind] : "Talk"
+  return item.eventType ? EVENT_TYPE_LABELS[item.eventType] : "Event"
+}
+
+/** A pin's count in words. A pin of one item shows that item's type icon,
+ * so its name says the type too ("1 event (Performance)"): the icon is never
+ * the only carrier of the type (DESIGN.md "Iconography"). */
+function pinCount(pinned: readonly MapItem[]): string {
+  const count = countPhrase(pinned)
+  if (pinned.length !== 1) return count
+  const only = pinned[0]
+  const typed = only.kind === "talk" ? only.talkKind : only.eventType
+  return typed ? `${count} (${itemTypeLabel(only)})` : count
+}
+
 /** The day's pins, one per venue with coordinates inside the pin region, in
  * the order of each venue's first item. Items whose `venueKey` is not among
  * `venues`, or whose venue is far from Cambridge, get none. */
@@ -112,7 +132,7 @@ export function mapPins(
   const byKey = new Map(venues.map((venue) => [venue.key, venue]))
   const grouped = new Map<string, MapItem[]>()
   for (const item of items) {
-    if (!item.venueKey || item.precision === "online") continue
+    if (!item.venueKey || item.precision === "online" || item.precision === "film") continue
     const venue = byKey.get(item.venueKey)
     if (!pinnable(venue)) continue
     const list = grouped.get(item.venueKey) ?? []
@@ -142,15 +162,20 @@ export function mapPins(
       items: pinned,
       kind: pinned.every((item) => item.kind === "talk") ? "talk" : "event",
       status,
-      label: `${venue.name}: ${countPhrase(pinned)}${state}`,
+      label: `${venue.name}: ${pinCount(pinned)}${state}`,
     }
   })
 }
 
+/** Where a film with no screening venue is (a short film, a shoot: precision
+ * `film`), on the map's rows and an item's "Where" row. */
+export const FILM_PLACE = "Film — no screening venue listed"
+
 /** The list's sections: what has a place in or near Cambridge (pinned or
  * not), what is far from it ("Away from Cambridge": a placed venue beyond the
  * pin region, listed with its place and directions, no pin), what is online,
- * and what has no place yet ("Location TBC"). Each keeps start order. */
+ * films with no screening venue (a short film, a shoot: no pin), and what
+ * has no place yet ("Location TBC"). Each keeps start order. */
 export function mapSections(
   items: readonly MapItem[],
   venues: readonly MapVenue[] = [],
@@ -158,20 +183,23 @@ export function mapSections(
   placed: MapItem[]
   away: MapItem[]
   online: MapItem[]
+  films: MapItem[]
   tbc: MapItem[]
 } {
   const byKey = new Map(venues.map((venue) => [venue.key, venue]))
   const placed: MapItem[] = []
   const away: MapItem[] = []
   const online: MapItem[] = []
+  const films: MapItem[] = []
   const tbc: MapItem[] = []
   for (const item of items) {
     if (item.precision === "online") online.push(item)
+    else if (item.precision === "film" && !item.venueKey) films.push(item)
     else if (item.precision === "unknown" && !item.venueKey) tbc.push(item)
     else if (item.venueKey && farAway(byKey.get(item.venueKey))) away.push(item)
     else placed.push(item)
   }
-  return { placed, away, online, tbc }
+  return { placed, away, online, films, tbc }
 }
 
 /** An item's identity across kinds (events and talks may share nothing else). */

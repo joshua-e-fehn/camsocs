@@ -947,12 +947,13 @@ Every event and talk has at most one `itemLocations` row (docs/data-model.md, wr
 pipeline's `locate` stage through `locations/batch`; docs/locations-and-map.md). Precision:
 `exact` (the building is stated), `building` (inferred: an organiser's usual place, a street or
 postcode point), `area` (only a town, district or anchor is known; `areaLabel` says which),
-`online`, `unknown`.
+`online`, `unknown`, `film` (a film production with no screening venue: no venue, the "Where"
+row says "Film — no screening venue listed" with the film icon and no maps link).
 
 | Function | Args | Returns |
 |---|---|---|
-| `locations.forItem` | `{ kind: "event" \| "talk", itemKey }` | `null` (no row yet, or an item the viewer may not see: the event gate of `events.get`, a talk must be `listed`) or `{ precision, room?, areaLabel?, venue: VenuePublic \| null }`. `venue` is null for `online` / `unknown`. The talk variant is called only from `/talks/...` pages (G1). Room and area label are scrubbed like other free text (suppressed names and addresses) |
-| `map.day` | `{ date: YYYY-MM-DD, talks?: "include" \| "exclude", talksCam?: "exclude" \| "only" }` (both default `exclude`, G1) | `{ date, from, to, venues: VenuePublic[], items: MapItem[], counts: { events, talks, online, unknown } }`. `venues`: only those the day's rows reference and that have coordinates, read by key (never `venues.list`), anywhere in the world: an away fixture's venue is returned too, and the page decides what gets a pin. `MapItem`: `{ kind, key, title, startsAt, endsAt \| null, allDay, href, cancelled, precision, venueKey \| null (set only when its venue is in `venues`), room?, areaLabel?, placeLabel, orgLabel?, eventType? / talkKind?, visibility? }`. Events are `events.list`'s window read (tiers, hidden hosts, withdrawn, superseded, multi-day on every day they cover), minus suppressed events; talks are `listed`, on their start day |
+| `locations.forItem` | `{ kind: "event" \| "talk", itemKey }` | `null` (no row yet, or an item the viewer may not see: the event gate of `events.get`, a talk must be `listed`) or `{ precision, room?, areaLabel?, venue: VenuePublic \| null }`. `venue` is null for `online` / `unknown` / `film`. The talk variant is called only from `/talks/...` pages (G1). Room and area label are scrubbed like other free text (suppressed names and addresses) |
+| `map.day` | `{ date: YYYY-MM-DD, talks?: "include" \| "exclude", talksCam?: "exclude" \| "only" }` (both default `exclude`, G1) | `{ date, from, to, venues: VenuePublic[], items: MapItem[], counts: { events, talks, online, unknown, films } }`. `venues`: only those the day's rows reference and that have coordinates, read by key (never `venues.list`), anywhere in the world: an away fixture's venue is returned too, and the page decides what gets a pin. `MapItem`: `{ kind, key, title, startsAt, endsAt \| null, allDay, href, cancelled, precision, venueKey \| null (set only when its venue is in `venues`), room?, areaLabel?, placeLabel, orgLabel?, eventType? / talkKind?, visibility? }`. Events are `events.list`'s window read (tiers, hidden hosts, withdrawn, superseded, multi-day on every day they cover), minus suppressed events; talks are `listed`, on their start day |
 | `map.weekCounts` | `{ from: YYYY-MM-DD, days: 1..14 }` | `{ date, events, talks }[]`: numbers only (G1-safe), counting talks.cam-derived items too |
 
 **`/map`** (`app/(site)/map/page.tsx`, owner decisions in docs/locations-and-map.md §0): the server
@@ -964,7 +965,7 @@ pin per venue, and the list's sections. A venue gets a pin only inside `MAP_PIN_
 (`lib/map-style.ts`: Cambridge and its villages, S 52.05 N 52.35 W −0.10 E 0.35, equal to the
 pipeline's `CAMBRIDGE_REGION`); the camera fits the pins, never a far venue. Items at a placed
 venue beyond it (an away fixture, a tour abroad) are listed under **"Away from Cambridge"** with
-their place, address and a Directions link, and no pin; online items under "Online"; unresolved
+their place, address and a Directions link, and no pin; online items under "Online"; films with no screening venue under "Films" (film icon, no pin); unresolved
 ones under "Location TBC". `/map` (no params) is indexable; `?d=` views are `noindex,follow`.
 On an event or talk page, the "Where" row (`components/molecules/place-line.tsx`) shows the place,
 its address, "Open in Maps" (Apple Maps on Apple platforms, else Google, `lib/maps-link.ts`) and

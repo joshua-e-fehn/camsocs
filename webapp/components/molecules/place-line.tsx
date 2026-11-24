@@ -4,7 +4,7 @@ import { ArrowUpRightIcon, MapIcon } from "lucide-react"
 import Link from "next/link"
 import { useSyncExternalStore } from "react"
 import { linkProps } from "@/lib/crawl-traps"
-import { pinnable } from "@/lib/map-day"
+import { FILM_PLACE, pinnable } from "@/lib/map-day"
 import { mapsLinks, preferredMapsHref } from "@/lib/maps-link"
 import type { ItemLocation } from "@/lib/public-api"
 import { venueDisplayName } from "@/lib/venue-name"
@@ -44,6 +44,7 @@ function googleSearch(text: string): string {
  *  - a venue far from Cambridge (beyond /map's pin region) has no "See on
  *    the map": the map lists it without a pin;
  *  - `online`: the source's words, else "Online";
+ *  - `film`: a film with no screening venue, said so; no maps link, no pin;
  *  - `unknown`: the source's words, if any, and "Location to be confirmed".
  * `sourceText` is the source's own words for where (the event's venue text or
  * the talk's venue).
@@ -95,6 +96,8 @@ export function placeLineModel(location: PlacedLocation, sourceText?: string): P
     }
     case "online":
       return { label: text ?? "Online", details: [], onMap: false }
+    case "film":
+      return { label: FILM_PLACE, details: [], onMap: false }
     case "unknown":
       return { label: text, details: text ? ["Location to be confirmed"] : [], onMap: false }
   }

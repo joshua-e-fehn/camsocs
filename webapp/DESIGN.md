@@ -265,7 +265,8 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
   parks `--sky`, land `--muted`, roads white, labels `--muted-foreground`), light only, no
   sprite. The OpenStreetMap / OpenFreeMap attribution stays visible (top left, restyled).
 - Pins are our own buttons (44 px targets) styled with tokens: events teal circles (`--brand`),
-  talk-only venues ink rounded squares, numbered from two items, grey when over (`--input` /
+  talk-only venues ink rounded squares, a lone item's type icon in white (lib/item-icons.ts),
+  numbered from two items, grey when over (`--input` /
   `--faint`), an apricot `--today` ring when on now. Each says its venue, counts and state in
   words; the list beside the map is the text equivalent and says "Now" / "Ended" too.
 - Pins within 36 px of each other merge into a cluster (`lib/map-cluster.ts`): a larger mark
@@ -308,10 +309,17 @@ broker's `/dashboard/pipeline` canvas (`components/molecules/pipeline-canvas.tsx
 
 ## Shell & motifs
 
-- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Societies · Formals · Guides ·
-  About with a teal underline on the current page, the "Search everything ⌘K" box (an icon from
+- **Header** (`public-header.tsx`): crest and wordmark, Events · Talks · Map · Societies · Formals ·
+  Guides with a teal underline on the current page, the "Search everything ⌘K" box (an icon from
   `md` to `lg`, so all six sections fit at 768px; never drop a section for room), the account menu
-  (Sign in lives there); a right sheet on phones, each section with its hint.
+  (Sign in lives there); a right sheet on phones, each section with its hint. About is not a
+  section (2026-11-24: the Map took its place); the footer's CAMsocs column links it.
+- **Type icons** (`lib/item-icons.ts`): one Lucide icon per event type and talk kind, and a
+  clapperboard for a film with no screening venue. Always beside the type's word, never alone,
+  `aria-hidden`, monochrome in the text's own colour, 12–14px: in the event type chip, the event
+  and talk eyebrows, the talk row's kind, the map list's rows and inside a lone map pin (white on
+  teal or ink, grey when over; a pin of several items and a cluster keep their number). Neutral
+  choices: worship has no one religion's symbol.
 - **⌘K palette** (`organisms/command-palette.tsx`): ⌘K / Ctrl+K, `/` when not typing, the
   header box, or `openPalette()` (`lib/palette.ts`). Typing also matches "Guides & pages", every
   guide and the static pages (`lib/guide-links.ts`), locally.

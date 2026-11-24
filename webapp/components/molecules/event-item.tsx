@@ -4,6 +4,7 @@ import { TONE_CLASSES } from "@/components/molecules/org-monogram"
 import { formatEventWhen, londonTime } from "@/lib/calendar"
 import { EVENT_TYPE_TONE, eventTimes, splitEmoji, spokenTitle, UNIVERSITY_NAME } from "@/lib/events"
 import { takesPart } from "@/lib/format"
+import { EVENT_TYPE_ICONS } from "@/lib/item-icons"
 import type { EventListItem } from "@/lib/public-api"
 import { cn } from "@/lib/utils"
 import { EVENT_TYPE_LABELS, type EventType } from "@/lib/vocab"
@@ -105,14 +106,16 @@ export function EventFlags({
 
 /** The event's type as a tinted chip in its family's colours. */
 export function EventTypeChip({ type, className }: { type: EventType; className?: string }) {
+  const Icon = EVENT_TYPE_ICONS[type]
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium",
         TONE_CLASSES[EVENT_TYPE_TONE[type]],
         className,
       )}
     >
+      <Icon aria-hidden className="size-3 shrink-0" />
       <span className="sr-only">Type: </span>
       {EVENT_TYPE_LABELS[type]}
     </span>

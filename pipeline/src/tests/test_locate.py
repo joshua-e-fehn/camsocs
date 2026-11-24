@@ -47,9 +47,11 @@ from camsocs_pipeline.locate.places import (
 )
 from camsocs_pipeline.locate.resolver import (
     PROMPT_NAME,
+    RESOLVER_VERSION,
     Budget,
     Locator,
     deterministic,
+    row_input_hash,
 )
 from camsocs_pipeline.pipeline.context import StageContext
 from camsocs_pipeline.pipeline.load import ConvexLoader
@@ -255,6 +257,81 @@ def test_the_rules_place_online_own_venues_and_aliases() -> None:
     alias = deterministic(event(venueText="Seminar Room 1, Isaac Newton Institute"), index)
     assert alias is not None and alias.method == "alias" and alias.reply.room == "Seminar Room 1"
     assert deterministic(event(venueText="The Burrow"), index) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "venue_text", "description", "source_type", "film"),
+    [
+        ("2026 Short Film: You're Never Alone Here", None, None, "camdram", True),
+        ("Ten in Hand (Short Film)", "Short Film", None, "camdram", True),
+        ("Lost and Found (Short Film)", None, None, "camdram", True),
+        ("MAGPIE: 16mm short film", None, None, "camdram", True),
+        ("SWEETFANTASY THE FILM SHOOTING", None, None, "camdram", True),
+        ("Bedlam", "On Location", None, "camdram", True),
+        ("Ghosts", None, "A short film shot around Cambridge.", "camdram", True),
+        # A screening has a place even when none is listed.
+        ("Short film screening night", None, None, "ics", False),
+        # A real venue text: placed like any other event.
+        ("Lost and Found (Short Film)", "Corpus Playroom", None, "camdram", False),
+        # Not a film production at all.
+        ("Hamlet", None, "Based on the play.", "camdram", False),
+        ("Pub quiz", None, "We'll watch a short film after.", "ics", False),
+        # About film, or run by a film society: not a production (any source).
+        ("The Film Society AGM", None, None, "ics", False),
+        ("The Film Society Social", "TBC", None, "camdram", False),
+        ("Talk: the ethics of student film", None, None, "talks_cam", False),
+        ("Workshop: filming on your phone", "TBA", None, "camdram", False),
+        ("Careers in film: on location sound", None, None, "uni_events", False),
+        ("35mm photography walk", "Various locations", None, "camdram", False),
+        # A short film anywhere but Camdram goes to the model.
+        ("Lost and Found (Short Film)", None, None, "ics", False),
+        # A showing, or a venue named in the description: it has a place.
+        ("Short Film Showcase", None, None, "camdram", False),
+        ("Short Film Festival", None, None, "camdram", False),
+        ("Ghosts (Short Film)", None, "Shown at the Arts Picturehouse.", "camdram", False),
+        ("Ghosts (Short Film)", None, "Come watch it with us.", "camdram", False),
+    ],
+)
+def test_a_film_without_a_screening_venue_is_film(
+    title: str, venue_text: str | None, description: str | None, source_type: str, film: bool
+) -> None:
+    index = VenueIndex.of(VENUES)
+    item = event(title=title, venueText=venue_text, description=description, sourceType=source_type)
+    plan = deterministic(item, index)
+    assert (plan is not None and plan.film) is film
+    if film:
+        assert plan is not None and plan.method == "source"
+
+
+def test_a_film_at_its_own_venue_is_pinned_there() -> None:
+    index = VenueIndex.of(VENUES)
+    plan = deterministic(event(title="Lost and Found (Short Film)", venueKey=ADC.key), index)
+    assert plan is not None and plan.reply.decision == "existing"
+    assert plan.reply.venue_key == ADC.key
+
+
+def test_a_film_with_an_unplaced_venue_of_its_own_keeps_that_venue() -> None:
+    index = VenueIndex.of(VENUES)
+    item = event(title="Lost and Found (Short Film)", venueKey=UNPLACED.key, sourceType="camdram")
+    plan = deterministic(item, index)
+    assert plan is not None and not plan.film
+    assert plan.reply.decision == "existing" and plan.reply.venue_key == UNPLACED.key
+
+
+def test_a_model_never_makes_a_film_row() -> None:
+    reply = LocateReply.model_validate({"precision": "film", "venueKey": ADC.key})
+    assert reply.precision == "unknown" and reply.decision == "unknown"
+
+
+def test_a_film_row_has_no_venue_and_counts_as_resolved(tmp_path) -> None:
+    item = event(title="Ten in Hand (Short Film)", venueText="Short Film", sourceType="camdram")
+    found = locator(tmp_path).resolve([item])
+    assert len(found) == 1
+    row = found[0]
+    assert row.precision == "film" and row.venue_key is None and row.method == "source"
+    # Versioned like unknown: a later resolver re-checks a rule's verdict.
+    assert row.input_hash == f"{input_hash(item, PROMPT_NAME)}:{RESOLVER_VERSION}"
+    assert row.input_hash == row_input_hash(input_hash(item, PROMPT_NAME), "film")
 
 
 # --- Nominatim ------------------------------------------------------------------------------------

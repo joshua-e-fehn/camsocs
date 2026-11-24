@@ -10,7 +10,7 @@ const COVERAGE = {
   upcoming: 200,
   resolved: 194,
   unknown: 6,
-  byPrecision: { exact: 150, building: 30, area: 4, online: 10, unknown: 2, missing: 4 },
+  byPrecision: { exact: 150, building: 30, area: 4, online: 10, unknown: 2, film: 0, missing: 4 },
   unresolvedShare: 0.03,
   truncated: false,
   target: 0.02,
