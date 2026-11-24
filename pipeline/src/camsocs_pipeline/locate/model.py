@@ -9,6 +9,7 @@ rather than as a 400.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -34,6 +35,8 @@ LIMITS = {"room": 120, "areaLabel": 120, "note": 200, "model": 100, "promptVersi
 #: Venue text limits (convex/lib/fields.ts `VENUE_SPECS`).
 VENUE_NAME_MAX = 200
 VENUE_ADDRESS_MAX = 500
+
+_OSM_URL = re.compile(r"https://(?:www\.)?openstreetmap\.org/(node|way|relation)/(\d+)")
 
 _READ = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
 
@@ -132,11 +135,21 @@ class VenueRow(BaseModel):
     lng: float | None = None
     college_key: str | None = None
     google_place_id: str | None = None
+    #: The OpenStreetMap object the venue's point (else its name) is cited
+    #: to (optional: an older deployment does not send it). Its OSM class
+    #: tells a building from a town or a street (`locate/venue_class.py`).
+    osm_url: str | None = None
 
     @property
     def placed(self) -> bool:
         """Whether the venue has coordinates (a pin on the map)."""
         return self.lat is not None and self.lng is not None
+
+    @property
+    def osm_ident(self) -> str | None:
+        """``<type>/<id>`` of `osm_url` ("way/42"), or None."""
+        found = _OSM_URL.fullmatch(self.osm_url or "")
+        return f"{found.group(1)}/{found.group(2)}" if found else None
 
 
 class VenuesPage(BaseModel):

@@ -382,7 +382,26 @@ export const venueRowValidator = v.object({
   lng: v.optional(v.number()),
   collegeKey: v.optional(v.string()),
   googlePlaceId: v.optional(v.string()),
+  /**
+   * The OpenStreetMap object the venue was placed from (its `lat`, else its
+   * `name`, cited to an openstreetmap.org page): the stage looks up its OSM
+   * class, so a town, a district or a street is never an exact place.
+   * Optional (widen-only): an older stage ignores it.
+   */
+  osmUrl: v.optional(v.string()),
 })
+
+/** An OpenStreetMap object's page: `https://www.openstreetmap.org/<type>/<id>`. */
+const OSM_OBJECT_URL = /^https:\/\/(?:www\.)?openstreetmap\.org\/(?:node|way|relation)\/\d+$/
+
+/** The OSM object a venue's point (else its name) was cited to, if any. */
+export function venueOsmUrl(meta: Record<string, { sourceUrl?: string }>): string | undefined {
+  for (const field of ["lat", "name"]) {
+    const url = meta[field]?.sourceUrl
+    if (url !== undefined && OSM_OBJECT_URL.test(url)) return url
+  }
+  return undefined
+}
 
 export const venuesAll = internalQuery({
   args: { cursor: v.optional(v.union(v.string(), v.null())), limit: v.optional(v.number()) },
@@ -409,6 +428,7 @@ export const venuesAll = internalQuery({
         ...(venue.lng !== undefined ? { lng: venue.lng } : {}),
         ...(venue.collegeKey !== undefined ? { collegeKey: venue.collegeKey } : {}),
         ...(venue.googlePlaceId !== undefined ? { googlePlaceId: venue.googlePlaceId } : {}),
+        ...((osmUrl) => (osmUrl !== undefined ? { osmUrl } : {}))(venueOsmUrl(venue.meta)),
       })),
       continueCursor: result.continueCursor,
       isDone: result.isDone,

@@ -1,0 +1,127 @@
+{
+  "about": "Curated lookup names for Cambridge buildings whose OpenStreetMap name a listing does not use (the Faculty of Music is '11 West Road', talks name the Hodgkin-Huxley Seminar Room, not the Physiology Building). Each entry points at one place of cambridge_places.json by OSM type/id; `building` is that place's OSM name, checked by tests/test_locate_gazetteer.py. These names are only ever looked up, never published: a venue found through one carries OpenStreetMap's own name, address and point (source-research §23).",
+  "aliases": [
+    {
+      "osm": "relation/8388",
+      "building": "William Gates Building",
+      "names": [
+        "Department of Computer Science and Technology",
+        "Dept of Computer Science and Technology",
+        "Computer Science and Technology",
+        "Department of Computer Science",
+        "Computer Laboratory",
+        "Computer Lab",
+        "Cambridge Computer Lab",
+        "Computer Science Department",
+        "CST"
+      ]
+    },
+    {
+      "osm": "way/26378137",
+      "building": "Austin Robinson Building",
+      "names": [
+        "Faculty of Economics",
+        "Economics Faculty",
+        "Cambridge Faculty of Economics",
+        "Keynes Room",
+        "Meade Room",
+        "Faculty of Economics, Austin Robinson Building"
+      ]
+    },
+    {
+      "osm": "way/136330930",
+      "building": "Department of Land Economy",
+      "names": ["Department of Land Economy", "Land Economy", "Land Economy Department"]
+    },
+    {
+      "osm": "way/132558230",
+      "building": "11 West Road",
+      "names": ["Faculty of Music", "Music Faculty", "Cambridge Faculty of Music"]
+    },
+    {
+      "osm": "way/28364543",
+      "building": "Physiology Building",
+      "names": [
+        "Department of Physiology, Development and Neuroscience",
+        "Department of Physiology Development and Neuroscience",
+        "Physiology, Development and Neuroscience",
+        "Department of Physiology",
+        "Physiology Department",
+        "Physiology",
+        "PDN",
+        "Hodgkin-Huxley Seminar Room",
+        "Hodgkin Huxley Seminar Room",
+        "Hodgkin-Huxley Room",
+        "Physiology Building, Downing Site"
+      ]
+    },
+    {
+      "osm": "relation/17935287",
+      "building": "Ray Dolby Centre (Cavendish Laboratory)",
+      "names": ["Ray Dolby Centre", "RDC", "Cavendish III", "Ray Dolby Centre, Cavendish Laboratory"]
+    },
+    {
+      "osm": "way/164365618",
+      "building": "Cavendish Laboratory",
+      "names": ["Cavendish Laboratory", "Cavendish Lab", "Department of Physics", "Physics Department"]
+    },
+    {
+      "osm": "way/4195915",
+      "building": "Centre for Mathematical Sciences (University of Cambridge)",
+      "names": [
+        "Centre for Mathematical Sciences",
+        "CMS",
+        "DAMTP",
+        "DPMMS",
+        "Department of Applied Mathematics and Theoretical Physics",
+        "Department of Pure Mathematics and Mathematical Statistics",
+        "Statistical Laboratory",
+        "Faculty of Mathematics"
+      ]
+    },
+    {
+      "osm": "way/12861842",
+      "building": "Isaac Newton Institute for Mathematical Sciences",
+      "names": ["Isaac Newton Institute", "Newton Institute", "INI"]
+    },
+    {
+      "osm": "way/39640956",
+      "building": "Cambridge Judge Business School",
+      "names": ["Judge Business School", "Cambridge Judge", "JBS"]
+    },
+    {
+      "osm": "way/136225903",
+      "building": "Department of Engineering (University of Cambridge)",
+      "names": ["Department of Engineering", "Engineering Department", "CUED"]
+    },
+    {
+      "osm": "way/127718988",
+      "building": "University Chemical Laboratory",
+      "names": [
+        "Department of Chemistry",
+        "Yusuf Hamied Department of Chemistry",
+        "Chemistry Department"
+      ]
+    },
+    {
+      "osm": "way/131662340",
+      "building": "Zoology Building",
+      "names": ["Department of Zoology", "Zoology Department"]
+    },
+    {
+      "osm": "way/23439371",
+      "building": "Observatory Building and Library",
+      "names": ["Institute of Astronomy", "IoA"]
+    },
+    {
+      "osm": "way/38006429",
+      "building": "History Building",
+      "names": ["Faculty of History", "Seeley Historical Library"]
+    },
+    {
+      "osm": "way/27411570",
+      "building": "University Centre (Grad Pad)",
+      "names": ["University Centre", "Grad Pad"]
+    }
+  ]
+}

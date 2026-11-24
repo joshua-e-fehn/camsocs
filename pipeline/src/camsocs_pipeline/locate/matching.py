@@ -222,14 +222,117 @@ def single_line(text: str | None, limit: int) -> str | None:
     return out if len(out) <= limit else out[: limit - 1].rstrip() + "…"
 
 
+#: A UK postcode inside a room's text, or a Cambridge one cut short ("CB2 3P", "CB2").
+_ANY_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b")
+_CB_POSTCODE = re.compile(r"\bCB\d{1,2}(?:\s*\d[A-Z]{0,2})?\b", re.IGNORECASE)
+#: The last word of a street's name (abbreviations included).
+_STREET_END = frozenset(
+    {
+        "road",
+        "rd",
+        "street",
+        "st",
+        "lane",
+        "ln",
+        "avenue",
+        "ave",
+        "drive",
+        "terrace",
+        "crescent",
+        "parade",
+    }
+)
+#: Street words that read as an address only after a house number ("4-5
+#: Peas Hill", "12 Trinity Place"): rooms are called "… Garden" too.
+_NUMBERED_STREET_END = _STREET_END | {
+    "hill",
+    "way",
+    "place",
+    "row",
+    "walk",
+    "close",
+    "gardens",
+    "passage",
+    "square",
+    "green",
+}
+#: A house number at the start of a segment: "4", "4-5", "12a".
+_HOUSE_NUMBER = re.compile(r"^\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?\s+[a-z]", re.IGNORECASE)
+#: A segment that is only the town or the country.
+_TOWNS = frozenset({"cambridge", "cambridgeshire", "uk", "united kingdom", "england", "gb"})
+#: Words a venue's name may carry beside it in a room's text and still be
+#: only the venue ("Trinity Hall Cambridge", "University of X").
+_VENUE_FILLER = frozenset(
+    {"cambridge", "cambridgeshire", "uk", "england", "university", "of", "the"}
+)
+
+
+def _address_segment(segment: str) -> bool:
+    """Whether a segment of a room's text is (part of) an address: a
+    postcode, even cut short; a street ("Trinity Ln", "Wilberforce Road");
+    a house number and a street ("4-5 Peas Hill"); the town alone."""
+    words = normalise(segment).split()
+    if not words:
+        return True
+    if " ".join(words) in _TOWNS:
+        return True
+    if _ANY_POSTCODE.search(segment) or _CB_POSTCODE.search(segment):
+        return True
+    if words[-1] in _STREET_END and len([word for word in words if word != "the"]) >= 2:
+        # "Wilberforce Road", "Trinity Ln"; never "The Drive" (a room's name).
+        return True
+    return bool(_HOUSE_NUMBER.match(segment.strip())) and words[-1] in _NUMBERED_STREET_END
+
+
+def _names_the_venue(segment: str, venue_name: str) -> bool:
+    """Whether a segment of a room's text is the venue itself ("Trinity
+    Hall Cambridge" at Trinity Hall, "BrewBoard" at BrewBoard): every word
+    the venue's name has, and nothing more than generic words, or its
+    initials ("CMS"). A generic word more ("Chapel", "Lecture Theatre")
+    makes it a room of the venue, kept."""
+    own = tokens(venue_name)
+    words = tokens(segment)
+    bare = segment.strip()
+    if (
+        len(own) >= 2
+        and re.fullmatch(r"[A-Z]{2,6}", bare)
+        and bare.lower()
+        == "".join(word[0] for word in normalise(venue_name).split() if word in own)
+    ):
+        # "CMS" at the Centre for Mathematical Sciences: its initials.
+        return True
+    if not own or not words:
+        return normalise(segment) == normalise(venue_name)
+    if normalise(segment) == normalise(venue_name):
+        return True
+    # Every word of the venue's name and nothing but the town around it
+    # ("Trinity Hall Cambridge"). Any other word, generic or not, is the
+    # room's ("Trinity College Chapel", "Wolfson College Lecture Theatre").
+    said = set(normalise(segment).split())
+    name = set(normalise(venue_name).split()) - _VENUE_FILLER
+    return bool(name) and name <= said and said - name <= _VENUE_FILLER
+
+
 def clean_room(room: str | None, venue_name: str) -> str | None:
-    """A room as the row stores it: one line ≤ 120 characters, never the
-    venue's own name, never a link, an address or an honorific (a room is
-    never a person)."""
+    """A room as the row stores it: one line ≤ 120 characters of what the
+    text adds to the venue. Never the venue's own name ("BrewBoard" at
+    BrewBoard), never an address or a part of one (a street, "4-5 Peas
+    Hill", a postcode even cut short, the town), never a link or an
+    honorific (a room is never a person): "Bridgetower Room, Trinity Hall
+    Cambridge, Trinity Ln" at Trinity Hall → "Bridgetower Room"."""
     out = single_line(room, LIMITS["room"])
-    if out is None or PERSONISH.search(out) or _POSTCODE.search(out):
+    if out is None or PERSONISH.search(out):
         return None
-    if normalise(out) in ("", normalise(venue_name)):
+    segments = [part.strip() for part in re.split(r"[,;]| - | – ", out) if part.strip()]
+    kept = [
+        part
+        for part in segments
+        if not _address_segment(part) and not _names_the_venue(part, venue_name)
+    ]
+    if not kept:
+        return None
+    out = ", ".join(kept)
+    if _POSTCODE.search(out) or normalise(out) in ("", normalise(venue_name)):
         return None
     words = tokens(out)
     if words and words <= tokens(venue_name) and not re.search(r"\d", out):
@@ -245,13 +348,32 @@ class VenueIndex:
 
     venues: dict[str, VenueRow] = field(default_factory=dict)
     _by_name: dict[str, set[str]] = field(default_factory=dict)
+    #: Venues that are a town, a district or a street themselves
+    #: (`venue_class.Coarse.itself`): reached by key only, never by a name,
+    #: an alias or overlap, and never in the model's shortlist.
+    hidden: set[str] = field(default_factory=set)
 
     @classmethod
-    def of(cls, rows: Iterable[VenueRow]) -> VenueIndex:
-        index = cls()
+    def of(cls, rows: Iterable[VenueRow], hidden: Iterable[str] = ()) -> VenueIndex:
+        index = cls(hidden=set(hidden))
         for row in rows:
             index.add(row)
         return index
+
+    def hide(self, key: str) -> None:
+        """Take a venue out of matching by name (it is a town or a street)."""
+        row = self.venues.get(key)
+        if row is not None:
+            for name in self._names(row):
+                self._by_name.get(name, set()).discard(key)
+        self.hidden.add(key)
+
+    def named(self) -> list[VenueRow]:
+        """The venues a name may reach: no area venue, no hidden one."""
+        return [row for row in self.venues.values() if self.nameable(row.key)]
+
+    def nameable(self, key: str) -> bool:
+        return not is_area_key(key) and key not in self.hidden
 
     def add(self, row: VenueRow) -> None:
         old = self.venues.get(row.key)
@@ -262,9 +384,8 @@ class VenueIndex:
         for name in self._names(row):
             self._by_name.setdefault(name, set()).add(row.key)
 
-    @staticmethod
-    def _names(row: VenueRow) -> set[str]:
-        if is_area_key(row.key):
+    def _names(self, row: VenueRow) -> set[str]:
+        if not self.nameable(row.key):
             # A town found for a building: reached by its key only, never
             # by a name a building may share ("Cambridge", "Barnes").
             return set()
@@ -329,7 +450,7 @@ class VenueIndex:
             names = tokens(" ".join([row.name, *row.aliases]))
             return 3 * len(names & wanted) + len(names & title)
 
-        named = [row for row in self.venues.values() if not is_area_key(row.key)]
+        named = self.named()
         ranked = sorted(((score(row), row.name, row.key) for row in named), reverse=True)
         overlap = [self.venues[key] for points, _name, key in ranked if points > 0]
         anchors = sorted(

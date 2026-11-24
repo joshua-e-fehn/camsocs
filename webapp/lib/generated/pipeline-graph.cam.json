@@ -777,7 +777,7 @@
         {
           "doc": "docs/source-research.md",
           "section": "23",
-          "anchor": "23-location-resolution-osm-nominatim-photon-postcodesio--google-places"
+          "anchor": "23-location-resolution-osm-gazetteer-nominatim-photon-postcodesio--google-places"
         }
       ]
     },
