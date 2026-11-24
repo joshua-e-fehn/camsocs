@@ -299,11 +299,11 @@ export default function PrivacyPage() {
           register, Sport Cambridge, Camdram, CUCBC, college and JCR/MCR websites, societies’ own
           websites, Linktree pages and public calendars, talks.cam, departments’ and institutes’
           public talk listings, Playwaze and SU What’s On; the University of Cambridge’s public
-          events programme (What’s On, the Cambridge Festival and Open Cambridge), read with the
-          permission of the University offices that run it; public posts of professional Instagram
-          accounts, read only through Meta’s official Business Discovery API (part of the Instagram
-          API), never by scraping; and society mailing lists as described above. The full list and
-          our collection rules are on the <Link href="/about#data">About page</Link>.
+          events programme (What’s On, the Cambridge Festival and Open Cambridge); public posts of
+          professional Instagram accounts, read only through Meta’s official Business Discovery API
+          (part of the Instagram API), never by scraping; and society mailing lists as described
+          above. The full list and our collection rules are on the{" "}
+          <Link href="/about#data">About page</Link>.
         </p>
         <h3>If we have not written to you</h3>
         <p>
@@ -415,27 +415,27 @@ export default function PrivacyPage() {
         <h3>The AI model</h3>
         <p>
           The AI model that extracts facts from public pages, the University of Cambridge’s public
-          events programme (with its permission) and mailing-list messages, replaces names in
-          descriptions with roles, works out where events and talks take place, and drafts the
-          operator&apos;s answer to a request sent through the request form, is one of OpenAI’s. We
-          do not use OpenAI’s API service for it: the operator reaches the models through his own
-          ChatGPT subscription, by way of a relay (cliproxy) on our server at Hostinger. The text is
-          therefore sent to OpenAI under the subscription’s own terms. We have no data processing
-          agreement with OpenAI, so it is not a provider acting only on our instructions like those
-          above. Under OpenAI’s terms for Europe, a subscription held by someone living in the UK is
-          with OpenAI OpCo, LLC in the United States, and one held by someone living in the European
-          Economic Area with OpenAI Ireland Ltd; we have not yet confirmed which of the two holds
-          the operator’s subscription, and will say so here once we have. Either way OpenAI
-          processes the text outside the UK, including in the United States. OpenAI’s privacy policy
-          says it relies on adequacy decisions and on the standard contractual clauses with the UK’s
-          addendum for those transfers, but that is OpenAI’s own arrangement: the subscription’s
-          terms give us no safeguard of our own for sending the text to OpenAI, and OpenAI is not
-          certified under the UK Extension to the EU–US Data Privacy Framework. The account setting
-          that lets OpenAI use what it is sent to train its models is switched off (since 3 November
-          2026), and we send it as little as we can: talk listings from talks.cam and departments
-          only to work out a talk’s venue, and mailing-list messages only after quoted replies,
-          signatures, addresses and phone numbers are cut out, and requests only with their email
-          addresses and phone numbers replaced.
+          events programme and mailing-list messages, replaces names in descriptions with roles,
+          works out where events and talks take place, and drafts the operator&apos;s answer to a
+          request sent through the request form, is one of OpenAI’s. We do not use OpenAI’s API
+          service for it: the operator reaches the models through his own ChatGPT subscription, by
+          way of a relay (cliproxy) on our server at Hostinger. The text is therefore sent to OpenAI
+          under the subscription’s own terms. We have no data processing agreement with OpenAI, so
+          it is not a provider acting only on our instructions like those above. Under OpenAI’s
+          terms for Europe, a subscription held by someone living in the UK is with OpenAI OpCo, LLC
+          in the United States, and one held by someone living in the European Economic Area with
+          OpenAI Ireland Ltd; we have not yet confirmed which of the two holds the operator’s
+          subscription, and will say so here once we have. Either way OpenAI processes the text
+          outside the UK, including in the United States. OpenAI’s privacy policy says it relies on
+          adequacy decisions and on the standard contractual clauses with the UK’s addendum for
+          those transfers, but that is OpenAI’s own arrangement: the subscription’s terms give us no
+          safeguard of our own for sending the text to OpenAI, and OpenAI is not certified under the
+          UK Extension to the EU–US Data Privacy Framework. The account setting that lets OpenAI use
+          what it is sent to train its models is switched off (since 3 November 2026), and we send
+          it as little as we can: talk listings from talks.cam and departments only to work out a
+          talk’s venue, and mailing-list messages only after quoted replies, signatures, addresses
+          and phone numbers are cut out, and requests only with their email addresses and phone
+          numbers replaced.
         </p>
         <h3>Map services</h3>
         <p>

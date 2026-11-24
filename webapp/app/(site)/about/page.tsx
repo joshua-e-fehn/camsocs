@@ -50,7 +50,7 @@ const SOURCES = [
   ["Playwaze and SU What's On", "leagues and events"],
   [
     "The University of Cambridge's public events programme (What's On, the Cambridge Festival, Open Cambridge)",
-    "every public event it lists, with its images, read with the University's permission",
+    "every public event it lists, with its images",
   ],
   [
     "Instagram, only through Meta's official Business Discovery API",
@@ -132,12 +132,9 @@ export default async function AboutPage() {
               robots.txt or an AI opt-out asks otherwise, because they exist to tell students about
               the society. The other exception is the University of Cambridge’s public events
               programme (What’s On, the Cambridge Festival and Open Cambridge, and their event
-              images): University Information Services, which runs the events service, and the
-              Office of External Affairs and Communications, which runs the programme, gave
-              permission on 2 November 2026 for it to be read and for the AI model to read its text.
-              Permission to read the programme is not an endorsement: CAMsocs remains unofficial and
-              is not run by or for the University. The rest of that site keeps its robots.txt. Crawl
-              delays always apply, and the harvester makes one request at a time per site.
+              images), which is read, also by the AI model. CAMsocs remains unofficial and is not
+              run by or for the University. The rest of that site keeps its robots.txt. Crawl delays
+              always apply, and the harvester makes one request at a time per site.
             </li>
             <li>
               <strong>Nothing behind a login.</strong> Pages that need a Raven or members’ login, or
@@ -154,12 +151,12 @@ export default async function AboutPage() {
               reached through the operator’s own ChatGPT subscription rather than OpenAI’s API
               service (the <Link href="/privacy#sharing">privacy notice</Link> says what that
               means), reads free text from societies’ own pages to pull out facts such as how to
-              join, and the University’s public events listings (with the permission above) to keep
-              private individuals’ names and notices out of them. A fact counts as <em>found</em>{" "}
-              only when the model quotes the source word for word and the quote is checked;
-              otherwise it is labelled <em>inferred</em>. Content from tbc.xyz is never given to an
-              AI model. Talk listings from talks.cam and departments are given to it only to work
-              out where a talk takes place (see <Link href="#talks">Talks</Link>).
+              join, and the University’s public events listings to keep private individuals’ names
+              and notices out of them. A fact counts as <em>found</em> only when the model quotes
+              the source word for word and the quote is checked; otherwise it is labelled{" "}
+              <em>inferred</em>. Content from tbc.xyz is never given to an AI model. Talk listings
+              from talks.cam and departments are given to it only to work out where a talk takes
+              place (see <Link href="#talks">Talks</Link>).
             </li>
             <li>
               <strong>Mailing lists.</strong> Events announced on society mailing lists are shown
@@ -202,9 +199,8 @@ export default async function AboutPage() {
               code that picks out the title, speakers, time and place. No AI agent fetches talks.cam
               or a department’s pages, and no language model writes or rewrites a talk. Once a talk
               is stored, a language model is given its text only to work out the venue (the building
-              and room), so the talk can be placed on a map; this use of talks.cam text is with
-              permission. Our robots.txt asks AI crawlers to keep off the talk pages and calendar
-              feeds, as talks.cam’s own does.
+              and room), so the talk can be placed on a map. Our robots.txt asks AI crawlers to keep
+              off the talk pages and calendar feeds, as talks.cam’s own does.
             </li>
             <li>
               <strong>Speakers as published.</strong> A talk’s speakers and their affiliations are
