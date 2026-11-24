@@ -15,6 +15,7 @@ import type { MapDayDirection } from "@/lib/analytics-events"
 import { addDays, dayWindow, formatDayShort, startOfWeek } from "@/lib/calendar"
 import {
   countPhrase,
+  farAway,
   itemId,
   itemStatus,
   type MapPin,
@@ -44,6 +45,10 @@ import { relativeDay } from "@/lib/week-strip"
  *    calendar does (no router round trip).
  *  - Past and now (owner decision 5): a 30-second clock greys what has ended
  *    and rings what is on, in words as well.
+ *  - Far venues (an away fixture, a tour abroad: beyond `MAP_PIN_BOUNDS`)
+ *    get no pin, so the camera never fits the county or the continent; their
+ *    items are listed under "Away from Cambridge" with their place, address
+ *    and Directions.
  *
  * The talks boundary (G1): the server preloads the day's events only; the
  * talks and talks.cam-derived events join here once hydrated
@@ -159,7 +164,7 @@ export function DayMap({
     () => new Map((day?.venues ?? []).map((venue) => [venue.key, venue])),
     [day?.venues],
   )
-  const sections = useMemo(() => mapSections(items), [items])
+  const sections = useMemo(() => mapSections(items, day?.venues ?? []), [items, day?.venues])
   const canvasPins = useMemo<DayMapPin[]>(
     () =>
       pins.map((pin: MapPin) => ({
@@ -331,8 +336,14 @@ export function DayMap({
   const row = (item: MapItem) => {
     const venue = item.venueKey ? venues.get(item.venueKey) : undefined
     const pin = item.venueKey ? pinByVenue.get(item.venueKey) : undefined
+    // A far venue (an away fixture, a town abroad) has no pin: its directions
+    // are the way to find it, even when only its town is known.
+    const away = farAway(venue)
     const directions =
-      venue && venue.lat !== undefined && venue.lng !== undefined && item.precision !== "area"
+      venue &&
+      venue.lat !== undefined &&
+      venue.lng !== undefined &&
+      (item.precision !== "area" || away)
         ? directionsHref(
             {
               name: venue.name,
@@ -353,6 +364,7 @@ export function DayMap({
           open={pin !== undefined && openVenue === pin.venueKey}
           pointed={pin !== undefined && hoveredPin === pin.venueKey}
           address={venue?.address}
+          showAddress={away}
           directions={directions}
           pinCount={pin?.items.length}
           onShow={pin ? () => showOnMap(item) : undefined}
@@ -565,6 +577,17 @@ export function DayMap({
           {sections.placed.length > 0 && (
             <ul className="flex flex-col divide-y divide-dashed">{sections.placed.map(row)}</ul>
           )}
+          {sections.away.length > 0 && (
+            <section aria-labelledby="map-away" className="pt-4">
+              <h2
+                id="map-away"
+                className="mx-4 border-t-2 border-foreground pt-2 pb-1 font-mono text-[0.6875rem] font-medium tracking-[0.14em] uppercase sm:mx-5"
+              >
+                Away from Cambridge · {sections.away.length}
+              </h2>
+              <ul className="flex flex-col divide-y divide-dashed">{sections.away.map(row)}</ul>
+            </section>
+          )}
           {sections.online.length > 0 && (
             <section aria-labelledby="map-online" className="pt-4">
               <h2
@@ -589,7 +612,10 @@ export function DayMap({
           )}
           <p className="px-4 pt-6 text-xs text-muted-foreground sm:px-5">
             Places are matched from each listing’s own words; check the item’s page before you go.
-            Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap.
+            Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap. Some places are
+            placed by postcode via postcodes.io: contains OS data © Crown copyright and database
+            right; contains Royal Mail data © Royal Mail copyright and database right; source:
+            Office for National Statistics, licensed under the Open Government Licence v3.0.
           </p>
         </div>
       </aside>

@@ -97,6 +97,8 @@ What the site serves for crawlers and sharing, already in the code: `app/robots.
 | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` (`POSTHOG_APP_HOST` optional, default `https://eu.posthog.com`) | the broker overview's website traffic, read from PostHog (`convex/traffic.ts`, "Website traffic" below) | the camsocs project's personal API key from the 1Password Mya item `PostHog` (field `personal API key`, the same key as the dashboards and the VPS monitor; it needs `query:read`) and `330133`. Production only; unset = the card says PostHog is not set up |
 | `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET`, `GSC_REFRESH_TOKEN` (`GSC_SITE_URL` optional, default `SITE_URL` + `/`) | the broker overview's Google Search numbers, read from Search Console | the Desktop OAuth client `camsocs search console reader` of GCP project `camsocs-515220` (camsocs.uk organisation, since 2026-11-19) and its refresh token for `webmasters` (read and write, for the sitemap resubmission) granted by joshua@camsocs.uk; all three in the Mya item `CAMsocs Search Console OAuth (camsocs.uk)` ("Website traffic" below). Production only; unset = the card says Search Console is not set up and the daily sitemap resubmission does nothing |
 
+| `GOOGLE_PLACES_API_KEY` | Google Places Text Search, place ids only (docs/locations-and-map.md §0.3) | the key of GCP project `camsocs-515220`, restricted to `places.googleapis.com` (£20 budget alert); 1Password Mya vault, item "CAMsocs Google Places API key (camsocs-515220)". **Set on dev and production since 2026-11-24.** No Convex function reads it today: the pipeline's `locate` stage makes the Places requests with its own copy (§4); it is kept here for a server-side lookup. Rotation: docs/key-rotation.md |
+
 `bunx convex env list --prod` prints values; use `bunx convex env list --prod --names-only` to check what is set.
 
 ### PostHog (monitoring)
@@ -227,6 +229,14 @@ The pipeline reads `pipeline/.env` (dev) and, for another environment, a second 
    ```
 
    Both unset, `monitor` checks nothing and exits 0. `pixi run pipeline -- --env prod monitor` runs the four checks once from the laptop.
+
+   Optional, for exact "Open in Google Maps" links (stage `locate`, source-research §23): the Places key, the same value as Convex's `GOOGLE_PLACES_API_KEY` (§3). It is set in `/opt/camsocs/pipeline/.env.prod` on the host (installed 2026-11-24) and goes in the laptop's `pipeline/.env.prod` (and `pipeline/.env` for dev) the same way:
+
+   ```dotenv
+   GOOGLE_PLACES_API_KEY=<1Password Mya vault, item "CAMsocs Google Places API key (camsocs-515220)">
+   ```
+
+   Unset, the stage skips place ids with a note; coordinates never come from Google (OpenStreetMap Nominatim and Photon, postcodes.io: no key). `status` shows `Places key: set`, never the value.
 
    Unset `POSTHOG_KEY` (the default, and `pipeline/.env`'s) means nothing is sent and the SDK is not loaded. `POSTHOG_HOST` defaults to the EU host and `POSTHOG_ENV` to `development`. Events: `harvest_run_started`, `harvest_stage_completed`, `harvest_run_finished`, as `camsocs-harvester` without a person profile, carrying counts, durations, statuses, stage names and exception class names only (plus the SDK's library name and version; the host's OS and Python version are stripped). With the key set, each cliproxy request is also an `$ai_generation` (LLM analytics, ENG-9): model, provider `cliproxy`, token counts, latency, HTTP status, error flag and class name, run key as trace id and stage, never the prompt, the reply, error text or the base URL; talks stages make none. Any cost PostHog shows for those generations is indicative only (cliproxy's models match no public price list; no custom pricing is set). Details: `docs/ops-vps.md` §6. Closing the client at the end of a run waits at most about 6 s, so PostHog trouble never stretches a harvest. On the VPS host the file is `/opt/camsocs/pipeline/.env.prod` (`0600`, owned by `camsocs`; `docs/ops-vps.md` §2, §6, §7): the harvest reads it there like `PIPELINE_API_KEY`, so no unit or installer change is involved.
 2. Run with `--env prod` (or `CAMSOCS_ENV_FILE=pipeline/.env.prod`, relative to the repo root; the flag wins):

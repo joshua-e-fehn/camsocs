@@ -124,6 +124,7 @@ export const SOURCE_TYPES = [
   // Location resolution (docs/locations-and-map.md §1a, source-research §23).
   "osm_nominatim",
   "google_places",
+  "postcodes_io",
 ] as const
 export type SourceType = (typeof SOURCE_TYPES)[number]
 

@@ -1,6 +1,6 @@
 # Rotating keys outside the VPS (ENG-37)
 
-How to replace each credential production uses that does not live on the VPS, what breaks while it is half done, and how to check it worked. The VPS's own keys (production `PIPELINE_API_KEY`, the cliproxy key, the deploy key, Slack, Meta, Camdram, the PostHog values in `/opt/camsocs/pipeline/.env.prod`) are in docs/ops-vps.md §7; this page links there where a key lives in both places.
+How to replace each credential production uses that does not live on the VPS, what breaks while it is half done, and how to check it worked. The VPS's own keys (production `PIPELINE_API_KEY`, the cliproxy key, the deploy key, Slack, Meta, Camdram, the PostHog values in `/opt/camsocs/pipeline/.env.prod`) are in docs/ops-vps.md §7; the Google Places key, which lives in both, is below; this page links there where a key lives in both places.
 
 **When.** Rotate at once after a suspected leak (then follow docs/compliance/breach-procedure.md as well); otherwise when a person or device with access goes away, and at the annual review in July for anything older than a year. Do it outside the harvest windows (not 04:30–06:30 daily, not 02:00–08:00 on Sundays) when a key is shared with the VPS.
 
@@ -15,6 +15,7 @@ Where each key lives (read 2026-11-04, names only: `bunx convex env list --prod 
 | Google OAuth client | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | — | Google Cloud project `camsocs` (admin@joshua-fehn.de) |
 | PostHog project token (`phc_`) | `POSTHOG_KEY` | `NEXT_PUBLIC_POSTHOG_KEY` | VPS `.env.prod` `POSTHOG_KEY`; 1Password `PostHog` |
 | PostHog personal API key (`phx_`) | — | `POSTHOG_PERSONAL_API_KEY` (type `sensitive`) | VPS `.env.prod`; the dashboards script; 1Password `PostHog` |
+| Google Places key | `GOOGLE_PLACES_API_KEY` (dev and production; no function reads it yet) | — | VPS `.env.prod` `GOOGLE_PLACES_API_KEY` (stage `locate`); laptop `pipeline/.env` / `.env.prod`; 1Password "CAMsocs Google Places API key (camsocs-515220)" |
 | IndexNow key | — | — | `webapp/public/<key>.txt` and `INDEXNOW_KEY` in `pipeline/.../indexnow.py` (public by design) |
 | Vercel access tokens | — | — | Vercel account → Tokens; the CLI's own login; the "Mya token" |
 | Resend (`RESEND_*`, `INBOUND_*`) | not set on production | — | when J3 is done: docs/setup/inbox-instagram.md |
@@ -60,6 +61,17 @@ Breaks while half done: nothing, as long as the old secret stays enabled until s
 **Project token (`phc_…`, ingest only, public by design).** It ships to every browser, so rotating it only matters if it is abused to send junk events. PostHog → Project settings → General → Project API key → **Reset**. Then set it in all three places in one sitting: Vercel `NEXT_PUBLIC_POSTHOG_KEY` (Production; inlined at build time, so **redeploy**), `bunx convex env set --prod POSTHOG_KEY`, the VPS `.env.prod` (docs/ops-vps.md §7), and 1Password. Breaks while half done: the senders still holding the old token are refused, silently (no visitor sees anything; Convex logs `PostHog refused listing_request_received`). Check: an accepted analytics consent on camsocs.uk produces a `$pageview` in PostHog's activity view within a minute (exclude internal filters off), and the hourly monitor's `stale_harvest` stays ok after the next run.
 
 **Personal API key (`phx_…`).** Used by the Vercel production build to upload source maps, by the VPS monitor and by `ops/posthog/dashboards.py`. Create the new key first (PostHog → Settings → Personal API keys → Create; camsocs project only; scopes: error tracking write, insight and dashboard write, query read), then: Vercel `POSTHOG_PERSONAL_API_KEY` (Production, **Sensitive**) and redeploy — a wrong or under-scoped key **fails the production build** (Turbopack aborts on a failed upload; the previous deployment stays live); the VPS per docs/ops-vps.md §7 (check `journalctl -u camsocs-monitor -n 10` shows no `unknown`); 1Password. Delete the old key last.
+
+## Google Places key (`GOOGLE_PLACES_API_KEY`)
+
+What it does: Places Text Search with the IDs-only field mask (`places.id`), so the `locate` stage can store a venue's `googlePlaceId` for an exact "Open in Google Maps" link (source-research §23). A leak lets someone spend the project's Places quota; it reads nothing of ours. GCP project `camsocs-515220` (camsocs.uk organisation), the key restricted to `places.googleapis.com`, with a £20 budget alert.
+
+1. Create the new key, restricted the same way (from a shell signed in to gcloud as the project's owner): `gcloud services api-keys create --project=camsocs-515220 --display-name="camsocs places <date>" --api-target=service=places.googleapis.com`. The command prints the key string once: copy it straight into the 1Password Mya vault item "CAMsocs Google Places API key (camsocs-515220)", never into a chat or a file.
+2. Put it everywhere it lives (table above): on the VPS `sudoedit /opt/camsocs/pipeline/.env.prod` (it stays `0600 camsocs`); the laptop's `pipeline/.env` and `pipeline/.env.prod`; Convex `bunx convex env set GOOGLE_PLACES_API_KEY` and `bunx convex env set --prod GOOGLE_PLACES_API_KEY` (each prompts).
+3. Check: `pixi run pipeline -- --env prod status` shows `Places key: set`; the next `locate` run's report has `placesCalls` above 0 and no `Google Places: Places answered 403` note (when venues need ids).
+4. Delete the old key: `gcloud services api-keys list --project=camsocs-515220` (names and display names only), then `gcloud services api-keys delete <old key's name> --project=camsocs-515220`.
+
+While half done: a run with the old key deleted and the new one not yet in `.env.prod` gets 403 and stops asking Places for that run (a note, never a failure); place ids are filled in on a later run.
 
 ## IndexNow key
 

@@ -3,7 +3,11 @@ import { addDays, londonIsoDate, londonMidnight } from "../lib/calendar"
 import { eventKey } from "../lib/keys"
 import { api, internal } from "./_generated/api"
 import type { ClaimInput } from "./ingest/claims"
-import { type ItemLocationInput, LOCATION_RETENTION_MS } from "./ingest/locations"
+import {
+  type ItemLocationInput,
+  LOCATION_RETENTION_MS,
+  MAX_ORGANISERS_EXPANDED,
+} from "./ingest/locations"
 import { newTest, signedInAs, type TestConvex, withEnv } from "./lib/harness.testing"
 import { talkKey } from "./lib/talks"
 
@@ -362,6 +366,92 @@ describe("locations/pending and venues/all", () => {
     expect(items.find((item) => item.itemKey === TALKS.dept)?.stored).toBeUndefined()
   })
 
+  test("carries the organisers' usual places: college, sessions' and events' venues, departments", async () => {
+    const t = newTest()
+    await seed(t)
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        claim("organisation", "org-invented-college", "name", "Invented College"),
+        claim("organisation", "org-invented-college", "orgType", "college"),
+        claim("organisation", "org-maths", "collegeKeys", ["org-invented-college"]),
+        claim("session", "ses-maths-weekly", "orgKey", "org-maths"),
+        claim("session", "ses-maths-weekly", "title", "Weekly problem session"),
+        claim("session", "ses-maths-weekly", "venueKey", VENUES.ini),
+        claim("session", "ses-maths-social", "orgKey", "org-maths"),
+        claim("session", "ses-maths-social", "title", "Social"),
+        claim("session", "ses-maths-social", "venueText", "The Invented Arms"),
+      ],
+    })
+    const items = []
+    let cursor: string | null = null
+    for (let call = 0; call < 10; call++) {
+      const page: Awaited<ReturnType<typeof t.query<typeof internal.ingest.locations.pending>>> =
+        await t.query(internal.ingest.locations.pending, { from: NOW, to: NOW + 10 * DAY, cursor })
+      items.push(...page.page)
+      cursor = page.continueCursor
+      if (page.isDone) break
+    }
+    const lecture = items.find((item) => item.itemKey === KEYS.lecture)
+    expect(lecture?.organiserPlaces).toEqual([
+      "Invented College",
+      "Isaac Newton Institute",
+      "The Invented Arms",
+      // Then the places its own latest events name (online ones left out),
+      // most used first, ties by name, up to six in all.
+      "Around town",
+      "MR2, CMS",
+      "Seminar Room 1, INI",
+    ])
+    const talk = items.find((item) => item.itemKey === TALKS.dept)
+    expect(talk?.organiserPlaces).toEqual(["Faculty of History"])
+  })
+
+  test("works out the usual places of at most MAX_ORGANISERS_EXPANDED organisers per call", async () => {
+    const t = newTest()
+    const count = MAX_ORGANISERS_EXPANDED + 5
+    const orgs = Array.from(
+      { length: count },
+      (_, i) => `org-invented-${String(i).padStart(2, "0")}`,
+    )
+    const events = orgs.map((_, i) => eventKey("ics", `cap-${i}`))
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: orgs.flatMap((org, i) => [
+        claim("organisation", org, "name", `Invented Society ${i}`),
+        claim("organisation", org, "level", "university"),
+        claim("session", `ses-${org}`, "orgKey", org),
+        claim("session", `ses-${org}`, "title", "Weekly meeting"),
+        claim("session", `ses-${org}`, "venueText", `Invented Hall ${i}`),
+      ]),
+    })
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: events.flatMap((key, i) =>
+        Object.entries({
+          title: `Invented meeting ${i}`,
+          startsAt: NOON + i * 60_000,
+          visibility: "public",
+          source: "ics",
+          sourceUrl: `https://example.org/cap-${i}`,
+          externalId: `cap-${i}`,
+        }).map(([field, value]) => claim("event", key, field, value)),
+      ),
+    })
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: events.map((eventKey, i) => ({
+        eventKey,
+        organisers: [{ orgKey: orgs[i] as string, role: "organiser" as const }],
+      })),
+    })
+    const page = await t.query(internal.ingest.locations.pending, {
+      from: NOW,
+      to: NOW + 10 * DAY,
+      cursor: null,
+    })
+    const hinted = page.page.filter((item) => item.organiserPlaces !== undefined)
+    expect(page.page).toHaveLength(count)
+    expect(hinted).toHaveLength(MAX_ORGANISERS_EXPANDED)
+    expect(hinted[0]?.organiserPlaces).toEqual(["Invented Hall 0"])
+  })
+
   test("also offers a multi-day event that started before the window and still runs", async () => {
     const t = newTest()
     await seed(t)
@@ -534,6 +624,40 @@ describe("map.day", () => {
       precision: "building",
       venueKey: null,
       placeLabel: "Somewhere without coordinates",
+    })
+  })
+
+  test("a venue far from Cambridge (an away fixture) is accepted and returned with its place", async () => {
+    const t = newTest()
+    await seed(t)
+    const far = "ven-invented-golf-club"
+    await t.mutation(internal.ingest.claims.ingest, {
+      claims: [
+        ["name", "Invented Golf Club"],
+        ["address", "Pond Road, Woking GU22 0JZ"],
+        ["lat", 51.305],
+        ["lng", -0.585],
+      ].map(([field, value]) =>
+        claim(
+          "venue",
+          far,
+          field as string,
+          value,
+          "osm_nominatim",
+          "https://www.openstreetmap.org/way/9",
+        ),
+      ),
+    })
+    const result = await t.mutation(internal.ingest.locations.batch, {
+      locations: [row({ itemKey: KEYS.lecture, venueKey: far })],
+    })
+    expect(result).toMatchObject({ inserted: 1, rejected: [] })
+    const day = await t.query(api.map.day, { date: DATE, talks: "exclude" })
+    const lecture = day.items.find((item) => item.key === KEYS.lecture)
+    expect(lecture).toMatchObject({ venueKey: far, placeLabel: "Invented Golf Club" })
+    expect(day.venues.find((venue) => venue.key === far)).toMatchObject({
+      lat: 51.305,
+      lng: -0.585,
     })
   })
 

@@ -14,6 +14,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from camsocs_pipeline.extract.memo import memo_key
+from camsocs_pipeline.keys import venue_key
 from camsocs_pipeline.locate.model import LIMITS, PendingItem, VenueRow
 
 #: Words that say nothing about which building it is.
@@ -50,6 +51,55 @@ _STOP = frozenset(
         "rd",
     ]
 )
+#: Words many venue names share ("Trinity College" and "King's College"
+#: Chapel share "college"): left out when two names, or a name and an item's
+#: text, are compared for a word in common (`distinctive`).
+GENERIC = frozenset(
+    [
+        "college",
+        "colleges",
+        "hall",
+        "halls",
+        "centre",
+        "center",
+        "society",
+        "club",
+        "institute",
+        "department",
+        "dept",
+        "faculty",
+        "school",
+        "chapel",
+        "church",
+        "theatre",
+        "theater",
+        "seminar",
+        "lecture",
+        "lectures",
+        "museum",
+        "library",
+        "house",
+        "court",
+        "studio",
+        "lab",
+        "laboratory",
+        "floor",
+        "main",
+        "new",
+        "old",
+        "great",
+        "little",
+        "north",
+        "south",
+        "east",
+        "west",
+    ]
+)
+#: Venue keys of a town or district a lookup found where a building was
+#: asked for (`area_venue_key`): an area's anchor, never an exact place.
+#: ``--`` never occurs in `keys.venue_key` (a slug has single hyphens), so
+#: no named venue can take one of these keys.
+AREA_KEY_PREFIX = "ven-area--"
 #: A UK postcode, and a trailing ", Cambridge" / ", UK" a venue text often ends with.
 _POSTCODE = re.compile(r"\bCB\d{1,2}\s*\d[A-Z]{2}\b", re.IGNORECASE)
 _TAIL = re.compile(r"(?:,\s*(?:cambridge(?:shire)?|uk|united kingdom|england))+\s*$", re.IGNORECASE)
@@ -132,6 +182,22 @@ def tokens(text: str) -> set[str]:
     return {word for word in normalise(text).split() if word not in _STOP and len(word) > 1}
 
 
+def distinctive(text: str) -> set[str]:
+    """`tokens` without the words many venue names share (`GENERIC`)."""
+    return tokens(text) - GENERIC
+
+
+def area_venue_key(name: str) -> str:
+    """The key of the area venue a town or district found by a lookup is
+    posted under ("Leuven" → ``ven-area--leuven``)."""
+    return AREA_KEY_PREFIX + venue_key(name).removeprefix("ven-")
+
+
+def is_area_key(key: str | None) -> bool:
+    """Whether `key` is an area venue's (`area_venue_key`)."""
+    return bool(key) and key.startswith(AREA_KEY_PREFIX)  # type: ignore[union-attr]
+
+
 def is_online_only(text: str) -> bool:
     """Whether a venue text names only an online place: "Zoom", "Online
     (link sent on registration)", a meeting link. "Hybrid", "In person and
@@ -198,6 +264,10 @@ class VenueIndex:
 
     @staticmethod
     def _names(row: VenueRow) -> set[str]:
+        if is_area_key(row.key):
+            # A town found for a building: reached by its key only, never
+            # by a name a building may share ("Cambridge", "Barnes").
+            return set()
         return {n for n in (normalise(row.name), *(normalise(a) for a in row.aliases)) if n}
 
     def get(self, key: str | None) -> VenueRow | None:
@@ -248,23 +318,22 @@ class VenueIndex:
         """Up to `size` venues the model is shown: those sharing the most words
         with the item's venue text, title and organisers, then the colleges
         and the main sites (`ANCHOR_NAMES`), then more by overlap."""
-        wanted = tokens(item.place_text) | tokens(" ".join(item.organisers))
+        wanted = (
+            tokens(item.place_text)
+            | tokens(" ".join(item.organisers))
+            | tokens(" ".join(item.organiser_places))
+        )
         title = tokens(item.title)
 
         def score(row: VenueRow) -> int:
             names = tokens(" ".join([row.name, *row.aliases]))
             return 3 * len(names & wanted) + len(names & title)
 
-        ranked = sorted(
-            ((score(row), row.name, row.key) for row in self.venues.values()), reverse=True
-        )
+        named = [row for row in self.venues.values() if not is_area_key(row.key)]
+        ranked = sorted(((score(row), row.name, row.key) for row in named), reverse=True)
         overlap = [self.venues[key] for points, _name, key in ranked if points > 0]
         anchors = sorted(
-            (
-                row
-                for row in self.venues.values()
-                if row.college_key or normalise(row.name) in ANCHOR_NAMES
-            ),
+            (row for row in named if row.college_key or normalise(row.name) in ANCHOR_NAMES),
             key=lambda row: row.name,
         )
         lead = min(SHORTLIST_LEAD, size // 2)
@@ -279,7 +348,10 @@ class VenueIndex:
 def input_hash(item: PendingItem, prompt_version: str) -> str:
     """The hash of everything the stage reads of an item (§2 step 1): the
     prompt version, kind, title, description (its first 1,500 characters),
-    venue text, venue key, online flag and organisers. A stored row with this
+    venue text, venue key, online flag, organisers and the organisers' usual
+    places, these only when the item names no venue (the only case the hint
+    decides; in any order, so a society's new event that reorders them does
+    not ask again for every item it lists). A stored row with this
     hash is not resolved again. ``<prompt>:<sha256>``, inside the server's
     ``[A-Za-z0-9:_-]{1,128}``."""
     digest = memo_key(
@@ -291,6 +363,11 @@ def input_hash(item: PendingItem, prompt_version: str) -> str:
         item.venue_key or "",
         "online" if item.online else "",
         "\n".join(item.organisers),
+        *(
+            ["\n".join(sorted(item.organiser_places))]
+            if item.organiser_places and not item.place_text and not item.venue_key
+            else []
+        ),
     )
     return f"{prompt_version}:{digest}"
 
@@ -301,18 +378,23 @@ def by_overlap(rows: Sequence[VenueRow], text: str) -> VenueRow | None:
     words = tokens(text)
     if not words:
         return None
-    hits = [row for row in rows if words and tokens(row.name) == words]
+    hits = [row for row in rows if not is_area_key(row.key) and words and tokens(row.name) == words]
     return hits[0] if len(hits) == 1 else None
 
 
 __all__ = [
     "ANCHOR_NAMES",
+    "AREA_KEY_PREFIX",
+    "GENERIC",
     "PERSONISH",
     "SHORTLIST_SIZE",
     "VenueIndex",
+    "area_venue_key",
     "by_overlap",
     "clean_room",
+    "distinctive",
     "input_hash",
+    "is_area_key",
     "is_online_only",
     "normalise",
     "single_line",

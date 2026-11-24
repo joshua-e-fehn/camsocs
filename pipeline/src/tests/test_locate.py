@@ -128,13 +128,23 @@ def osm(name: str, lat: float = 52.2, lng: float = 0.12, osm_id: int = 42) -> di
     }
 
 
+def nominatim_query(request: httpx.Request) -> str:
+    """A free-text search's `q`, or "street=…|postalcode=…" for a structured one."""
+    params = request.url.params
+    if "q" in params:
+        return params["q"]
+    return "|".join(
+        f"{key}={params[key]}" for key in ("street", "city", "postalcode") if key in params
+    )
+
+
 def nominatim() -> Nominatim:
     return Nominatim(user_agent=UA, base_url=NOMINATIM, sleep=lambda _s: None)
 
 
 def mock_nominatim(net: respx.MockRouter, answers: dict[str, list[dict[str, Any]]]) -> respx.Route:
     def answer(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=answers.get(request.url.params["q"], []))
+        return httpx.Response(200, json=answers.get(nominatim_query(request), []))
 
     return net.get(f"{NOMINATIM}/search").mock(side_effect=answer)
 
@@ -213,10 +223,20 @@ def test_the_shortlist_puts_overlap_first_and_always_has_the_colleges() -> None:
 
 def test_the_input_hash_changes_with_what_is_read_and_fits_the_server() -> None:
     first = input_hash(event(venueText="ADC"), PROMPT_NAME)
-    assert first.startswith("locate_v1:") and len(first) <= 128
+    assert first.startswith("locate_v2:") and len(first) <= 128
     assert first == input_hash(event(venueText="ADC"), PROMPT_NAME)
     assert first != input_hash(event(venueText="ADC Theatre"), PROMPT_NAME)
-    assert first != input_hash(event(venueText="ADC"), "locate_v2")
+    assert first != input_hash(event(venueText="ADC"), "locate_v1")
+    # The organisers' usual places count only when the item names no venue,
+    # and in any order.
+    assert first == input_hash(event(venueText="ADC", organiserPlaces=["Quokka Hall"]), PROMPT_NAME)
+    bare = input_hash(event(), PROMPT_NAME)
+    hinted = input_hash(event(organiserPlaces=["Quokka Hall", "Burrow Court"]), PROMPT_NAME)
+    assert bare != hinted
+    assert hinted == input_hash(event(organiserPlaces=["Burrow Court", "Quokka Hall"]), PROMPT_NAME)
+    assert input_hash(event(venueKey=ADC.key), PROMPT_NAME) == input_hash(
+        event(venueKey=ADC.key, organiserPlaces=["Quokka Hall"]), PROMPT_NAME
+    )
 
 
 # --- deterministic rules ------------------------------------------------------------------------
@@ -381,7 +401,7 @@ def test_a_new_venue_is_found_on_osm_and_posted_with_osm_values_only(
         "Room 2",
         "llm",
         "bulk-model-1",
-        "locate_v1",
+        "locate_v2",
     )
     assert row.input_hash == input_hash(item, PROMPT_NAME)
     claims = {c.field: c for c in run.venue_claims()}
@@ -398,30 +418,12 @@ def test_a_new_venue_is_found_on_osm_and_posted_with_osm_values_only(
     assert "ven-trinity-college: Trinity College" in fake.calls[0]["text"]
 
 
-def test_an_osm_place_without_a_name_or_with_a_persons_name_is_no_venue(
-    tmp_path, net: respx.MockRouter
-) -> None:
-    nameless = {**osm("x"), "name": ""}
-    mock_nominatim(
-        net,
-        {
-            "Dr Quokka's rooms, Cambridge": [osm("Dr Quokka's rooms")],
-            "1 Burrow Lane, Cambridge": [nameless],
-        },
-    )
-    fake = FakeLLM(
-        lambda text, _tier: (
-            {"decision": "new", "new_venue": {"name": "Dr Quokka's rooms"}}
-            if "Venue as listed: the rooms" in text
-            else {
-                "decision": "new",
-                "new_venue": {"name": "Burrow House", "address": "1 Burrow Lane, Cambridge"},
-            }
-        )
-    )
+def test_an_osm_place_with_a_persons_name_is_no_venue(tmp_path, net: respx.MockRouter) -> None:
+    mock_nominatim(net, {"Dr Quokka's rooms, Cambridge": [osm("Dr Quokka's rooms")]})
+    fake = FakeLLM(reply(decision="new", new_venue={"name": "Dr Quokka's rooms"}))
     run = locator(tmp_path, fake)
-    rows = run.resolve([event("evt-a", venueText="the rooms"), event("evt-b", venueText="x")])
-    assert [r.precision for r in rows] == ["unknown", "unknown"]
+    [row] = run.resolve([event("evt-a", venueText="the rooms")])
+    assert row.precision == "unknown"
     assert run.venue_claims() == []
 
 
@@ -519,7 +521,7 @@ def test_nothing_found_is_unknown_with_a_note(tmp_path, net: respx.MockRouter) -
     fake = FakeLLM(reply(decision="new", new_venue={"name": "The Lost Burrow"}))
     [row] = locator(tmp_path, fake).resolve([event(venueText="The Lost Burrow")])
     assert row.precision == "unknown" and row.venue_key is None
-    assert row.note == "not found on OpenStreetMap: The Lost Burrow"
+    assert row.note == "not found on OpenStreetMap or by postcode: The Lost Burrow"
     unknown = FakeLLM(reply(decision="unknown", note="no venue and no host"))
     [row] = locator(tmp_path / "b", unknown).resolve([event("evt-b")])
     assert (row.precision, row.note) == ("unknown", "no venue and no host")
@@ -757,12 +759,14 @@ def test_a_row_round_trips_the_wire() -> None:
         "method": "source",
         "inputHash": "locate_v1:abc",
     }
-    assert LocateReply.model_validate({"decision": "online"}).precision is None
+    assert LocateReply.model_validate({"decision": "online"}).precision == "online"
+    assert LocateReply.model_validate({}).decision == "unknown"
 
 
 def test_the_prompt_names_its_placeholders() -> None:
     text = resolver_module.PROMPT_PATH.read_text(encoding="utf-8")
     assert "$venues" in text and "$item" in text
+    assert resolver_module.PROMPT_PATH.name == f"{PROMPT_NAME}.md" == "locate_v2.md"
 
 
 # --- settings ----------------------------------------------------------------------------------

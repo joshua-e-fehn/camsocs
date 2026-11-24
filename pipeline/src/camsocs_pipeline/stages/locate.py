@@ -9,7 +9,9 @@ Places are `locate/resolver.py`'s; this module wires them to the run:
 
 - the model through the run's `LLMClient` (bulk, strong fallback) and the
   reply cache; without a configured model, cached replies only;
-- Nominatim at one request a second with the crawler's User-Agent;
+- the geocoding chain (`locate/geocode.py`): Nominatim and Photon at one
+  request a second each, postcodes.io paced, all with the crawler's
+  User-Agent;
 - Places only with `GOOGLE_PLACES_API_KEY` (a note otherwise), for place ids;
 - venue claims first (`claims`), then the rows (`locations/batch`), then the
   14-day coverage (`locations/summary`) for the run report.
@@ -23,9 +25,13 @@ University student). That permission covers location resolution only; the
 rules for *fetching* talks.cam (§6) and the G1 render boundary are unchanged,
 and the fetch and claim guards (`claims.NO_LLM_SOURCE_TYPES`,
 `extract.llm.assert_llm_source_allowed`) still apply to every other path.
-The venue claims this stage posts carry OpenStreetMap's and Google's own
-values (name, address, coordinates, place id), never the item's text nor
-the model's wording of it: the model's reply only chooses what to look up.
+The venue claims this stage posts carry OpenStreetMap's, postcodes.io's and
+Google's own values (name, address, coordinates, place id), never the
+item's text. The model's wording becomes a claim only as a building's name
+(and address) for an object its source does not name, posted `inferred`,
+only when it reads as a building's name the item's own text gives
+(`resolver.model_building_name`) and never for a talk or a talks.cam-derived
+event (`resolver.model_names_allowed`): venues are public site-wide.
 """
 
 from __future__ import annotations
@@ -39,7 +45,9 @@ from camsocs_pipeline.extract.memo import LLMMemo
 from camsocs_pipeline.locate.matching import input_hash
 from camsocs_pipeline.locate.model import PendingItem
 from camsocs_pipeline.locate.nominatim import Nominatim
+from camsocs_pipeline.locate.photon import Photon
 from camsocs_pipeline.locate.places import Places
+from camsocs_pipeline.locate.postcodes import Postcodes
 from camsocs_pipeline.locate.resolver import PROMPT_NAME, Locator
 from camsocs_pipeline.pipeline.context import StageContext
 
@@ -89,6 +97,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
     memo = LLMMemo(settings.cache_dir / "llm")
     llm: LLMClient | None = None
     nominatim: Nominatim | None = None
+    photon: Photon | None = None
+    postcodes: Postcodes | None = None
     places: Places | None = None
     if not ctx.dry_run and todo:
         try:
@@ -101,6 +111,8 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             base_url=settings.nominatim_url,
             interval=settings.nominatim_interval,
         )
+        photon = Photon(user_agent=user_agent)
+        postcodes = Postcodes(user_agent=user_agent)
         if settings.places_configured:
             places = Places(
                 api_key=settings.google_places_api_key.get_secret_value(),
@@ -115,16 +127,19 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
         memo=memo,
         llm=llm,
         nominatim=nominatim,
+        photon=photon,
+        postcodes=postcodes,
         places=places,
         now=now,
         places_tried=state.setdefault("placesTried", {}),
+        coarse_venues=state.setdefault("coarseVenues", {}),
         workers=settings.llm_concurrency,
     )
     try:
         rows = locator.resolve(todo)
         locator.place_ids()
     finally:
-        for client in (nominatim, places):
+        for client in (nominatim, photon, postcodes, places):
             if client is not None:
                 client.close()
 
@@ -160,8 +175,12 @@ def run(ctx: StageContext, *, now: datetime | None = None) -> None:
             "llmCalls": metrics.llm_calls,
             "llmErrors": metrics.llm_errors,
             "nominatimCalls": nominatim.calls if nominatim else 0,
+            "photonCalls": photon.calls if photon else 0,
+            "postcodesCalls": postcodes.calls if postcodes else 0,
             "placesCalls": places.calls if places else 0,
             "newVenues": metrics.new_venues,
+            "modelNamedVenues": metrics.model_named_venues,
+            "outsideCambridge": metrics.outside,
             "venueClaims": len(claims),
             "unresolvedShare": share,
         }

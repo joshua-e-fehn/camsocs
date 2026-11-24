@@ -46,6 +46,10 @@ app/                         Next.js App Router pages
                              Category hubs: every listing of a category on one self-canonical page
                              (lib/directory-hubs.ts; outside /societies/ so no slug can collide)
     events/page.tsx          Calendar: list / week / month, filters, event sheet (?event=)
+    map/page.tsx             One London day of events and talks on a map (?d=YYYY-MM-DD, ?show=);
+                             preloads map.day (events only, G1) + map.weekCounts; organism
+                             components/organisms/day-map.tsx, MapLibre in molecules/day-map-canvas.tsx
+                             (docs/locations-and-map.md §4)
     request/page.tsx         Claim / correct / remove / object / add form (?kind=&org=<slug>&event=<key>;
                              an event is named by its key in the HTML, its title read in the browser
                              with events.requestLabel, which sends none for a talks.cam-derived one;
@@ -127,7 +131,7 @@ convex/
   http.ts                    Better Auth routes + /api/pipeline/* (Bearer PIPELINE_API_KEY)
                              + /api/inbound/email (forwarded list mail; Svix / Bearer, see below)
   orgs.ts events.ts venues.ts termDates.ts collegeFinances.ts listingRequests.ts sitemap.ts
-                             PUBLIC read API (see "Public API" below) + the listing-request form
+  locations.ts map.ts        PUBLIC read API (see "Public API" below) + the listing-request form
   ingest/                    internal mutations behind /api/pipeline/* (claims, sources, orgInternal,
                              relationships + eventOrganisers, broker, files, inbound, termDates,
                              collegeFinances, purge, suppressions, cleanup)
@@ -937,11 +941,40 @@ alone); one with other evidence keeps it, minus the talks.cam links.
 The home page's Talks column carries counts from the server; its rows (titles, speakers, series) are
 read in the browser once hydrated (`HomeOverview`, `homeTalkRows`).
 
+### Locations and the map (`convex/locations.ts`, `convex/map.ts`)
+
+Every event and talk has at most one `itemLocations` row (docs/data-model.md, written only by the
+pipeline's `locate` stage through `locations/batch`; docs/locations-and-map.md). Precision:
+`exact` (the building is stated), `building` (inferred: an organiser's usual place, a street or
+postcode point), `area` (only a town, district or anchor is known; `areaLabel` says which),
+`online`, `unknown`.
+
+| Function | Args | Returns |
+|---|---|---|
+| `locations.forItem` | `{ kind: "event" \| "talk", itemKey }` | `null` (no row yet, or an item the viewer may not see: the event gate of `events.get`, a talk must be `listed`) or `{ precision, room?, areaLabel?, venue: VenuePublic \| null }`. `venue` is null for `online` / `unknown`. The talk variant is called only from `/talks/...` pages (G1). Room and area label are scrubbed like other free text (suppressed names and addresses) |
+| `map.day` | `{ date: YYYY-MM-DD, talks?: "include" \| "exclude", talksCam?: "exclude" \| "only" }` (both default `exclude`, G1) | `{ date, from, to, venues: VenuePublic[], items: MapItem[], counts: { events, talks, online, unknown } }`. `venues`: only those the day's rows reference and that have coordinates, read by key (never `venues.list`), anywhere in the world: an away fixture's venue is returned too, and the page decides what gets a pin. `MapItem`: `{ kind, key, title, startsAt, endsAt \| null, allDay, href, cancelled, precision, venueKey \| null (set only when its venue is in `venues`), room?, areaLabel?, placeLabel, orgLabel?, eventType? / talkKind?, visibility? }`. Events are `events.list`'s window read (tiers, hidden hosts, withdrawn, superseded, multi-day on every day they cover), minus suppressed events; talks are `listed`, on their start day |
+| `map.weekCounts` | `{ from: YYYY-MM-DD, days: 1..14 }` | `{ date, events, talks }[]`: numbers only (G1-safe), counting talks.cam-derived items too |
+
+**`/map`** (`app/(site)/map/page.tsx`, owner decisions in docs/locations-and-map.md §0): the server
+preloads `map.day({ date, talks: "exclude", talksCam: "exclude" })` and `map.weekCounts`; after
+hydration the browser asks `map.day({ talks: "include", talksCam: "only" })` and merges it
+(`useMapDayTalksSide`, `mergeMapDays` in `hooks/convex/map.ts`), so no talk text is in the HTML or
+RSC payload. The pure day logic is `lib/map-day.ts`: status (past / now / upcoming), one numbered
+pin per venue, and the list's sections. A venue gets a pin only inside `MAP_PIN_BOUNDS`
+(`lib/map-style.ts`: Cambridge and its villages, S 52.05 N 52.35 W −0.10 E 0.35, equal to the
+pipeline's `CAMBRIDGE_REGION`); the camera fits the pins, never a far venue. Items at a placed
+venue beyond it (an away fixture, a tour abroad) are listed under **"Away from Cambridge"** with
+their place, address and a Directions link, and no pin; online items under "Online"; unresolved
+ones under "Location TBC". `/map` (no params) is indexable; `?d=` views are `noindex,follow`.
+On an event or talk page, the "Where" row (`components/molecules/place-line.tsx`) shows the place,
+its address, "Open in Maps" (Apple Maps on Apple platforms, else Google, `lib/maps-link.ts`) and
+"See on the map" (only when the venue gets a pin there; a far area gets a maps link instead).
+
 ### Reference data and the form
 
 | Function | Args | Returns |
 |---|---|---|
-| `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng? }[]` by name |
+| `venues.list` | `{}` | `{ key, name, aliases, address?, collegeKey?, lat?, lng?, googlePlaceId? }[]` by name (`VenuePublic`; `googlePlaceId` only builds an "Open in Google Maps" link, never coordinates) |
 | `venues.get` | `{ key }` | one venue (same shape) or null — an event page's Place |
 | `termDates.list` | `{}` | `{ academicYear, term, fullTermStart, fullTermEnd, sourceUrl }[]` in calendar order |
 | `collegeFinances.history` | `{}` | `{ collegeKey, periods: { periodEnd, endowmentGbp?, netAssetsGbp?, incomeGbp?, status }[], needsReview }[]`, one per college (all 31), oldest period first; a `needs_review` period is listed without its figures and counted in `needsReview` (source-research §22) |
@@ -1093,6 +1126,10 @@ found". Item-level refusals (a bad claim, an unknown event) come back in the 200
 | `events/scan` | read: `{cursor?, limit?}` → a page of every event (any visibility) with its title, start of description, venue, source, hosting, organisers, `sweepGroup`, `lastSeenAt` — for `camsocs clean-events` |
 | `events/remove` | `{keys, confirm: "REMOVE-EVENTS"}` (events only, ≤ 25 a call) → `{removed, missing}`: deletes events as `ingest/purge:removeEntity` does (docs/deploy.md §7) |
 | `events/superseded` | `{events: [{key, by}]}` (≤ 500) → `{updated, unchanged, unknown, rejected}`: each event key whose reading this load folded into another source's event `by`, or an LLM stage dropped as that event's (ENG-47, `convex/ingest/superseded.ts`); sets `supersededBy` on an existing old event, counts a key or survivor the deployment lacks as `unknown` (the load's note shows the count). The load posts it after the organiser sets; a 404 (route not deployed yet) is a warning, not a failure |
+| `locations/pending` | read: `{from, to (≤ 186 days later), cursor?, limit?}` → a page of `{kind, itemKey, startsAt, endsAt?, allDay?, title, description? (≤ 1,500), venueText? / venueKey? (events), venue? / online? (talks), organisers, organiserPlaces? (≤ 6: an organiser's college, its regular sessions' venues, the venues its latest 20 own events name, most used first, never a members-only one; a talk's departments), sourceType, sourceUrl?, stored?: {inputHash, precision, venueKey?, startsAt}}`: events of every tier but `members_only` that are not cancelled, superseded or suppressed (also multi-day ones still running), then listed talks (stage `locate`) |
+| `venues/all` | read: `{cursor?, limit?}` → a page of every venue `{key, name, aliases, address?, lat?, lng?, collegeKey?, googlePlaceId?}` |
+| `locations/batch` | `{locations: ItemLocationInput[]}` (≤ 500) → `{inserted, updated, unchanged, rejected: [{itemKey, reason}]}`: `itemLocations` upserted by (kind, itemKey). Refuses a bad item or venue key, a venue that does not exist (for exact / building / area), an `area` row without a label, text over its limit or naming a suppressed person, a suppressed event. Coordinates are only range-checked (on the venue's claims), so a venue anywhere in the world is accepted |
+| `locations/summary` | read: `{}` → `{from, to, upcoming, resolved, unknown, byPrecision, unresolvedShare, truncated}` over items starting in the next 14 days (the monitor's `location_unresolved_share`) |
 | `runs/start`, `runs/finish` | the run log |
 
 ## Inbound mail webhook

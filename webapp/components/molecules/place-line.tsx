@@ -4,6 +4,7 @@ import { ArrowUpRightIcon, MapIcon } from "lucide-react"
 import Link from "next/link"
 import { useSyncExternalStore } from "react"
 import { linkProps } from "@/lib/crawl-traps"
+import { pinnable } from "@/lib/map-day"
 import { mapsLinks, preferredMapsHref } from "@/lib/maps-link"
 import type { ItemLocation } from "@/lib/public-api"
 
@@ -37,7 +38,10 @@ function googleSearch(text: string): string {
  *  - `exact` / `building`: "room, venue" with the venue's address, linked to
  *    the visitor's maps app (a Google search when the venue has no
  *    coordinates yet); `building` says it is inferred;
- *  - `area`: the area as stated ("exact place sent to attendees"), no maps link;
+ *  - `area`: the area as stated ("exact place sent to attendees"), no maps
+ *    link unless the area is far from Cambridge (an away town);
+ *  - a venue far from Cambridge (beyond /map's pin region) has no "See on
+ *    the map": the map lists it without a pin;
  *  - `online`: the source's words, else "Online";
  *  - `unknown`: the source's words, if any, and "Location to be confirmed".
  * `sourceText` is the source's own words for where (the event's venue text or
@@ -64,14 +68,29 @@ export function placeLineModel(location: PlacedLocation, sourceText?: string): P
             googlePlaceId: venue.googlePlaceId,
           })
         : { google: googleSearch(label) }
-      return { label, details, maps, onMap: hasCoordinates(venue) }
+      return { label, details, maps, onMap: hasCoordinates(venue) && pinnable(venue) }
     }
-    case "area":
+    case "area": {
+      // A far area (an away town, a city abroad) has no pin on /map: a
+      // maps link is the way to it instead.
+      const far = hasCoordinates(venue) && !pinnable(venue)
       return {
         label: location.areaLabel ?? venue?.name ?? text,
         details: [],
-        onMap: hasCoordinates(venue),
+        ...(far
+          ? {
+              maps: mapsLinks({
+                name: venue.name,
+                address: venue.address,
+                lat: venue.lat,
+                lng: venue.lng,
+                googlePlaceId: venue.googlePlaceId,
+              }),
+            }
+          : {}),
+        onMap: hasCoordinates(venue) && !far,
       }
+    }
     case "online":
       return { label: text ?? "Online", details: [], onMap: false }
     case "unknown":

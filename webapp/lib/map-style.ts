@@ -42,8 +42,16 @@ export const MAP_COLORS = {
 
 /** The city (lib/events.ts `CAMBRIDGE_BOUNDS`), as [west, south, east, north]. */
 export const CAMBRIDGE_BOUNDS: [number, number, number, number] = [0.03, 52.15, 0.22, 52.26]
-/** How far the map may be panned: the city with a margin. */
-export const MAP_MAX_BOUNDS: [number, number, number, number] = [-0.08, 52.1, 0.33, 52.31]
+/**
+ * Where a venue gets a pin, as [west, south, east, north]: Cambridge and its
+ * villages (Great Shelford, Hinxton, Madingley; pipeline
+ * `locate/model.py` `CAMBRIDGE_REGION`). A venue beyond it (an away
+ * fixture, a tour abroad) gets no pin: its items are listed under "Away
+ * from Cambridge" (lib/map-day.ts).
+ */
+export const MAP_PIN_BOUNDS: [number, number, number, number] = [-0.1, 52.05, 0.35, 52.35]
+/** How far the map may be panned: the pin region with a margin. */
+export const MAP_MAX_BOUNDS: [number, number, number, number] = [-0.14, 52.03, 0.39, 52.37]
 /** The city centre (Market Square) and the zoom a day without pins opens at. */
 export const CITY_CENTRE: [number, number] = [0.1192, 52.2053]
 export const CITY_ZOOM = 13.6

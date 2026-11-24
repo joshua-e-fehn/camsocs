@@ -25,6 +25,7 @@ export function MapItemRow({
   open,
   pointed,
   address,
+  showAddress = false,
   directions,
   pinCount,
   onShow,
@@ -41,6 +42,8 @@ export function MapItemRow({
   pointed: boolean
   /** The venue's address, shown on the open row. */
   address?: string
+  /** Show the address on a closed row too (a far venue: no pin to open). */
+  showAddress?: boolean
   /** A Directions link to the venue (lib/maps-link.ts), when it has one. */
   directions?: string
   /** How many items share its pin, from 2 (drawn beside "Show on map"). */
@@ -151,7 +154,7 @@ export function MapItemRow({
           <PlaceIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0">
             {place}
-            {open && address && <span className="block text-xs">{address}</span>}
+            {(open || showAddress) && address && <span className="block text-xs">{address}</span>}
           </span>
         </p>
         {item.orgLabel && <p className="truncate text-xs text-muted-foreground">{item.orgLabel}</p>}
