@@ -239,7 +239,7 @@ flowchart LR
 | 13 | `talks_cam` (talks.cam lists (G1)) | events | events | cam/events | events, full | yes | no | [§6](source-research.md#6-talkscam) |
 | 14 | `cucbc_events` | events | events | cam/events | events, full | yes | no | [§7](source-research.md#7-cucbc) |
 | 15 | `playwaze` | events | events | cam/events | events, full | yes | no | [§9](source-research.md#9-playwaze-college-leagues-and-bucs) |
-| 16 | `uni_events` | events | events | cam/events | events, full | yes | no | [§10](source-research.md#10-university-events-programme-read-with-permission) |
+| 16 | `uni_events` | events | events | cam/events | events, full | yes | no | [§10](source-research.md#10-university-events-programme-policy-exception) |
 | 17 | `calendar_feeds` | events | events | engine/events | events, full | yes | no | [§11](source-research.md#11-calendar-feeds-that-societies-publish) |
 | 18 | `su_whatson` | events | events | cam/events | events, full | yes | no | [§12](source-research.md#12-su-whats-on) |
 | 19 | `website_events` | events | events | engine/events | events, full | yes | yes | [§14](source-research.md#14-society-websites) |
@@ -261,7 +261,7 @@ flowchart LR
 
 ## Sources
 
-| Source | Stage | Pillar | Source types | Event sources | § | Permission |
+| Source | Stage | Pillar | Source types | Event sources | § | Robots rule |
 |---|---|---|---|---|---|---|
 | University Full Term dates (verified seed) | `term_dates` | shared | – | – | [§19](source-research.md#19-university-full-term-dates) | – |
 | Charity Commission register: the colleges' annual-return finances | `college_finances` | societies | – | – | [§22](source-research.md#22-charity-commission-register-the-colleges-finances) | robots |
@@ -278,7 +278,7 @@ flowchart LR
 | talks.cam lists (G1) | `talks_cam` | events | `talks_list` | `talks_cam` | [§6](source-research.md#6-talkscam) | robots |
 | CUCBC calendar, Bumps and timetable | `cucbc_events` | events | `cucbc` | `cucbc` | [§7](source-research.md#7-cucbc) | robots |
 | Playwaze college leagues | `playwaze` | events | `playwaze` | `playwaze` | [§9](source-research.md#9-playwaze-college-leagues-and-bucs) | robots |
-| University events programme | `uni_events` | events | `uni_events_api` | `uni_events_api` | [§10](source-research.md#10-university-events-programme-read-with-permission) | D3a |
+| University events programme | `uni_events` | events | `uni_events_api` | `uni_events_api` | [§10](source-research.md#10-university-events-programme-policy-exception) | D3a |
 | Society calendar feeds (ICS, Google Calendar, Luma) | `calendar_feeds` | events | `ics_feed`, `luma` | `ics`, `google_calendar`, `luma` | [§11](source-research.md#11-calendar-feeds-that-societies-publish) | D3 |
 | SU What's On | `su_whatson` | events | `su_whatson` | `su_whatson` | [§12](source-research.md#12-su-whats-on) | D3 |
 | Society websites' events pages | `website_events` | events | `society_website` | `website`, `termcard` | [§14](source-research.md#14-society-websites) | D3 |

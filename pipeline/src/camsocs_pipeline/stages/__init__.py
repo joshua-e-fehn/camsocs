@@ -344,7 +344,7 @@ STAGES: list[Stage] = [
         docs=("source-research§9",),
     ),
     #
-    # University events programme, read with recorded permission (§10, D3a).
+    # University events programme, read by a policy exception (§10, D3a).
     Stage(
         "uni_events",
         fetches=True,

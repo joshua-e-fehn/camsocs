@@ -72,12 +72,12 @@ def test_the_redaction_keeps_a_refused_sources_text_from_the_model(
     assert posted.value == "Contact our Captain about trials."
 
 
-def test_the_university_events_api_may_reach_the_model_with_its_permission(
+def test_the_university_events_api_may_reach_the_model_by_its_exception(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
-    # Decision D3a: UIS and the Office of External Affairs and Communications
-    # let the model read the programme's text; the rest of the host keeps its
-    # robots.txt, which shuts out every agent.
+    # Decision D3a: by a policy exception the model may read the programme's
+    # text; the rest of the host keeps its robots.txt, which shuts out every
+    # agent.
     net.get("https://webservices.admin.cam.ac.uk/robots.txt").respond(
         200, text="User-agent: *\nDisallow: /\n"
     )

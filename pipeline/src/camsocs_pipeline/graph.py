@@ -61,7 +61,7 @@ JSON_PATH = Path("webapp/lib/generated/pipeline-graph.cam.json")
 MERMAID_PATH = Path("docs/pipeline-map.md")
 
 #: How a stage may get past robots.txt: not at all (``robots``), as a society
-#: page of a D3 URL class (``D3``), or by a publisher's recorded permission
+#: page of a D3 URL class (``D3``), or by an explicit policy exception
 #: (``D3a``); `None` for a source that is not crawled at run time (a seed in
 #: the repo, forwarded mail, an official API).
 PERMISSIONS: tuple[str | None, ...] = ("robots", "D3", "D3a", None)
@@ -662,7 +662,7 @@ def render_mermaid(graph: Mapping[str, Any]) -> str:
         "",
         "## Sources",
         "",
-        "| Source | Stage | Pillar | Source types | Event sources | § | Permission |",
+        "| Source | Stage | Pillar | Source types | Event sources | § | Robots rule |",
         "|---|---|---|---|---|---|---|",
     ]
     for source in graph["sources"]:

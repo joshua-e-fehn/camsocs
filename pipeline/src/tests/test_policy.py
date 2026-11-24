@@ -16,15 +16,15 @@ from camsocs_pipeline.sources.policy import (
     GENERAL,
     PERMISSION_AI_NOTE,
     PERMISSION_ROBOTS_NOTE,
-    RECORDED_PERMISSIONS,
+    POLICY_EXCEPTIONS,
     ROBOTS_OVERRIDE_NOTE,
     SOCIETY,
     SOCIETY_WEBSITE,
     FetchPurpose,
     ai_optout_override,
+    exception_for,
     is_general_host,
     never_fetched,
-    permission_for,
     robots_override,
     robots_override_note,
     society_class,
@@ -119,7 +119,7 @@ UNI_API = "https://webservices.admin.cam.ac.uk/events/api"
 
 
 @pytest.mark.parametrize(
-    ("url", "permitted"),
+    ("url", "covered"),
     [
         (f"{UNI_API}/programmes.json", True),
         (f"{UNI_API}/programmes/11/calendar/events.json?resultSetSize=20000", True),
@@ -144,32 +144,31 @@ UNI_API = "https://webservices.admin.cam.ac.uk/events/api"
         ("https://talks.cam.ac.uk/events/api/programmes.json", False),
     ],
 )
-def test_a_recorded_permission_covers_its_paths_only(url: str, permitted: bool) -> None:
+def test_a_policy_exception_covers_its_paths_only(url: str, covered: bool) -> None:
     # Decision D3a: keyed by URL, not purpose, so a general fetch (and the
     # load's image copy) may override too.
-    assert robots_override(url, GENERAL) is permitted
-    assert ai_optout_override(url, GENERAL) is permitted
-    assert robots_override_note(url, GENERAL) == (PERMISSION_ROBOTS_NOTE if permitted else None)
-    assert (permission_for(url, "fetch") is not None) is permitted
-    assert (permission_for(url, "ai_input") is not None) is permitted
+    assert robots_override(url, GENERAL) is covered
+    assert ai_optout_override(url, GENERAL) is covered
+    assert robots_override_note(url, GENERAL) == (PERMISSION_ROBOTS_NOTE if covered else None)
+    assert (exception_for(url, "fetch") is not None) is covered
+    assert (exception_for(url, "ai_input") is not None) is covered
     assert never_fetched(url) is None
     if url.startswith(("https://webservices.admin.cam.ac.uk/", "http://webservices.admin")):
         # The host is a general one: no society class ever applies there.
         for purpose in (GENERAL, SOCIETY, SOCIETY_WEBSITE, COLLEGE_SOCIETY_LIST):
             assert society_class(url, purpose) is None
-            assert robots_override(url, purpose) is permitted
+            assert robots_override(url, purpose) is covered
             assert robots_override_note(url, purpose) == (
-                PERMISSION_ROBOTS_NOTE if permitted else None
+                PERMISSION_ROBOTS_NOTE if covered else None
             )
 
 
-def test_the_university_permission_is_recorded_with_who_and_when() -> None:
-    (permission,) = RECORDED_PERMISSIONS
-    assert permission.host == "webservices.admin.cam.ac.uk"
-    assert permission.granted_on == "2026-11-02"
-    assert "University Information Services" in permission.granted_by
-    assert "Office of External Affairs and Communications" in permission.granted_by
-    assert permission.scope == {"fetch", "ai_input"}
+def test_the_university_exception_is_recorded_with_its_decision_and_date() -> None:
+    (exception,) = POLICY_EXCEPTIONS
+    assert exception.host == "webservices.admin.cam.ac.uk"
+    assert exception.decision == "D3a"
+    assert exception.decided_on == "2026-11-02"
+    assert exception.scope == {"fetch", "ai_input"}
     assert robots_override_note(SOCIETY_SITE, SOCIETY_WEBSITE) == ROBOTS_OVERRIDE_NOTE
     assert robots_override_note(SOCIETY_SITE, GENERAL) is None
 
@@ -351,7 +350,7 @@ def test_never_fetched_hosts_are_refused_before_any_request(
     assert not net.calls
 
 
-def test_the_university_api_is_read_with_its_permission_and_says_so(
+def test_the_university_api_is_read_by_its_exception_and_says_so(
     tmp_path: Path, net: respx.MockRouter
 ) -> None:
     net.get("https://webservices.admin.cam.ac.uk/robots.txt").respond(
@@ -368,7 +367,7 @@ def test_the_university_api_is_read_with_its_permission_and_says_so(
     other = client.fetch("https://webservices.admin.cam.ac.uk/events/doc/chunks/index.html")
 
     assert first.outcome == "fetched" and first.override == PERMISSION_ROBOTS_NOTE
-    # Its cached copy serves any purpose (the permission is keyed by URL).
+    # Its cached copy serves any purpose (the exception is keyed by URL).
     assert again.from_cache and again.override == PERMISSION_ROBOTS_NOTE
     assert feed.call_count == 1
     assert other.outcome == "disallowed_by_robots" and docs.call_count == 0

@@ -327,7 +327,7 @@ def test_the_real_groups_name_registry_stages_and_the_events_group_ends_with_loa
     # `locate` places what load and talks posted (D13), before the report.
     assert events[0] == "term_dates" and events[-4:] == ["load", "talks", "locate", "report"]
     # Every events source runs daily, the University's programme included
-    # (read with recorded permission, §10); no harvest, resolve, enrich or
+    # (read by a policy exception, §10); no harvest, resolve, enrich or
     # classify stage does.
     fetching = {s.name for s in STAGES if s.fetches} - {"enrich"}
     assert "uni_events" in events

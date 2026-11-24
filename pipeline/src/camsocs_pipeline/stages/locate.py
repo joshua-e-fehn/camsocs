@@ -21,10 +21,10 @@ A **dry run** posts nothing and makes no request: Convex is not read (the
 loader's read methods return nothing), the model is not asked and no venue is
 looked up — cached replies only.
 
-talks.cam text may reach the model here (D13: Joshua's permission as a
-University student). That permission covers location resolution only; the
-rules for *fetching* talks.cam (§6) and the G1 render boundary are unchanged,
-and the fetch and claim guards (`claims.NO_LLM_SOURCE_TYPES`,
+talks.cam text may reach the model here (D13, Joshua's decision: talk text
+may be given to the model to resolve the venue). That exception covers
+location resolution only; the rules for *fetching* talks.cam (§6) and the G1
+render boundary are unchanged, and the fetch and claim guards (`claims.NO_LLM_SOURCE_TYPES`,
 `extract.llm.assert_llm_source_allowed`) still apply to every other path.
 The venue claims this stage posts carry OpenStreetMap's, postcodes.io's and
 Google's own values (name, address, coordinates, place id), never the

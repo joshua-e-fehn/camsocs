@@ -1,18 +1,17 @@
 """University events programme → public events (source-research §10; stage
 `uni_events`).
 
-**Permission** (decision D3a, PLAN.md, 2026-11-02). The University's events
-service lives on ``webservices.admin.cam.ac.uk``, whose robots.txt is
-``User-agent: *`` / ``Disallow: /``. University Information Services (which
-runs the host) and the Office of External Affairs and Communications (which
-runs the programme) gave us permission to read its events API and event
-images, and to let the model read their text (D1 redaction, D6 noise). The
-permission is recorded in `sources.policy.RECORDED_PERMISSIONS`, keyed by
-path: the polite client reads ``/events/api/`` and ``/events/uploadedImages/``
-despite the disallow and records ``robots_override:permission``; every other
-path on the host keeps its robots.txt. Each staged reading's ``accessNote``
-also says ``ai_optout_override:permission``, since its text reaches the model
-only thanks to that permission.
+**Policy exception** (decision D3a, PLAN.md, 2026-11-02). The University's
+events service lives on ``webservices.admin.cam.ac.uk``, whose robots.txt is
+``User-agent: *`` / ``Disallow: /``. By an explicit policy exception its
+events API and event images are read, and the model may read their text (D1
+redaction, D6 noise). The exception is listed in
+`sources.policy.POLICY_EXCEPTIONS`, keyed by path: the polite client reads
+``/events/api/`` and ``/events/uploadedImages/`` despite the disallow and
+records ``robots_override:permission``; every other path on the host keeps
+its robots.txt. Each staged reading's ``accessNote`` also says
+``ai_optout_override:permission``, since its text reaches the model only
+under that exception.
 
 **Which programmes.** Every run reads the programme list (``programmes.json``,
 `read_programmes`) and keeps the published ones we list (`select_programmes`):
@@ -776,8 +775,8 @@ def _image(client: PoliteClient, path: str | None, cache: dict[str, str | None])
     return cache[url]
 
 
-def _with_permission(records: Sequence[EventObservation]) -> list[EventObservation]:
-    """Each reading read only thanks to the recorded permission also says its
+def _with_exception_note(records: Sequence[EventObservation]) -> list[EventObservation]:
+    """Each reading read only under the policy exception also says its
     text may reach the model for the same reason (module docstring)."""
     out: list[EventObservation] = []
     for record in records:
@@ -916,7 +915,7 @@ def run(
     )
     if folding.runs:
         notes.append(f"{folding.occurrences} occurrences folded into {folding.runs} runs")
-    write_staging(ctx, _with_permission(records), tally)
+    write_staging(ctx, _with_exception_note(records), tally)
 
 
 __all__ = [

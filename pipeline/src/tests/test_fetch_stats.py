@@ -44,7 +44,7 @@ _CONVEX_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}")
         ("https://www.cam.ac.uk/whatson", GENERAL, "university_main_site"),
         ("https://www.proctors.cam.ac.uk/register", GENERAL, "university_main_site"),
         ("https://www.clare.cam.ac.uk/", SOCIETY_WEBSITE, "university_main_site"),
-        # The University's register and admin hosts, recorded permissions.
+        # The University's register and admin hosts, policy exceptions.
         ("https://webservices.admin.cam.ac.uk/events/api/programmes", GENERAL, "registry"),
         ("https://reporter.admin.cam.ac.uk/x", GENERAL, "registry"),
         # Other general hosts are not registers.

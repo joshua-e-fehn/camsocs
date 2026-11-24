@@ -48,7 +48,7 @@ daily stage reads). The VPS host runs both under systemd timers (decision D5,
 `docs/ops-vps.md`):
 
 - **events**, daily (`pixi run harvest-events`): `term_dates`, every events stage (the
-  University's programme included, read with recorded permission, source-research §10),
+  University's programme included, read by a policy exception, source-research §10),
   `talks`, `inbox`, `instagram`, `termcards`, then `load` and `report`. It harvests no
   organisation, so it reads what the last full run staged — `_resolved`, `society_website`,
   `su_profile` — and stops before any request when one was never staged ("run the full group
@@ -321,10 +321,9 @@ Read from `pipeline/.env` (gitignored; plus `pipeline/.env.<name>` with `--env <
   site as a society's website, or a robots.txt that could not be reached. A declared class
   is bound to the site it was declared for (`FetchPurpose.bound_to`): a redirect or a
   linked file on another domain keeps that host's rules.
-  **Recorded permission (decision D3a).** Paths a publisher let us read in writing
-  (`policy.RECORDED_PERMISSIONS`: the University's events API `/events/api/` and event
-  images `/events/uploadedImages/` on webservices.admin.cam.ac.uk, granted 2026-11-02 by
-  University Information Services and the Office of External Affairs and Communications)
+  **Policy exception (decision D3a, 2026-11-02).** Paths listed as explicit exceptions
+  (`policy.POLICY_EXCEPTIONS`: the University's events API `/events/api/` and event
+  images `/events/uploadedImages/` on webservices.admin.cam.ac.uk)
   may be read whatever the purpose, and their text may reach the model; every other path on
   that host keeps its robots.txt. Instagram, Facebook and LinkedIn are never fetched. An
   overridden fetch carries `FetchResult.override` = `robots_override:society` or
