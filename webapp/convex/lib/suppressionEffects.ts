@@ -6,7 +6,13 @@ import type { MutationCtx } from "../_generated/server"
 import { emptyProfile } from "../ingest/broker"
 import { type ClaimInput, reresolveEntity } from "../ingest/claims"
 import { deleteFileIfUnused } from "../retention"
-import { findOrganisation, loadTerms, refreshOrganisation, writeOrgCard } from "./entityStore"
+import {
+  deleteEventCard,
+  findOrganisation,
+  loadTerms,
+  refreshOrganisation,
+  writeOrgCard,
+} from "./entityStore"
 import {
   carriesSuppressedAddress,
   indexSuppressions,
@@ -228,6 +234,7 @@ async function removeEvent(ctx: MutationCtx, eventKey: string): Promise<void> {
     .unique()
   if (event) {
     await ctx.db.delete("events", event._id)
+    await deleteEventCard(ctx, event.key)
     if (event.image?.storageId) await deleteFileIfUnused(ctx, event.image.storageId)
   }
   const now = Date.now()

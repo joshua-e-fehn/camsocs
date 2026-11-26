@@ -3,7 +3,14 @@ import { ENTITY_TYPES } from "../../lib/vocab"
 import type { TableNames } from "../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../_generated/server"
 import { eventStreamOf } from "../lib/derived"
-import { ENTITY_TABLES, findEntity, loadTerms, refreshOrganisation } from "../lib/entityStore"
+import {
+  deleteEventCard,
+  ENTITY_TABLES,
+  findEntity,
+  loadTerms,
+  refreshEventCard,
+  refreshOrganisation,
+} from "../lib/entityStore"
 import { FIELD_SPECS, hostOf } from "../lib/fields"
 import { literalUnion } from "../lib/validators"
 import { reresolveEntity } from "./claims"
@@ -65,6 +72,8 @@ const PIPELINE_TABLES = [
   "orgCards",
   "organisations",
   "events",
+  "eventCards",
+  "projectionBackfills",
   "teams",
   "sessions",
   "venues",
@@ -175,6 +184,7 @@ export async function deleteEntity(
   if (entity) {
     await ctx.db.delete(ENTITY_TABLES[entityType], entity._id as never)
     count(ENTITY_TABLES[entityType])
+    if (entityType === "event") await deleteEventCard(ctx, key)
   }
   for (const field of Object.keys(FIELD_SPECS[entityType])) {
     const claims = await ctx.db
@@ -231,6 +241,7 @@ export async function deleteEntity(
         // A programme event left with no society is the University's again.
         const stream = eventStreamOf({ ...event, ...keys })
         await ctx.db.patch("events", event._id, { ...keys, stream, updatedAt: Date.now() })
+        await refreshEventCard(ctx, event._id)
       }
     }
     const owned = await ctx.db

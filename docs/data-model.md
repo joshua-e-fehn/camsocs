@@ -251,6 +251,12 @@ An event row is created by its first claims, which must include `title`, `starts
 
 `eventOrganisers` is a join table, `{ eventKey, orgKey, role: organiser|co_host|sponsor, startsAt, spanEndsAt?, visibility, hosting? }` (the last four denormalised from the event and kept in step; `hosting` absent on rows from before 2026-10-10 means the event says, and the daily re-derivation fills it in — so `lastActiveAt` skips the events an organisation only takes part in without reading them, however many CTFs a feed imports; `superseded: true` while the event is superseded, ENG-47, so activity counts skip it), with indexes `by_org_startsAt`, `by_org_spanEndsAt`, `by_visibility_startsAt` and `by_event`. It exists for "events of organisation X", and for counting activity without reading the events (the directory's "Most active" order, `orgs.list` `sort: "active"`, ranks by the public rows of the term). The pipeline sends an event's organiser set whole (`replace`), or — when the source names organisers it could not resolve — as `merge`, which adds and never removes.
 
+### eventCards (derived, public)
+
+An event's list card (ENG-280): every `events` field but `meta` and `description` (three quarters of an event's bytes), plus `talksDerived` (the talks boundary's verdict over the full row, G1) and `startsAtMeta` (`meta.startsAt`'s status, method and source type). Written by the server on every write to `events` (`lib/entityStore.ts` `writeEventCard`, `deleteEventCard`) and repaired by the daily derivation. The window read (`lib/eventWindow.ts` `matchingEvents`: `events.list`, `events.feed`, `events.restrictedCount`, the map) reads it once `projectionBackfills` has an `eventCards` row, recorded when a daily walk that began with the card writes in place has finished; until then it builds the same cards from full events in memory. **Indexes:** `by_key`, `by_stream_visibility_startsAt`, `by_stream_visibility_spanEndsAt`.
+
+`projectionBackfills` holds one `{ name, completedAt }` row per derived projection whose backfill walk has finished (`by_name`).
+
 ### venues
 
 | Field | Type |

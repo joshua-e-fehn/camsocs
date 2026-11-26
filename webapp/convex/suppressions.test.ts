@@ -437,6 +437,14 @@ describe("events and names", () => {
       })
       expect(await t.query(api.events.get, { key: eventKey })).toBeNull()
       expect(await t.query(api.events.exists, { key: eventKey })).toBe(false)
+      // Its list card (ENG-280) goes with it.
+      const card = await t.run((ctx) =>
+        ctx.db
+          .query("eventCards")
+          .withIndex("by_key", (q) => q.eq("key", eventKey))
+          .unique(),
+      )
+      expect(card).toBeNull()
       const again = await t.mutation(internal.ingest.claims.ingest, {
         claims: goNight("Come and play."),
       })
