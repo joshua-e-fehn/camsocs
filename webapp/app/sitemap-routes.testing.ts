@@ -56,6 +56,8 @@ mock.module("convex/nextjs", () => ({
           isDone: true,
           continueCursor: "",
         }
+      case "eventSeries:list":
+        return [{ slug: "cambridge-greek-play", name: "The Cambridge Greek Play", lastStartsAt: 0 }]
       default:
         throw new Error(`unexpected query ${getFunctionName(query as never)}`)
     }
@@ -92,8 +94,11 @@ const file = (name: string) => files.GET({} as never, { params: Promise.resolve(
 {
   const body = await (await file("events.xml")).text()
   assert.match(body, new RegExp(`/events/evt-${"a".repeat(40)}</loc><lastmod>`))
+  // Each recurring series' page rides along (ENG-282).
+  assert.match(body, /<loc>https:\/\/camsocs\.uk\/events\/series\/cambridge-greek-play<\/loc>/)
   const pages = await (await file("pages.xml")).text()
   assert.match(pages, /<loc>https:\/\/camsocs\.uk\/events<\/loc>/)
+  assert.match(pages, /<loc>https:\/\/camsocs\.uk\/events\/series<\/loc>/)
   assert.match(pages, /<loc>https:\/\/camsocs\.uk\/term-dates<\/loc>/)
   assert.doesNotMatch(pages, /\/talks\/talk-|\/talks\/events\//)
 }

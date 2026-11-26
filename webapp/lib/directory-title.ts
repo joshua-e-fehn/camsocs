@@ -29,18 +29,27 @@ export function titleBase(title: string | { absolute: string }): string {
   return typeof title === "string" ? title : title.absolute
 }
 
-/** The directory's title with nothing filtered. */
+/** The directory's title with nothing filtered, when the count is unknown. */
 export const DIRECTORY_TITLE = "Cambridge societies & clubs: A–Z directory"
 
+/** The unfiltered directory's title with its live count (ENG-281): it answers
+ * "cambridge societies list" / "list of societies cambridge", which reached a
+ * category page while the A–Z was titled as a "directory". */
+export function societiesListTitle(total: number): string {
+  return `Cambridge societies list: ${total.toLocaleString("en-GB")} societies & clubs`
+}
+
 /** The directory's page title for a state (also set in place when the
- * filters change without a page load). */
+ * filters change without a page load). `total` is the number of listed
+ * societies with nothing filtered; without it the plain title is used. */
 export function directoryTitle(
   state: Pick<DirectoryState, "q" | "categories"> & { page?: number },
+  total?: number,
 ): string {
   if (state.q) return `“${state.q}” — Cambridge societies and clubs`
   if (state.categories.length === 1) return categoryHubTitle(state.categories[0])
   if (state.page && state.page > 1) return `Cambridge societies & clubs, page ${state.page}`
-  return DIRECTORY_TITLE
+  return total && total > 0 ? societiesListTitle(total) : DIRECTORY_TITLE
 }
 
 /** Categories whose members call themselves clubs more than societies. */
