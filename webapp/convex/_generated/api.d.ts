@@ -80,6 +80,7 @@ import type * as locations from "../locations.js";
 import type * as map from "../map.js";
 import type * as notifications from "../notifications.js";
 import type * as orgs from "../orgs.js";
+import type * as related from "../related.js";
 import type * as requestAgent from "../requestAgent.js";
 import type * as retention from "../retention.js";
 import type * as runs from "../runs.js";
@@ -169,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   map: typeof map;
   notifications: typeof notifications;
   orgs: typeof orgs;
+  related: typeof related;
   requestAgent: typeof requestAgent;
   retention: typeof retention;
   runs: typeof runs;

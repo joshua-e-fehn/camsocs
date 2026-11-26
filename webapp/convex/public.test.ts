@@ -664,6 +664,45 @@ describe("withdrawn events", () => {
     ])
   })
 
+  test("a listing's newest sighting is kept small and never goes back (ENG-279)", async () => {
+    const t = newTest()
+    const show = "https://www.camdram.net/shows/hamlet.json"
+    await listed(
+      t,
+      "camdram",
+      "show:1/performance:1/a",
+      "Hamlet",
+      NOW + 10 * DAY,
+      NOW - 5 * DAY,
+      show,
+    )
+    await listed(
+      t,
+      "camdram",
+      "show:1/performance:2/b",
+      "Hamlet",
+      NOW + 11 * DAY,
+      NOW - 60_000,
+      show,
+    )
+    const rows = await t.run((ctx) => ctx.db.query("sweepGroupSightings").collect())
+    expect(rows.map((row) => row.lastSeenAt)).toEqual([NOW - 60_000])
+    const window = { from: NOW, to: NOW + 20 * DAY }
+    const withRows = await t.query(api.events.list, window)
+    expect(withRows.map((e) => e.startsAt)).toEqual([NOW + 11 * DAY])
+    // Without the rows (before the backfill), the events say the same.
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("sweepGroupSightings").collect()) {
+        await ctx.db.delete("sweepGroupSightings", row._id)
+      }
+    })
+    expect(await t.query(api.events.list, window)).toEqual(withRows)
+    // The daily derivation fills them in again.
+    await t.mutation(internal.derive.recomputeEvents, {})
+    const refilled = await t.run((ctx) => ctx.db.query("sweepGroupSightings").collect())
+    expect(refilled.map((row) => row.lastSeenAt)).toEqual([NOW - 60_000])
+  })
+
   test("a society's page or card that stops listing an event withdraws it", async () => {
     const t = newTest()
     // The model's wording keys the event (`<org>:<date>:<title slug>`): a

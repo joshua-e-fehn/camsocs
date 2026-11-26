@@ -1355,10 +1355,21 @@ export default defineSchema({
     .index("by_key", ["key"])
     .index("by_isCounterpart_nameSort", ["isCounterpart", "nameSort"])
     .index("by_orgType", ["orgType"])
+    // `orgs.related` (ENG-279): the profile's card by slug, not the
+    // organisation with its per-field meta.
+    .index("by_slug", ["slug"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["isCounterpart", "level", "status", "orgType"],
     }),
+  /** Each listing's most related listings (`relatedCards`), precomputed by
+   * convex/related.ts so a profile view reads one row and a few cards, not
+   * the whole directory (ENG-279). Derived and public: keys only. */
+  relatedOrgs: defineTable({
+    orgKey: v.string(),
+    relatedKeys: v.array(v.string()),
+    updatedAt: v.number(),
+  }).index("by_orgKey", ["orgKey"]),
   teams: defineTable(teamFields).index("by_key", ["key"]).index("by_orgKey", ["orgKey"]),
   sessions: defineTable(sessionFields).index("by_key", ["key"]).index("by_orgKey", ["orgKey"]),
   events: defineTable(eventFields)
@@ -1373,6 +1384,14 @@ export default defineSchema({
     .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"])
     // Retention (convex/retention.ts): is a stored file still an event's image?
     .index("by_imageStorageId", ["image.storageId"]),
+  /** Each sweep group's newest sighting (the greatest `events.lastSeenAt`
+   * of its events), so `withdrawnCheck` reads this small row rather than the
+   * group's newest event in full (ENG-279). Kept by ingest and the daily
+   * derivation; a group without a row is read from the events. */
+  sweepGroupSightings: defineTable({
+    sweepGroup: v.string(),
+    lastSeenAt: v.number(),
+  }).index("by_sweepGroup", ["sweepGroup"]),
   eventOrganisers: defineTable({
     eventKey: v.string(),
     orgKey: v.string(),

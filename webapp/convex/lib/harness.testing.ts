@@ -32,6 +32,7 @@ const appModules = {
   "./locations.ts": () => import("../locations"),
   "./map.ts": () => import("../map"),
   "./notifications.ts": () => import("../notifications"),
+  "./related.ts": () => import("../related"),
   "./requestAgent.ts": () => import("../requestAgent"),
   "./orgs.ts": () => import("../orgs"),
   "./retention.ts": () => import("../retention"),
