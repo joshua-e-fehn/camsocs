@@ -645,11 +645,18 @@ def test_a_termcard_page_without_a_file_is_read_as_text(tmp_path, net) -> None:
     assert llm.calls[0]["tier"] == "bulk" and llm.calls[0]["version"] == "website_events_v1"
 
 
-def test_a_termcard_page_row_without_a_time_of_day_is_all_day(tmp_path, net) -> None:
+def test_a_termcard_page_row_without_a_time_of_day_is_all_day(tmp_path, net, monkeypatch) -> None:
     # ENG-37 on a term card that is an HTML page: read by the website prompt,
     # its rows are still a card's.
     from camsocs_pipeline.sources.policy import SOCIETY_WEBSITE
+    from camsocs_pipeline.sources.websites import events as website_events
     from camsocs_pipeline.stages.termcards import page_events
+
+    # The page is dated by when it was read: read it before the card's dates,
+    # not today, or the rows are dropped as past.
+    monkeypatch.setattr(
+        website_events, "fetched_at", lambda _result: datetime(2026, 10, 9, 12, tzinfo=UTC)
+    )
 
     net.get("https://orrery.example.org/robots.txt").mock(return_value=httpx.Response(404))
     html = (
