@@ -27,8 +27,8 @@ import {
  * one whose hosts are all hidden, and never a talks.cam-derived one (G1;
  * `eventSeriesOf` gives those no series, and this re-checks the stored
  * event). A series is itself hidden (`seriesShown`) when its organiser is no
- * longer listed, or when it holds editions and every one is suppressed: its
- * stored name is a removed event's title, less the year.
+ * longer listed, or when it holds editions and none may be shown: its stored
+ * name is then a hidden event's title, less the year.
  */
 
 /** Editions read per series: a long run (a panto's nights) is one edition each night. */
@@ -94,7 +94,10 @@ async function seriesShown(
   const held = await heldEditions(ctx, row.key)
   const editions: Doc<"events">[] = []
   for (const event of held) if (await shownEdition(gate, event, row.key)) editions.push(event)
-  if (held.length > 0 && held.every((event) => gate.removed.has(event.key))) return null
+  // Editions held but none shown (suppressed, no longer public, withdrawn,
+  // hosts hidden): the stored name would be the only trace, so hide it. A
+  // series with nothing held (retention took its editions) keeps its page.
+  if (held.length > 0 && editions.length === 0) return null
   return { org, editions }
 }
 

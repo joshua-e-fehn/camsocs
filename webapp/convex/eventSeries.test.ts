@@ -150,6 +150,19 @@ describe("eventSeries", () => {
     expect(await t.query(api.eventSeries.ofEvent, { key: "evt-gp-1" })).toBeNull()
   })
 
+  test("a series whose editions are all no longer public is hidden", async () => {
+    const t = newTest()
+    await addOrg(t, "org-greek", "Greek Play Committee")
+    await addEvent(t, "evt-gp-1", "The Cambridge Greek Play 2026", Date.now() + 10 * DAY)
+    await t.mutation(internal.derive.recomputeEvents, {})
+    await t.run(async (ctx) => {
+      const event = await ctx.db.query("events").first()
+      if (event) await ctx.db.patch("events", event._id, { visibility: "cam_only" })
+    })
+    expect(await t.query(api.eventSeries.list, {})).toEqual([])
+    expect(await t.query(api.eventSeries.get, { slug: "cambridge-greek-play" })).toBeNull()
+  })
+
   test("an edition whose hosts are all hidden gives no next date", async () => {
     const t = newTest()
     await addOrg(t, "org-greek", "Greek Play Committee")
