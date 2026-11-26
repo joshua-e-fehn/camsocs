@@ -11,6 +11,7 @@ import {
   type TermDates,
   termWeekLabel,
 } from "./derived"
+import { eventSeriesOf } from "./eventSeries"
 import { type ApplicabilityContext, FIELD_SPECS, type FieldSpec } from "./fields"
 import { type FieldMeta, hasClaimEvidence, type Resolution, unclaimedMeta } from "./resolve"
 
@@ -236,6 +237,10 @@ function derive(
       stream: eventStreamOf(
         row as { source: string; organiserKeys: string[]; coHostKeys: string[] },
       ),
+      seriesKey: eventSeriesOf({
+        ...(row as { title: string; organiserKeys: string[]; hosting?: string; source: string }),
+        meta,
+      })?.key,
       confidence: confidences.length > 0 ? Math.min(...confidences) : 0.5,
       lastSeenAt: seen.length > 0 ? Math.max(...seen) : context.now,
     }

@@ -287,9 +287,14 @@ export function OrgDirectory({
     [colleges],
   )
 
+  // The plain list's title carries its live count (ENG-281), like the server's.
+  const plainTotal =
+    !state.q && activeDirectoryFilterCount(state) === 0 && state.page <= 1 && !facets.stale
+      ? counts?.total
+      : undefined
   useEffect(() => {
-    document.title = titleText(fitTitle(directoryTitle(state)))
-  }, [state])
+    document.title = titleText(fitTitle(directoryTitle(state, plainTotal)))
+  }, [state, plainTotal])
 
   const hrefFor = (next: DirectoryState) => `/societies${serializeDirectoryState(next)}`
   const apply = (next: DirectoryState, { replace = false, scroll = false } = {}) => {

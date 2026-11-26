@@ -6,9 +6,11 @@ import {
   directoryTitle,
   fitTitle,
   MAX_TITLE,
+  societiesListTitle,
   titleBase,
   titleText,
 } from "./directory-title"
+import { TITLE_SUFFIX } from "./site"
 import { CATEGORIES } from "./vocab"
 
 test("the directory's title names Cambridge, a query, a single category or the page", () => {
@@ -49,4 +51,14 @@ test("every hub title names Cambridge and fits in 60 characters", () => {
   )
   expect(collegeHubTitle("Cambridge Union")).toBe("Societies and clubs at Cambridge Union")
   expect(categoryHubTitle("music")).toBe("Music societies in Cambridge")
+})
+
+test("the plain list's title carries the live count and fits a result (ENG-281)", () => {
+  expect(directoryTitle({ q: "", categories: [] }, 1234)).toBe(
+    "Cambridge societies list: 1,234 societies & clubs",
+  )
+  expect(societiesListTitle(1234).length + TITLE_SUFFIX.length).toBeLessThanOrEqual(MAX_TITLE)
+  expect(directoryTitle({ q: "", categories: [] }, 0)).toBe(DIRECTORY_TITLE)
+  expect(directoryTitle({ q: "", categories: [] })).toBe(DIRECTORY_TITLE)
+  expect(directoryTitle({ q: "chess", categories: [] }, 900)).toContain("chess")
 })

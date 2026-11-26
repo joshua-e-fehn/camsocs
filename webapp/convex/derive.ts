@@ -9,6 +9,7 @@ import {
   refreshOrganisation,
   syncEventOrganiserRows,
 } from "./lib/entityStore"
+import { eventSeriesOf, noteSeriesEdition } from "./lib/eventSeriesStore"
 
 /**
  * Derived fields that depend on the clock or on other tables (data-model §6),
@@ -21,7 +22,9 @@ import {
  *    `spanEndsAt`, `sweepGroup` and `stream` are kept current, also for rows
  *    written before they existed: this walk is their backfill — ENG-31's
  *    `stream` among them, `streamBackfill` below says when it is done);
- *  - a person's `stale` flag turns on when `staleAfter` passes.
+ *  - a person's `stale` flag turns on when `staleAfter` passes;
+ *  - events' `seriesKey` (ENG-282) is backfilled, and each public edition
+ *    keeps its `eventSeries` row (created with its slug, `lastStartsAt` moved on).
  *
  * Each walk is paginated and reschedules itself, so no transaction reads a
  * whole table. `daily` (convex/crons.ts) starts all three.
@@ -69,6 +72,11 @@ export const recomputeEvents = internalMutation({
       const spanEndsAt = spanEndOf(event.startsAt, event.endsAt)
       const sweepGroup = sweepGroupOf(event.source, event.meta.externalId?.sourceUrl, event)
       const stream = eventStreamOf(event)
+      const series = eventSeriesOf(event)
+      const seriesKey = series?.key
+      if (series && event.visibility === "public" && !event.supersededBy) {
+        await noteSeriesEdition(ctx, series, event)
+      }
       // Also fills in the organiser rows' copy of `hosting` for rows written
       // before it was copied (it patches only rows that differ).
       await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
@@ -79,7 +87,8 @@ export const recomputeEvents = internalMutation({
         label === event.termWeekLabel &&
         spanEndsAt === event.spanEndsAt &&
         sweepGroup === event.sweepGroup &&
-        stream === event.stream
+        stream === event.stream &&
+        seriesKey === event.seriesKey
       ) {
         continue
       }
@@ -88,6 +97,7 @@ export const recomputeEvents = internalMutation({
         spanEndsAt,
         sweepGroup,
         stream,
+        seriesKey,
       })
       changed++
     }

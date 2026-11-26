@@ -899,6 +899,16 @@ only events whose `@id` exists. A month of events
 was ~450 KB with them and is ~50 KB without (`scripts/measure-public-api.ts`, dev data 2026-10-09);
 the sheet reads the rest with `events.get`.
 
+### Event series (`convex/eventSeries.ts`, ENG-282)
+
+A named yearly event gets a new event URL each year, so its search ranking used to restart. Each recurring series (data-model §2 "Recurring series") has one page that keeps its URL: `/events/series/<slug>` leads with the edition still to come (else the latest held, "next edition not listed yet") and lists the earlier editions still held; `/events/series` lists every series, those with a date first. Its title names the edition's year ("The Cambridge Greek Play 2026: dates & every year"), so it moves on by itself. An event page links its series ("Held every year: …, every edition") once the daily walk has created the series' row. Series pages are in `events.xml`, the index in `pages.xml`, linked from `/events`.
+
+- `eventSeries.list` → every series `{ slug, name, org?, lastStartsAt, nextStartsAt? }`, by name.
+- `eventSeries.get({ slug })` → `{ series, editions: EventListItem[] }` or null.
+- `eventSeries.ofEvent({ key })` → `{ slug, name }` or null.
+
+Only public editions are read, whatever the viewer (the pages are cached for everyone): never `cam_only` or `members_only`, never a superseded, withdrawn or suppressed event, never one whose hosts are all hidden, never a talks.cam-derived one (G1).
+
 ### The talks boundary (owner decision G1)
 
 No talks.cam-derived text (a talk's title, speakers, abstract, a department's talk listing, a

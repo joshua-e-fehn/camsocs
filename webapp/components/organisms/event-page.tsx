@@ -12,6 +12,7 @@ import { OrgMonogram } from "@/components/molecules/org-monogram"
 import { TrackView } from "@/components/molecules/track-view"
 import { analyticsAttrs } from "@/lib/analytics-events"
 import { linkProps } from "@/lib/crawl-traps"
+import { seriesPath } from "@/lib/event-series-path"
 import { eventHasEnded, eventTrail } from "@/lib/events"
 import type { NextEvent } from "@/lib/next-events"
 import type { EventPublic, ItemLocation } from "@/lib/public-api"
@@ -37,6 +38,7 @@ export function EventPage({
   termWeek,
   now,
   nextEvents = [],
+  series,
 }: {
   event: EventPublic
   venueName?: string
@@ -48,6 +50,9 @@ export function EventPage({
   /** The host's next events after this one (lib/next-events.ts); none
    * under /talks. */
   nextEvents?: readonly NextEvent[]
+  /** The recurring series this event is an edition of (ENG-282); never
+   * under /talks. */
+  series?: { slug: string; name: string } | null
 }) {
   const path = eventPath(event)
   const pageUrl = `${SITE_URL}${path}`
@@ -126,6 +131,18 @@ export function EventPage({
             showTitle
             actions="from-sm"
           />
+          {series && !underTalks && (
+            <p className="text-sm text-muted-foreground">
+              <HistoryIcon aria-hidden className="mr-1.5 inline size-3.5 align-[-2px]" />
+              Held every year:{" "}
+              <Link
+                href={seriesPath(series.slug)}
+                className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring sm:min-h-6"
+              >
+                {series.name}, every edition
+              </Link>
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             <PencilLineIcon aria-hidden className="mr-1.5 inline size-3.5 align-[-2px]" />
             Something wrong here?{" "}

@@ -99,7 +99,7 @@ describe("public pages", () => {
   // nothing, except the category hubs.
   const segments = pages.filter((file) => /\[[^\]]+\][/\\]page\.tsx$/.test(file))
   test("the scan sees every dynamic segment", () => {
-    expect(segments.length).toBe(6)
+    expect(segments.length).toBe(7)
   })
   // The category hubs are the exception: a fixed list of 16, built with the
   // site, so that any other slug gets the site's static 404 (re-check

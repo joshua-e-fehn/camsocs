@@ -47,7 +47,7 @@ type Section = {
 
 export const LISTING_SECTIONS = {
   societies: { kind: "society", wellFormed: isOrgSlug, siblings: [] },
-  events: { kind: "event", wellFormed: isEventKey, siblings: [] },
+  events: { kind: "event", wellFormed: isEventKey, siblings: ["series"] },
   // `events`: talks.cam-derived society events, /talks/events/<key> (G1).
   talks: { kind: "talk", wellFormed: isTalkKey, siblings: ["departments", "events", "finder"] },
 } as const satisfies Record<string, Section>

@@ -24,6 +24,7 @@ export const PAGE_PATHS = [
   "/",
   "/societies",
   "/events",
+  "/events/series",
   "/map",
   "/talks",
   "/talks/departments",

@@ -380,6 +380,10 @@ export const eventFields = {
    * backfilled (derive.ts `recomputeEvents`); `events.list` classifies an
    * unset row in memory. */
   stream: v.optional(literalUnion(EVENT_STREAMS)),
+  /** Derived: the recurring series it is an edition of (lib/eventSeries.ts
+   * `eventSeriesOf`, ENG-282), e.g. "The Cambridge Greek Play 2026" → the
+   * Greek Play's; absent for a one-off. Indexed for `/events/series/<slug>`. */
+  seriesKey: v.optional(v.string()),
   /** Derived: the lower of `title` and `startsAt` confidence. */
   confidence: v.number(),
   meta: metaValidator,
@@ -1386,7 +1390,26 @@ export default defineSchema({
     .index("by_stream_visibility_spanEndsAt", ["stream", "visibility", "spanEndsAt"])
     .index("by_sweepGroup_lastSeenAt", ["sweepGroup", "lastSeenAt"])
     // Retention (convex/retention.ts): is a stored file still an event's image?
-    .index("by_imageStorageId", ["image.storageId"]),
+    .index("by_imageStorageId", ["image.storageId"])
+    .index("by_seriesKey_startsAt", ["seriesKey", "startsAt"]),
+  /** Recurring event series (ENG-282), derived by the daily walk
+   * (derive.ts `recomputeEvents`) from public editions. A row outlives its
+   * editions (events go a year after they end, retention R3), so the series
+   * URL keeps answering between one year's edition and the next. It holds
+   * only the series' name and organiser, never an edition's details. */
+  eventSeries: defineTable({
+    key: v.string(),
+    /** The URL slug, minted once and never changed (`/events/series/<slug>`). */
+    slug: v.string(),
+    name: v.string(),
+    /** The first organiser of its editions; absent for a curated series. */
+    orgKey: v.optional(v.string()),
+    /** The latest start of a public edition seen. */
+    lastStartsAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_slug", ["slug"]),
   /** Each sweep group's newest sighting (the greatest `events.lastSeenAt`
    * of its events), so `withdrawnCheck` reads this small row rather than the
    * group's newest event in full (ENG-279). Kept by ingest and the daily

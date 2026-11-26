@@ -1,5 +1,6 @@
 import { preloadedQueryResult } from "convex/nextjs"
 import type { Metadata } from "next"
+import Link from "next/link"
 import { unstable_rethrow } from "next/navigation"
 import { cache } from "react"
 import { NewlyListed } from "@/components/molecules/newly-listed"
@@ -10,6 +11,7 @@ import { londonIsoDate } from "@/lib/calendar"
 import { currentTermEnd } from "@/lib/date-presets"
 import { isThinListing } from "@/lib/directory-indexing"
 import { FEED_PATH, FEED_TITLE, type FeedEvent } from "@/lib/event-feed"
+import { SERIES_INDEX_PATH } from "@/lib/event-series-path"
 import { EVENTS_TITLE, eventsListStructuredData, orgEventsTitle } from "@/lib/events"
 import { guide } from "@/lib/guides"
 import { pageMetadata } from "@/lib/page-metadata"
@@ -187,7 +189,14 @@ export default async function EventsPage({ searchParams }: Props) {
         preloadedRestricted={preloadedRestricted}
       />
       <NewlyListed events={newest} />
-      <div className="mx-auto w-full max-w-7xl px-4 pt-4 pb-12 sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pt-4 pb-12 sm:px-6">
+        <p className="text-sm text-muted-foreground">
+          Shows, races and fairs that come back every year each keep one page:{" "}
+          <Link href={SERIES_INDEX_PATH} className="text-foreground underline underline-offset-4">
+            yearly events in Cambridge
+          </Link>
+          .
+        </p>
         <RelatedGuides guides={EVENT_GUIDES} title="Guides to the year" columns />
       </div>
     </>

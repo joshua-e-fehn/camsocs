@@ -1,6 +1,7 @@
 import { fetchQuery } from "convex/nextjs"
 import type { NextRequest } from "next/server"
 import { api } from "@/convex/_generated/api"
+import { seriesPath } from "@/lib/event-series-path"
 import { formalCollegeSitemapEntries } from "@/lib/formal-college-page"
 import {
   isSitemapFile,
@@ -21,7 +22,8 @@ import { loadSocietySitemap } from "@/lib/sitemap-societies"
  *    but thin ones (owner decision G3) and each college's hub page, with
  *    when it last changed (lib/sitemap-societies.ts, `orgs.sitemap`);
  *  - `events.xml`: every public event from today on, never a talks.cam-
- *    derived one (G1), with when it last changed (`sitemap.events`).
+ *    derived one (G1), with when it last changed (`sitemap.events`), and
+ *    every recurring series' page (`/events/series/<slug>`, ENG-282).
  * Rendered per request (a build has no data) and cached at the edge; a
  * backend failure is a 503, never a partial file.
  */
@@ -40,7 +42,11 @@ async function entries(file: string): Promise<SitemapEntry[]> {
       const rows = await readAllPages((cursor) =>
         fetchQuery(api.sitemap.events, { paginationOpts: { numItems: PAGE, cursor } }),
       )
-      return rows.map((row) => ({ path: `/events/${row.key}`, lastModified: row.updatedAt }))
+      const series = await fetchQuery(api.eventSeries.list, {})
+      return [
+        ...rows.map((row) => ({ path: `/events/${row.key}`, lastModified: row.updatedAt })),
+        ...series.map((row) => ({ path: seriesPath(row.slug) })),
+      ]
     }
   }
 }

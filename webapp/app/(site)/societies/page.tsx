@@ -28,6 +28,28 @@ type Props = { searchParams: Promise<SearchParams> }
 const DESCRIPTION =
   "An unofficial A–Z of Cambridge student societies, sports clubs and college groups: filter by category, college and level, with every fact sourced."
 
+/** The unfiltered first page's description, with the live count (ENG-281). */
+function listDescription(total: number) {
+  return `The full list of ${total.toLocaleString("en-GB")} Cambridge student societies, sports clubs and college groups, A–Z: filter by category, college and level, with every fact sourced.`
+}
+
+/** Whether a state is the plain list: no search, no filter, first page. */
+function isPlainList(state: DirectoryState) {
+  return !state.q && activeDirectoryFilterCount(state) === 0 && state.page <= 1
+}
+
+/** The number of listed societies for the plain list's title. Undefined when
+ * it cannot be read: the title falls back to the uncounted one. */
+async function listTotal(state: DirectoryState): Promise<number | undefined> {
+  if (!isPlainList(state)) return undefined
+  try {
+    return (await publicQuery(api.orgs.facets, directoryFilters(state))).total
+  } catch (error) {
+    unstable_rethrow(error)
+    return undefined
+  }
+}
+
 /** The slug of the one college a state filters on, for its canonical (the
  * college's own page is its hub). Undefined when it cannot be read. */
 async function collegeSlugOf(state: DirectoryState) {
@@ -51,9 +73,11 @@ async function collegeSlugOf(state: DirectoryState) {
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const state = parseDirectoryParams(await searchParams)
   const seo = directorySeo(state, await collegeSlugOf(state))
-  const title = directoryTitle(state)
+  const total = await listTotal(state)
+  const title = directoryTitle(state, total)
+  const description = total ? listDescription(total) : DESCRIPTION
   return {
-    ...pageMetadata({ title, description: DESCRIPTION, path: seo.canonical }),
+    ...pageMetadata({ title, description, path: seo.canonical }),
     ...(seo.index ? {} : { robots: { index: false, follow: true } }),
   }
 }
@@ -98,8 +122,8 @@ export default async function SocietiesPage({ searchParams }: Props) {
     unfiltered && seo.index
       ? collectionJsonLd({
           path: seo.canonical,
-          title: directoryTitle(state),
-          description: DESCRIPTION,
+          title: directoryTitle(state, isPlainList(state) ? total : undefined),
+          description: isPlainList(state) && total > 0 ? listDescription(total) : DESCRIPTION,
           items: preloadedQueryResult(preloadedList).page.map((card) => ({
             name: card.name,
             path: `/societies/${card.slug}`,
@@ -134,7 +158,7 @@ export default async function SocietiesPage({ searchParams }: Props) {
           </h1>
           <p className="max-w-2xl text-pretty text-muted-foreground">
             {unfiltered && total > 0
-              ? `An unofficial A–Z of ${total} student societies, sports clubs, theatre companies and college groups in Cambridge`
+              ? `The full list of ${total.toLocaleString("en-GB")} student societies, sports clubs, theatre companies and college groups in Cambridge`
               : "University-wide and college societies, sports clubs, theatre companies and student bodies in Cambridge"}
             {" — what they do, how to join, and where every fact came from. "}
             <Link href={CATEGORIES_PATH} className="text-foreground underline underline-offset-4">
