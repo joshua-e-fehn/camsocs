@@ -1,7 +1,12 @@
 import { type Infer, v } from "convex/values"
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../_generated/server"
-import { loadTerms, refreshOrganisation, syncEventOrganiserRows } from "../lib/entityStore"
+import {
+  loadTerms,
+  refreshEventCard,
+  refreshOrganisation,
+  syncEventOrganiserRows,
+} from "../lib/entityStore"
 import { assertBatchSize } from "../lib/ingest"
 
 /**
@@ -62,6 +67,7 @@ async function eventByKey(ctx: MutationCtx, key: string): Promise<Doc<"events"> 
 /** Keeps the organiser rows' copy in step and re-derives their organisations
  * (`lastActiveAt`, activity), after `supersededBy` changed. */
 async function afterChange(ctx: MutationCtx, event: Doc<"events">, now: number): Promise<void> {
+  await refreshEventCard(ctx, event._id)
   const orgKeys = new Set(await syncEventOrganiserRows(ctx, event))
   if (orgKeys.size === 0) return
   const terms = await loadTerms(ctx)

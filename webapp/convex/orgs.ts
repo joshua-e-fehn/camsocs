@@ -10,7 +10,7 @@ import { AUDIENCES, CATEGORIES } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { londonIsoDate, type TermDates, termWeekLabel } from "./lib/derived"
-import { withdrawnCheck } from "./lib/entityStore"
+import { eventCardOf, withdrawnCheck } from "./lib/entityStore"
 import { isHttpUrl } from "./lib/fields"
 import {
   type ActivityWindow,
@@ -764,7 +764,7 @@ export const getBySlug = query({
         !isTalksDerivedEvent(event) &&
         !(await withdrawn(event))
       ) {
-        events.push(await eventListItem(event, lookup))
+        events.push(await eventListItem(eventCardOf(event), lookup))
       }
     }
     const contacts = await loadContactHashes(ctx)
