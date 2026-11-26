@@ -456,6 +456,7 @@ LISTING_REQUEST_STATUSES: tuple[str, ...] = (
     "accepted",
     "rejected",
     "done",
+    "answered",
 )
 
 SUPPRESSION_SCOPES: tuple[str, ...] = (

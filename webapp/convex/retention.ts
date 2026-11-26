@@ -520,7 +520,7 @@ export const purgeIntroductions = internalMutation({
 
 // --- R8: listing requests ----------------------------------------------------------------
 
-const RESOLVED = ["rejected", "accepted", "done"] as const
+const RESOLVED = ["rejected", "accepted", "done", "answered"] as const
 
 export const purgeRequests = internalMutation({
   args: { ...walkArgs, status: v.optional(v.number()) },
@@ -529,10 +529,13 @@ export const purgeRequests = internalMutation({
     const now = args.now ?? Date.now()
     const statusIndex = args.status ?? 0
     const status = RESOLVED[statusIndex]
-    const cutoff = daysAgo(
-      now,
-      status === "rejected" ? RETENTION.rejectedRequestDays : RETENTION.requestDays,
-    )
+    // An answered request keeps the period of what it was closed as: a
+    // rejection answered is still a rejection. The walk takes the shorter
+    // cutoff and checks each row's own below.
+    const cutoffFor = (closedAs: string | undefined) =>
+      daysAgo(now, closedAs === "rejected" ? RETENTION.rejectedRequestDays : RETENTION.requestDays)
+    const cutoff =
+      status === "accepted" || status === "done" ? cutoffFor(status) : cutoffFor("rejected")
     // Resolution follows creation, so everything due was also created before
     // the cutoff.
     const page = await ctx.db
@@ -541,8 +544,9 @@ export const purgeRequests = internalMutation({
       .paginate({ numItems: PAGE.rows, cursor: args.cursor ?? null })
     let deleted = 0
     for (const row of page.page) {
-      if ((row.resolvedAt ?? row.createdAt) >= cutoff || row.purgedAt !== undefined) continue
-      if (row.status === "accepted" && (row.outcome?.appliedFields?.length ?? 0) > 0) {
+      const rowCutoff = status === "answered" ? cutoffFor(row.closedAs) : cutoff
+      if ((row.resolvedAt ?? row.createdAt) >= rowCutoff || row.purgedAt !== undefined) continue
+      if ((row.outcome?.appliedFields?.length ?? 0) > 0) {
         // Its owner_submitted claims cite it (`request:<key>`): a stub stays —
         // what was accepted, for which listing and in what role, when — with
         // nothing of the person who sent it.

@@ -939,6 +939,9 @@ export const listingRequestFields = {
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
   outcome: v.optional(listingRequestOutcomeValidator),
+  /** What an `answered` request was closed as before its sender was told
+   * (`accepted`, `rejected` or `done`); retention keeps its period by it. */
+  closedAs: v.optional(v.union(v.literal("accepted"), v.literal("rejected"), v.literal("done"))),
   /** The new-request notification's delivery, per channel (ENG-104). */
   notifications: v.optional(v.array(requestNotificationValidator)),
   /** The request agent's draft (ENG-126). */

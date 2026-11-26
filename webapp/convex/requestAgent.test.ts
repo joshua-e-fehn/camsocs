@@ -565,6 +565,21 @@ describe("the events page of a request (ENG-158)", () => {
       const left = await broker.query(api.broker.listingRequests.list, { active: true })
       expect(left.map((item) => item.key)).toEqual([second])
       expect(await broker.query(api.broker.listingRequests.openCount, {})).toBe(1)
+
+      // Telling the sender is the last step: Answered keeps when it was
+      // closed and what it was closed as. An open request cannot skip ahead.
+      await broker.mutation(api.broker.listingRequests.setStatus, { key, status: "answered" })
+      const answered = await row(t, key)
+      expect(answered).toMatchObject({
+        status: "answered",
+        closedAs: "accepted",
+        resolvedAt: closed?.resolvedAt,
+      })
+      await expect(
+        broker.mutation(api.broker.listingRequests.setStatus, { key: second, status: "answered" }),
+      ).rejects.toThrow("Close the request before marking it answered")
+      await broker.mutation(api.broker.listingRequests.setStatus, { key, status: "open" })
+      expect((await row(t, key))?.closedAs).toBeUndefined()
     })
   })
 
