@@ -292,4 +292,35 @@ describe("orgs.related", () => {
     expect(await t.query(api.orgs.related, { slug: "rowing" })).toEqual([])
     expect(await t.query(api.orgs.related, { slug: "nope" })).toEqual([])
   })
+
+  test("the precomputed ranking (ENG-279) gives the live one, re-checked at read time", async () => {
+    const t = newTest()
+    await seed(t)
+    const live = await t.query(api.orgs.related, { slug: "chess" })
+    await t.mutation(internal.related.recompute, {})
+    const rows = await t.run((ctx) => ctx.db.query("relatedOrgs").collect())
+    expect(rows.find((row) => row.orgKey === "org-chess")?.relatedKeys).toEqual(["org-go"])
+    expect(await t.query(api.orgs.related, { slug: "chess" })).toEqual(live)
+    // A stored pick archived (or hidden) since the walk drops out.
+    await t.run(async (ctx) => {
+      const go = await ctx.db
+        .query("orgCards")
+        .withIndex("by_key", (i) => i.eq("key", "org-go"))
+        .unique()
+      if (go) await ctx.db.patch("orgCards", go._id, { status: "archived" })
+    })
+    expect(await t.query(api.orgs.related, { slug: "chess" })).toEqual([])
+    // A listing hidden since has no card: nothing, and its row goes next walk.
+    await t.run(async (ctx) => {
+      const chess = await ctx.db
+        .query("orgCards")
+        .withIndex("by_key", (i) => i.eq("key", "org-chess"))
+        .unique()
+      if (chess) await ctx.db.delete("orgCards", chess._id)
+    })
+    expect(await t.query(api.orgs.related, { slug: "chess" })).toEqual([])
+    await t.mutation(internal.related.recompute, {})
+    const after = await t.run((ctx) => ctx.db.query("relatedOrgs").collect())
+    expect(after.some((row) => row.orgKey === "org-chess")).toBe(false)
+  })
 })

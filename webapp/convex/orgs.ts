@@ -20,6 +20,7 @@ import {
   countRuns,
   countsAsActivity,
   relatedCards,
+  relatedScore,
   sortByActivity,
   weekWindow,
 } from "./lib/orgActivity"
@@ -60,7 +61,7 @@ import { getViewer, visibleEventTiers } from "./lib/viewer"
 
 /** More cards than this is a directory an order of magnitude past plan; the
  * scan stops rather than reading an unbounded table. */
-const MAX_CARDS = 5_000
+export const MAX_CARDS = 5_000
 /** Convex's maximum result set for one full-text search query (docs:
  * production/state/limits). The directory holds fewer listings than this; a
  * query that fills it says so (`facets.truncated`). */
@@ -609,30 +610,40 @@ const RELATED_LIMIT = 6
 /**
  * Listings related to one (convex/lib/orgActivity.ts `relatedScore`): the
  * same college first, then the same categories. Empty for an unknown or
- * hidden slug.
+ * hidden slug (a hidden listing has no card). Reads the listing's
+ * precomputed ranking (convex/related.ts, ENG-279) and the cards it names,
+ * each re-checked; a listing not yet ranked is ranked live over every card.
  */
 export const related = query({
   args: { slug: v.string(), limit: v.optional(v.number()) },
   returns: v.array(orgCardPublicValidator),
   handler: async (ctx, args) => {
-    const org = await ctx.db
-      .query("organisations")
-      .withIndex("by_slug", (i) => i.eq("slug", args.slug))
-      .unique()
-    if (!org || org.hidden === true) return []
-    const cards = await ctx.db
+    const base = await ctx.db
       .query("orgCards")
-      .withIndex("by_isCounterpart_nameSort", (i) => i.eq("isCounterpart", false))
-      .take(MAX_CARDS)
-    const base = cards.find((card) => card.key === org.key)
-    if (!base) return []
+      .withIndex("by_slug", (i) => i.eq("slug", args.slug))
+      .first()
+    if (!base || base.isCounterpart) return []
     const limit = Math.max(1, Math.min(RELATED_LIMIT, Math.floor(args.limit ?? RELATED_LIMIT) || 1))
+    const stored = await ctx.db
+      .query("relatedOrgs")
+      .withIndex("by_orgKey", (i) => i.eq("orgKey", base.key))
+      .unique()
+    let picks: Doc<"orgCards">[]
+    if (stored) {
+      const lookup = orgRefCache(ctx)
+      picks = []
+      for (const key of stored.relatedKeys) {
+        if (picks.length >= limit) break
+        const card = await lookup(key)
+        if (card && relatedScore(base, card) > 0) picks.push(card)
+      }
+    } else {
+      picks = relatedCards(base, await candidates(ctx, undefined), limit)
+    }
     const contacts = await loadContactHashes(ctx)
     const names = await loadNameHashes(ctx)
     return await Promise.all(
-      relatedCards(base, cards, limit).map(async (card) =>
-        publicCard(await orgCardPublic(ctx, card), contacts, names),
-      ),
+      picks.map(async (card) => publicCard(await orgCardPublic(ctx, card), contacts, names)),
     )
   },
 })

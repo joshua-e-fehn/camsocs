@@ -3,7 +3,12 @@ import { spanEndOf } from "../lib/calendar"
 import { internal } from "./_generated/api"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { eventStreamOf, londonIsoDate, sweepGroupOf, termWeekLabel } from "./lib/derived"
-import { loadTerms, refreshOrganisation, syncEventOrganiserRows } from "./lib/entityStore"
+import {
+  loadTerms,
+  noteSweepSighting,
+  refreshOrganisation,
+  syncEventOrganiserRows,
+} from "./lib/entityStore"
 
 /**
  * Derived fields that depend on the clock or on other tables (data-model §6),
@@ -67,6 +72,9 @@ export const recomputeEvents = internalMutation({
       // Also fills in the organiser rows' copy of `hosting` for rows written
       // before it was copied (it patches only rows that differ).
       await syncEventOrganiserRows(ctx, { ...event, spanEndsAt })
+      // Also the backfill of `sweepGroupSightings` (ENG-279), and its repair
+      // for an event whose group just changed.
+      await noteSweepSighting(ctx, { sweepGroup, lastSeenAt: event.lastSeenAt })
       if (
         label === event.termWeekLabel &&
         spanEndsAt === event.spanEndsAt &&

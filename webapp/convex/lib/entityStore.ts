@@ -262,16 +262,60 @@ export function withdrawnCheck(ctx: QueryCtx, now: number) {
     if (group === undefined || event.startsAt < now) return false
     let found = newest.get(group)
     if (!found) {
-      found = ctx.db
-        .query("events")
-        .withIndex("by_sweepGroup_lastSeenAt", (q) => q.eq("sweepGroup", group))
-        .order("desc")
-        .first()
-        .then((row) => row?.lastSeenAt)
+      found = newestSighting(ctx, group)
       newest.set(group, found)
     }
     return isWithdrawn(event, await found, now)
   }
+}
+
+/** A sweep group's newest sighting: its `sweepGroupSightings` row (about
+ * 0.1 KB), else its newest event (a full event, ~4 KB; a group the daily
+ * derivation has not yet recorded). The row is never behind the events: every
+ * write that advances an event's `lastSeenAt` raises it (`noteSweepSighting`). */
+async function newestSighting(ctx: QueryCtx, group: string): Promise<number | undefined> {
+  const row = await ctx.db
+    .query("sweepGroupSightings")
+    .withIndex("by_sweepGroup", (q) => q.eq("sweepGroup", group))
+    .unique()
+  if (row) return row.lastSeenAt
+  const event = await ctx.db
+    .query("events")
+    .withIndex("by_sweepGroup_lastSeenAt", (q) => q.eq("sweepGroup", group))
+    .order("desc")
+    .first()
+  return event?.lastSeenAt
+}
+
+/** Raises the event's sweep group's newest sighting to its `lastSeenAt`
+ * (`newestSighting`); writes nothing when the row is already as new. A new
+ * row starts from the group's newest event, so it is never behind one the
+ * write did not touch. */
+export async function noteSweepSighting(
+  ctx: MutationCtx,
+  event: Pick<Doc<"events">, "sweepGroup" | "lastSeenAt">,
+): Promise<void> {
+  const group = event.sweepGroup
+  if (group === undefined) return
+  const row = await ctx.db
+    .query("sweepGroupSightings")
+    .withIndex("by_sweepGroup", (q) => q.eq("sweepGroup", group))
+    .unique()
+  if (row) {
+    if (event.lastSeenAt > row.lastSeenAt) {
+      await ctx.db.patch("sweepGroupSightings", row._id, { lastSeenAt: event.lastSeenAt })
+    }
+    return
+  }
+  const newestEvent = await ctx.db
+    .query("events")
+    .withIndex("by_sweepGroup_lastSeenAt", (q) => q.eq("sweepGroup", group))
+    .order("desc")
+    .first()
+  await ctx.db.insert("sweepGroupSightings", {
+    sweepGroup: group,
+    lastSeenAt: Math.max(event.lastSeenAt, newestEvent?.lastSeenAt ?? 0),
+  })
 }
 
 export type MetaMap = Record<string, FieldMeta>

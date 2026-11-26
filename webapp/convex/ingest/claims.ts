@@ -20,6 +20,7 @@ import {
   findEntity,
   latestPastEvent,
   loadTerms,
+  noteSweepSighting,
   organiserCopyChanged,
   refreshOrganisation,
   syncEventOrganiserRows,
@@ -584,6 +585,8 @@ async function writeEntity(
   if (entityType === "event") {
     const event = written as Doc<"events">
     const before = existing as Doc<"events"> | null
+    // A new sighting raises its listing's newest one (`withdrawnCheck`).
+    await noteSweepSighting(ctx, event)
     // The organiser rows copy its start, visibility and hosting; someone
     // else's event no longer counts as its organisers' activity (decision D6,
     // lib/entityStore.ts `latestPastEvent`), and back.

@@ -13,6 +13,8 @@ import { internal } from "./_generated/api"
  *    docs/compliance/retention.md).
  *  - `coverage-daily` (04:45): the broker overview's directory coverage, after
  *    the walks above have settled (convex/coverage.ts).
+ *  - `related-daily` (05:00): each listing's related listings for its
+ *    profile, after the derivation has settled statuses (convex/related.ts).
  *  - `talks-retention-daily` (04:30): talks and their details 30 days after
  *    they ended (convex/ingest/talks.ts `purgeExpired`, decision D7).
  *  - `talks-stats-daily` (00:10): the talks counts (this London week, next 28
@@ -38,6 +40,7 @@ const crons = cronJobs()
 crons.daily("derive-daily", { hourUTC: 3, minuteUTC: 30 }, internal.derive.daily, {})
 crons.daily("retention-daily", { hourUTC: 4, minuteUTC: 15 }, internal.retention.daily, {})
 crons.daily("feeds-prune-daily", { hourUTC: 4, minuteUTC: 20 }, internal.feeds.prune, {})
+crons.daily("related-daily", { hourUTC: 5, minuteUTC: 0 }, internal.related.daily, {})
 crons.daily("coverage-daily", { hourUTC: 4, minuteUTC: 45 }, internal.coverage.recompute, {})
 crons.daily(
   "talks-retention-daily",
