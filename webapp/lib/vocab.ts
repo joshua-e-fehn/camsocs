@@ -465,9 +465,9 @@ export function requestNeedsListing(kind: ListingRequestKind, aboutEvent: boolea
 export const LISTING_REQUEST_STATUSES = [
   "open",
   "in_progress",
-  "accepted",
   "rejected",
   "done",
+  "accepted",
   "answered",
 ] as const
 export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
