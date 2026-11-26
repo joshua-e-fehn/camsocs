@@ -21,7 +21,7 @@ Background and the rules each source follows: `docs/source-research.md` §16 (in
 
 **Receiving (Gmail, the camsocs.uk Workspace).**
 - An unguessable alias of joshua@camsocs.uk, `lists-<random>@camsocs.uk` (the value is in 1Password, Mya vault, "CAMsocs list-mail relay", and in `INBOUND_EMAIL_RECIPIENTS`; keep it out of the repository).
-- A Gmail filter, `deliveredto:<alias>`: label **Lists**, skip the inbox. The agents' mail tool hides that label (mya-workstation `camsocs_mail`): list mail is never shown to an agent.
+- A Gmail filter, `deliveredto:<alias> -from:sympa@lists.cam.ac.uk`: label **Lists**, skip the inbox. The agents' mail tool hides that label (mya-workstation `camsocs_mail`): list mail is never shown to an agent. Mail from the Sympa robot itself (subscription confirmations, "already subscribed" notices; never list posts) is exempt and lands in the joshua@camsocs.uk inbox, so an agent can confirm subscriptions (2026-11-26).
 - The relay, `camsocs-lists-relay.timer` on the VPS (every 5 minutes, mya-workstation `camsocs_mail/lists.py`), posts each new Lists message to `POST <prod>.convex.site/api/inbound/email` in the provider-agnostic shape with `Authorization: Bearer $INBOUND_EMAIL_SECRET`, then labels it **Lists/relayed** (4xx: **Lists/rejected**; 5xx or no network: tried again next run; the route dedupes on `Message-ID`). Settings: `/docker/hermes-agent-vspa/data/secrets/mya-camsocs-mail/lists-relay.env` (0600 root).
 - Convex production: `INBOUND_EMAIL_SECRET`, `INBOUND_EMAIL_RECIPIENTS` (the alias), `INBOUND_TRUSTED_AUTHSERV_IDS=mx.microsoft.com,mx.google.com` (Gmail seals the last ARC set on a redirected mail; see J4 step 1).
 
@@ -50,7 +50,10 @@ pixi run pipeline -- worklist             # needs CONVEX_HTTP_URL + PIPELINE_API
 ```
 
 It writes `var/reports/mailing-list-worklist.csv`, best first.
-- **sign_up** is a URL to open, or a Sympa command: `send 'subscribe soc-xyz' to sympa@lists.cam.ac.uk`. Put the command in the subject or the first line, from your @cam.ac.uk address. Most lists need the owners' approval (UIS help, https://help.uis.cam.ac.uk/node/1444).
+- **sign_up** is a URL to open, or a Sympa list name (`send 'subscribe soc-xyz' to sympa@lists.cam.ac.uk`).
+- **Subscribe the list alias, not jef76** (decided 2026-11-26): it keeps list mail out of the personal inbox and tells owners plainly who is reading. Sympa lists, signed out of lists.cam.ac.uk: `/sympa/subscribe/<list>` with the alias as e-mail and `CAMsocs (camsocs.uk)` as name → confirm → Sympa emails a link to the alias, which arrives in the joshua@camsocs.uk inbox (filter exemption above) → open it and confirm. Some lists then forward the request to their owners for approval. A list that refuses a non-Cambridge address falls back to jef76, which the Outlook rule above redirects.
+- Web sign-ups (Mailchimp) show a CAPTCHA, so Joshua does those by hand, with the alias as e-mail.
+- Leave out lists that are not society news (for example the gliding club's trial-flight bookings) and faith societies' member lists unless Joshua decides otherwise; check matches marked "matched by name".
 - **why** says why the organisation is ranked there: active, no other event feed, the list on record (or "matched by name (check it)").
 - `var/reports/sympa-soc-lists.csv` holds every public `soc-` list name and description, with the organisation it was matched to.
 
