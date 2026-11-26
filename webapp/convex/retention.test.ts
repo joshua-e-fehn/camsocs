@@ -408,7 +408,7 @@ describe("retention", () => {
       })
       const requestRow = (
         key: string,
-        status: "open" | "rejected" | "accepted" | "done",
+        status: "open" | "rejected" | "accepted" | "done" | "answered",
         days: number,
       ) => ({
         key,
@@ -425,6 +425,19 @@ describe("retention", () => {
       await ctx.db.insert("listingRequests", requestRow("lr-accepted", "accepted", 365))
       await ctx.db.insert("listingRequests", requestRow("lr-done-old", "done", 3 * 365))
       await ctx.db.insert("listingRequests", requestRow("lr-open-old", "open", 3 * 365))
+      // Answered requests keep the period of what they were closed as.
+      await ctx.db.insert("listingRequests", {
+        ...requestRow("lr-answered-rejected-old", "answered", 100),
+        closedAs: "rejected" as const,
+      })
+      await ctx.db.insert("listingRequests", {
+        ...requestRow("lr-answered-done", "answered", 100),
+        closedAs: "done" as const,
+      })
+      await ctx.db.insert("listingRequests", {
+        ...requestRow("lr-answered-done-old", "answered", 3 * 365),
+        closedAs: "done" as const,
+      })
       // An accepted correction its owner claims cite: a stub stays.
       await ctx.db.insert("listingRequests", {
         ...requestRow("lr-applied-old", "accepted", 3 * 365),
@@ -467,6 +480,7 @@ describe("retention", () => {
     expect(after.introductions).toEqual([])
     expect(after.requests).toEqual([
       "lr-accepted",
+      "lr-answered-done",
       "lr-applied-old",
       "lr-open-old",
       "lr-rejected-new",

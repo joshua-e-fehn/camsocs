@@ -468,8 +468,8 @@ function RequestCard({
 /**
  * Moving a request by hand, where no accept dialog does it: an open one is
  * rejected or marked done (a question answered, a listing added by hand), a
- * closed one reopened, and one whose job failed for good closed without its
- * events. The filters above the list show each status.
+ * closed one marked answered once its sender has been told, or reopened, and
+ * one whose job failed for good closed without its events. The filters above the list show each status.
  */
 function StatusActions({ request }: { request: BrokerListingRequest }) {
   const setStatus = useSetListingRequestStatus()
@@ -494,7 +494,12 @@ function StatusActions({ request }: { request: BrokerListingRequest }) {
         ? request.job?.state === "failed"
           ? [move("accepted", "Close without its events", "Request closed: now under Accepted")]
           : []
-        : [move("open", "Reopen", "Request reopened")]
+        : request.status === "answered"
+          ? [move("open", "Reopen", "Request reopened")]
+          : [
+              move("open", "Reopen", "Request reopened"),
+              move("answered", "Mark answered", "Request marked answered"),
+            ]
   if (actions.length === 0) return null
   return <div className="flex flex-wrap justify-end gap-1 border-t pt-2">{actions}</div>
 }

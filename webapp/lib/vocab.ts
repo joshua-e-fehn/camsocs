@@ -457,6 +457,10 @@ export function requestNeedsListing(kind: ListingRequestKind, aboutEvent: boolea
  * `in_progress` (ENG-158): the broker confirmed a plan whose work runs on the
  * VPS (the request's `job`). It stays there, on the inbox, until the broker
  * has seen the result and closes it, which makes it `accepted`.
+ *
+ * `answered` comes after a request is closed (`accepted`, `rejected` or
+ * `done`): the person who sent it has been told the outcome. Until then a
+ * closed request still owes them a reply.
  */
 export const LISTING_REQUEST_STATUSES = [
   "open",
@@ -464,6 +468,7 @@ export const LISTING_REQUEST_STATUSES = [
   "accepted",
   "rejected",
   "done",
+  "answered",
 ] as const
 export type ListingRequestStatus = (typeof LISTING_REQUEST_STATUSES)[number]
 

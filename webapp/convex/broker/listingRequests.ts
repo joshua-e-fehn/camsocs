@@ -255,9 +255,25 @@ export const setStatus = mutation({
   handler: async (ctx, args) => {
     await requireBrokerUser(ctx)
     const row = await findRequest(ctx, args.key)
+    const reopened = args.status === "open" || args.status === "in_progress"
+    const closedAs =
+      row.status === "accepted" || row.status === "rejected" || row.status === "done"
+        ? row.status
+        : row.status === "answered"
+          ? row.closedAs
+          : undefined
+    if (args.status === "answered" && row.status !== "answered" && closedAs === undefined) {
+      throw new ConvexError("Close the request before marking it answered")
+    }
     await ctx.db.patch("listingRequests", row._id, {
       status: args.status,
-      resolvedAt: args.status === "open" || args.status === "in_progress" ? undefined : Date.now(),
+      closedAs: args.status === "answered" ? closedAs : undefined,
+      // Answering a closed request keeps when it was closed.
+      resolvedAt: reopened
+        ? undefined
+        : args.status === "answered"
+          ? (row.resolvedAt ?? Date.now())
+          : Date.now(),
     })
     return null
   },
