@@ -1,5 +1,6 @@
+import { isTalksDerivedEvent } from "../../lib/talks-boundary"
 import type { EntityType } from "../../lib/vocab"
-import type { Doc } from "../_generated/dataModel"
+import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { isWithdrawn, type TermDates } from "./derived"
 import { sameContent, sameFields } from "./ingest"
@@ -162,6 +163,93 @@ export async function writeOrgCard(ctx: MutationCtx, org: Doc<"organisations">):
   await ctx.db.patch("orgCards", existing._id, card)
 }
 
+/** An event's list card (schema.ts `eventCardFields`, ENG-280). */
+export type EventCard = Omit<Doc<"eventCards">, "_id" | "_creationTime">
+
+/** The list card of an event: the event without `meta` and `description`,
+ * with the talks boundary's verdict and the start's provenance taken from
+ * them. Pure, so a read before the backfill builds the same card. */
+export function eventCardOf(event: Doc<"events">): EventCard {
+  const { _id, _creationTime, meta, description: _description, ...rest } = event
+  const start = meta.startsAt
+  return {
+    ...rest,
+    talksDerived: isTalksDerivedEvent(event),
+    ...(start
+      ? {
+          startsAtMeta: {
+            status: start.status,
+            ...(start.method ? { method: start.method } : {}),
+            ...(start.sourceType ? { sourceType: start.sourceType } : {}),
+          },
+        }
+      : {}),
+  }
+}
+
+async function eventCardByKey(ctx: QueryCtx, key: string): Promise<Doc<"eventCards"> | null> {
+  return await ctx.db
+    .query("eventCards")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique()
+}
+
+/**
+ * Inserts or replaces the card of `event`; writes nothing when it is current.
+ * Replaced, not patched, so a field the event lost (a cleared
+ * `supersededBy`) leaves the card too. Every write to `events` ends here or
+ * in `deleteEventCard`.
+ */
+export async function writeEventCard(ctx: MutationCtx, event: Doc<"events">): Promise<void> {
+  const card = eventCardOf(event)
+  const existing = await eventCardByKey(ctx, event.key)
+  if (!existing) {
+    await ctx.db.insert("eventCards", card)
+    return
+  }
+  const { _id, _creationTime, ...stored } = existing
+  if (sameFields(stored, card) && sameFields(card, stored)) return
+  await ctx.db.replace("eventCards", _id, card)
+}
+
+/** Re-reads an event after a patch and brings its card in line. */
+export async function refreshEventCard(ctx: MutationCtx, id: Id<"events">): Promise<void> {
+  const event = await ctx.db.get("events", id)
+  if (event) await writeEventCard(ctx, event)
+}
+
+/** Removes the card of a deleted event. */
+export async function deleteEventCard(ctx: MutationCtx, key: string): Promise<void> {
+  const existing = await eventCardByKey(ctx, key)
+  if (existing) await ctx.db.delete("eventCards", existing._id)
+}
+
+/** The `projectionBackfills` row of the event cards. */
+export const EVENT_CARDS_BACKFILL = "eventCards"
+
+/**
+ * Whether every event has a card: a full walk of `derive.recomputeEvents`
+ * that began with the card writes in place has finished
+ * (`markBackfilled`). Until then the window read takes full events and
+ * builds the cards in memory (lib/eventWindow.ts), so no list is short.
+ */
+export async function eventCardsReady(ctx: QueryCtx): Promise<boolean> {
+  const row = await ctx.db
+    .query("projectionBackfills")
+    .withIndex("by_name", (q) => q.eq("name", EVENT_CARDS_BACKFILL))
+    .unique()
+  return row !== null
+}
+
+/** Records that a projection's backfill walk has finished (once). */
+export async function markBackfilled(ctx: MutationCtx, name: string, now: number): Promise<void> {
+  const row = await ctx.db
+    .query("projectionBackfills")
+    .withIndex("by_name", (q) => q.eq("name", name))
+    .unique()
+  if (!row) await ctx.db.insert("projectionBackfills", { name, completedAt: now })
+}
+
 /**
  * Re-derives an organisation without re-resolving any field — for when only
  * the clock or its events changed. Returns whether the row changed.
@@ -256,7 +344,9 @@ export async function syncEventOrganiserRows(
  */
 export function withdrawnCheck(ctx: QueryCtx, now: number) {
   const newest = new Map<string, Promise<number | undefined>>()
-  return async (event: Doc<"events">): Promise<boolean> => {
+  return async (
+    event: Pick<Doc<"events">, "supersededBy" | "sweepGroup" | "startsAt" | "lastSeenAt">,
+  ): Promise<boolean> => {
     if (event.supersededBy !== undefined) return true
     const group = event.sweepGroup
     if (group === undefined || event.startsAt < now) return false

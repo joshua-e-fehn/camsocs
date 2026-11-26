@@ -10,7 +10,7 @@ import {
 import type { Doc } from "../_generated/dataModel"
 import { internalMutation } from "../_generated/server"
 import { eventStreamOf } from "../lib/derived"
-import { eventOrganiserCopy, loadTerms } from "../lib/entityStore"
+import { eventOrganiserCopy, loadTerms, refreshEventCard } from "../lib/entityStore"
 import { isHttpUrl, isOrgKey } from "../lib/fields"
 import { assertBatchSize, emptyBatchResult, recordBatch } from "../lib/ingest"
 import { upsertRelationship } from "../lib/relationships"
@@ -174,6 +174,7 @@ export const setEventOrganisers = internalMutation({
         stream !== event.stream
       ) {
         await ctx.db.patch("events", event._id, { ...keys, stream, updatedAt: now })
+        await refreshEventCard(ctx, event._id)
         result.updated++
       } else {
         result.unchanged++

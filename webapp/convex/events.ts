@@ -4,6 +4,7 @@ import type { EventVisibility } from "../lib/vocab"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
 import { DAY_MS, londonIsoDate } from "./lib/derived"
+import type { EventCard } from "./lib/entityStore"
 import {
   eventByKey,
   hostsListed,
@@ -90,7 +91,7 @@ export const feed = query({
     if (!row) return null
     const tiers = visibleEventTiers(await getViewer(ctx))
     const lookup = orgRefCache(ctx)
-    const byKey = new Map<string, Doc<"events">>()
+    const byKey = new Map<string, EventCard>()
     for (const orgKey of row.orgKeys) {
       const events = await matchingEvents(
         ctx,

@@ -30,6 +30,7 @@ import {
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import { classifyEmail, isUniversityListing } from "./derived"
+import type { EventCard } from "./entityStore"
 import {
   chatChannelValidator,
   isHttpUrl,
@@ -581,7 +582,7 @@ export function orgRefCache(ctx: QueryCtx) {
 
 /** An event's organisers, co-hosts and sponsors that are listed (hidden ones dropped). */
 async function eventOrganisers(
-  event: Doc<"events">,
+  event: Pick<EventCard, "organiserKeys" | "coHostKeys" | "sponsorKeys">,
   lookup: ReturnType<typeof orgRefCache>,
 ): Promise<EventPublic["organisers"]> {
   const roles = [
@@ -618,7 +619,7 @@ async function withWebsites(
 }
 
 /** The page a visitor may follow: none for mail (a private inbox), never a non-http value. */
-function eventSourceUrl(event: Doc<"events">): string | undefined {
+function eventSourceUrl(event: Pick<EventCard, "source" | "sourceUrl">): string | undefined {
   return event.source === "mailing_list" || !isHttpUrl(event.sourceUrl)
     ? undefined
     : event.sourceUrl
@@ -626,7 +627,9 @@ function eventSourceUrl(event: Doc<"events">): string | undefined {
 
 /** Hosted or only taken part in (decision D6): a row from before D6 hosts.
  * The external page goes with `takes_part` only, and only as http(s). */
-function eventHosting(event: Doc<"events">): Pick<EventListItem, "hosting" | "externalUrl"> {
+function eventHosting(
+  event: Pick<EventCard, "hosting" | "externalUrl">,
+): Pick<EventListItem, "hosting" | "externalUrl"> {
   const hosting = event.hosting ?? "hosts"
   const externalUrl =
     hosting === "takes_part" && event.externalUrl && isHttpUrl(event.externalUrl)
@@ -635,8 +638,10 @@ function eventHosting(event: Doc<"events">): Pick<EventListItem, "hosting" | "ex
   return { hosting, externalUrl }
 }
 
+/** A list item from an event's list card (lib/entityStore.ts `eventCardOf`;
+ * a full event goes through it first). */
 export async function eventListItem(
-  event: Doc<"events">,
+  event: EventCard,
   lookup: ReturnType<typeof orgRefCache>,
 ): Promise<EventListItem> {
   return {
@@ -656,20 +661,8 @@ export async function eventListItem(
     source: event.source,
     sourceUrl: eventSourceUrl(event),
     ...eventHosting(event),
-    talksDerived: isTalksDerivedEvent(event),
-    ...(event.meta.startsAt
-      ? {
-          meta: {
-            startsAt: {
-              status: event.meta.startsAt.status,
-              ...(event.meta.startsAt.method ? { method: event.meta.startsAt.method } : {}),
-              ...(event.meta.startsAt.sourceType
-                ? { sourceType: event.meta.startsAt.sourceType }
-                : {}),
-            },
-          },
-        }
-      : {}),
+    talksDerived: event.talksDerived,
+    ...(event.startsAtMeta ? { meta: { startsAt: event.startsAtMeta } } : {}),
     fromUniversity: isUniversityListing(event),
   }
 }

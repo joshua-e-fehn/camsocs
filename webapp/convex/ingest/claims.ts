@@ -24,6 +24,7 @@ import {
   organiserCopyChanged,
   refreshOrganisation,
   syncEventOrganiserRows,
+  writeEventCard,
   writeOrgCard,
 } from "../lib/entityStore"
 import { FIELD_SPECS, KEY_PREFIXES } from "../lib/fields"
@@ -585,6 +586,8 @@ async function writeEntity(
   if (entityType === "event") {
     const event = written as Doc<"events">
     const before = existing as Doc<"events"> | null
+    // Its list card (ENG-280) follows every write.
+    await writeEventCard(ctx, event)
     // A new sighting raises its listing's newest one (`withdrawnCheck`).
     await noteSweepSighting(ctx, event)
     // The organiser rows copy its start, visibility and hosting; someone

@@ -1,7 +1,7 @@
 import { v } from "convex/values"
 import type { Doc } from "./_generated/dataModel"
 import { type QueryCtx, query } from "./_generated/server"
-import { withdrawnCheck } from "./lib/entityStore"
+import { eventCardOf, withdrawnCheck } from "./lib/entityStore"
 import { eventSeriesOf } from "./lib/eventSeries"
 import { hostsListed } from "./lib/eventWindow"
 import {
@@ -21,19 +21,20 @@ import {
  * Recurring event series (ENG-282, docs/webapp.md "Event series"): one page
  * per series at `/events/series/<slug>`, whatever year it is.
  *
- * Only public editions are ever read here: never `cam_only` (whatever the
- * viewer — these pages are cached for everyone), never `members_only`, never
- * a superseded, withdrawn or suppressed event, never one whose hosts are all
- * hidden, and never a talks.cam-derived one (G1; `eventSeriesOf` gives those
- * no series, and this re-checks the stored event).
+ * Only public editions are ever read here (`gate`): never `cam_only`
+ * (whatever the viewer — these pages are cached for everyone), never
+ * `members_only`, never a superseded, withdrawn or suppressed event, never
+ * one whose hosts are all hidden, and never a talks.cam-derived one (G1;
+ * `eventSeriesOf` gives those no series, and this re-checks the stored
+ * event). A series is itself hidden (`seriesShown`) when its organiser is no
+ * longer listed, or when it holds editions and every one is suppressed: its
+ * stored name is a removed event's title, less the year.
  */
 
 /** Editions read per series: a long run (a panto's nights) is one edition each night. */
 const MAX_EDITIONS = 300
 /** Series listed at most on the index and in the sitemap. */
 const MAX_SERIES = 1_000
-/** Upcoming rows read to find a series' next public edition. */
-const NEXT_SCAN = 20
 
 const orgRefValidator = v.object({ name: v.string(), slug: v.string() })
 
@@ -45,45 +46,56 @@ const seriesRefValidator = v.object({
   lastStartsAt: v.number(),
 })
 
-async function orgOf(
-  lookup: ReturnType<typeof orgRefCache>,
-  row: Doc<"eventSeries">,
-): Promise<{ name: string; slug: string } | undefined> {
-  if (!row.orgKey) return undefined
-  const card = await lookup(row.orgKey)
-  return card ? { name: card.name, slug: card.slug } : undefined
+type Gate = {
+  lookup: ReturnType<typeof orgRefCache>
+  removed: Set<string>
+  withdrawn: ReturnType<typeof withdrawnCheck>
 }
 
-/** Whether a stored edition may be shown on a series page. */
-function shownEdition(event: Doc<"events">, seriesKey: string, removed: Set<string>): boolean {
-  return (
-    event.visibility === "public" &&
-    !event.supersededBy &&
-    !removed.has(event.key) &&
-    eventSeriesOf(event)?.key === seriesKey
-  )
+async function gateOf(ctx: QueryCtx): Promise<Gate> {
+  return {
+    lookup: orgRefCache(ctx),
+    removed: await loadSuppressedEvents(ctx),
+    withdrawn: withdrawnCheck(ctx, Date.now()),
+  }
 }
 
-/** A series' shown editions, by start, oldest first. */
-async function editionsOf(
-  ctx: QueryCtx,
-  seriesKey: string,
-  lookup: ReturnType<typeof orgRefCache>,
-): Promise<Doc<"events">[]> {
-  const rows = await ctx.db
+/** Whether a stored edition may be shown: the one rule for every query here. */
+async function shownEdition(gate: Gate, event: Doc<"events">, seriesKey: string): Promise<boolean> {
+  if (event.visibility !== "public" || event.supersededBy || gate.removed.has(event.key)) {
+    return false
+  }
+  if (eventSeriesOf(event)?.key !== seriesKey) return false
+  if (!(await hostsListed(event, gate.lookup))) return false
+  return !(await gate.withdrawn(event))
+}
+
+/** A series' stored editions (shown or not), oldest first. */
+async function heldEditions(ctx: QueryCtx, seriesKey: string): Promise<Doc<"events">[]> {
+  return await ctx.db
     .query("events")
     .withIndex("by_seriesKey_startsAt", (i) => i.eq("seriesKey", seriesKey))
     .take(MAX_EDITIONS)
-  const withdrawn = withdrawnCheck(ctx, Date.now())
-  const removed = await loadSuppressedEvents(ctx)
-  const out: Doc<"events">[] = []
-  for (const event of rows) {
-    if (!shownEdition(event, seriesKey, removed)) continue
-    if (!(await hostsListed(event, lookup))) continue
-    if (await withdrawn(event)) continue
-    out.push(event)
+}
+
+/** A series' shown editions, by start, oldest first, or null when the series
+ * itself is hidden (see the module comment). */
+async function seriesShown(
+  ctx: QueryCtx,
+  gate: Gate,
+  row: Doc<"eventSeries">,
+): Promise<{ org?: { name: string; slug: string }; editions: Doc<"events">[] } | null> {
+  let org: { name: string; slug: string } | undefined
+  if (row.orgKey) {
+    const card = await gate.lookup(row.orgKey)
+    if (!card) return null
+    org = { name: card.name, slug: card.slug }
   }
-  return out
+  const held = await heldEditions(ctx, row.key)
+  const editions: Doc<"events">[] = []
+  for (const event of held) if (await shownEdition(gate, event, row.key)) editions.push(event)
+  if (held.length > 0 && held.every((event) => gate.removed.has(event.key))) return null
+  return { org, editions }
 }
 
 /** Every series, by name (the `/events/series` index and pages.xml). */
@@ -93,21 +105,18 @@ export const list = query({
     v.object({ ...seriesRefValidator.fields, nextStartsAt: v.optional(v.number()) }),
   ),
   handler: async (ctx) => {
-    const lookup = orgRefCache(ctx)
+    const gate = await gateOf(ctx)
     const rows = await ctx.db.query("eventSeries").take(MAX_SERIES)
-    const removed = await loadSuppressedEvents(ctx)
     const now = Date.now()
     const out = []
     for (const row of rows) {
-      const upcoming = await ctx.db
-        .query("events")
-        .withIndex("by_seriesKey_startsAt", (i) => i.eq("seriesKey", row.key).gte("startsAt", now))
-        .take(NEXT_SCAN)
-      const next = upcoming.find((event) => shownEdition(event, row.key, removed))
+      const shown = await seriesShown(ctx, gate, row)
+      if (!shown) continue
+      const next = shown.editions.find((event) => (event.endsAt ?? event.startsAt) >= now)
       out.push({
         slug: row.slug,
         name: row.name,
-        org: await orgOf(lookup, row),
+        org: shown.org,
         lastStartsAt: row.lastStartsAt,
         nextStartsAt: next?.startsAt,
       })
@@ -129,25 +138,25 @@ export const get = query({
       .withIndex("by_slug", (i) => i.eq("slug", args.slug))
       .unique()
     if (!row) return null
-    const lookup = orgRefCache(ctx)
+    const gate = await gateOf(ctx)
+    const shown = await seriesShown(ctx, gate, row)
+    if (!shown) return null
     const [contacts, names] = await Promise.all([loadContactHashes(ctx), loadNameHashes(ctx)])
     const editions: EventListItem[] = []
-    for (const event of await editionsOf(ctx, row.key, lookup)) {
-      editions.push(scrubAddresses(await eventListItem(event, lookup), contacts, names))
+    for (const event of shown.editions) {
+      editions.push(
+        scrubAddresses(await eventListItem(eventCardOf(event), gate.lookup), contacts, names),
+      )
     }
     return {
-      series: {
-        slug: row.slug,
-        name: row.name,
-        org: await orgOf(lookup, row),
-        lastStartsAt: row.lastStartsAt,
-      },
+      series: { slug: row.slug, name: row.name, org: shown.org, lastStartsAt: row.lastStartsAt },
       editions,
     }
   },
 })
 
-/** The series an event's page links to, or null (a one-off, or no row yet). */
+/** The series an event's page links to, or null (a one-off, an event not
+ * shown, or no row yet). */
 export const ofEvent = query({
   args: { key: v.string() },
   returns: v.union(v.null(), v.object({ slug: v.string(), name: v.string() })),
@@ -157,11 +166,14 @@ export const ofEvent = query({
       .withIndex("by_key", (i) => i.eq("key", args.key))
       .unique()
     const seriesKey = event?.seriesKey
-    if (!event || !seriesKey || !shownEdition(event, seriesKey, new Set())) return null
+    if (!event || !seriesKey) return null
+    const gate = await gateOf(ctx)
+    if (!(await shownEdition(gate, event, seriesKey))) return null
     const row = await ctx.db
       .query("eventSeries")
       .withIndex("by_key", (i) => i.eq("key", seriesKey))
       .unique()
-    return row ? { slug: row.slug, name: row.name } : null
+    if (!row || !(await seriesShown(ctx, gate, row))) return null
+    return { slug: row.slug, name: row.name }
   },
 })

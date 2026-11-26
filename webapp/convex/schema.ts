@@ -390,6 +390,33 @@ export const eventFields = {
   ...stamps,
 }
 
+/**
+ * An event's list card (ENG-280): every field of `events` but `meta` and
+ * `description`, which are three quarters of an event's bytes and which no
+ * list reads, plus the two answers a list needs from them, computed when the
+ * event is written. `events.list`, `events.feed`, `events.restrictedCount`
+ * and the map read the window from these cards (lib/eventWindow.ts
+ * `matchingEvents`) once `projectionBackfills` says every event has one.
+ * Kept by lib/entityStore.ts `writeEventCard` on every write to `events`.
+ */
+const { meta: _cardMeta, description: _cardDescription, ...eventCardBase } = eventFields
+export const eventCardFields = {
+  ...eventCardBase,
+  /** The talks boundary's verdict over the full event (G1,
+   * lib/talks-boundary.ts `isTalksDerivedEvent`, which reads `description`
+   * and every field's provenance). */
+  talksDerived: v.boolean(),
+  /** `meta.startsAt`'s status, method and source type, as a list item
+   * carries them (lib/projections.ts `eventListItem`). */
+  startsAtMeta: v.optional(
+    v.object({
+      status: literalUnion(FIELD_STATUSES),
+      method: v.optional(literalUnion(CLAIM_METHODS)),
+      sourceType: v.optional(literalUnion(SOURCE_TYPES)),
+    }),
+  ),
+}
+
 export const venueFields = {
   key: v.string(),
   name: v.string(),
@@ -1410,6 +1437,17 @@ export default defineSchema({
   })
     .index("by_key", ["key"])
     .index("by_slug", ["slug"]),
+  eventCards: defineTable(eventCardFields)
+    .index("by_key", ["key"])
+    .index("by_stream_visibility_startsAt", ["stream", "visibility", "startsAt"])
+    .index("by_stream_visibility_spanEndsAt", ["stream", "visibility", "spanEndsAt"]),
+  /** Which derived projections a complete walk has filled (one row each,
+   * e.g. `eventCards`): reads switch to a projection only once its row
+   * exists, so a page never shows fewer rows while it is backfilled. */
+  projectionBackfills: defineTable({
+    name: v.string(),
+    completedAt: v.number(),
+  }).index("by_name", ["name"]),
   /** Each sweep group's newest sighting (the greatest `events.lastSeenAt`
    * of its events), so `withdrawnCheck` reads this small row rather than the
    * group's newest event in full (ENG-279). Kept by ingest and the daily

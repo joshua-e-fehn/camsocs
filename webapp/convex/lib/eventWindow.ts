@@ -4,7 +4,7 @@ import { CATEGORIES, EVENT_TYPES, type EventVisibility } from "../../lib/vocab"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import { DAY_MS, type EventStream, eventStreamOf, isUniversityListing } from "./derived"
-import { withdrawnCheck } from "./entityStore"
+import { type EventCard, eventCardOf, eventCardsReady, withdrawnCheck } from "./entityStore"
 import type { orgRefCache } from "./projections"
 import { loadSuppressedEvents } from "./suppressions"
 import { literalUnion } from "./validators"
@@ -16,6 +16,11 @@ import { literalUnion } from "./validators"
  * superseded rows and hidden hosts leave out, and how multi-day events still
  * running at a window's start are read (the two-range read). Moved here
  * unchanged from convex/events.ts so the map cannot drift from the calendar.
+ *
+ * The window is read as list cards (`eventCards`, ENG-280: an event without
+ * its `meta` and `description`, a quarter of its bytes) once every event has
+ * one (`eventCardsReady`); until then from `events`, each turned into the
+ * same card in memory. The rules below see the same fields either way.
  */
 
 /** Whether `list` leaves talks.cam-derived events out (the default), returns
@@ -87,31 +92,18 @@ export async function tierRows(
   args: ListArgs,
   tier: EventVisibility,
   order: readonly (EventStream | undefined)[],
-): Promise<Doc<"events">[]> {
-  const rows: Doc<"events">[] = []
+  cards: boolean,
+): Promise<EventCard[]> {
+  const rows: EventCard[] = []
   let starting = 0
   let spanning = 0
   for (const stream of order) {
     const [started, spans] = await Promise.all([
       starting < MAX_EVENTS
-        ? ctx.db
-            .query("events")
-            .withIndex("by_stream_visibility_startsAt", (i) =>
-              i
-                .eq("stream", stream)
-                .eq("visibility", tier)
-                .gte("startsAt", args.from)
-                .lt("startsAt", args.to),
-            )
-            .take(MAX_EVENTS - starting)
+        ? startingRange(ctx, cards, stream, tier, args, MAX_EVENTS - starting)
         : [],
       spanning < MAX_SPANNING
-        ? ctx.db
-            .query("events")
-            .withIndex("by_stream_visibility_spanEndsAt", (i) =>
-              i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", args.from),
-            )
-            .take(MAX_SPANNING - spanning)
+        ? spanningRange(ctx, cards, stream, tier, args.from, MAX_SPANNING - spanning)
         : [],
     ])
     starting += started.length
@@ -121,6 +113,80 @@ export async function tierRows(
   return rows
 }
 
+/** Events of one stream and tier starting in [from, to), as cards: from
+ * `eventCards` when `cards`, else from `events` (the same index). */
+async function startingRange(
+  ctx: QueryCtx,
+  cards: boolean,
+  stream: EventStream | undefined,
+  tier: EventVisibility,
+  window: { from: number; to: number },
+  limit: number,
+): Promise<EventCard[]> {
+  if (cards) {
+    return await ctx.db
+      .query("eventCards")
+      .withIndex("by_stream_visibility_startsAt", (i) =>
+        i
+          .eq("stream", stream)
+          .eq("visibility", tier)
+          .gte("startsAt", window.from)
+          .lt("startsAt", window.to),
+      )
+      .take(limit)
+  }
+  const events = await ctx.db
+    .query("events")
+    .withIndex("by_stream_visibility_startsAt", (i) =>
+      i
+        .eq("stream", stream)
+        .eq("visibility", tier)
+        .gte("startsAt", window.from)
+        .lt("startsAt", window.to),
+    )
+    .take(limit)
+  return events.map(eventCardOf)
+}
+
+/** Multi-day events of one stream and tier still running after `from`, as
+ * cards (as `startingRange`). */
+async function spanningRange(
+  ctx: QueryCtx,
+  cards: boolean,
+  stream: EventStream | undefined,
+  tier: EventVisibility,
+  from: number,
+  limit: number,
+): Promise<EventCard[]> {
+  if (cards) {
+    return await ctx.db
+      .query("eventCards")
+      .withIndex("by_stream_visibility_spanEndsAt", (i) =>
+        i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", from),
+      )
+      .take(limit)
+  }
+  const events = await ctx.db
+    .query("events")
+    .withIndex("by_stream_visibility_spanEndsAt", (i) =>
+      i.eq("stream", stream).eq("visibility", tier).gt("spanEndsAt", from),
+    )
+    .take(limit)
+  return events.map(eventCardOf)
+}
+
+/** One event's card by key (as `startingRange`). */
+async function cardByKey(ctx: QueryCtx, cards: boolean, key: string): Promise<EventCard | null> {
+  if (cards) {
+    return await ctx.db
+      .query("eventCards")
+      .withIndex("by_key", (i) => i.eq("key", key))
+      .unique()
+  }
+  const event = await eventByKey(ctx, key)
+  return event ? eventCardOf(event) : null
+}
+
 /**
  * The 1,000-row cap, society events first (ENG-31): every society event of
  * the window up to the cap, then the University's listings in the room left,
@@ -128,7 +194,7 @@ export async function tierRows(
  * then crowd out only its own later days, never a society's event; the
  * University view (`university: "only"`) has the whole cap to itself.
  */
-export function capByStream(sorted: Doc<"events">[]): Doc<"events">[] {
+export function capByStream<E extends EventCard>(sorted: E[]): E[] {
   const society = sorted.filter((event) => eventStreamOf(event) === "society")
   const kept = society.slice(0, MAX_EVENTS)
   const university = sorted
@@ -139,7 +205,11 @@ export function capByStream(sorted: Doc<"events">[]): Doc<"events">[] {
 
 /** Whether an event is on screen in [from, to): it starts inside, or it is a
  * multi-day event that started earlier and is still running at `from`. */
-export function overlaps(event: Doc<"events">, from: number, to: number): boolean {
+export function overlaps(
+  event: Pick<EventCard, "startsAt" | "spanEndsAt">,
+  from: number,
+  to: number,
+): boolean {
   if (event.startsAt >= from && event.startsAt < to) return true
   return event.spanEndsAt !== undefined && event.startsAt < to && event.spanEndsAt > from
 }
@@ -151,7 +221,7 @@ export function overlaps(event: Doc<"events">, from: number, to: number): boolea
  * card). An event nobody is credited with stays.
  */
 export async function hostsListed(
-  event: Doc<"events">,
+  event: Pick<EventCard, "organiserKeys" | "coHostKeys">,
   lookup: ReturnType<typeof orgRefCache>,
 ): Promise<boolean> {
   const hosts = [...event.organiserKeys, ...event.coHostKeys]
@@ -177,11 +247,12 @@ export async function matchingEvents(
   args: ListArgs,
   tiers: readonly EventVisibility[],
   lookup: ReturnType<typeof orgRefCache>,
-): Promise<Doc<"events">[]> {
+): Promise<EventCard[]> {
   if (!(args.to > args.from)) throw new Error("`to` must be after `from`")
   if (args.to - args.from > MAX_WINDOW_MS) throw new Error("The window is limited to 186 days")
 
-  const byKey = new Map<string, Doc<"events">>()
+  const cards = await eventCardsReady(ctx)
+  const byKey = new Map<string, EventCard>()
   if (args.orgKey) {
     const orgKey = args.orgKey
     // A hidden (or unknown) organisation has no card and no public events.
@@ -200,7 +271,7 @@ export async function matchingEvents(
     ])
     for (const link of [...starting, ...spanning]) {
       if (byKey.has(link.eventKey)) continue
-      const event = await eventByKey(ctx, link.eventKey)
+      const event = await cardByKey(ctx, cards, link.eventKey)
       if (event) byKey.set(event.key, event)
     }
   } else {
@@ -210,7 +281,7 @@ export async function matchingEvents(
     // yet backfilled (derive.ts `recomputeEvents`): the filter below
     // classifies them, and once the backfill has run the range is empty.
     const order = readOrder(args.university)
-    const reads = tiers.map((tier) => tierRows(ctx, args, tier, order))
+    const reads = tiers.map((tier) => tierRows(ctx, args, tier, order, cards))
     for (const event of (await Promise.all(reads)).flat()) byKey.set(event.key, event)
   }
 
@@ -223,7 +294,7 @@ export async function matchingEvents(
     (event) =>
       overlaps(event, args.from, args.to) &&
       tiers.includes(event.visibility) &&
-      (talksCam === "include" || isTalksDerived(event) === (talksCam === "only")) &&
+      (talksCam === "include" || event.talksDerived === (talksCam === "only")) &&
       (args.includeTakingPart !== false || event.hosting !== "takes_part") &&
       (!types || types.has(event.eventType)) &&
       (!args.university || (args.university === "only") === isUniversityListing(event)) &&
@@ -234,7 +305,7 @@ export async function matchingEvents(
   const categories = args.categories?.length ? new Set<string>(args.categories) : null
   const colleges = args.collegeKeys?.length ? new Set(args.collegeKeys) : null
   const withdrawn = withdrawnCheck(ctx, Date.now())
-  const out: Doc<"events">[] = []
+  const out: EventCard[] = []
   for (const event of events) {
     if (!(await hostsListed(event, lookup)) || (await withdrawn(event))) continue
     if (categories || colleges) {

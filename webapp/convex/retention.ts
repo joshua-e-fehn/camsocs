@@ -11,7 +11,12 @@ import { internalMutation, type MutationCtx } from "./_generated/server"
 import { ORIGINAL_TEXT_FIELDS } from "./ingest/claims"
 import { orgClassesOf, ownWebsiteOf } from "./lib/brokerRows"
 import { DAY_MS, londonIsoDate, nextHandoverDate } from "./lib/derived"
-import { findOrganisation, loadTerms, refreshOrganisation } from "./lib/entityStore"
+import {
+  deleteEventCard,
+  findOrganisation,
+  loadTerms,
+  refreshOrganisation,
+} from "./lib/entityStore"
 
 /**
  * The retention schedule, enforced (docs/compliance/retention.md; the
@@ -166,6 +171,7 @@ async function deleteEvent(
     .take(200)
   for (const link of links) await ctx.db.delete("eventOrganisers", link._id)
   await ctx.db.delete("events", event._id)
+  await deleteEventCard(ctx, event.key)
   if (event.image?.storageId) await deleteFileIfUnused(ctx, event.image.storageId)
   return { organisers: links.map((link) => link.orgKey), claims, finished: true }
 }

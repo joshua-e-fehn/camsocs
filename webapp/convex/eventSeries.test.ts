@@ -127,4 +127,44 @@ describe("eventSeries", () => {
     expect(slugs[0]).toBe("spring-revue")
     expect(slugs[1]).toMatch(/^spring-revue-/)
   })
+
+  test("a series whose every edition is suppressed is hidden with its name (review of PR #102)", async () => {
+    const t = newTest()
+    await addOrg(t, "org-greek", "Greek Play Committee")
+    const soon = Date.now() + 10 * DAY
+    await addEvent(t, "evt-gp-1", "The Cambridge Greek Play 2026", soon)
+    await t.mutation(internal.derive.recomputeEvents, {})
+    expect((await t.query(api.eventSeries.list, {})).map((s) => s.slug)).toEqual([
+      "cambridge-greek-play",
+    ])
+    await t.run(async (ctx) => {
+      await ctx.db.insert("suppressions", {
+        key: "sup-gp-1",
+        scope: "event",
+        eventKey: "evt-gp-1",
+        createdAt: Date.now(),
+      })
+    })
+    expect(await t.query(api.eventSeries.list, {})).toEqual([])
+    expect(await t.query(api.eventSeries.get, { slug: "cambridge-greek-play" })).toBeNull()
+    expect(await t.query(api.eventSeries.ofEvent, { key: "evt-gp-1" })).toBeNull()
+  })
+
+  test("an edition whose hosts are all hidden gives no next date", async () => {
+    const t = newTest()
+    await addOrg(t, "org-greek", "Greek Play Committee")
+    const soon = Date.now() + 10 * DAY
+    await addEvent(t, "evt-old", "The Cambridge Greek Play 2026", Date.now() - 30 * DAY)
+    await addEvent(t, "evt-new", "The Cambridge Greek Play 2027", soon)
+    await t.mutation(internal.derive.recomputeEvents, {})
+    expect((await t.query(api.eventSeries.list, {}))[0].nextStartsAt).toBe(soon)
+    // The next edition's hosts are only a listing that is not in the directory.
+    await t.mutation(internal.ingest.relationships.setEventOrganisers, {
+      events: [{ eventKey: "evt-new", organisers: [{ orgKey: "org-gone", role: "organiser" }] }],
+    })
+    const [row] = await t.query(api.eventSeries.list, {})
+    expect(row.nextStartsAt).toBeUndefined()
+    const page = await t.query(api.eventSeries.get, { slug: "cambridge-greek-play" })
+    expect(page?.editions.map((e) => e.key)).toEqual(["evt-old"])
+  })
 })

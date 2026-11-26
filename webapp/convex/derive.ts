@@ -4,10 +4,14 @@ import { internal } from "./_generated/api"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { eventStreamOf, londonIsoDate, sweepGroupOf, termWeekLabel } from "./lib/derived"
 import {
+  EVENT_CARDS_BACKFILL,
   loadTerms,
+  markBackfilled,
   noteSweepSighting,
+  refreshEventCard,
   refreshOrganisation,
   syncEventOrganiserRows,
+  writeEventCard,
 } from "./lib/entityStore"
 import { eventSeriesOf, noteSeriesEdition } from "./lib/eventSeriesStore"
 
@@ -21,7 +25,9 @@ import { eventSeriesOf, noteSeriesEdition } from "./lib/eventSeriesStore"
  *  - events' `termWeekLabel` changes when `termDates` change (and their
  *    `spanEndsAt`, `sweepGroup` and `stream` are kept current, also for rows
  *    written before they existed: this walk is their backfill — ENG-31's
- *    `stream` among them, `streamBackfill` below says when it is done);
+ *    `stream` among them, `streamBackfill` below says when it is done),
+ *    and every event's list card (ENG-280): a walk that `daily` started
+ *    records, when it ends, that every event has one (`eventCardsReady`);
  *  - a person's `stale` flag turns on when `staleAfter` passes;
  *  - events' `seriesKey` (ENG-282) is backfilled, and each public edition
  *    keeps its `eventSeries` row (created with its slug, `lastStartsAt` moved on).
@@ -59,7 +65,13 @@ export const recomputeOrganisations = internalMutation({
 })
 
 export const recomputeEvents = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    /** Set by `daily` and carried page to page: a walk that started from
+     * the first event with card writes in place, so its end means every
+     * event has a card. A walk begun by an older deployment has none. */
+    cards: v.optional(v.boolean()),
+  },
   returns: pageResult,
   handler: async (ctx, args) => {
     const terms = await loadTerms(ctx)
@@ -90,6 +102,7 @@ export const recomputeEvents = internalMutation({
         stream === event.stream &&
         seriesKey === event.seriesKey
       ) {
+        await writeEventCard(ctx, event)
         continue
       }
       await ctx.db.patch("events", event._id, {
@@ -99,12 +112,16 @@ export const recomputeEvents = internalMutation({
         stream,
         seriesKey,
       })
+      await refreshEventCard(ctx, event._id)
       changed++
     }
     if (!page.isDone) {
       await ctx.scheduler.runAfter(0, internal.derive.recomputeEvents, {
         cursor: page.continueCursor,
+        cards: args.cards,
       })
+    } else if (args.cards === true) {
+      await markBackfilled(ctx, EVENT_CARDS_BACKFILL, Date.now())
     }
     return { processed: page.page.length, changed, done: page.isDone }
   },
@@ -157,7 +174,7 @@ export const daily = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     await ctx.scheduler.runAfter(0, internal.derive.recomputeOrganisations, {})
-    await ctx.scheduler.runAfter(0, internal.derive.recomputeEvents, {})
+    await ctx.scheduler.runAfter(0, internal.derive.recomputeEvents, { cards: true })
     await ctx.scheduler.runAfter(0, internal.derive.flagStalePeople, {})
     return null
   },
